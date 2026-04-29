@@ -182,13 +182,15 @@ Deno.serve(async (req) => {
       .eq('ghl_account_id', ghlAccountId)
       .eq('status', 'pending');
 
-    // Cancel any active engagement executions for this contact (reply detection)
+    // Cancel any active engagement executions for this contact (reply detection).
+    // engagement_executions stores the GHL contact id under ghl_contact_id, not
+    // lead_id (the column doesn't exist). Phase 4c fix.
     const { data: activeEngagements } = await supabase
       .from("engagement_executions")
-      .select("id, trigger_run_id, campaign_id, lead_id, client_id")
-      .eq("lead_id", contactId)
+      .select("id, trigger_run_id, campaign_id, ghl_contact_id, client_id")
+      .eq("ghl_contact_id", contactId)
       .eq("ghl_account_id", ghlAccountId)
-      .in("status", ["running", "pending"])
+      .in("status", ["pending", "running", "waiting"])
       .order("started_at", { ascending: false });
 
     if (activeEngagements && activeEngagements.length > 0 && triggerKey) {
@@ -211,13 +213,13 @@ Deno.serve(async (req) => {
           }
         }
 
-        // Mark as replied
+        // Mark as replied with the canonical Phase 4c stop_reason
         await supabase
           .from("engagement_executions")
           .update({
-            status: "replied",
+            status: "completed",
             completed_at: new Date().toISOString(),
-            stop_reason: "lead_replied",
+            stop_reason: "inbound_reply",
           })
           .eq("id", eng.id);
 
@@ -240,7 +242,7 @@ Deno.serve(async (req) => {
               client_id: eng.client_id,
               campaign_id: eng.campaign_id,
               execution_id: eng.id,
-              lead_id: eng.lead_id,
+              lead_id: eng.ghl_contact_id,
               event_type: "reply_received",
               channel: replyChannel,
               occurred_at: new Date().toISOString(),
@@ -263,8 +265,8 @@ Deno.serve(async (req) => {
     if (!activeEngagements || activeEngagements.length === 0) {
       const { data: recentFinished } = await supabase
         .from("engagement_executions")
-        .select("id, campaign_id, lead_id, client_id, status, stop_reason, last_sms_sent_at, completed_at")
-        .eq("lead_id", contactId)
+        .select("id, campaign_id, ghl_contact_id, client_id, status, stop_reason, last_sms_sent_at, completed_at")
+        .eq("ghl_contact_id", contactId)
         .eq("ghl_account_id", ghlAccountId)
         .in("status", ["completed"])
         .not("last_sms_sent_at", "is", null)
@@ -288,7 +290,7 @@ Deno.serve(async (req) => {
           if (!existingReply) {
             await supabase
               .from("engagement_executions")
-              .update({ status: "replied", stop_reason: "lead_replied" })
+              .update({ stop_reason: "inbound_reply" })
               .eq("id", recentFinished.id);
 
             try {
@@ -308,7 +310,7 @@ Deno.serve(async (req) => {
                 client_id: recentFinished.client_id,
                 campaign_id: recentFinished.campaign_id,
                 execution_id: recentFinished.id,
-                lead_id: recentFinished.lead_id,
+                lead_id: recentFinished.ghl_contact_id,
                 event_type: "reply_received",
                 channel: lateReplyChannel,
                 occurred_at: new Date().toISOString(),

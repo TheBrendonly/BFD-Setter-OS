@@ -27,6 +27,108 @@ const corsHeaders = {
 const TWIML_EMPTY =
   '<?xml version="1.0" encoding="UTF-8"?><Response></Response>';
 
+// Phase 4a — STOP / opt-out keyword regexes. Match common variants;
+// a leading/trailing period is tolerated.
+const STOP_KEYWORDS_RE = /^\s*(stop|stopall|unsubscribe|cancel|end|quit|opt[- ]?out)\s*\.?\s*$/i;
+const START_KEYWORDS_RE = /^\s*(start|unstop|resubscribe|yes)\s*\.?\s*$/i;
+const STOP_REPLY = "You've been unsubscribed. Reply START to resubscribe.";
+const START_REPLY = "You've been resubscribed. Reply STOP to opt out at any time.";
+
+// Send a one-shot Twilio outbound (used for STOP/START compliance replies)
+async function sendTwilioCompliance(args: {
+  twilioSid: string | null;
+  twilioAuth: string | null;
+  fromNumber: string;
+  toNumber: string;
+  body: string;
+}): Promise<void> {
+  const { twilioSid, twilioAuth, fromNumber, toNumber, body } = args;
+  if (!twilioSid || !twilioAuth) {
+    console.warn("sendTwilioCompliance skipped: missing twilio creds");
+    return;
+  }
+  try {
+    const params = new URLSearchParams({ From: fromNumber, To: toNumber, Body: body });
+    const r = await fetch(
+      `https://api.twilio.com/2010-04-01/Accounts/${twilioSid}/Messages.json`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+          Authorization: `Basic ${btoa(`${twilioSid}:${twilioAuth}`)}`,
+        },
+        body: params.toString(),
+      },
+    );
+    if (!r.ok) {
+      const errBody = await r.text().catch(() => "");
+      console.warn(`sendTwilioCompliance failed ${r.status}: ${errBody.slice(0, 200)}`);
+    }
+  } catch (e) {
+    console.warn("sendTwilioCompliance threw", e);
+  }
+}
+
+// Phase 4c — cancel any active engagement_executions for this lead.
+// Triggered by mid-cadence reply OR by STOP keyword. Uses ghl_contact_id
+// (the canonical column on engagement_executions; receive-dm-webhook used
+// to query a non-existent `lead_id` column — silently broken).
+async function endActiveCadences(args: {
+  supabase: any;
+  clientId: string;
+  ghlContactId: string;
+  ghlAccountId: string;
+  triggerKey: string | null;
+  stopReason: "inbound_reply" | "opt_out";
+}): Promise<number> {
+  const { supabase, ghlContactId, ghlAccountId, triggerKey, stopReason } = args;
+  const { data: active, error } = await supabase
+    .from("engagement_executions")
+    .select("id, trigger_run_id, campaign_id, client_id")
+    .eq("ghl_contact_id", ghlContactId)
+    .eq("ghl_account_id", ghlAccountId)
+    .in("status", ["pending", "running", "waiting"]);
+  if (error) {
+    console.warn("endActiveCadences select failed", error);
+    return 0;
+  }
+  if (!active || active.length === 0) return 0;
+
+  for (const exec of active) {
+    await supabase
+      .from("engagement_executions")
+      .update({
+        status: stopReason === "opt_out" ? "cancelled" : "completed",
+        stop_reason: stopReason,
+        completed_at: new Date().toISOString(),
+      })
+      .eq("id", exec.id);
+    if (exec.trigger_run_id && triggerKey) {
+      await cancelTriggerRun(exec.trigger_run_id, triggerKey);
+    }
+    if (exec.campaign_id) {
+      try {
+        await supabase.from("campaign_events").insert({
+          client_id: exec.client_id,
+          campaign_id: exec.campaign_id,
+          execution_id: exec.id,
+          lead_id: ghlContactId,
+          event_type: stopReason === "opt_out" ? "opt_out" : "reply_received",
+          occurred_at: new Date().toISOString(),
+        });
+      } catch (evtErr) {
+        console.warn("endActiveCadences campaign_events insert failed", evtErr);
+      }
+    }
+  }
+  console.info("endActiveCadences cancelled", {
+    count: active.length,
+    ghlContactId,
+    stopReason,
+  });
+  return active.length;
+}
+
 type TriggerProcessMessagesParams = {
   contactId: string;
   ghlAccountId: string;
@@ -292,7 +394,7 @@ Deno.serve(async (req) => {
     const { data: client, error: clientError } = await supabase
       .from("clients")
       .select(
-        "id, ghl_location_id, ghl_api_key, dm_enabled, debounce_seconds, twilio_auth_token, supabase_url, supabase_service_key",
+        "id, ghl_location_id, ghl_api_key, dm_enabled, debounce_seconds, twilio_account_sid, twilio_auth_token, supabase_url, supabase_service_key",
       )
       .eq("retell_phone_1", toPhone)
       .maybeSingle();
@@ -335,6 +437,87 @@ Deno.serve(async (req) => {
 
     if (!client.dm_enabled) {
       console.info("client.dm_enabled=false; SMS recorded but skipped", { clientId: client.id });
+      return new Response(TWIML_EMPTY, {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "text/xml" },
+      });
+    }
+
+    // ── Phase 4a: STOP / START keyword handling ──
+    // Sig is already verified; client is resolved. Match against the inbound
+    // body BEFORE any GHL contact resolution / message_queue / Trigger.dev hop
+    // so opt-out is regulator-friendly (no marketing reply, no AI processing).
+    const trimmedBody = (messageBody ?? "").trim();
+    const isStop = STOP_KEYWORDS_RE.test(trimmedBody);
+    const isStart = START_KEYWORDS_RE.test(trimmedBody);
+
+    if (isStop || isStart) {
+      const triggerKey = Deno.env.get("TRIGGER_SECRET_KEY") ?? null;
+
+      if (isStop) {
+        // Record opt-out
+        await supabase
+          .from("lead_optouts")
+          .upsert(
+            {
+              client_id: client.id,
+              phone: fromPhone,
+              source: "sms_stop",
+              raw_keyword: trimmedBody.toUpperCase().slice(0, 32),
+            },
+            { onConflict: "client_id,phone" },
+          );
+        // Mark setter_stopped on any matching lead row
+        await supabase
+          .from("leads")
+          .update({ setter_stopped: true })
+          .eq("client_id", client.id)
+          .eq("phone", fromPhone);
+        // Cancel active cadences for any matching ghl_contact_id under this client
+        const { data: matchedLeads } = await supabase
+          .from("leads")
+          .select("lead_id")
+          .eq("client_id", client.id)
+          .eq("phone", fromPhone);
+        if (matchedLeads && client.ghl_location_id) {
+          for (const lead of matchedLeads) {
+            await endActiveCadences({
+              supabase,
+              clientId: client.id,
+              ghlContactId: lead.lead_id,
+              ghlAccountId: client.ghl_location_id,
+              triggerKey,
+              stopReason: "opt_out",
+            });
+          }
+        }
+      } else if (isStart) {
+        // Symmetric resubscribe
+        await supabase
+          .from("lead_optouts")
+          .delete()
+          .eq("client_id", client.id)
+          .eq("phone", fromPhone);
+        await supabase
+          .from("leads")
+          .update({ setter_stopped: false })
+          .eq("client_id", client.id)
+          .eq("phone", fromPhone);
+      }
+
+      // Compliance reply (single send, no AI loop)
+      await sendTwilioCompliance({
+        twilioSid: client.twilio_account_sid as string | null,
+        twilioAuth: client.twilio_auth_token as string | null,
+        fromNumber: toPhone,
+        toNumber: fromPhone,
+        body: isStop ? STOP_REPLY : START_REPLY,
+      });
+
+      console.info(`Phase 4a ${isStop ? "STOP" : "START"} keyword handled`, {
+        clientId: client.id,
+        from: fromPhone.slice(0, 4) + "***",
+      });
       return new Response(TWIML_EMPTY, {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "text/xml" },
@@ -510,6 +693,19 @@ Deno.serve(async (req) => {
         last_message_at: nowISO,
         last_message_preview: (messageBody || "").substring(0, 200),
       }, { onConflict: "client_id,lead_id" });
+
+    // Phase 4c — reply-detected cadence-end. Inbound SMS means the human
+    // (or AI) takes the conversation; running cadence sends should stop.
+    if (triggerKey) {
+      await endActiveCadences({
+        supabase,
+        clientId: client.id,
+        ghlContactId: contactId,
+        ghlAccountId,
+        triggerKey,
+        stopReason: "inbound_reply",
+      });
+    }
 
     if (!triggerKey) {
       console.error("TRIGGER_SECRET_KEY not set");
