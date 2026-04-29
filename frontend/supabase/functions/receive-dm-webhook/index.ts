@@ -3,8 +3,40 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
+    "authorization, x-client-info, apikey, content-type, x-wh-signature",
 };
+
+// Phase 8a — GHL Webhook V2 signature verification (HMAC-SHA256 over raw
+// body, hex-encoded). Verification only kicks in when the calling
+// client has clients.ghl_webhook_secret set; otherwise backwards-compat
+// V1 query-string POSTs still work.
+async function verifyGhlSignature(
+  rawBody: string,
+  signatureHeader: string | null,
+  secret: string,
+): Promise<boolean> {
+  if (!signatureHeader) return false;
+  const enc = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    "raw",
+    enc.encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const sigBuf = await crypto.subtle.sign("HMAC", key, enc.encode(rawBody));
+  const sigBytes = new Uint8Array(sigBuf);
+  let hex = "";
+  for (const b of sigBytes) hex += b.toString(16).padStart(2, "0");
+  const expected = hex.toLowerCase();
+  const presented = signatureHeader.replace(/^sha256=/i, "").toLowerCase();
+  if (expected.length !== presented.length) return false;
+  let mismatch = 0;
+  for (let i = 0; i < expected.length; i++) {
+    mismatch |= expected.charCodeAt(i) ^ presented.charCodeAt(i);
+  }
+  return mismatch === 0;
+}
 
 type TriggerProcessMessagesParams = {
   contactId: string;
@@ -331,7 +363,7 @@ Deno.serve(async (req) => {
 
     const { data: client, error: clientError } = await supabase
       .from("clients")
-      .select("id, dm_enabled, debounce_seconds, text_engine_webhook, supabase_url, supabase_service_key")
+      .select("id, dm_enabled, debounce_seconds, text_engine_webhook, supabase_url, supabase_service_key, ghl_webhook_secret")
       .eq("ghl_location_id", ghlAccountId)
       .maybeSingle();
 
@@ -340,6 +372,29 @@ Deno.serve(async (req) => {
         JSON.stringify({ error: "Client not found for GHL_Account_ID: " + ghlAccountId }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
+    }
+
+    // Phase 8a — verify GHL Webhook V2 signature when the client has the
+    // secret configured. Backwards-compatible: if no secret, skip
+    // verification (V1 query-string posts still work).
+    const sigHeader = req.headers.get("x-wh-signature");
+    if (client.ghl_webhook_secret && sigHeader) {
+      // V2 sends a JSON body that's actually signed; clone request to read it
+      const rawBody = await req.clone().text().catch(() => "");
+      const sigOk = await verifyGhlSignature(rawBody, sigHeader, client.ghl_webhook_secret);
+      if (!sigOk) {
+        console.warn("receive-dm-webhook: GHL signature mismatch", { clientId: client.id, ghlAccountId });
+        return new Response(JSON.stringify({ error: "Forbidden" }), {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    } else if (client.ghl_webhook_secret && !sigHeader) {
+      console.warn("receive-dm-webhook: secret configured but no x-wh-signature header", { clientId: client.id });
+      return new Response(JSON.stringify({ error: "Missing x-wh-signature" }), {
+        status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     if (!client.dm_enabled) {

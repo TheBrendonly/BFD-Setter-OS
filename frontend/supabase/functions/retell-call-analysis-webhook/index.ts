@@ -3,8 +3,40 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
+    "authorization, x-client-info, apikey, content-type, x-retell-signature",
 };
+
+// Phase 8b — Retell webhook signature verification (HMAC-SHA256 over raw
+// body; key = clients.retell_webhook_secret). Only kicks in when the
+// resolved client has the secret set; otherwise backwards-compat (no
+// verification, matches the prior behaviour).
+async function verifyRetellSignature(
+  rawBody: string,
+  signatureHeader: string | null,
+  secret: string,
+): Promise<boolean> {
+  if (!signatureHeader) return false;
+  const enc = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    "raw",
+    enc.encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const sigBuf = await crypto.subtle.sign("HMAC", key, enc.encode(rawBody));
+  const sigBytes = new Uint8Array(sigBuf);
+  let hex = "";
+  for (const b of sigBytes) hex += b.toString(16).padStart(2, "0");
+  const expected = hex.toLowerCase();
+  const presented = signatureHeader.replace(/^sha256=/i, "").toLowerCase();
+  if (expected.length !== presented.length) return false;
+  let mismatch = 0;
+  for (let i = 0; i < expected.length; i++) {
+    mismatch |= expected.charCodeAt(i) ^ presented.charCodeAt(i);
+  }
+  return mismatch === 0;
+}
 
 const CALL_ANALYZED_EVENT = "call_analyzed";
 const EXTERNAL_STRINGIFIABLE_COLUMNS = new Set([
@@ -92,7 +124,15 @@ Deno.serve(async (req) => {
     });
 
   try {
-    const rawPayload = await req.json();
+    // Read raw body once so Phase 8b sig verification can hash it and
+    // the rest of the handler can JSON.parse it.
+    const rawBodyText = await req.text();
+    let rawPayload: any;
+    try {
+      rawPayload = rawBodyText ? JSON.parse(rawBodyText) : {};
+    } catch {
+      return ok({ ok: false, error: "invalid JSON" }, 400);
+    }
     const eventType = rawPayload.event;
     console.log(`📞 Retell call analysis webhook received, event: ${eventType}`);
 
@@ -195,6 +235,29 @@ Deno.serve(async (req) => {
       });
 
       return ok({ ok: true, skipped: true, reason: "client_not_found" });
+    }
+
+    // Phase 8b — verify Retell signature when the client has the secret
+    // configured. Backwards-compatible: no secret → no verification.
+    {
+      const { data: secretRow } = await supabase
+        .from("clients")
+        .select("retell_webhook_secret")
+        .eq("id", clientId)
+        .maybeSingle();
+      const retellSecret = secretRow?.retell_webhook_secret as string | null;
+      if (retellSecret) {
+        const sigHeader = req.headers.get("x-retell-signature");
+        if (!sigHeader) {
+          console.warn("retell-call-analysis-webhook: secret configured but x-retell-signature missing", { clientId });
+          return ok({ ok: false, error: "Forbidden" }, 403);
+        }
+        const sigOk = await verifyRetellSignature(rawBodyText, sigHeader, retellSecret);
+        if (!sigOk) {
+          console.warn("retell-call-analysis-webhook: signature mismatch", { clientId, agentId });
+          return ok({ ok: false, error: "Forbidden" }, 403);
+        }
+      }
     }
 
     // ── Bump leads.last_message_at for the contact (canonical inbound pattern).
