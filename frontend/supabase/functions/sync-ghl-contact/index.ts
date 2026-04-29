@@ -60,6 +60,90 @@ interface Step {
   timestamp: string;
 }
 
+// Auto-enroll a freshly-created lead in an engagement cadence.
+// Inserts an engagement_executions row + fires the runEngagement Trigger.dev
+// task. Triggered only when clients.auto_engagement_workflow_id is set.
+async function enrollLeadInEngagement(args: {
+  supabase: any;
+  clientId: string;
+  workflowId: string;
+  ghlAccountId: string;
+  leadId: string;
+  contactName: string | null;
+  contactPhone: string | null;
+  contactEmail: string | null;
+}): Promise<void> {
+  const { supabase, clientId, workflowId, ghlAccountId, leadId, contactName, contactPhone, contactEmail } = args;
+
+  // Confirm the workflow exists and belongs to this client (defense in depth).
+  const { data: wf } = await supabase
+    .from("engagement_workflows")
+    .select("id, nodes")
+    .eq("id", workflowId)
+    .eq("client_id", clientId)
+    .maybeSingle();
+  if (!wf) throw new Error(`engagement_workflow ${workflowId} not found for client ${clientId}`);
+
+  // Create the execution row first so runEngagement has stable state to update.
+  const { data: execution, error: execErr } = await supabase
+    .from("engagement_executions")
+    .insert({
+      client_id: clientId,
+      workflow_id: workflowId,
+      ghl_contact_id: leadId,
+      ghl_account_id: ghlAccountId,
+      contact_name: contactName,
+      contact_phone: contactPhone,
+      status: "pending",
+      current_node_index: 0,
+      stage_description: "Auto-enrolled on lead create",
+      started_at: new Date().toISOString(),
+    })
+    .select("id")
+    .single();
+  if (execErr) throw new Error(`engagement_executions insert failed: ${execErr.message}`);
+
+  // Fire Trigger.dev runEngagement.
+  const triggerKey = Deno.env.get("TRIGGER_SECRET_KEY");
+  if (!triggerKey) throw new Error("TRIGGER_SECRET_KEY not configured");
+
+  const triggerResp = await fetch(
+    "https://api.trigger.dev/api/v1/tasks/run-engagement/trigger",
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${triggerKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        payload: {
+          execution_id: execution.id,
+          Lead_ID: leadId,
+          GHL_Account_ID: ghlAccountId,
+          client_id: clientId,
+          workflow_id: workflowId,
+          campaign_id: "auto-enroll",
+          Name: contactName ?? undefined,
+          Email: contactEmail ?? undefined,
+          Phone: contactPhone ?? undefined,
+        },
+      }),
+    },
+  );
+  if (!triggerResp.ok) {
+    const errText = await triggerResp.text();
+    throw new Error(`Trigger.dev run-engagement trigger failed ${triggerResp.status}: ${errText.slice(0, 200)}`);
+  }
+  const triggerJson = await triggerResp.json().catch(() => ({}));
+  const trigger_run_id = triggerJson?.id ?? null;
+  if (trigger_run_id) {
+    await supabase
+      .from("engagement_executions")
+      .update({ trigger_run_id })
+      .eq("id", execution.id);
+  }
+}
+
 function makeStep(id: string, label: string, nodeType: string, status: Step["status"], detail?: string): Step {
   return { id, label, node_type: nodeType, status, detail, timestamp: new Date().toISOString() };
 }
@@ -150,7 +234,7 @@ Deno.serve(async (req) => {
 
     const { data: clientRow, error: clientErr } = await supabase
       .from("clients")
-      .select("id, sync_ghl_enabled")
+      .select("id, sync_ghl_enabled, auto_engagement_workflow_id")
       .eq("ghl_location_id", ghlAccountId)
       .single();
 
@@ -252,6 +336,32 @@ Deno.serve(async (req) => {
       }
 
       steps.push(makeStep("sync-create", "Create New Lead", "create_contact", "completed", `Created ${newContact.id}`));
+
+      // Auto-enroll in default engagement cadence when client opts in.
+      // Disabled until clients.auto_engagement_workflow_id is non-null —
+      // safe to ship; current default is NULL across all clients.
+      if (clientRow.auto_engagement_workflow_id) {
+        try {
+          await enrollLeadInEngagement({
+            supabase,
+            clientId,
+            workflowId: clientRow.auto_engagement_workflow_id,
+            ghlAccountId,
+            leadId: contactId,
+            contactName: name || null,
+            contactPhone: phone || null,
+            contactEmail: email || null,
+          });
+          steps.push(makeStep("sync-engage", "Enroll in Engagement Cadence", "enroll_engagement", "completed",
+            `Workflow ${clientRow.auto_engagement_workflow_id}`));
+        } catch (enrollErr: any) {
+          // Non-blocking: lead is created, engagement is opt-in. Log but don't fail.
+          console.error("[sync-ghl-contact] auto-enroll failed:", enrollErr);
+          steps.push(makeStep("sync-engage", "Enroll in Engagement Cadence", "enroll_engagement", "failed",
+            enrollErr?.message || "unknown"));
+        }
+      }
+
       await logExecution(clientId, contactId, name || null, "created", null, steps);
       return new Response(
         JSON.stringify({ status: "created", contact_id: newContact.id }),

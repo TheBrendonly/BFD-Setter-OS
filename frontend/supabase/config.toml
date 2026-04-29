@@ -92,3 +92,6 @@ verify_jwt = false
 
 [functions.sync-ghl-booking]
 verify_jwt = false
+
+[functions.push-contact-to-ghl]
+verify_jwt = false

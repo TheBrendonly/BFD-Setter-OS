@@ -614,6 +614,32 @@ const ContactDetail = () => {
         }
       }
 
+      // 3. Push to GHL (canonical contact source). Echo-loop prevention is
+      // handled inside push-contact-to-ghl by bumping leads.updated_at; if a
+      // GHL contact-update webhook fires within ~30s of our push, sync-ghl-
+      // contact can debounce it.
+      if (canonicalContactId && /^[a-zA-Z0-9_-]{10,}$/.test(canonicalContactId)) {
+        try {
+          await supabase.functions.invoke('push-contact-to-ghl', {
+            body: {
+              clientId,
+              contactId: canonicalContactId,
+              contact: {
+                first_name: updatePayload.first_name,
+                last_name: updatePayload.last_name,
+                email: updatePayload.email,
+                phone: updatePayload.phone,
+                business_name: updatePayload.business_name,
+                custom_fields: customFields,
+                tags: tagsPayload?.map(t => t.name).filter(Boolean),
+              },
+            },
+          });
+        } catch (ghlErr) {
+          console.error('GHL push failed (non-blocking):', ghlErr);
+        }
+      }
+
       setContact(prev => prev ? { ...prev, ...updatePayload } : prev);
       setOriginalEditData({ ...currentData });
       editDataRef.current = currentData;
