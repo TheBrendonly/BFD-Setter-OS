@@ -3,8 +3,8 @@
 import { readFileSync } from 'fs';
 import { request } from 'https';
 
-const KEY = process.env.BFD_SETTER_LIVE_SERVICE_ROLE;
-if (!KEY) { console.error('Missing BFD_SETTER_LIVE_SERVICE_ROLE in .env'); process.exit(1); }
+const KEY = process.env.BFD_SETTER_LIVE_SECRET_KEY;
+if (!KEY) { console.error('Missing BFD_SETTER_LIVE_SECRET_KEY in .env'); process.exit(1); }
 
 const content = readFileSync('c:/Projects/Projects/1prompt-os/frontend/src/data/bfdVoiceSetterPrompt.ts', 'utf8');
 const match = content.match(/BFD_VOICE_SETTER_PROMPT = `([\s\S]+)`;/);

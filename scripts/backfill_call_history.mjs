@@ -4,9 +4,9 @@
 // Source secrets from .env. Run with: node --env-file=.env scripts/backfill_call_history.mjs
 import { request } from 'https';
 
-const BFDP_KEY = process.env.BFD_PLATFORM_SERVICE_ROLE;
+const BFDP_KEY = process.env.BFD_PLATFORM_SECRET_KEY;
 if (!BFDP_KEY) {
-  console.error('Missing BFD_PLATFORM_SERVICE_ROLE in .env');
+  console.error('Missing BFD_PLATFORM_SECRET_KEY in .env');
   process.exit(1);
 }
 const CLIENT_ID = process.env.BFD_CLIENT_ID || 'e467dabc-57ee-416c-8831-83ecd9c7c925';

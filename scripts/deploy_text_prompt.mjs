@@ -3,8 +3,8 @@
 import { readFileSync } from 'fs';
 import { request } from 'https';
 
-const KEY = process.env.BFD_SETTER_LIVE_SERVICE_ROLE;
-if (!KEY) { console.error('Missing BFD_SETTER_LIVE_SERVICE_ROLE in .env'); process.exit(1); }
+const KEY = process.env.BFD_SETTER_LIVE_SECRET_KEY;
+if (!KEY) { console.error('Missing BFD_SETTER_LIVE_SECRET_KEY in .env'); process.exit(1); }
 const ROW_ID = 'e8df4178-c5f9-4366-a924-134ae6b9733c';
 
 const content = readFileSync('c:/Projects/Projects/1prompt-os/frontend/src/data/bfdTextSetterPrompt.ts', 'utf8');

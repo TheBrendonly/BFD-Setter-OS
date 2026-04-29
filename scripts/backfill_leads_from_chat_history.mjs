@@ -10,10 +10,10 @@
 import https from 'https';
 
 const BFD_PLATFORM_REF = 'bjgrgbgykvjrsuwwruoh';
-const BFD_PLATFORM_SR = requireEnv('BFD_PLATFORM_SERVICE_ROLE');
+const BFD_PLATFORM_SR = requireEnv('BFD_PLATFORM_SECRET_KEY');
 
 const SETTER_LIVE_REF = 'qildpilxjodxdifggmto';
-const SETTER_LIVE_SR = requireEnv('BFD_SETTER_LIVE_SERVICE_ROLE');
+const SETTER_LIVE_SR = requireEnv('BFD_SETTER_LIVE_SECRET_KEY');
 
 // Account-level PAT for Management API SQL endpoint
 const MANAGEMENT_PAT = requireEnv('SUPABASE_PAT');
