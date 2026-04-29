@@ -197,6 +197,40 @@ Deno.serve(async (req) => {
       return ok({ ok: true, skipped: true, reason: "client_not_found" });
     }
 
+    // ── Bump leads.last_message_at for the contact (canonical inbound pattern).
+    // Mirrors receive-twilio-sms / receive-dm-webhook so the Chats list reflects
+    // voice activity. Skipped when contactId is unknown (call had no contact context).
+    if (contactId) {
+      const direction = String(call.direction || call.call_type || "").toLowerCase();
+      const isInbound = direction.includes("inbound");
+      const leadPhone = isInbound ? (call.from_number || null) : (call.to_number || null);
+      const dvFirst = typeof dynamicVars.first_name === "string" ? dynamicVars.first_name : null;
+      const dvLast = typeof dynamicVars.last_name === "string" ? dynamicVars.last_name : null;
+      const callTs = toIsoTimestamp(call.end_timestamp) || toIsoTimestamp(call.start_timestamp) || new Date().toISOString();
+      const previewBits = ["[voice call"];
+      if (call.disconnection_reason) previewBits.push(String(call.disconnection_reason));
+      else if (call.call_status) previewBits.push(String(call.call_status));
+      else previewBits.push(String(eventType));
+      const preview = previewBits.join(": ").slice(0, 200) + "]";
+
+      const upsertRow: Record<string, unknown> = {
+        client_id: clientId,
+        lead_id: contactId,
+        last_message_at: callTs,
+        last_message_preview: preview,
+      };
+      if (leadPhone) upsertRow.phone = leadPhone;
+      if (dvFirst) upsertRow.first_name = dvFirst;
+      if (dvLast) upsertRow.last_name = dvLast;
+
+      const { error: leadUpsertErr } = await supabase
+        .from("leads")
+        .upsert(upsertRow, { onConflict: "client_id,lead_id" });
+      if (leadUpsertErr) {
+        console.warn(`⚠️ leads upsert failed for ${contactId}: ${leadUpsertErr.message}`);
+      }
+    }
+
     if (callId) {
       const { data: existingCallHistory } = await supabase
         .from("call_history")

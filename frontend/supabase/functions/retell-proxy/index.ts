@@ -42,6 +42,63 @@ function getSupabaseAdmin() {
   return createClient(supabaseUrl, serviceKey);
 }
 
+class RetellProxyAuthError extends Error {
+  status: number;
+  constructor(status: number, message: string) {
+    super(message);
+    this.status = status;
+  }
+}
+
+// Decode a Supabase auth JWT without verifying the signature.
+// Local decode mirrors check-client-subscription/index.ts:60-71 — avoids
+// brittle getUser() session-not-found issues and is sufficient because
+// every subsequent DB query goes through the service role + an
+// agency/client ownership check below.
+function decodeJwtSub(authHeader: string | null): string {
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    throw new RetellProxyAuthError(401, "Unauthorized");
+  }
+  const token = authHeader.slice("Bearer ".length);
+  let payload: { sub?: string };
+  try {
+    payload = JSON.parse(atob(token.split(".")[1]));
+  } catch {
+    throw new RetellProxyAuthError(401, "Unauthorized");
+  }
+  if (!payload.sub) throw new RetellProxyAuthError(401, "Unauthorized");
+  return payload.sub;
+}
+
+// Verify the calling user is allowed to act on `clientId`.
+// Agency users: profile.agency_id must match clients.agency_id.
+// Client users: profile.client_id must match clients.id.
+// This is the same check check-client-subscription performs.
+async function assertClientAccess(authHeader: string | null, clientId: string): Promise<void> {
+  const userId = decodeJwtSub(authHeader);
+  const supabase = getSupabaseAdmin();
+
+  const [{ data: client }, { data: roleData }, { data: profile }] = await Promise.all([
+    supabase.from("clients").select("id, agency_id").eq("id", clientId).maybeSingle(),
+    supabase.from("user_roles").select("role").eq("user_id", userId).limit(1).maybeSingle(),
+    supabase.from("profiles").select("agency_id, client_id").eq("id", userId).maybeSingle(),
+  ]);
+
+  if (!client) throw new RetellProxyAuthError(404, "Client not found");
+
+  const role = roleData?.role;
+  const allowed = role === "agency"
+    ? !!profile?.agency_id && profile.agency_id === client.agency_id
+    : role === "client"
+      ? profile?.client_id === client.id
+      : false;
+
+  if (!allowed) {
+    console.warn(`[retell-proxy] Forbidden: user=${userId} role=${role ?? "none"} clientId=${clientId}`);
+    throw new RetellProxyAuthError(403, "Forbidden");
+  }
+}
+
 async function getRetellApiKey(clientId: string): Promise<string> {
   const supabase = getSupabaseAdmin();
 
@@ -376,6 +433,12 @@ Deno.serve(async (req) => {
     if (!clientId) throw new Error("clientId is required");
     if (!action) throw new Error("action is required");
 
+    // Ownership check: the caller's JWT must map to a profile that owns
+    // (or has agency-level access to) the requested clientId. Without this,
+    // any authenticated agency user could pass another client's UUID and
+    // operate on their Retell account / read their API key.
+    await assertClientAccess(req.headers.get("Authorization"), clientId);
+
     const apiKey = await getRetellApiKey(clientId);
     let result: unknown;
 
@@ -683,6 +746,12 @@ Deno.serve(async (req) => {
       status: 200,
     });
   } catch (error: unknown) {
+    if (error instanceof RetellProxyAuthError) {
+      return new Response(JSON.stringify({ error: error.message }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: error.status,
+      });
+    }
     console.error("retell-proxy error:", error);
     const message = error instanceof Error ? error.message : "Unknown error";
     return new Response(JSON.stringify({ error: message }), {

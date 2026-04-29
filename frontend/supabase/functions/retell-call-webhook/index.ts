@@ -55,16 +55,53 @@ Deno.serve(async (req) => {
     }
 
     const client = clients[0];
+
+    // Extract dynamic vars early so we can use contactId for the leads upsert
+    // even when an external Supabase isn't configured.
+    const dynamicVars = call.retell_llm_dynamic_variables || call.dynamic_variables || {};
+    const setterId: string | null = dynamicVars.voice_setter_id || null;
+    const contactId: string | null =
+      dynamicVars.contact_id || dynamicVars.Contact_ID || dynamicVars.Lead_ID || null;
+
+    // ── Bump leads.last_message_at so the Chats list reflects voice activity.
+    // Same pattern as receive-twilio-sms / receive-dm-webhook / retell-call-analysis-webhook.
+    if (contactId) {
+      const direction = String(call.direction || call.call_type || "").toLowerCase();
+      const isInbound = direction.includes("inbound");
+      const leadPhone = isInbound ? (call.from_number || null) : (call.to_number || null);
+      const dvFirst = typeof dynamicVars.first_name === "string" ? dynamicVars.first_name : null;
+      const dvLast = typeof dynamicVars.last_name === "string" ? dynamicVars.last_name : null;
+      const ts = call.end_timestamp ? new Date(call.end_timestamp).toISOString() : (call.start_timestamp ? new Date(call.start_timestamp).toISOString() : new Date().toISOString());
+      const previewBits = ["[voice call"];
+      if (call.disconnection_reason) previewBits.push(String(call.disconnection_reason));
+      else if (call.call_status) previewBits.push(String(call.call_status));
+      else previewBits.push(String(payload.event));
+      const preview = previewBits.join(": ").slice(0, 200) + "]";
+
+      const upsertRow: Record<string, unknown> = {
+        client_id: client.id,
+        lead_id: contactId,
+        last_message_at: ts,
+        last_message_preview: preview,
+      };
+      if (leadPhone) upsertRow.phone = leadPhone;
+      if (dvFirst) upsertRow.first_name = dvFirst;
+      if (dvLast) upsertRow.last_name = dvLast;
+
+      const { error: leadUpsertErr } = await internalSupabase
+        .from("leads")
+        .upsert(upsertRow, { onConflict: "client_id,lead_id" });
+      if (leadUpsertErr) {
+        console.warn(`⚠️ leads upsert failed for ${contactId}: ${leadUpsertErr.message}`);
+      }
+    }
+
     if (!client.supabase_url || !client.supabase_service_key) {
       console.warn(`Client ${client.id} has no external Supabase configured`);
       return new Response(JSON.stringify({ ok: true, skipped: true, reason: "no_external_db" }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-
-    // Extract setter_id from dynamic variables if available
-    const dynamicVars = call.retell_llm_dynamic_variables || call.dynamic_variables || {};
-    const setterId: string | null = dynamicVars.voice_setter_id || null;
 
     // Build the voice_call_history record from Retell call data
     const durationMs = call.duration_ms ?? call.call_duration_ms ?? null;

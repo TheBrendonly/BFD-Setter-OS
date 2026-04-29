@@ -285,7 +285,6 @@ Deno.serve(async (req) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const triggerKey = Deno.env.get("TRIGGER_SECRET_KEY");
-    const skipSig = Deno.env.get("SKIP_TWILIO_SIG_CHECK") === "true";
 
     const supabase = createClient(supabaseUrl, serviceKey);
 
@@ -306,34 +305,32 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Verify Twilio signature
-    if (!skipSig) {
-      const authToken = client.twilio_auth_token;
-      if (!authToken) {
-        console.warn("No twilio_auth_token configured for client; rejecting", { clientId: client.id });
-        return new Response("Forbidden", { status: 403 });
-      }
-      // Twilio signs the EXTERNAL URL it called (whatever was configured
-      // in IncomingPhoneNumbers.sms_url). Inside Supabase's Deno runtime
-      // `req.url` reports the internal path (e.g. http://host/receive-twilio-sms),
-      // not the public path (https://host/functions/v1/receive-twilio-sms),
-      // so signing against `req.url` always fails. Reconstruct the public URL.
-      const publicWebhookUrl = `${supabaseUrl.replace(/\/$/, "")}/functions/v1/receive-twilio-sms`;
-      const sigOk = await verifyTwilioSignature(
+    // Verify Twilio signature. Mandatory — no skip env var. Twilio signs the
+    // EXTERNAL URL it called (whatever was configured in IncomingPhoneNumbers
+    // .sms_url). Inside Supabase's Deno runtime `req.url` reports the internal
+    // path (e.g. http://host/receive-twilio-sms), not the public path
+    // (https://host/functions/v1/receive-twilio-sms), so signing against
+    // `req.url` always fails. Reconstruct the public URL from SUPABASE_URL.
+    const authToken = client.twilio_auth_token;
+    if (!authToken) {
+      console.warn("No twilio_auth_token configured for client; rejecting", { clientId: client.id });
+      return new Response("Forbidden", { status: 403 });
+    }
+    const publicWebhookUrl = `${supabaseUrl.replace(/\/$/, "")}/functions/v1/receive-twilio-sms`;
+    const sigOk = await verifyTwilioSignature(
+      publicWebhookUrl,
+      params,
+      req.headers.get("X-Twilio-Signature"),
+      authToken,
+    );
+    if (!sigOk) {
+      console.warn("Twilio signature mismatch", {
+        clientId: client.id,
         publicWebhookUrl,
-        params,
-        req.headers.get("X-Twilio-Signature"),
-        authToken,
-      );
-      if (!sigOk) {
-        console.warn("Twilio signature mismatch", {
-          clientId: client.id,
-          publicWebhookUrl,
-          rawReqUrl: req.url,
-          messageSid,
-        });
-        return new Response("Forbidden", { status: 403 });
-      }
+        rawReqUrl: req.url,
+        messageSid,
+      });
+      return new Response("Forbidden", { status: 403 });
     }
 
     if (!client.dm_enabled) {
@@ -473,6 +470,9 @@ Deno.serve(async (req) => {
       .limit(1)
       .maybeSingle();
 
+    // Twilio retries the inbound webhook on transient errors; the partial
+    // unique index on message_queue.twilio_message_sid lets us swallow the
+    // duplicate so a retry doesn't enqueue (and reply to) the same SMS twice.
     const { error: mqError } = await supabase.from("message_queue").insert({
       lead_id: contactId,
       ghl_account_id: ghlAccountId,
@@ -481,8 +481,21 @@ Deno.serve(async (req) => {
       contact_email: contactEmail,
       contact_phone: fromPhone,
       channel: "sms",
+      twilio_message_sid: messageSid,
     });
-    if (mqError) console.error("message_queue insert failed", mqError);
+    if (mqError) {
+      // 23505 = unique_violation — Twilio retried this same SID; treat as success.
+      const isDuplicate = (mqError as { code?: string }).code === "23505"
+        || /duplicate key|already exists/i.test(mqError.message ?? "");
+      if (isDuplicate) {
+        console.info("message_queue dedup: Twilio retry for sid", { messageSid });
+        return new Response(TWIML_EMPTY, {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "text/xml" },
+        });
+      }
+      console.error("message_queue insert failed", mqError);
+    }
 
     const nameParts = (contactName || "").split(" ").filter(Boolean);
     await supabase

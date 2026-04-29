@@ -8,6 +8,19 @@ const getMainSupabase = () =>
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
 
+const redactPhone = (p: string | null | undefined): string => {
+  if (!p) return "<no-phone>";
+  const s = String(p);
+  if (s.length <= 6) return s.slice(0, 2) + "***";
+  return s.slice(0, 4) + "***" + s.slice(-3);
+};
+
+const redactBody = (b: string | null | undefined): string => {
+  if (b == null) return "<empty>";
+  const s = String(b);
+  return `[redacted body, ${s.length} chars]`;
+};
+
 export const processMessages = task({
   id: "process-messages",
   maxDuration: 3600,
@@ -337,10 +350,10 @@ export const processMessages = task({
           );
           const twilioJson = (await twilioRes.json()) as { sid?: string; error_code?: number; error_message?: string };
           if (!twilioRes.ok) {
-            await logError("twilio_sms_error", `Twilio SMS failed: ${twilioJson.error_code} ${twilioJson.error_message}`, { to: contact_phone, error_code: twilioJson.error_code });
+            await logError("twilio_sms_error", `Twilio SMS failed: ${twilioJson.error_code} ${twilioJson.error_message}`, { to: redactPhone(contact_phone), error_code: twilioJson.error_code });
             console.warn(`Twilio SMS failed for msg: ${twilioJson.error_code} ${twilioJson.error_message}`);
           } else {
-            console.log(`Twilio SMS sent: ${twilioJson.sid} → ${contact_phone}`);
+            console.log(`Twilio SMS sent: ${twilioJson.sid} → ${redactPhone(contact_phone)}`);
           }
         }
       }

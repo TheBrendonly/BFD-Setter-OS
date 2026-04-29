@@ -8,6 +8,12 @@ const getMainSupabase = () =>
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
 
+const redactBody = (b: string | null | undefined): string => {
+  if (b == null) return "<empty>";
+  const s = String(b);
+  return `[redacted body, ${s.length} chars]`;
+};
+
 type EngageChannel = {
   type: "sms" | "whatsapp" | "phone_call";
   enabled: boolean;
@@ -436,7 +442,7 @@ export const runEngagement = task({
               throw new Error(`Engagement webhook (${ch.type}) failed ${resp.status}: ${errText.slice(0, 200)}`);
             }
 
-            console.log(`Engage ${ch.type} sent to ${lead_id}: "${message.slice(0, 80)}"`);
+            console.log(`Engage ${ch.type} sent to lead ${lead_id}: ${redactBody(message)}`);
             await updateExecution({
               ...(ch.type === "sms" ? { last_sms_sent_at: new Date().toISOString() } : {}),
               stage_description: `${ch.type === "sms" ? "SMS" : "WhatsApp"} sent.`,
@@ -478,7 +484,7 @@ export const runEngagement = task({
             throw new Error(`Engagement webhook (SMS) failed ${smsResponse.status}: ${errText.slice(0, 200)}`);
           }
 
-          console.log(`SMS sent to ${lead_id}: "${message.slice(0, 80)}"`);
+          console.log(`SMS sent to lead ${lead_id}: ${redactBody(message)}`);
           await updateExecution({
             last_sms_sent_at: new Date().toISOString(),
             stage_description: "SMS sent.",
@@ -509,7 +515,7 @@ export const runEngagement = task({
             throw new Error(`Engagement webhook (WhatsApp) failed ${waResponse.status}: ${errText.slice(0, 200)}`);
           }
 
-          console.log(`WhatsApp sent to ${lead_id}: "${message.slice(0, 80)}"`);
+          console.log(`WhatsApp sent to lead ${lead_id}: ${redactBody(message)}`);
           await updateExecution({ stage_description: "WhatsApp sent." });
           await Promise.all([
             logCampaignEvent({ event_type: "message_sent", channel: "whatsapp", node_index: i, node_id: node.id, metadata: { message_body: message } }),
