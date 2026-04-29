@@ -26,6 +26,10 @@ type EngageChannel = {
   voice_setter_id?: string;            // slot_id like "Voice-Setter-2"
   instructions?: string;               // custom call instructions
   treat_pickup_as_reply?: boolean;     // end sequence when human answers
+  // Phase 4d — voicemail-drop variant. When call_mode === "voicemail_drop",
+  // skip Retell entirely and use Twilio AMD + <Play>{audio_url}</Play>.
+  call_mode?: "live_call" | "voicemail_drop";
+  voicemail_audio_url?: string;
 };
 
 type EngagementNode =
@@ -38,6 +42,156 @@ type EngagementNode =
   | { id: string; type: "engage"; message: string; channels: EngageChannel[] }
   | { id: string; type: "wait_for_reply"; timeout_seconds: number }
   | { id: string; type: "drip"; batch_size: number; interval_seconds: number };
+
+// ── Phase 4b — Quiet hours ─────────────────────────────────────────────────
+// clients.cadence_quiet_hours jsonb shape (per Docs/CADENCE_DESIGN.md):
+//   { "start": "09:00", "end": "21:00", "tz": "Australia/Brisbane",
+//     "days": [1,2,3,4,5] }   // 1=Mon ... 7=Sun
+type QuietHoursConfig = {
+  start: string; // HH:MM
+  end: string;   // HH:MM
+  tz: string;    // IANA
+  days: number[]; // 1..7
+};
+
+const DEFAULT_QUIET_HOURS: QuietHoursConfig = {
+  start: "09:00",
+  end: "21:00",
+  tz: "Australia/Brisbane",
+  days: [1, 2, 3, 4, 5, 6, 7],
+};
+
+const PHONE_TZ_PREFIX_MAP: Record<string, string> = {
+  "+61": "Australia/Brisbane",
+  "+1":  "America/New_York",
+  "+44": "Europe/London",
+  "+64": "Pacific/Auckland",
+  "+353": "Europe/Dublin",
+  "+27": "Africa/Johannesburg",
+};
+
+function resolveLeadTimezone(phone: string | undefined, clientDefaultTz: string): string {
+  if (!phone) return clientDefaultTz;
+  // Sort prefixes by length descending so +353 wins over +1
+  const prefixes = Object.keys(PHONE_TZ_PREFIX_MAP).sort((a, b) => b.length - a.length);
+  for (const prefix of prefixes) {
+    if (phone.startsWith(prefix)) return PHONE_TZ_PREFIX_MAP[prefix];
+  }
+  return clientDefaultTz;
+}
+
+function isWithinQuietHoursWindow(now: Date, qh: QuietHoursConfig, tz: string): boolean {
+  const localStr = now.toLocaleString("en-US", { timeZone: tz });
+  const local = new Date(localStr);
+  // 1=Mon..7=Sun
+  const dayJs = local.getDay();
+  const day = dayJs === 0 ? 7 : dayJs;
+  if (!qh.days.includes(day)) return false;
+  const cur = local.toTimeString().slice(0, 5);
+  const overnight = qh.start > qh.end;
+  if (overnight) return cur >= qh.start || cur <= qh.end;
+  return cur >= qh.start && cur <= qh.end;
+}
+
+// Step forward in 5-minute increments to keep the loop cheap; max 14 days
+function getNextQuietHoursStart(now: Date, qh: QuietHoursConfig, tz: string): Date {
+  if (isWithinQuietHoursWindow(now, qh, tz)) return now;
+  let probe = new Date(now);
+  const stepMs = 5 * 60_000;
+  const maxIters = (14 * 24 * 60) / 5;
+  for (let i = 0; i < maxIters; i++) {
+    probe = new Date(probe.getTime() + stepMs);
+    if (isWithinQuietHoursWindow(probe, qh, tz)) return probe;
+  }
+  // 14d soft cap — return now to avoid forever-park
+  return now;
+}
+
+function parseQuietHours(raw: unknown): QuietHoursConfig | null {
+  if (!raw || typeof raw !== "object") return null;
+  const r = raw as Record<string, unknown>;
+  const start = typeof r.start === "string" ? r.start : null;
+  const end = typeof r.end === "string" ? r.end : null;
+  const tz = typeof r.tz === "string" ? r.tz : null;
+  const days = Array.isArray(r.days) ? r.days.filter((d): d is number => typeof d === "number" && d >= 1 && d <= 7) : null;
+  if (!start || !end || !tz || !days || days.length === 0) return null;
+  return { start, end, tz, days };
+}
+
+// ── Phase 4d — Voicemail drop ─────────────────────────────────────────────
+// Resolve the voicemail audio URL for this channel. Per-client setting on
+// clients.voicemail_audio_url (jsonb of { "voice-setter-1": url, ... }) so
+// each setter has its own pre-recorded voicemail. Channel-level override
+// (channel.voicemail_audio_url) wins if present.
+function resolveVoicemailAudioUrl(args: {
+  channel: EngageChannel;
+  voicemailMap: unknown;
+}): string | null {
+  if (typeof args.channel.voicemail_audio_url === "string" && args.channel.voicemail_audio_url) {
+    return args.channel.voicemail_audio_url;
+  }
+  const map = args.voicemailMap;
+  if (!map || typeof map !== "object" || Array.isArray(map)) return null;
+  const m = map as Record<string, unknown>;
+  if (args.channel.voice_setter_id) {
+    const v = m[args.channel.voice_setter_id];
+    if (typeof v === "string" && v) return v;
+  }
+  // Also accept the lowercase / hyphenated variant as a fallback
+  const slotKeys = ["default", "voice-setter-1", "voice-setter-default"];
+  for (const k of slotKeys) {
+    const v = m[k];
+    if (typeof v === "string" && v) return v;
+  }
+  return null;
+}
+
+async function placeVoicemailDrop(args: {
+  twilioSid: string;
+  twilioAuth: string;
+  fromNumber: string;
+  toNumber: string;
+  audioUrl: string;
+}): Promise<{ ok: boolean; callSid: string | null; error?: string }> {
+  const { twilioSid, twilioAuth, fromNumber, toNumber, audioUrl } = args;
+  const twiml = `<?xml version="1.0" encoding="UTF-8"?><Response><Pause length="1"/><Play>${escapeXml(audioUrl)}</Play></Response>`;
+  const params = new URLSearchParams({
+    From: fromNumber,
+    To: toNumber,
+    Twiml: twiml,
+    MachineDetection: "Enable",
+    AsyncAmd: "true",
+  });
+  try {
+    const r = await fetch(
+      `https://api.twilio.com/2010-04-01/Accounts/${twilioSid}/Calls.json`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+          Authorization: `Basic ${Buffer.from(`${twilioSid}:${twilioAuth}`).toString("base64")}`,
+        },
+        body: params.toString(),
+      },
+    );
+    const j = await r.json().catch(() => null) as { sid?: string; code?: number; message?: string } | null;
+    if (!r.ok) {
+      return { ok: false, callSid: null, error: `Twilio ${r.status}: ${j?.message ?? "unknown"}` };
+    }
+    return { ok: true, callSid: j?.sid ?? null };
+  } catch (e) {
+    return { ok: false, callSid: null, error: (e as Error).message };
+  }
+}
+
+function escapeXml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+}
 
 export const runEngagement = task({
   id: "run-engagement",
@@ -163,13 +317,37 @@ export const runEngagement = task({
       // ── Load client config ────────────────────────────────────────────────
       const { data: client } = await supabase
         .from("clients")
-        .select("send_engagement_webhook_url, supabase_url, supabase_service_key")
+        .select("send_engagement_webhook_url, supabase_url, supabase_service_key, cadence_quiet_hours, twilio_account_sid, twilio_auth_token, twilio_default_phone, retell_phone_1, voicemail_audio_url")
         .eq("id", client_id)
         .single();
 
       if (!client?.send_engagement_webhook_url) {
         throw new Error("Missing client send_engagement_webhook_url");
       }
+
+      // Phase 4b — quiet hours config (falls back to a sensible default when
+      // the client hasn't explicitly configured a window).
+      const quietHours = parseQuietHours(client.cadence_quiet_hours) ?? DEFAULT_QUIET_HOURS;
+      const leadTz = resolveLeadTimezone(payload.Phone, quietHours.tz);
+
+      const enforceQuietHoursBeforeSend = async (label: string): Promise<boolean> => {
+        const now = new Date();
+        if (isWithinQuietHoursWindow(now, quietHours, leadTz)) return true;
+        const resumeAt = getNextQuietHoursStart(now, quietHours, leadTz);
+        const waitSecs = Math.max(0, Math.round((resumeAt.getTime() - Date.now()) / 1000));
+        const localTime = resumeAt.toLocaleTimeString("en-US", {
+          timeZone: leadTz,
+          hour: "2-digit",
+          minute: "2-digit",
+          timeZoneName: "short",
+        });
+        console.log(`Quiet-hours gate (${label}): outside window — waiting ${waitSecs}s until ${localTime} (${leadTz})`);
+        await updateExecution({
+          stage_description: `Outside quiet hours — resuming at ${localTime}`,
+        });
+        await wait.until({ date: resumeAt });
+        return false;
+      };
 
       // External Supabase client for writing outbound messages to chat_history
       const clientSupabase =
@@ -334,6 +512,10 @@ export const runEngagement = task({
         // Groups SMS, WhatsApp, and phone call channels with per-channel delays.
         // Channels are executed in order; only enabled channels fire.
         } else if (node.type === "engage") {
+          // Phase 4b — quiet hours gate (always-on per-client fallback).
+          await enforceQuietHoursBeforeSend(`engage node ${i}`);
+          if (await isCancelled()) return { status: "cancelled", node_index: i };
+
           // ── Schedule gate: wait until the next allowed send window ──────────
           if (schedule) {
             const nextWindow = getNextScheduleWindow(new Date(), schedule);
@@ -376,6 +558,51 @@ export const runEngagement = task({
             }
 
             if (ch.type === "phone_call") {
+              // Phase 4d — voicemail drop branch (Twilio AMD + <Play>) bypasses
+              // Retell entirely. Cheaper + faster + always reaches voicemail.
+              if (ch.call_mode === "voicemail_drop") {
+                const audioUrl = resolveVoicemailAudioUrl({
+                  channel: ch,
+                  voicemailMap: client.voicemail_audio_url,
+                });
+                const twilioSid = (client as any).twilio_account_sid as string | null;
+                const twilioAuth = (client as any).twilio_auth_token as string | null;
+                const twilioFrom =
+                  (client as any).twilio_default_phone as string | null
+                  ?? (client as any).retell_phone_1 as string | null;
+                const toNumber = payload.Phone;
+
+                if (!audioUrl) {
+                  console.warn(`Engage phone_call (voicemail_drop) skipped — no audio URL configured for setter ${ch.voice_setter_id ?? "(none)"}`);
+                  await updateExecution({ stage_description: "Voicemail drop skipped (no audio URL)." });
+                } else if (!twilioSid || !twilioAuth || !twilioFrom || !toNumber) {
+                  console.warn("Engage phone_call (voicemail_drop) skipped — missing twilio creds or phone numbers");
+                  await updateExecution({ stage_description: "Voicemail drop skipped (twilio config)." });
+                } else {
+                  await updateExecution({ stage_description: "Placing voicemail drop..." });
+                  const dropResult = await placeVoicemailDrop({
+                    twilioSid,
+                    twilioAuth,
+                    fromNumber: twilioFrom,
+                    toNumber,
+                    audioUrl,
+                  });
+                  if (!dropResult.ok) {
+                    throw new Error(`Voicemail drop failed: ${dropResult.error ?? "unknown"}`);
+                  }
+                  console.log(`Voicemail drop placed (call_sid=${dropResult.callSid}) → ${toNumber}`);
+                  await updateExecution({ stage_description: "Voicemail drop placed." });
+                  await logCampaignEvent({
+                    event_type: "message_sent",
+                    channel: "voicemail_drop",
+                    node_index: i,
+                    node_id: node.id,
+                    metadata: { call_sid: dropResult.callSid, voice_setter_id: ch.voice_setter_id },
+                  });
+                }
+                continue;
+              }
+
               if (!payload.make_retell_call_url) {
                 throw new Error("phone_call channel requires make_retell_call_url in payload");
               }
@@ -465,6 +692,8 @@ export const runEngagement = task({
 
         // ── SEND SMS node (legacy) ──────────────────────────────────────────
         } else if (node.type === "send_sms") {
+          await enforceQuietHoursBeforeSend(`send_sms node ${i}`);
+          if (await isCancelled()) return { status: "cancelled", node_index: i };
           const message = interpolate(node.message);
           await updateExecution({ stage_description: "Sending SMS..." });
 
@@ -496,6 +725,8 @@ export const runEngagement = task({
 
         // ── SEND WHATSAPP node ──────────────────────────────────────────────
         } else if (node.type === "send_whatsapp") {
+          await enforceQuietHoursBeforeSend(`send_whatsapp node ${i}`);
+          if (await isCancelled()) return { status: "cancelled", node_index: i };
           const message = interpolate(node.message);
           await updateExecution({ stage_description: "Sending WhatsApp..." });
 
@@ -524,6 +755,8 @@ export const runEngagement = task({
 
         // ── PHONE CALL node (legacy flat) ───────────────────────────────────
         } else if (node.type === "phone_call") {
+          await enforceQuietHoursBeforeSend(`phone_call node ${i}`);
+          if (await isCancelled()) return { status: "cancelled", node_index: i };
           if (!payload.make_retell_call_url) {
             throw new Error("phone_call node requires make_retell_call_url in payload");
           }

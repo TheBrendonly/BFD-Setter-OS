@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { isWithinBusinessHours, getNextValidTime } from "../_shared/business-hours.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -26,63 +27,8 @@ interface BulkInsertRequest {
   daysOfWeek: number[];
 }
 
-// Helper function to check if a time is within business hours
-function isWithinBusinessHours(
-  date: Date,
-  startTime: string,
-  endTime: string,
-  daysOfWeek: number[],
-  timezone: string
-): boolean {
-  // Convert to target timezone
-  const timeInTZ = new Date(date.toLocaleString("en-US", {timeZone: timezone}));
-  
-  // Get day of week (0 = Sunday, 1 = Monday, etc.)
-  const dayOfWeek = timeInTZ.getDay();
-  // Convert to our format (1 = Monday, 7 = Sunday)
-  const normalizedDay = dayOfWeek === 0 ? 7 : dayOfWeek;
-  
-  // Check if day is allowed
-  if (!daysOfWeek.includes(normalizedDay)) {
-    return false;
-  }
-  
-  // Get time in HH:MM format
-  const currentTime = timeInTZ.toTimeString().slice(0, 5);
-  
-  // Handle overnight schedules
-  const isOvernightSchedule = startTime > endTime;
-  
-  if (isOvernightSchedule) {
-    return currentTime >= startTime || currentTime <= endTime;
-  } else {
-    return currentTime >= startTime && currentTime <= endTime;
-  }
-}
-
-// Calculate next valid scheduling time
-function getNextValidTime(
-  currentTime: Date,
-  startTime: string,
-  endTime: string,
-  daysOfWeek: number[],
-  timezone: string
-): Date {
-  let nextTime = new Date(currentTime);
-  
-  // Look ahead up to 14 days to find next valid time
-  for (let i = 0; i < 14; i++) {
-    if (isWithinBusinessHours(nextTime, startTime, endTime, daysOfWeek, timezone)) {
-      return nextTime;
-    }
-    
-    // Move to next minute
-    nextTime = new Date(nextTime.getTime() + 60000);
-  }
-  
-  // Fallback: return original time if no valid time found
-  return currentTime;
-}
+// Business-hours helpers extracted to ../_shared/business-hours.ts
+// (so other edge functions can reuse the same convention).
 
 serve(async (req) => {
   console.log('Bulk insert leads function called');
