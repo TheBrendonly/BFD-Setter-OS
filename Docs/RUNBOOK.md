@@ -1,0 +1,241 @@
+# Runbook
+
+## Deploys
+
+### Edge function (single)
+```bash
+cd frontend
+SUPABASE_ACCESS_TOKEN=$(grep '^SUPABASE_PAT=' ../.env | cut -d= -f2) \
+  ./node_modules/.bin/supabase functions deploy <slug> \
+  --project-ref bjgrgbgykvjrsuwwruoh --no-verify-jwt
+```
+
+### Edge function (all changed in current branch)
+```bash
+cd frontend
+git diff --name-only main..HEAD | grep '^frontend/supabase/functions/' | cut -d/ -f4 | sort -u | \
+  while read slug; do
+    SUPABASE_ACCESS_TOKEN=$(...) ./node_modules/.bin/supabase functions deploy "$slug" \
+      --project-ref bjgrgbgykvjrsuwwruoh --no-verify-jwt
+  done
+```
+
+### Trigger.dev tasks
+```bash
+TRIGGER_ACCESS_TOKEN=$(grep '^TRIGGER_DEPLOY_PAT=' .env | cut -d= -f2) \
+  npx -y trigger.dev@latest deploy --env prod
+```
+
+### Supabase migration via Management API
+```bash
+node --env-file=.env -e "
+const sql = \`<your migration SQL>\`;
+const r = await fetch('https://api.supabase.com/v1/projects/bjgrgbgykvjrsuwwruoh/database/query', {
+  method: 'POST',
+  headers: {
+    'Authorization': 'Bearer ' + process.env.SUPABASE_PAT,
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({ query: sql })
+});
+console.log(await r.json());
+"
+```
+
+### Frontend dashboard (Railway)
+Auto-deploys on push to `main`. To redeploy without code change: hit the **Redeploy** button in Railway UI for the frontend service.
+
+## Rollback
+
+### One phase back (preferred)
+```bash
+git revert phase-N..HEAD             # creates a revert commit
+git push origin main                  # triggers Railway redeploy
+# Redeploy affected edge fns + Trigger.dev tasks per CHANGES_LOG.md "files changed" list
+```
+
+### Hard reset (only if forward-fix is impossible)
+```bash
+git reset --hard <commit-before-broken-phase>
+git push --force-with-lease origin main
+```
+**Warning:** force-push rewrites history. Coordinate with anyone working on the repo.
+
+## Critical operations
+
+### Flip a client to native text engine (Phase 9)
+```sql
+-- Pre-flight: confirm processSetterReply is deployed
+-- (Trigger.dev console should show task `process-setter-reply` at the latest version)
+
+UPDATE clients SET use_native_text_engine = true WHERE id = '<client-uuid>';
+```
+
+To roll back instantly:
+```sql
+UPDATE clients SET use_native_text_engine = false WHERE id = '<client-uuid>';
+```
+
+No deploy needed — `processMessages.ts` reads the flag on every run.
+
+### Enable cadence auto-enrolment for a client
+```sql
+-- Pre-flight: review the workflow nodes
+SELECT id, name, jsonb_array_length(nodes) AS node_count
+FROM engagement_workflows
+WHERE client_id = '<client-uuid>';
+
+-- Enable
+UPDATE clients SET auto_engagement_workflow_id = '<workflow-uuid>'
+WHERE id = '<client-uuid>';
+```
+
+Disable: `UPDATE clients SET auto_engagement_workflow_id = NULL WHERE id = '...'`.
+
+### Cancel an active engagement execution
+```sql
+-- Find it
+SELECT id, trigger_run_id FROM engagement_executions
+WHERE ghl_contact_id = '<lead-id>' AND status IN ('pending','running','waiting');
+
+-- Cancel
+UPDATE engagement_executions
+SET status = 'cancelled', stop_reason = 'manual', completed_at = now()
+WHERE id = '<execution-uuid>';
+```
+
+Then cancel the Trigger.dev run via:
+```bash
+curl -X POST https://api.trigger.dev/api/v2/runs/<run_id>/cancel \
+  -H "Authorization: Bearer $TRIGGER_SECRET_KEY"
+```
+
+### Manually opt-out a phone number
+```sql
+INSERT INTO lead_optouts (client_id, phone, source)
+VALUES ('<client-uuid>', '+61400000000', 'manual')
+ON CONFLICT (client_id, phone) DO NOTHING;
+
+UPDATE leads SET setter_stopped = true
+WHERE client_id = '<client-uuid>' AND phone = '+61400000000';
+```
+
+### Add a per-client custom field id for last_synced_from (Phase 6)
+1. Brendan: in GHL location settings → Custom Fields → New, name `last_synced_from`, type Single Line Text, applies to Contacts. Note the field id.
+2. Edit `frontend/supabase/functions/push-contact-to-ghl/index.ts:33`:
+   ```ts
+   const BFD_LAST_SYNCED_FROM_FIELD_ID = "<the-field-id>";
+   ```
+3. Redeploy `push-contact-to-ghl`.
+
+For multi-client: add `clients.ghl_last_synced_from_field_id text` and read per-client.
+
+## Incident playbooks
+
+### "Inbound SMS pipeline silent"
+Confirm with:
+```sql
+SELECT count(*) FROM message_queue WHERE created_at > now() - interval '1 hour';
+```
+If 0:
+1. Check Twilio Messages log: did Twilio attempt the webhook? Note `error_code` if any (11200 = HTTP retrieval failure).
+2. Curl the function directly: `curl -X POST 'https://bjgrgbgykvjrsuwwruoh.supabase.co/functions/v1/receive-twilio-sms'` — expect 405 (GET) or 403 (POST without sig).
+3. If 5xx: Supabase function is broken. Check function logs in dashboard.
+4. If 200 from curl but Twilio still gets non-200: the gateway is rejecting Twilio's POST due to a JWT verification mis-config. Check `verify_jwt = false` in config.toml AND the Management API listing.
+5. Reference: session-5 handoff, the req.url-vs-public-URL bug.
+
+### "AI replies stop arriving"
+1. Check `error_logs` last hour
+2. Check Trigger.dev console for failed `process-messages` runs
+3. If `client.use_native_text_engine = true`: also check `process-setter-reply` runs
+4. n8n down? `curl https://primary-production-392b.up.railway.app/healthz`
+5. OpenRouter key invalid? Test: `curl https://openrouter.ai/api/v1/models -H "Authorization: Bearer $key"`
+
+### "Webhook returning 403"
+1. Sig mismatch — check the function logs for the warn message
+2. Public URL reconstruction issue (req.url vs SUPABASE_URL)
+3. Token mismatch — DB token vs provider's current primary
+
+## Pre-flight checklists
+
+### Before flipping `use_native_text_engine` (Phase 9)
+- [ ] processSetterReply task deployed and visible in Trigger.dev console
+- [ ] Side-by-side test of 5 historical messages logged in CHANGES_LOG.md, diffs reviewed
+- [ ] Trigger.dev runs for processSetterReply succeed (no failures in last 24h test runs)
+- [ ] No errors in `error_logs` for `source = 'process-setter-reply'`
+
+### Before enabling auto-enrolment for a client
+- [ ] `engagement_workflows.nodes` reviewed — every `engage` node has client-edited copy (no `[BRENDAN: ...]` placeholders)
+- [ ] Quiet hours configured: `clients.cadence_quiet_hours` set (or default of 9-9 acceptable)
+- [ ] STOP keyword path tested
+- [ ] One real lead enrolled manually first, watched through full cadence
+
+### Before n8n decommission (Phase 10)
+- [ ] BFD running on `use_native_text_engine = true` for ≥ 14 days
+- [ ] Zero regressions logged in CHANGES_LOG.md
+- [ ] `voice-booking-tools` agent URL repointed and tested with a live booking
+- [ ] `kb-ingest` tested with a real KB doc upload
+- [ ] All clients (currently just BFD) flipped
+
+## Embed `intake-lead` on a client website (after Phase 5)
+
+Drop this on the form's success handler:
+```html
+<script>
+async function intake1prompt(formData) {
+  const r = await fetch('https://bjgrgbgykvjrsuwwruoh.supabase.co/functions/v1/intake-lead', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer <YOUR_INTAKE_SECRET>'
+    },
+    body: JSON.stringify({
+      clientId: '<YOUR_CLIENT_ID>',
+      first_name: formData.get('first_name'),
+      last_name: formData.get('last_name'),
+      phone: formData.get('phone'),
+      email: formData.get('email'),
+      source: 'website-form'
+    })
+  });
+  return r.json();
+}
+</script>
+```
+
+Each client gets their own `intake_lead_secret`. Lookup:
+```sql
+SELECT id, name, intake_lead_secret FROM clients WHERE id = '<client-uuid>';
+```
+
+To rotate: `UPDATE clients SET intake_lead_secret = encode(gen_random_bytes(24), 'base64') WHERE id = '...'`. Then update the embed script.
+
+## GHL configuration playbook
+
+### Configuring the GHL "Send Setter Reply" workflow → bookings webhook (Phase 7c)
+Brendan, in GHL:
+1. Go to **Workflows** → New → **Calendar Events**
+2. Trigger: **Appointment Created** + **Appointment Updated** + **Appointment Cancelled**
+3. Action: **Webhook** → URL: `https://bjgrgbgykvjrsuwwruoh.supabase.co/functions/v1/bookings-webhook`
+4. Payload: include `appointmentId`, `contactId`, `calendarId`, `startTime`, `endTime`, `status`
+5. Save + activate
+
+### Enabling Webhook V2 for sig verification (Phase 8a)
+Brendan, in GHL:
+1. **Settings** → **Marketplace** → **Webhooks v2** → **Enable**
+2. Note the webhook secret shown — paste into `clients.ghl_webhook_secret` for each client location
+
+## Environment
+
+Local `.env` template at `.env.example`. Required for autonomous sessions:
+- `SUPABASE_PAT` — Supabase Management API PAT (account-level)
+- `BFD_PLATFORM_SECRET_KEY` — bfd-platform service-role key (sb_secret_*)
+- `BFD_PLATFORM_ANON_KEY` — bfd-platform publishable key (sb_publishable_*)
+- `BFD_SETTER_LIVE_SECRET_KEY` — bfd-setter-live service-role key
+- `BFD_RETELL_API_KEY` — BFD's Retell API key
+- `BFD_TWILIO_ACCOUNT_SID` + `BFD_TWILIO_AUTH_TOKEN` — for Twilio API calls during scripts
+- `BFD_GHL_PIT` + `BFD_GHL_LOCATION_ID` — for GHL API calls during scripts
+- `BFD_CLIENT_ID` — for SQL filters during scripts
+- `TRIGGER_DEPLOY_PAT` — for `npx trigger.dev deploy`
+
+Pre-commit hook (`.git/hooks/pre-commit`) runs `scripts/check-secrets.mjs` to block accidental re-leakage. NEVER inline secrets in committed code.
