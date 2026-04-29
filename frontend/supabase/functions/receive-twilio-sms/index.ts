@@ -313,10 +313,14 @@ Deno.serve(async (req) => {
         console.warn("No twilio_auth_token configured for client; rejecting", { clientId: client.id });
         return new Response("Forbidden", { status: 403 });
       }
-      // Twilio signs the public URL Twilio used to call us. URL must match
-      // exactly what Twilio used (no trailing slash diffs). Use req.url.
+      // Twilio signs the EXTERNAL URL it called (whatever was configured
+      // in IncomingPhoneNumbers.sms_url). Inside Supabase's Deno runtime
+      // `req.url` reports the internal path (e.g. http://host/receive-twilio-sms),
+      // not the public path (https://host/functions/v1/receive-twilio-sms),
+      // so signing against `req.url` always fails. Reconstruct the public URL.
+      const publicWebhookUrl = `${supabaseUrl.replace(/\/$/, "")}/functions/v1/receive-twilio-sms`;
       const sigOk = await verifyTwilioSignature(
-        req.url,
+        publicWebhookUrl,
         params,
         req.headers.get("X-Twilio-Signature"),
         authToken,
@@ -324,7 +328,8 @@ Deno.serve(async (req) => {
       if (!sigOk) {
         console.warn("Twilio signature mismatch", {
           clientId: client.id,
-          url: req.url,
+          publicWebhookUrl,
+          rawReqUrl: req.url,
           messageSid,
         });
         return new Response("Forbidden", { status: 403 });
