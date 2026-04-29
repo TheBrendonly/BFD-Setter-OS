@@ -6,7 +6,7 @@ Append-only. One row per phase / sub-phase as it ships. Used to roll back.
 |---|---|---|---|---|---|
 | 2026-04-30 | 0 — Docs scaffold | `0967238` | `phase-0-docs` | `Docs/*` (7 new) | `git revert phase-0-docs..HEAD` |
 | 2026-04-30 | 6 — Bidirectional GHL sync | `68237a5` | `phase-6-bidi-sync` | `frontend/supabase/functions/push-contact-to-ghl/index.ts:33` (field id), `frontend/supabase/functions/sync-ghl-contact/index.ts` (echo guard), `n8n/exports/Text_Engine_REVERSE_ENGINEERED.md` (NEW) | `git revert phase-6-bidi-sync..HEAD` then redeploy push-contact-to-ghl + sync-ghl-contact |
-| 2026-04-30 | 1 — Text Engine port | _this commit_ | `phase-1-text-engine-port` | `trigger/processSetterReply.ts` (NEW), `trigger/processMessages.ts` (branch on `client.use_native_text_engine`) | `git revert phase-1-text-engine-port..HEAD` then `npx trigger.dev deploy --env prod` |
+| 2026-04-30 | 1 — Text Engine port | `0e76001` | `phase-1-text-engine-port` | `trigger/processSetterReply.ts` (NEW), `trigger/processMessages.ts` (branch on `client.use_native_text_engine`) | `git revert phase-1-text-engine-port..HEAD` then `npx trigger.dev deploy --env prod` |
 
 ## Format for future entries
 
