@@ -381,14 +381,23 @@ export const processMessages = task({
       const twilioSid = (client as any).twilio_account_sid as string | null;
       const twilioAuth = (client as any).twilio_auth_token as string | null;
       const twilioFrom = (client as any).retell_phone_1 as string | null;
+      // Phase 7b — Twilio status callback. Reconstruct from SUPABASE_URL
+      // (req.url-style internal hostnames don't help here since we're in
+      // Trigger.dev, not a Deno edge fn — but we still need the public URL).
+      const supabaseUrl = process.env.SUPABASE_URL;
+      const statusCallbackUrl = supabaseUrl
+        ? `${supabaseUrl.replace(/\/$/, "")}/functions/v1/twilio-status-webhook`
+        : null;
       if (channel === "sms" && twilioSid && twilioAuth && twilioFrom && contact_phone) {
         for (const msg of setterMessages) {
           if (!msg?.trim()) continue;
-          const twilioBody = new URLSearchParams({
+          const params: Record<string, string> = {
             From: twilioFrom,
             To: contact_phone,
             Body: msg,
-          });
+          };
+          if (statusCallbackUrl) params.StatusCallback = statusCallbackUrl;
+          const twilioBody = new URLSearchParams(params);
           const twilioRes = await fetch(
             `https://api.twilio.com/2010-04-01/Accounts/${twilioSid}/Messages.json`,
             {
@@ -406,6 +415,25 @@ export const processMessages = task({
             console.warn(`Twilio SMS failed for msg: ${twilioJson.error_code} ${twilioJson.error_message}`);
           } else {
             console.log(`Twilio SMS sent: ${twilioJson.sid} → ${redactPhone(contact_phone)}`);
+            // Stamp the outbound on message_queue so the status webhook can
+            // mirror terminal states back to it.
+            if (twilioJson.sid) {
+              try {
+                await supabase.from("message_queue").insert({
+                  lead_id,
+                  ghl_account_id,
+                  message_body: msg,
+                  contact_name,
+                  contact_email,
+                  contact_phone,
+                  channel: "sms_outbound",
+                  twilio_message_sid: twilioJson.sid,
+                  processed: true,
+                });
+              } catch (insErr) {
+                console.warn("processMessages: outbound message_queue insert failed (non-fatal)", insErr);
+              }
+            }
           }
         }
       }

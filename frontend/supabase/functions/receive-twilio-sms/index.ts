@@ -48,7 +48,13 @@ async function sendTwilioCompliance(args: {
     return;
   }
   try {
-    const params = new URLSearchParams({ From: fromNumber, To: toNumber, Body: body });
+    const supabaseUrlEnv = Deno.env.get("SUPABASE_URL");
+    const statusCallbackUrl = supabaseUrlEnv
+      ? `${supabaseUrlEnv.replace(/\/$/, "")}/functions/v1/twilio-status-webhook`
+      : null;
+    const fields: Record<string, string> = { From: fromNumber, To: toNumber, Body: body };
+    if (statusCallbackUrl) fields.StatusCallback = statusCallbackUrl;
+    const params = new URLSearchParams(fields);
     const r = await fetch(
       `https://api.twilio.com/2010-04-01/Accounts/${twilioSid}/Messages.json`,
       {

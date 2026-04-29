@@ -298,6 +298,105 @@ export const runEngagement = task({
         return Object.prototype.hasOwnProperty.call(varMap, lower) ? varMap[lower] : match;
       });
 
+    // ── Phase 7e — cadence_metrics buffer ──────────────────────────────────
+    // Counters are buffered in this object across the run; written to
+    // cadence_metrics once on completion / cancellation (whichever exit
+    // the task takes, including the catch block below).
+    const metricsBuffer = {
+      nodes_fired: 0,
+      sms_sent: 0,
+      sms_delivered: 0, // mirrored from sms_delivery_events at write time
+      whatsapp_sent: 0,
+      calls_attempted: 0,
+      calls_picked_up: 0, // mirrored from voice_call_logs at write time
+      voicemails_dropped: 0,
+      reply_received: false,
+      time_to_first_response_seconds: null as number | null,
+      booking_created: false,
+      booking_id: null as string | null,
+      time_to_booking_seconds: null as number | null,
+    };
+    const runStartedAt = Date.now();
+
+    const writeCadenceMetrics = async (stopReason: string) => {
+      try {
+        // Best-effort: read the final exec row + cancellation reason
+        const { data: execRow } = await supabase
+          .from("engagement_executions")
+          .select("status, stop_reason, completed_at, last_completed_node_index")
+          .eq("id", execution_id)
+          .maybeSingle();
+        const finalStop = execRow?.stop_reason ?? stopReason;
+
+        // Hydrate sms_delivered + calls_picked_up from authoritative tables
+        // (cheap one-shot reads keyed by execution_id / lead_id).
+        let smsDelivered = metricsBuffer.sms_sent; // optimistic default
+        try {
+          const { count: deliveredCount } = await supabase
+            .from("sms_delivery_events")
+            .select("twilio_message_sid", { count: "exact", head: true })
+            .eq("client_id", client_id)
+            .eq("status", "delivered")
+            .gte("received_at", new Date(runStartedAt).toISOString());
+          if (typeof deliveredCount === "number") smsDelivered = deliveredCount;
+        } catch { /* ignore */ }
+
+        // booking_created / booking_id: look up the latest bookings row for
+        // (client_id, lead_id) keyed to this execution.
+        let bookingCreated = metricsBuffer.booking_created;
+        let bookingId = metricsBuffer.booking_id;
+        let timeToBookingSeconds = metricsBuffer.time_to_booking_seconds;
+        if (finalStop === "booking_created" || metricsBuffer.booking_created) {
+          try {
+            const { data: bookingRow } = await supabase
+              .from("bookings")
+              .select("id, created_at")
+              .eq("client_id", client_id)
+              .eq("lead_id", lead_id)
+              .order("created_at", { ascending: false })
+              .limit(1)
+              .maybeSingle();
+            if (bookingRow) {
+              bookingCreated = true;
+              bookingId = bookingRow.id as string;
+              const bookedAt = new Date(bookingRow.created_at as string).getTime();
+              if (!Number.isNaN(bookedAt)) {
+                timeToBookingSeconds = Math.max(0, Math.round((bookedAt - runStartedAt) / 1000));
+              }
+            }
+          } catch { /* ignore */ }
+        }
+
+        await supabase
+          .from("cadence_metrics")
+          .upsert(
+            {
+              execution_id,
+              client_id,
+              workflow_id,
+              lead_id,
+              nodes_fired: metricsBuffer.nodes_fired,
+              sms_sent: metricsBuffer.sms_sent,
+              sms_delivered: smsDelivered,
+              whatsapp_sent: metricsBuffer.whatsapp_sent,
+              calls_attempted: metricsBuffer.calls_attempted,
+              calls_picked_up: metricsBuffer.calls_picked_up,
+              voicemails_dropped: metricsBuffer.voicemails_dropped,
+              reply_received: metricsBuffer.reply_received || finalStop === "inbound_reply",
+              time_to_first_response_seconds: metricsBuffer.time_to_first_response_seconds,
+              booking_created: bookingCreated,
+              booking_id: bookingId,
+              time_to_booking_seconds: timeToBookingSeconds,
+              ended_at: new Date().toISOString(),
+              stop_reason: finalStop,
+            },
+            { onConflict: "execution_id" },
+          );
+      } catch (metricsErr) {
+        console.warn("writeCadenceMetrics failed (non-fatal):", (metricsErr as Error).message);
+      }
+    };
+
     try {
       // ── Load workflow ─────────────────────────────────────────────────────
       const { data: workflow } = await supabase
@@ -438,6 +537,7 @@ export const runEngagement = task({
         // Check for external cancellation before every node
         if (await isCancelled()) {
           console.log(`Engagement ${execution_id} cancelled at node ${i}`);
+          await writeCadenceMetrics("cancelled");
           return { status: "cancelled", node_index: i };
         }
 
@@ -514,7 +614,7 @@ export const runEngagement = task({
         } else if (node.type === "engage") {
           // Phase 4b — quiet hours gate (always-on per-client fallback).
           await enforceQuietHoursBeforeSend(`engage node ${i}`);
-          if (await isCancelled()) return { status: "cancelled", node_index: i };
+          if (await isCancelled()) { await writeCadenceMetrics("cancelled"); return { status: "cancelled", node_index: i }; }
 
           // ── Schedule gate: wait until the next allowed send window ──────────
           if (schedule) {
@@ -534,7 +634,7 @@ export const runEngagement = task({
                 stage_description: `Outside sending hours — resuming at ${localTime}`,
               });
               await wait.until({ date: nextWindow });
-              if (await isCancelled()) return { status: "cancelled", node_index: i };
+              if (await isCancelled()) { await writeCadenceMetrics("cancelled"); return { status: "cancelled", node_index: i }; }
             }
           }
 
@@ -554,6 +654,7 @@ export const runEngagement = task({
 
             if (await isCancelled()) {
               console.log(`Engagement ${execution_id} cancelled during engage node`);
+              await writeCadenceMetrics("cancelled");
               return { status: "cancelled", node_index: i };
             }
 
@@ -599,6 +700,8 @@ export const runEngagement = task({
                     node_id: node.id,
                     metadata: { call_sid: dropResult.callSid, voice_setter_id: ch.voice_setter_id },
                   });
+                  metricsBuffer.voicemails_dropped++;
+                  metricsBuffer.calls_attempted++;
                 }
                 continue;
               }
@@ -635,6 +738,7 @@ export const runEngagement = task({
                 node_id: node.id,
                 metadata: { call_id: callId, voice_setter_id: ch.voice_setter_id },
               });
+              metricsBuffer.calls_attempted++;
               continue;
             }
 
@@ -674,6 +778,8 @@ export const runEngagement = task({
               ...(ch.type === "sms" ? { last_sms_sent_at: new Date().toISOString() } : {}),
               stage_description: `${ch.type === "sms" ? "SMS" : "WhatsApp"} sent.`,
             });
+            if (ch.type === "sms") metricsBuffer.sms_sent++;
+            else if (ch.type === "whatsapp") metricsBuffer.whatsapp_sent++;
             const isWaTemplate = ch.type === "whatsapp" && ch.whatsapp_type === "template" && !!ch.template_name;
             const eventMessageBody = isWaTemplate
               ? `WhatsApp Template from GoHighLevel:\n\n"${ch.template_name}"`
@@ -693,7 +799,7 @@ export const runEngagement = task({
         // ── SEND SMS node (legacy) ──────────────────────────────────────────
         } else if (node.type === "send_sms") {
           await enforceQuietHoursBeforeSend(`send_sms node ${i}`);
-          if (await isCancelled()) return { status: "cancelled", node_index: i };
+          if (await isCancelled()) { await writeCadenceMetrics("cancelled"); return { status: "cancelled", node_index: i }; }
           const message = interpolate(node.message);
           await updateExecution({ stage_description: "Sending SMS..." });
 
@@ -718,6 +824,7 @@ export const runEngagement = task({
             last_sms_sent_at: new Date().toISOString(),
             stage_description: "SMS sent.",
           });
+          metricsBuffer.sms_sent++;
           await Promise.all([
             logCampaignEvent({ event_type: "message_sent", channel: "sms", node_index: i, node_id: node.id, metadata: { message_body: message } }),
             writeToChatHistory(message),
@@ -726,7 +833,7 @@ export const runEngagement = task({
         // ── SEND WHATSAPP node ──────────────────────────────────────────────
         } else if (node.type === "send_whatsapp") {
           await enforceQuietHoursBeforeSend(`send_whatsapp node ${i}`);
-          if (await isCancelled()) return { status: "cancelled", node_index: i };
+          if (await isCancelled()) { await writeCadenceMetrics("cancelled"); return { status: "cancelled", node_index: i }; }
           const message = interpolate(node.message);
           await updateExecution({ stage_description: "Sending WhatsApp..." });
 
@@ -748,6 +855,7 @@ export const runEngagement = task({
 
           console.log(`WhatsApp sent to lead ${lead_id}: ${redactBody(message)}`);
           await updateExecution({ stage_description: "WhatsApp sent." });
+          metricsBuffer.whatsapp_sent++;
           await Promise.all([
             logCampaignEvent({ event_type: "message_sent", channel: "whatsapp", node_index: i, node_id: node.id, metadata: { message_body: message } }),
             writeToChatHistory(message),
@@ -756,7 +864,7 @@ export const runEngagement = task({
         // ── PHONE CALL node (legacy flat) ───────────────────────────────────
         } else if (node.type === "phone_call") {
           await enforceQuietHoursBeforeSend(`phone_call node ${i}`);
-          if (await isCancelled()) return { status: "cancelled", node_index: i };
+          if (await isCancelled()) { await writeCadenceMetrics("cancelled"); return { status: "cancelled", node_index: i }; }
           if (!payload.make_retell_call_url) {
             throw new Error("phone_call node requires make_retell_call_url in payload");
           }
@@ -821,14 +929,20 @@ export const runEngagement = task({
 
           if (replies && replies.length > 0) {
             console.log(`Lead ${lead_id} replied — stopping engagement`);
+            metricsBuffer.reply_received = true;
+            metricsBuffer.time_to_first_response_seconds = Math.max(
+              0,
+              Math.round((Date.now() - runStartedAt) / 1000),
+            );
             await updateExecution({
               status: "completed",
-              stop_reason: "replied",
+              stop_reason: "inbound_reply",
               stage_description: "Lead replied — engagement complete.",
               completed_at: new Date().toISOString(),
               last_completed_node_index: i,
             });
-            return { status: "completed", stop_reason: "replied" };
+            await writeCadenceMetrics("inbound_reply");
+            return { status: "completed", stop_reason: "inbound_reply" };
           }
 
           console.log(`No reply from ${lead_id} — continuing sequence`);
@@ -837,6 +951,7 @@ export const runEngagement = task({
         // Mark this node as fully completed so retries can resume here instead
         // of replaying it from the beginning. Written after every node type.
         await updateExecution({ last_completed_node_index: i });
+        metricsBuffer.nodes_fired++;
       }
 
       // All nodes completed without a reply
@@ -852,6 +967,7 @@ export const runEngagement = task({
         completed_at: new Date().toISOString(),
       });
 
+      await writeCadenceMetrics("sequence_complete");
       return { status: "completed", stop_reason: "sequence_complete" };
 
     } catch (error) {
@@ -862,6 +978,7 @@ export const runEngagement = task({
         waiting_for_reply_since: null,
         waiting_for_reply_until: null,
       });
+      await writeCadenceMetrics("error");
       throw error;
     }
   },
