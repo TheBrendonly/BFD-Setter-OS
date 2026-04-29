@@ -262,10 +262,45 @@ Deno.serve(async (req) => {
     // Check if contact already exists
     const { data: existingContact } = await supabase
       .from("leads")
-      .select("id")
+      .select("id, updated_at")
       .eq("client_id", clientId)
       .eq("lead_id", contactId)
       .maybeSingle();
+
+    // Echo-loop guard: when push-contact-to-ghl writes a contact upstream it
+    // tags customField `last_synced_from = "1prompt-os"`. GHL then fires
+    // contact.update back here; if our leads.updated_at is fresh (< 60s) we
+    // KNOW this update originated from us and skip. Without this guard every
+    // outbound edit causes a redundant inbound sync round-trip.
+    if (existingContact?.updated_at) {
+      const candidates: unknown[] = [];
+      if (Array.isArray(contact.customFields)) candidates.push(...(contact.customFields as unknown[]));
+      if (Array.isArray(contact.customField)) candidates.push(...(contact.customField as unknown[]));
+      if (Array.isArray(contact.custom_field)) candidates.push(...(contact.custom_field as unknown[]));
+      const isOurStamp = candidates.some((cf) => {
+        if (!isRecord(cf)) return false;
+        const fieldKey = typeof cf.key === "string" ? cf.key : (typeof cf.fieldKey === "string" ? cf.fieldKey : "");
+        const fieldId = typeof cf.id === "string" ? cf.id : "";
+        const isLastSynced = fieldKey === "contact.last_synced_from"
+          || fieldKey === "last_synced_from"
+          || fieldId === "PQNTqtTnIw9Uu0XLLE5M";
+        if (!isLastSynced) return false;
+        const value = cf.value ?? cf.field_value ?? cf.fieldValue;
+        return typeof value === "string" && value.trim().toLowerCase() === "1prompt-os";
+      });
+      if (isOurStamp) {
+        const ageMs = Date.now() - new Date(existingContact.updated_at).getTime();
+        if (ageMs < 60_000) {
+          steps.push(makeStep("sync-echo", "Echo-loop check", "condition", "skipped",
+            `Skipping — push-contact-to-ghl stamped this update ${ageMs}ms ago`));
+          await logExecution(clientId, contactId, name || null, "skipped_echo", null, steps);
+          return new Response(
+            JSON.stringify({ status: "skipped_echo", contact_id: existingContact.id, age_ms: ageMs }),
+            { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+      }
+    }
 
     steps.push(makeStep("sync-find", "Find Lead in 1Prompt", "find", "completed",
       existingContact ? `Found: ${existingContact.id}` : "Not found"));

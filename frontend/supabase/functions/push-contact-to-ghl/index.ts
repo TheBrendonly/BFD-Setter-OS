@@ -26,11 +26,13 @@ const corsHeaders = {
 };
 
 // Custom field id that flags "this update came from 1prompt-OS, ignore the
-// resulting webhook". One per GHL location. BFD's location id is set in
-// .env as BFD_GHL_LAST_SYNCED_FROM_FIELD_ID — empty string disables the tag.
-// TODO: per-client lookup via clients.ghl_last_synced_from_field_id once
-// multiple clients use this function.
-const BFD_LAST_SYNCED_FROM_FIELD_ID = "";
+// resulting webhook". Created via GHL API on 2026-04-30 against BFD location
+// xo0XjmenBBJxJgSnAdyM (field name `last_synced_from`, dataType TEXT, model
+// contact, fieldKey `contact.last_synced_from`).
+//
+// TODO when onboarding non-BFD clients: read clients.ghl_last_synced_from_field_id
+// instead of this constant, and create the field per-location at onboarding time.
+const BFD_LAST_SYNCED_FROM_FIELD_ID = "PQNTqtTnIw9Uu0XLLE5M";
 
 class AuthError extends Error {
   status: number;
