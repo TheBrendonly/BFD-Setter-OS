@@ -1,9 +1,11 @@
 // One-shot: deploy BFD voice setter prompt to Retell LLM llm_22e795de19b4d25cb579013586be
+// Source secrets from .env. Run with: node --env-file=.env scripts/deploy_voice_prompt.mjs
 import { readFileSync } from 'fs';
 import { request } from 'https';
 
-const RETELL_KEY = 'key_d59cad7681e2a5a67c2ad0843eec';
-const LLM_ID = 'llm_22e795de19b4d25cb579013586be';
+const RETELL_KEY = process.env.BFD_RETELL_API_KEY;
+if (!RETELL_KEY) { console.error('Missing BFD_RETELL_API_KEY in .env'); process.exit(1); }
+const LLM_ID = process.env.BFD_RETELL_LLM_ID || 'llm_22e795de19b4d25cb579013586be';
 
 const content = readFileSync('c:/Projects/Projects/1prompt-os/frontend/src/data/bfdVoiceSetterPrompt.ts', 'utf8');
 const match = content.match(/BFD_VOICE_SETTER_PROMPT = `([\s\S]+)`;/);

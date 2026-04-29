@@ -1,9 +1,15 @@
 // Direct-insert the prior call into call_history using only existing columns
 // (bypasses edge function which needs columns that haven't been added yet)
+//
+// Source secrets from .env. Run with: node --env-file=.env scripts/backfill_call_history.mjs
 import { request } from 'https';
 
-const BFDP_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJqZ3JnYmd5a3ZqcnN1d3dydW9oIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NjQ4MDUxMywiZXhwIjoyMDkyMDU2NTEzfQ.laUwqFTlvXxxb0vywX1ODCcZyJp83z59_5fQnmwaW1U';
-const CLIENT_ID = 'e467dabc-57ee-416c-8831-83ecd9c7c925';
+const BFDP_KEY = process.env.BFD_PLATFORM_SERVICE_ROLE;
+if (!BFDP_KEY) {
+  console.error('Missing BFD_PLATFORM_SERVICE_ROLE in .env');
+  process.exit(1);
+}
+const CLIENT_ID = process.env.BFD_CLIENT_ID || 'e467dabc-57ee-416c-8831-83ecd9c7c925';
 
 // Only columns confirmed to exist
 const row = {

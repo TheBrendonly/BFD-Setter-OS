@@ -1,11 +1,14 @@
 // Replay a Retell call to the retell-call-analysis-webhook to write call_history row
+// Source secrets from .env. Run with: node --env-file=.env scripts/replay_call_to_webhook.mjs [CALL_ID]
 import { request } from 'https';
 
-const RETELL_KEY = 'key_d59cad7681e2a5a67c2ad0843eec';
-const CALL_ID = 'call_6d46e695cfcb54749aa0440102f';
+const RETELL_KEY = process.env.BFD_RETELL_API_KEY;
+if (!RETELL_KEY) { console.error('Missing BFD_RETELL_API_KEY in .env'); process.exit(1); }
+const CALL_ID = process.argv[2] || process.env.REPLAY_CALL_ID || 'call_6d46e695cfcb54749aa0440102f';
 const WEBHOOK_HOST = 'bjgrgbgykvjrsuwwruoh.supabase.co';
 const WEBHOOK_PATH = '/functions/v1/retell-call-analysis-webhook';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJqZ3JnYmd5a3ZqcnN1d3dydW9oIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY0ODAzMDEsImV4cCI6MjA5MjA1NjMwMX0.vg5lj9PnvHHNI_0ZlsJHlPPGhvMz1qWMNEzK5t9-dXs';
+const SUPABASE_ANON_KEY = process.env.BFD_PLATFORM_ANON_KEY;
+if (!SUPABASE_ANON_KEY) { console.error('Missing BFD_PLATFORM_ANON_KEY in .env'); process.exit(1); }
 
 const fetchJson = (hostname, path, method = 'GET', headers = {}, body = null) =>
   new Promise((resolve, reject) => {

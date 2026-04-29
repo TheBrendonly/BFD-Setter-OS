@@ -3,19 +3,31 @@
 // test/probe sessions (e.g. "test-*", "phase6test*", "curl-probe", "p5-...") are skipped.
 //
 // Idempotent: uses ON CONFLICT (client_id, lead_id) DO NOTHING.
+//
+// Source secrets from .env — never inline.
+// Run with: node --env-file=.env scripts/backfill_leads_from_chat_history.mjs
 
 import https from 'https';
 
 const BFD_PLATFORM_REF = 'bjgrgbgykvjrsuwwruoh';
-const BFD_PLATFORM_SR = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJqZ3JnYmd5a3ZqcnN1d3dydW9oIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0NDY3OTM5NiwiZXhwIjoyMDYwMjU1Mzk2fQ.EuuDAKWIe2Yc4Wv3-XCHfXCOCzqMfIFkEZ3a1jM74T8';
+const BFD_PLATFORM_SR = requireEnv('BFD_PLATFORM_SERVICE_ROLE');
 
 const SETTER_LIVE_REF = 'qildpilxjodxdifggmto';
-const SETTER_LIVE_SR = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFpbGRwaWx4am9keGRpZmdnbXRvIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NjU4MjAxMywiZXhwIjoyMDkyMTU4MDEzfQ.FOWnbT6tql92CV4eQT-4KOFGxc799LqNkMS4uCGsbRc';
+const SETTER_LIVE_SR = requireEnv('BFD_SETTER_LIVE_SERVICE_ROLE');
 
 // Account-level PAT for Management API SQL endpoint
-const MANAGEMENT_PAT = 'sbp_bda99a50f822c83489d7f0c24980b5f28306303e';
+const MANAGEMENT_PAT = requireEnv('SUPABASE_PAT');
 
-const CLIENT_ID = 'e467dabc-57ee-416c-8831-83ecd9c7c925';
+const CLIENT_ID = process.env.BFD_CLIENT_ID || 'e467dabc-57ee-416c-8831-83ecd9c7c925';
+
+function requireEnv(name) {
+  const v = process.env[name];
+  if (!v) {
+    console.error(`Missing required env var: ${name}. Set it in .env and re-run with --env-file=.env`);
+    process.exit(1);
+  }
+  return v;
+}
 
 const GHL_ID_RE = /^[a-zA-Z0-9]{20}$/;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
