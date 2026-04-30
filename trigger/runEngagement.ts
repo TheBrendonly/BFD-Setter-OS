@@ -26,11 +26,16 @@ type EngageChannel = {
   voice_setter_id?: string;            // slot_id like "Voice-Setter-2"
   instructions?: string;               // custom call instructions
   treat_pickup_as_reply?: boolean;     // end sequence when human answers
-  // Phase 4d — voicemail-drop variant. When call_mode === "voicemail_drop",
-  // skip Retell entirely and use Twilio AMD + <Play>{audio_url}</Play>.
-  call_mode?: "live_call" | "voicemail_drop";
-  voicemail_audio_url?: string;
+  // Voicemail behaviour is handled by Retell natively (phase-11d) — see
+  // engagement_workflows.voicemail_config + make-retell-outbound-call's
+  // ensureVoicemailConfig PATCH. The legacy Twilio AMD voicemail-drop
+  // branch was removed.
 };
+
+type VoicemailConfig = {
+  mode: "static" | "dynamic";
+  message: string;
+} | null;
 
 type EngagementNode =
   | { id: string; type: "delay"; delay_seconds: number }
@@ -118,79 +123,38 @@ function parseQuietHours(raw: unknown): QuietHoursConfig | null {
   return { start, end, tz, days };
 }
 
-// ── Phase 4d — Voicemail drop ─────────────────────────────────────────────
-// Resolve the voicemail audio URL for this channel. Per-client setting on
-// clients.voicemail_audio_url (jsonb of { "voice-setter-1": url, ... }) so
-// each setter has its own pre-recorded voicemail. Channel-level override
-// (channel.voicemail_audio_url) wins if present.
-function resolveVoicemailAudioUrl(args: {
-  channel: EngageChannel;
-  voicemailMap: unknown;
-}): string | null {
-  if (typeof args.channel.voicemail_audio_url === "string" && args.channel.voicemail_audio_url) {
-    return args.channel.voicemail_audio_url;
-  }
-  const map = args.voicemailMap;
-  if (!map || typeof map !== "object" || Array.isArray(map)) return null;
-  const m = map as Record<string, unknown>;
-  if (args.channel.voice_setter_id) {
-    const v = m[args.channel.voice_setter_id];
-    if (typeof v === "string" && v) return v;
-  }
-  // Also accept the lowercase / hyphenated variant as a fallback
-  const slotKeys = ["default", "voice-setter-1", "voice-setter-default"];
-  for (const k of slotKeys) {
-    const v = m[k];
-    if (typeof v === "string" && v) return v;
-  }
-  return null;
-}
-
-async function placeVoicemailDrop(args: {
-  twilioSid: string;
-  twilioAuth: string;
-  fromNumber: string;
-  toNumber: string;
-  audioUrl: string;
-}): Promise<{ ok: boolean; callSid: string | null; error?: string }> {
-  const { twilioSid, twilioAuth, fromNumber, toNumber, audioUrl } = args;
-  const twiml = `<?xml version="1.0" encoding="UTF-8"?><Response><Pause length="1"/><Play>${escapeXml(audioUrl)}</Play></Response>`;
-  const params = new URLSearchParams({
-    From: fromNumber,
-    To: toNumber,
-    Twiml: twiml,
-    MachineDetection: "Enable",
-    AsyncAmd: "true",
-  });
+// ── Phase 11d — GHL tag removal at cadence end ────────────────────────────
+// When a workflow is the new-leads auto-enrol campaign and a contact was
+// enrolled via tag, the tag represents "currently in cadence". When the
+// cadence ends for ANY reason (sequence_complete, inbound_reply,
+// booking_created, opt_out, cancelled, error), the tag is no longer truth
+// and should be removed from the GHL contact. Best-effort, non-blocking.
+async function removeNewLeadsTag(args: {
+  ghlApiKey: string;
+  contactId: string;
+  tagName: string;
+}): Promise<void> {
   try {
     const r = await fetch(
-      `https://api.twilio.com/2010-04-01/Accounts/${twilioSid}/Calls.json`,
+      `https://services.leadconnectorhq.com/contacts/${args.contactId}/tags`,
       {
-        method: "POST",
+        method: "DELETE",
         headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
-          Authorization: `Basic ${Buffer.from(`${twilioSid}:${twilioAuth}`).toString("base64")}`,
+          Authorization: `Bearer ${args.ghlApiKey}`,
+          Version: "2021-07-28",
+          "Content-Type": "application/json",
+          Accept: "application/json",
         },
-        body: params.toString(),
+        body: JSON.stringify({ tags: [args.tagName] }),
       },
     );
-    const j = await r.json().catch(() => null) as { sid?: string; code?: number; message?: string } | null;
-    if (!r.ok) {
-      return { ok: false, callSid: null, error: `Twilio ${r.status}: ${j?.message ?? "unknown"}` };
+    if (!r.ok && r.status !== 404) {
+      const txt = await r.text().catch(() => "");
+      console.warn(`removeNewLeadsTag non-2xx ${r.status}: ${txt.slice(0, 200)}`);
     }
-    return { ok: true, callSid: j?.sid ?? null };
   } catch (e) {
-    return { ok: false, callSid: null, error: (e as Error).message };
+    console.warn(`removeNewLeadsTag failed (non-fatal): ${(e as Error).message}`);
   }
-}
-
-function escapeXml(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&apos;");
 }
 
 export const runEngagement = task({
@@ -298,6 +262,30 @@ export const runEngagement = task({
         return Object.prototype.hasOwnProperty.call(varMap, lower) ? varMap[lower] : match;
       });
 
+    // Phase 11d — workflow + client are loaded inside the try block. Hold
+    // lateinit bindings here so writeCadenceMetrics can reach them when it
+    // fires the GHL tag-removal step at every terminal stop_reason.
+    let workflowRow: {
+      nodes: unknown;
+      name: string;
+      quiet_hours_override?: unknown;
+      voicemail_config?: unknown;
+      is_new_leads_campaign?: boolean;
+      new_leads_tag?: string | null;
+    } | null = null;
+    let clientRow: {
+      send_engagement_webhook_url?: string | null;
+      supabase_url?: string | null;
+      supabase_service_key?: string | null;
+      cadence_quiet_hours?: unknown;
+      twilio_account_sid?: string | null;
+      twilio_auth_token?: string | null;
+      twilio_default_phone?: string | null;
+      retell_phone_1?: string | null;
+      ghl_api_key?: string | null;
+      ghl_location_id?: string | null;
+    } | null = null;
+
     // ── Phase 7e — cadence_metrics buffer ──────────────────────────────────
     // Counters are buffered in this object across the run; written to
     // cadence_metrics once on completion / cancellation (whichever exit
@@ -395,19 +383,41 @@ export const runEngagement = task({
       } catch (metricsErr) {
         console.warn("writeCadenceMetrics failed (non-fatal):", (metricsErr as Error).message);
       }
+
+      // Phase 11d — tag removal at every terminal stop_reason. Best-effort
+      // and intentionally fires on ALL terminal states (the tag means
+      // "currently in cadence" so once we exit, the tag is no longer truth).
+      try {
+        if (
+          workflowRow?.is_new_leads_campaign &&
+          typeof workflowRow.new_leads_tag === "string" &&
+          workflowRow.new_leads_tag.trim() &&
+          clientRow?.ghl_api_key &&
+          lead_id
+        ) {
+          await removeNewLeadsTag({
+            ghlApiKey: clientRow.ghl_api_key,
+            contactId: lead_id,
+            tagName: workflowRow.new_leads_tag.trim(),
+          });
+        }
+      } catch (tagErr) {
+        console.warn("removeNewLeadsTag wrapper failed (non-fatal):", (tagErr as Error).message);
+      }
     };
 
     try {
       // ── Load workflow ─────────────────────────────────────────────────────
       const { data: workflow } = await supabase
         .from("engagement_workflows")
-        .select("nodes, name")
+        .select("nodes, name, quiet_hours_override, voicemail_config, is_new_leads_campaign, new_leads_tag")
         .eq("id", workflow_id)
         .single();
 
       if (!workflow?.nodes) {
         throw new Error(`Engagement workflow ${workflow_id} not found or has no nodes`);
       }
+      workflowRow = workflow as unknown as typeof workflowRow;
 
       const nodes = workflow.nodes as EngagementNode[];
       // schedule column doesn't exist in DB yet — disabled until added
@@ -416,17 +426,38 @@ export const runEngagement = task({
       // ── Load client config ────────────────────────────────────────────────
       const { data: client } = await supabase
         .from("clients")
-        .select("send_engagement_webhook_url, supabase_url, supabase_service_key, cadence_quiet_hours, twilio_account_sid, twilio_auth_token, twilio_default_phone, retell_phone_1, voicemail_audio_url")
+        .select("send_engagement_webhook_url, supabase_url, supabase_service_key, cadence_quiet_hours, twilio_account_sid, twilio_auth_token, twilio_default_phone, retell_phone_1, ghl_api_key, ghl_location_id")
         .eq("id", client_id)
         .single();
 
-      if (!client?.send_engagement_webhook_url) {
+      if (!client) {
+        throw new Error(`Client ${client_id} not found`);
+      }
+      if (!client.send_engagement_webhook_url) {
+        // engage-node SMS still goes via the GHL Custom Webhook here.
+        // phase-11f will replace this path with direct Twilio.
         throw new Error("Missing client send_engagement_webhook_url");
       }
+      clientRow = client as unknown as typeof clientRow;
 
-      // Phase 4b — quiet hours config (falls back to a sensible default when
-      // the client hasn't explicitly configured a window).
-      const quietHours = parseQuietHours(client.cadence_quiet_hours) ?? DEFAULT_QUIET_HOURS;
+      // Phase 11d — quiet-hours fallback chain: workflow override wins, then
+      // per-client default, then DEFAULT_QUIET_HOURS.
+      const quietHours =
+        parseQuietHours((workflow as any).quiet_hours_override) ??
+        parseQuietHours(client.cadence_quiet_hours) ??
+        DEFAULT_QUIET_HOURS;
+
+      // Voicemail config travels through to make-retell-outbound-call so it
+      // can PATCH the agent's voicemail_option before placing each call.
+      const voicemailConfig: VoicemailConfig = (() => {
+        const raw = (workflow as any).voicemail_config;
+        if (!raw || typeof raw !== "object") return null;
+        const r = raw as Record<string, unknown>;
+        if ((r.mode === "static" || r.mode === "dynamic") && typeof r.message === "string" && r.message.trim()) {
+          return { mode: r.mode as "static" | "dynamic", message: r.message };
+        }
+        return null;
+      })();
       const leadTz = resolveLeadTimezone(payload.Phone, quietHours.tz);
 
       const enforceQuietHoursBeforeSend = async (label: string): Promise<boolean> => {
@@ -659,53 +690,11 @@ export const runEngagement = task({
             }
 
             if (ch.type === "phone_call") {
-              // Phase 4d — voicemail drop branch (Twilio AMD + <Play>) bypasses
-              // Retell entirely. Cheaper + faster + always reaches voicemail.
-              if (ch.call_mode === "voicemail_drop") {
-                const audioUrl = resolveVoicemailAudioUrl({
-                  channel: ch,
-                  voicemailMap: client.voicemail_audio_url,
-                });
-                const twilioSid = (client as any).twilio_account_sid as string | null;
-                const twilioAuth = (client as any).twilio_auth_token as string | null;
-                const twilioFrom =
-                  (client as any).twilio_default_phone as string | null
-                  ?? (client as any).retell_phone_1 as string | null;
-                const toNumber = payload.Phone;
-
-                if (!audioUrl) {
-                  console.warn(`Engage phone_call (voicemail_drop) skipped — no audio URL configured for setter ${ch.voice_setter_id ?? "(none)"}`);
-                  await updateExecution({ stage_description: "Voicemail drop skipped (no audio URL)." });
-                } else if (!twilioSid || !twilioAuth || !twilioFrom || !toNumber) {
-                  console.warn("Engage phone_call (voicemail_drop) skipped — missing twilio creds or phone numbers");
-                  await updateExecution({ stage_description: "Voicemail drop skipped (twilio config)." });
-                } else {
-                  await updateExecution({ stage_description: "Placing voicemail drop..." });
-                  const dropResult = await placeVoicemailDrop({
-                    twilioSid,
-                    twilioAuth,
-                    fromNumber: twilioFrom,
-                    toNumber,
-                    audioUrl,
-                  });
-                  if (!dropResult.ok) {
-                    throw new Error(`Voicemail drop failed: ${dropResult.error ?? "unknown"}`);
-                  }
-                  console.log(`Voicemail drop placed (call_sid=${dropResult.callSid}) → ${toNumber}`);
-                  await updateExecution({ stage_description: "Voicemail drop placed." });
-                  await logCampaignEvent({
-                    event_type: "message_sent",
-                    channel: "voicemail_drop",
-                    node_index: i,
-                    node_id: node.id,
-                    metadata: { call_sid: dropResult.callSid, voice_setter_id: ch.voice_setter_id },
-                  });
-                  metricsBuffer.voicemails_dropped++;
-                  metricsBuffer.calls_attempted++;
-                }
-                continue;
-              }
-
+              // Phase 11d — voicemail is now Retell-native (voicemail_option
+              // PATCHed onto the agent inside make-retell-outbound-call before
+              // each call). The legacy Twilio AMD voicemail-drop branch was
+              // removed. voicemail_config (workflow-level) flows through
+              // placeOutboundCall → make-retell-outbound-call.
               if (!payload.make_retell_call_url) {
                 throw new Error("phone_call channel requires make_retell_call_url in payload");
               }
@@ -723,6 +712,7 @@ export const runEngagement = task({
                 custom_instructions: interpolate(ch.instructions || ""),
                 contact_fields: payload.contact_fields || {},
                 treat_pickup_as_reply: ch.treat_pickup_as_reply ?? false,
+                voicemail_config: voicemailConfig,
               });
               if (callRun.ok !== true) {
                 const failure = callRun as { error?: unknown };

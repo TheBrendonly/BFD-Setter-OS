@@ -33,6 +33,10 @@ export const placeOutboundCall = task({
     contact_fields: Record<string, string>;
     treat_pickup_as_reply: boolean;
     timezone?: string;
+    // Phase 11d — workflow-level voicemail config. make-retell-outbound-call
+    // PATCHes the agent's voicemail_option from this payload before placing
+    // the call (hash-cached so we don't PATCH on every call).
+    voicemail_config?: { mode: "static" | "dynamic"; message: string } | null;
   }) => {
     const resp = await fetch(payload.make_retell_call_url, {
       method: "POST",
@@ -50,6 +54,7 @@ export const placeOutboundCall = task({
         contact_fields: payload.contact_fields,
         treat_pickup_as_reply: payload.treat_pickup_as_reply,
         timezone: payload.timezone,
+        voicemail_config: payload.voicemail_config ?? null,
       }),
     });
 

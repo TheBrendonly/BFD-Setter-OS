@@ -30,6 +30,57 @@ function parseVoiceSetterSlot(value: string): number | null {
   return Number.isNaN(slotNumber) ? null : slotNumber;
 }
 
+// ── Phase 11d — Retell-native voicemail ───────────────────────────────────
+// Cache the last-applied voicemail_option hash per agent so we don't PATCH
+// on every call. Module-scope Map persists across requests within the same
+// edge-fn instance.
+const voicemailHashCache = new Map<string, string>();
+
+async function sha256Hex(s: string): Promise<string> {
+  const buf = new TextEncoder().encode(s);
+  const digest = await crypto.subtle.digest("SHA-256", buf);
+  return Array.from(new Uint8Array(digest))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+async function ensureVoicemailConfig(
+  apiKey: string,
+  agentId: string,
+  cfg: { mode: "static" | "dynamic"; message: string } | null | undefined,
+): Promise<void> {
+  if (!cfg || !cfg.message || !cfg.message.trim()) return;
+  const hash = await sha256Hex(JSON.stringify(cfg));
+  if (voicemailHashCache.get(agentId) === hash) {
+    console.log(`📭 voicemail_option for ${agentId} is up-to-date (hash match) — skipping PATCH`);
+    return;
+  }
+  const action =
+    cfg.mode === "dynamic"
+      ? { type: "prompt", prompt: cfg.message }
+      : { type: "static_text", text: cfg.message };
+  const body = { voicemail_option: { action } };
+  try {
+    const r = await fetch(`${RETELL_BASE}/update-agent/${agentId}`, {
+      method: "PATCH",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    });
+    if (!r.ok) {
+      const txt = await r.text().catch(() => "");
+      console.warn(`📭 Retell update-agent voicemail PATCH failed ${r.status}: ${txt.slice(0, 200)}`);
+      return;
+    }
+    voicemailHashCache.set(agentId, hash);
+    console.log(`📭 voicemail_option PATCHed for ${agentId} (mode=${cfg.mode})`);
+  } catch (e) {
+    console.warn(`📭 ensureVoicemailConfig error: ${(e as Error).message}`);
+  }
+}
+
 const AVAILABILITY_WINDOW_DAYS = 30;
 
 /* ─── Debug step types ─── */
@@ -325,7 +376,8 @@ Deno.serve(async (req) => {
       contact_fields,
       treat_pickup_as_reply,
       timezone,
-    } = body;
+      voicemail_config,
+    } = body as Record<string, any>;
 
     if (!client_id) return ok({ error: "client_id is required" }, 400);
     if (!voice_setter_id) return ok({ error: "voice_setter_id is required" }, 400);
@@ -516,6 +568,12 @@ Deno.serve(async (req) => {
       if (k.startsWith("custom.")) {
         dynamicVars[k] = String(v ?? "");
       }
+    }
+
+    // Phase 11d — push voicemail_option to the agent before placing the call
+    // (hash-cached so we don't PATCH on every call). Best-effort; non-fatal.
+    if (voicemail_config && typeof voicemail_config === "object") {
+      await ensureVoicemailConfig(client.retell_api_key, agentId, voicemail_config);
     }
 
     // 7. Make the Retell API call with full debug capture

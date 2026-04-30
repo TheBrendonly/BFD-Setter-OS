@@ -179,30 +179,35 @@ for (const exec of activeCadences ?? []) {
 
 `cancelTriggerRun` already exists in `receive-twilio-sms/index.ts:56-74`.
 
-## Phase 4d — Voicemail drops
+## Voicemail (Retell-native, phase-11d)
 
-When `channels[i].call_mode === "voicemail_drop"`, runEngagement uses Twilio Calls API (NOT Retell) with TwiML:
+Voicemail behaviour is now handled by Retell natively. The legacy Twilio AMD `<Play>{audio}</Play>` branch (and the `EngageChannel.call_mode === "voicemail_drop"` shape) was removed in phase-11d.
 
-```xml
-<Response>
-  <Pause length="1"/>
-  <Play>{{voicemail_audio_url}}</Play>
-</Response>
-```
+### How it flows
 
-POST to `https://api.twilio.com/2010-04-01/Accounts/{Sid}/Calls.json`:
-```
-From={twilio_default_phone}
-To={lead_phone}
-Url={twilio-twiml-static-url-for-the-audio}
-MachineDetection=Enable
-AsyncAmd=true
-AsyncAmdStatusCallback={our-edge-fn}/voicemail-drop-status
-```
+1. The user configures voicemail per workflow in the Engagement editor's Cadence Settings bar:
+   - Mode: `static` (a fixed message Retell speaks if voicemail is reached) or `dynamic` (an LLM prompt; Retell generates the voicemail per call).
+   - Message: the script (Static) or prompt (Dynamic), with `{{first_name}}` style template vars.
+   - Persisted to `engagement_workflows.voicemail_config jsonb` as `{ mode, message }`.
+2. `runEngagement.ts` reads `workflow.voicemail_config` and forwards it through `placeOutboundCall.triggerAndWait` payload.
+3. Inside `make-retell-outbound-call/index.ts`, `ensureVoicemailConfig(apiKey, agentId, cfg)` runs BEFORE the actual `POST /v2/create-phone-call`:
+   - Computes `sha256(JSON.stringify(cfg))` and checks a module-level `voicemailHashCache` Map keyed by `agentId`. If the hash matches the last applied value, the PATCH is skipped (no Retell roundtrip).
+   - Otherwise PATCHes `https://api.retellai.com/update-agent/{agentId}` with body `{ voicemail_option: { action: { type: "static_text", text: <msg> } | { type: "prompt", prompt: <msg> } } }` and stores the hash.
+4. Retell's AMD runs in the first ~3 minutes of the call and ends with `disconnection_reason="voicemail_reached"` if it landed in voicemail.
 
-Twilio's Answering Machine Detection waits for the voicemail beep, then plays the audio. No Retell agent spun up — much cheaper (~$0.01 vs ~$0.30+).
+### Cost trade-off
 
-`clients.voicemail_audio_url` (jsonb of `{ "voice-setter-1": "https://...", "voice-setter-2": "..." }`) — pre-recorded MP3 hosted on Supabase Storage or S3.
+Retell-native voicemail costs the standard call rate (~$0.04-0.10 per voicemail) versus the previous Twilio MP3 path (sub-cent). Worth it for richer dynamic voicemails; the static path is roughly equivalent in semantics to the old MP3.
+
+### Per-agent state
+
+`voicemail_option` is per-agent on Retell; there is no per-call override via the public API. Different workflows that point at the same agent will overwrite each other's voicemail_option as they fire — the hash cache only protects against re-PATCHing identical config, not against cross-workflow overwrites. Configure separate agent slots when divergent voicemails are required for the same client.
+
+### Reference
+
+- Retell docs: https://docs.retellai.com/build/handle-voicemail and https://docs.retellai.com/api-references/update-agent
+- Implementation: `frontend/supabase/functions/make-retell-outbound-call/index.ts` — `ensureVoicemailConfig` + `voicemailHashCache`
+- Workflow plumbing: `trigger/runEngagement.ts` (reads `voicemail_config`) → `trigger/placeOutboundCall.ts` (forwards to edge fn body) → `make-retell-outbound-call`
 
 ## Default new-lead cadence (placeholder copy)
 
