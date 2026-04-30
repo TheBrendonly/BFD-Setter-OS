@@ -240,6 +240,82 @@ Sig verification: when `clients.ghl_webhook_secret` is set, an HMAC-SHA256 hex `
 
 Smoke-test (BFD): `curl -i -X POST https://bjgrgbgykvjrsuwwruoh.supabase.co/functions/v1/ghl-tag-webhook -H 'Content-Type: application/json' -d '{"contactId":"<bfd-contact-id>","locationId":"xo0XjmenBBJxJgSnAdyM","addedTags":["new-lead"]}'` → expect `{"ok":true,"enrolled":"<execution-id>"}`.
 
+## Synthetic probe setup (phase-11g)
+
+`trigger/syntheticProbe.ts` runs hourly, posts a fake lead to `intake-lead`, asserts the cadence enters `running` and an outbound `message_queue` row appears within 90s, then cancels. Pass/fail rows go into `probe_results`. On failure it pings `PROBE_ALERT_WEBHOOK_URL` (Slack/Discord-compatible).
+
+### One-off provisioning (operator)
+
+1. Create a dedicated client row + a 1-node test workflow:
+
+```sql
+-- A throwaway client just for the probe. Use a Twilio number you OWN.
+INSERT INTO public.clients (
+  id, agency_id, name,
+  twilio_account_sid, twilio_auth_token, retell_phone_1, twilio_default_phone,
+  cadence_quiet_hours, intake_lead_secret, dm_enabled,
+  use_native_text_engine, llm_model
+) VALUES (
+  gen_random_uuid(),
+  '<agency-uuid>',
+  'Synthetic Probe (do not delete)',
+  '<twilio-sid>', '<twilio-auth>', '<twilio-from-e164>', '<twilio-from-e164>',
+  -- 24/7 so the probe never defers
+  '{"start":"00:00","end":"23:59","tz":"Australia/Brisbane","days":[1,2,3,4,5,6,7]}'::jsonb,
+  encode(gen_random_bytes(24), 'base64'),
+  false,
+  true,
+  'openai/gpt-4.1-nano'
+)
+RETURNING id, intake_lead_secret;
+
+-- Save the returned id as <probe-client-id>; intake_lead_secret as <probe-secret>.
+
+-- 1-node workflow that fires a single SMS at T+0 (use a clearly-marked test message).
+INSERT INTO public.engagement_workflows (id, client_id, name, nodes, is_active)
+VALUES (
+  gen_random_uuid(),
+  '<probe-client-id>',
+  'Synthetic probe — single SMS',
+  '[{"id":"n1","type":"engage","channels":[{"type":"sms","enabled":true,"message":"[probe] do not respond","delay_seconds":0}]}]'::jsonb,
+  true
+)
+RETURNING id;
+
+-- Save returned id as <probe-workflow-id>.
+
+UPDATE public.clients
+  SET auto_engagement_workflow_id = '<probe-workflow-id>'
+  WHERE id = '<probe-client-id>';
+```
+
+2. Set Trigger.dev cloud env vars (Project Settings → Environment Variables):
+   - `PROBE_CLIENT_ID` = `<probe-client-id>`
+   - `PROBE_INTAKE_SECRET` = `<probe-secret>`
+   - `PROBE_TEST_PHONE` = `<your-test-phone-e164>` (will receive the test SMS each hour)
+   - `PROBE_ALERT_WEBHOOK_URL` = optional Slack/Discord webhook URL
+
+3. Deploy: `cd <repo> && npx trigger.dev deploy --env prod`. Confirm `synthetic-probe` appears in the Trigger.dev cloud console scheduled tasks list.
+
+### Reading results
+
+```sql
+-- Last 24 hours of probe runs
+SELECT ran_at, passed, duration_ms, error_message
+FROM probe_results
+WHERE ran_at > now() - interval '24 hours'
+ORDER BY ran_at DESC;
+
+-- Failure rate for the past week
+SELECT date_trunc('day', ran_at) AS day,
+       count(*) FILTER (WHERE passed) AS passes,
+       count(*) FILTER (WHERE NOT passed) AS fails
+FROM probe_results
+WHERE ran_at > now() - interval '7 days'
+GROUP BY 1
+ORDER BY 1 DESC;
+```
+
 ## Environment
 
 Local `.env` template at `.env.example`. Required for autonomous sessions:
