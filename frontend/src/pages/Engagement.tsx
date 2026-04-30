@@ -17,6 +17,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Switch } from '@/components/ui/switch';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { StatusTag } from '@/components/StatusTag';
 import { toast } from 'sonner';
 import { X, Save, ClipboardCheck, RefreshCw, Loader2, Square, Code, ChevronDown, ChevronRight, ChevronLeft, Search, Layers, Rocket, Power, Zap, MessageSquare, Phone, GripVertical, Clock, Maximize2, Check, Trash2, Plus, Copy, Globe, Pencil } from '@/components/icons';
@@ -106,6 +107,57 @@ function getUtcOffset(tz: string): string {
 
 const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const;
 const DAY_VALUES = [1, 2, 3, 4, 5, 6, 0]; // ISO Mon=1..Sun=0
+
+// Canonical days for runEngagement quiet-hours parser (Mon=1..Sun=7).
+// Differs from DAY_VALUES (drip schedule uses Sun=0).
+const CADENCE_DAY_VALUES = [1, 2, 3, 4, 5, 6, 7];
+
+interface QuietHoursConfig {
+  start: string;
+  end: string;
+  tz: string;
+  days: number[];
+}
+
+interface VoicemailConfig {
+  mode: 'static' | 'dynamic';
+  message: string;
+}
+
+const DEFAULT_QUIET_HOURS_OVERRIDE: QuietHoursConfig = {
+  start: '09:00',
+  end: '21:00',
+  tz: 'Australia/Brisbane',
+  days: [1, 2, 3, 4, 5],
+};
+
+const TIME_OPTIONS_30MIN: string[] = (() => {
+  const opts: string[] = [];
+  for (let h = 0; h < 24; h++) {
+    for (let m = 0; m < 60; m += 30) {
+      opts.push(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`);
+    }
+  }
+  return opts;
+})();
+
+function formatTime12(t: string): string {
+  const [hStr, mStr] = t.split(':');
+  let h = parseInt(hStr, 10);
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  if (h === 0) h = 12; else if (h > 12) h -= 12;
+  return `${String(h).padStart(2, '0')}:${mStr} ${ampm}`;
+}
+
+function summariseQuietHours(qh: QuietHoursConfig | null): string {
+  if (!qh) return 'no client default set';
+  const dayLabels = qh.days
+    .slice()
+    .sort((a, b) => a - b)
+    .map((d) => DAY_LABELS[d === 7 ? 6 : d - 1])
+    .join(',');
+  return `${formatTime12(qh.start)}–${formatTime12(qh.end)} ${qh.tz} ${dayLabels}`;
+}
 
 interface EngagementWorkflow {
   id: string;
@@ -1173,6 +1225,7 @@ function EngagementNodeConfig({
   textSetterNumber,
   onTextSetterChange,
   setterSlots,
+  workflowQuietHoursOverrideEnabled,
 }: {
   node: WorkflowNode;
   onChange: (updated: WorkflowNode) => void;
@@ -1188,6 +1241,7 @@ function EngagementNodeConfig({
   textSetterNumber: number;
   onTextSetterChange: (n: number) => void;
   setterSlots: string[];
+  workflowQuietHoursOverrideEnabled?: boolean;
 }) {
   const [showDeleteDrip, setShowDeleteDrip] = useState(false);
   const [showDeleteEngagement, setShowDeleteEngagement] = useState(false);
@@ -1525,7 +1579,8 @@ function EngagementNodeConfig({
               <div className="flex items-center justify-between">
                 <Label className="field-text text-foreground">Restrict to working hours</Label>
                 <Switch
-                  checked={hasSchedule}
+                  checked={hasSchedule && !workflowQuietHoursOverrideEnabled}
+                  disabled={workflowQuietHoursOverrideEnabled}
                   onCheckedChange={checked => {
                     if (checked) {
                       onChange({ ...node, schedule: { timezone: 'America/New_York', days: [1,2,3,4,5], start_time: '09:00', end_time: '17:00' } });
@@ -1536,9 +1591,15 @@ function EngagementNodeConfig({
                   }}
                 />
               </div>
-              <p className="text-muted-foreground" style={{ ...fieldStyle, fontSize: '13px' }}>
-                When on, batches only go out during the days and hours you choose. Leads queued outside this window will wait until the next active period.
-              </p>
+              {workflowQuietHoursOverrideEnabled ? (
+                <p className="text-muted-foreground" style={{ ...fieldStyle, fontSize: '13px' }}>
+                  Workflow-level quiet hours are active. The drip will use the workflow override; this switch is disabled.
+                </p>
+              ) : (
+                <p className="text-muted-foreground" style={{ ...fieldStyle, fontSize: '13px' }}>
+                  When on, batches only go out during the days and hours you choose. Leads queued outside this window will wait until the next active period.
+                </p>
+              )}
 
               {hasSchedule && (
                 <div className="space-y-3 pt-1">
@@ -2543,6 +2604,16 @@ export default function Engagement() {
   const [textSetterNumber, setTextSetterNumber] = useState(1);
   const [setterSlots, setSetterSlots] = useState<string[]>([]);
 
+  // Cadence Settings bar state (phase-11b)
+  const [cadenceBarOpen, setCadenceBarOpen] = useState(false);
+  const [quietHoursOverrideEnabled, setQuietHoursOverrideEnabled] = useState(false);
+  const [quietHoursOverride, setQuietHoursOverride] = useState<QuietHoursConfig>(DEFAULT_QUIET_HOURS_OVERRIDE);
+  const [voicemailMode, setVoicemailMode] = useState<'static' | 'dynamic'>('static');
+  const [voicemailMessage, setVoicemailMessage] = useState('');
+  const [clientQuietHoursDefault, setClientQuietHoursDefault] = useState<QuietHoursConfig | null>(null);
+  const [cadenceStartTimeOpen, setCadenceStartTimeOpen] = useState(false);
+  const [cadenceEndTimeOpen, setCadenceEndTimeOpen] = useState(false);
+
   usePageHeader({
     title: workflowName || 'Campaign',
     breadcrumbs: [
@@ -2554,8 +2625,19 @@ export default function Engagement() {
   // Load client GHL account ID
   useEffect(() => {
     if (!clientId) return;
-    supabase.from('clients').select('ghl_location_id').eq('id', clientId).single().then(({ data }) => {
+    (supabase as any).from('clients').select('ghl_location_id, cadence_quiet_hours').eq('id', clientId).single().then(({ data }: any) => {
       if (data?.ghl_location_id) setClientGhlAccountId(data.ghl_location_id);
+      if (data?.cadence_quiet_hours && typeof data.cadence_quiet_hours === 'object') {
+        const raw = data.cadence_quiet_hours as Record<string, unknown>;
+        if (typeof raw.start === 'string' && typeof raw.end === 'string' && typeof raw.tz === 'string' && Array.isArray(raw.days)) {
+          setClientQuietHoursDefault({
+            start: raw.start,
+            end: raw.end,
+            tz: raw.tz,
+            days: (raw.days as unknown[]).filter((d): d is number => typeof d === 'number'),
+          });
+        }
+      }
     });
   }, [clientId]);
 
@@ -2639,6 +2721,28 @@ export default function Engagement() {
         setWorkflowName(data.name);
         loadedWorkflowId = data.id;
         loadedWorkflowName = data.name;
+        // Hydrate Cadence Settings bar (phase-11b)
+        const qhRaw = data.quiet_hours_override as Record<string, unknown> | null | undefined;
+        if (qhRaw && typeof qhRaw.start === 'string' && typeof qhRaw.end === 'string' && typeof qhRaw.tz === 'string' && Array.isArray(qhRaw.days)) {
+          setQuietHoursOverrideEnabled(true);
+          setQuietHoursOverride({
+            start: qhRaw.start,
+            end: qhRaw.end,
+            tz: qhRaw.tz,
+            days: (qhRaw.days as unknown[]).filter((d): d is number => typeof d === 'number'),
+          });
+        } else {
+          setQuietHoursOverrideEnabled(false);
+          setQuietHoursOverride(DEFAULT_QUIET_HOURS_OVERRIDE);
+        }
+        const vmRaw = data.voicemail_config as Record<string, unknown> | null | undefined;
+        if (vmRaw && (vmRaw.mode === 'static' || vmRaw.mode === 'dynamic')) {
+          setVoicemailMode(vmRaw.mode);
+          setVoicemailMessage(typeof vmRaw.message === 'string' ? vmRaw.message : '');
+        } else {
+          setVoicemailMode('static');
+          setVoicemailMessage('');
+        }
         // Auto-migrate legacy send_sms nodes to engage nodes
         const rawNodes: WorkflowNode[] = Array.isArray(data.nodes) ? data.nodes : [];
         const migratedNodes = rawNodes.map(n => {
@@ -2787,6 +2891,9 @@ export default function Engagement() {
     if (!(workflow as any).is_active) {
       updatePayload.is_active = true;
     }
+    // Phase-11b: persist Cadence Settings bar values.
+    updatePayload.quiet_hours_override = quietHoursOverrideEnabled ? quietHoursOverride : null;
+    updatePayload.voicemail_config = voicemailMessage.trim() ? { mode: voicemailMode, message: voicemailMessage } : null;
     const { error } = await (supabase as any)
       .from('engagement_workflows')
       .update(updatePayload)
@@ -2810,7 +2917,7 @@ export default function Engagement() {
       }
     }
     setSaving(false);
-  }, [workflow, clientId, workflowName, nodes, textSetterNumber, campaignId]);
+  }, [workflow, clientId, workflowName, nodes, textSetterNumber, campaignId, quietHoursOverrideEnabled, quietHoursOverride, voicemailMode, voicemailMessage]);
 
   // Node operations
   const handleNodeChange = useCallback((nodeId: string, updated: WorkflowNode) => {
@@ -3370,6 +3477,200 @@ export default function Engagement() {
           </div>
         </div>
 
+        {/* Cadence Settings bar (phase-11b) */}
+        <div className="bg-card shrink-0" style={{ borderBottom: '3px groove hsl(var(--border-groove))' }}>
+          <div
+            className={rightPanel ? 'flex items-center' : 'container mx-auto max-w-7xl flex items-center'}
+            style={{
+              ...(rightPanel ? { paddingLeft: 'max(3rem, calc((100vw - 16rem - 80rem) / 2 + 3rem))', paddingRight: 12 } : undefined),
+              minHeight: 40,
+            }}
+          >
+            <button
+              type="button"
+              onClick={() => setCadenceBarOpen((v) => !v)}
+              className="flex items-center gap-2 text-foreground uppercase py-2"
+              style={tabStyle}
+            >
+              {cadenceBarOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+              <span>Cadence Settings</span>
+            </button>
+            <span className="ml-3 text-muted-foreground" style={{ ...fieldStyle, fontSize: '12px' }}>
+              {quietHoursOverrideEnabled ? `Quiet hours: ${summariseQuietHours(quietHoursOverride)}` : `Quiet hours: inherit (${summariseQuietHours(clientQuietHoursDefault)})`}
+              {' · '}
+              {voicemailMessage.trim() ? `Voicemail: ${voicemailMode}` : 'Voicemail: not configured'}
+            </span>
+          </div>
+          {cadenceBarOpen && (
+            <div
+              className={rightPanel ? 'pb-4' : 'container mx-auto max-w-7xl pb-4'}
+              style={rightPanel ? { paddingLeft: 'max(3rem, calc((100vw - 16rem - 80rem) / 2 + 3rem))', paddingRight: 12 } : undefined}
+            >
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
+                {/* Quiet Hours column */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <Label className="field-text text-foreground uppercase" style={tabStyle}>Quiet Hours</Label>
+                    <div className="flex items-center gap-2">
+                      <span className="text-muted-foreground" style={fieldStyle}>Override</span>
+                      <Switch checked={quietHoursOverrideEnabled} onCheckedChange={setQuietHoursOverrideEnabled} />
+                    </div>
+                  </div>
+                  <p className="text-muted-foreground" style={{ ...fieldStyle, fontSize: '12px' }}>
+                    Client default: <span className="text-foreground">{summariseQuietHours(clientQuietHoursDefault)}</span>
+                  </p>
+                  {quietHoursOverrideEnabled && (
+                    <div className="space-y-3 pt-1">
+                      <div className="space-y-1">
+                        <Label className="field-text text-foreground">Active Days</Label>
+                        <div className="flex gap-1 flex-wrap">
+                          {DAY_LABELS.map((label, i) => {
+                            const dayVal = CADENCE_DAY_VALUES[i];
+                            const active = quietHoursOverride.days.includes(dayVal);
+                            return (
+                              <button
+                                key={label}
+                                type="button"
+                                className={cn(
+                                  'px-2.5 py-1 rounded border transition-colors',
+                                  active
+                                    ? 'bg-primary text-primary-foreground border-primary'
+                                    : 'bg-muted text-muted-foreground border-border hover:border-primary/50'
+                                )}
+                                style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '13px' }}
+                                onClick={() => {
+                                  setQuietHoursOverride((prev) => ({
+                                    ...prev,
+                                    days: prev.days.includes(dayVal)
+                                      ? prev.days.filter((x) => x !== dayVal)
+                                      : [...prev.days, dayVal].sort((a, b) => a - b),
+                                  }));
+                                }}
+                              >
+                                {label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="field-text text-foreground">Time Window</Label>
+                        <div className="flex items-center gap-2">
+                          <Popover open={cadenceStartTimeOpen} onOpenChange={setCadenceStartTimeOpen}>
+                            <PopoverTrigger asChild>
+                              <button
+                                className="flex items-center gap-2 rounded border border-border bg-background px-3 py-1.5 text-foreground hover:border-primary/50 transition-colors"
+                                style={fieldStyle}
+                              >
+                                <span>{formatTime12(quietHoursOverride.start)}</span>
+                                <Clock className="h-4 w-4 text-muted-foreground mr-0.5" />
+                              </button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-44 p-0 bg-sidebar border border-border" style={{ borderStyle: 'solid', boxShadow: 'none' }} align="start">
+                              <div className="max-h-56 overflow-y-auto">
+                                {TIME_OPTIONS_30MIN.map((t) => (
+                                  <button
+                                    key={t}
+                                    type="button"
+                                    className={cn(
+                                      'w-full text-left px-3 py-1.5 transition-colors',
+                                      t === quietHoursOverride.start ? 'bg-accent/50 text-foreground' : 'hover:bg-accent/50 text-foreground'
+                                    )}
+                                    style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '13px' }}
+                                    onClick={() => { setQuietHoursOverride((p) => ({ ...p, start: t })); setCadenceStartTimeOpen(false); }}
+                                  >
+                                    {formatTime12(t)}
+                                  </button>
+                                ))}
+                              </div>
+                            </PopoverContent>
+                          </Popover>
+                          <span className="text-muted-foreground" style={fieldStyle}>to</span>
+                          <Popover open={cadenceEndTimeOpen} onOpenChange={setCadenceEndTimeOpen}>
+                            <PopoverTrigger asChild>
+                              <button
+                                className="flex items-center gap-2 rounded border border-border bg-background px-3 py-1.5 text-foreground hover:border-primary/50 transition-colors"
+                                style={fieldStyle}
+                              >
+                                <span>{formatTime12(quietHoursOverride.end)}</span>
+                                <Clock className="h-4 w-4 text-muted-foreground mr-0.5" />
+                              </button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-44 p-0 bg-sidebar border border-border" style={{ borderStyle: 'solid', boxShadow: 'none' }} align="start">
+                              <div className="max-h-56 overflow-y-auto">
+                                {TIME_OPTIONS_30MIN.map((t) => (
+                                  <button
+                                    key={t}
+                                    type="button"
+                                    className={cn(
+                                      'w-full text-left px-3 py-1.5 transition-colors',
+                                      t === quietHoursOverride.end ? 'bg-accent/50 text-foreground' : 'hover:bg-accent/50 text-foreground'
+                                    )}
+                                    style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '13px' }}
+                                    onClick={() => { setQuietHoursOverride((p) => ({ ...p, end: t })); setCadenceEndTimeOpen(false); }}
+                                  >
+                                    {formatTime12(t)}
+                                  </button>
+                                ))}
+                              </div>
+                            </PopoverContent>
+                          </Popover>
+                        </div>
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="field-text text-foreground">Timezone</Label>
+                        <Select value={quietHoursOverride.tz} onValueChange={(tz) => setQuietHoursOverride((p) => ({ ...p, tz }))}>
+                          <SelectTrigger className="field-text">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent className="bg-sidebar border border-border max-h-60" style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '13px', borderStyle: 'solid', boxShadow: 'none' }}>
+                            {IANA_TIMEZONES.map((tz) => (
+                              <SelectItem key={tz} value={tz}>{tz} ({getUtcOffset(tz)})</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Voicemail column */}
+                <div className="space-y-3">
+                  <Label className="field-text text-foreground uppercase" style={tabStyle}>Voicemail</Label>
+                  <RadioGroup
+                    value={voicemailMode}
+                    onValueChange={(v) => setVoicemailMode(v as 'static' | 'dynamic')}
+                    className="flex gap-4"
+                  >
+                    <div className="flex items-center gap-2">
+                      <RadioGroupItem value="static" id="vm-static" />
+                      <Label htmlFor="vm-static" className="field-text text-foreground cursor-pointer">Static text</Label>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <RadioGroupItem value="dynamic" id="vm-dynamic" />
+                      <Label htmlFor="vm-dynamic" className="field-text text-foreground cursor-pointer">Dynamic (LLM-generated per call)</Label>
+                    </div>
+                  </RadioGroup>
+                  <Textarea
+                    className="field-text"
+                    rows={5}
+                    value={voicemailMessage}
+                    onChange={(e) => setVoicemailMessage(e.target.value)}
+                    placeholder={voicemailMode === 'static'
+                      ? 'Hey {{first_name}}, sorry I missed you. Call me back when you can.'
+                      : 'You are leaving a voicemail for {{first_name}} after they did not pick up. Keep it under 15 seconds, friendly tone, ask them to call back.'}
+                  />
+                  <p className="text-muted-foreground" style={{ ...fieldStyle, fontSize: '12px' }}>
+                    {voicemailMode === 'static'
+                      ? 'Pushed to Retell as a static text voicemail. {{vars}} substituted by Retell.'
+                      : 'Pushed to Retell as a prompt; the LLM generates the voicemail per call.'}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
         <WorkflowCanvas
           nodes={canvasNodes}
           selectedNodeId={selectedNodeId}
@@ -3445,6 +3746,7 @@ export default function Engagement() {
           textSetterNumber={textSetterNumber}
           onTextSetterChange={setTextSetterNumber}
           setterSlots={setterSlots}
+          workflowQuietHoursOverrideEnabled={quietHoursOverrideEnabled}
           onDeleteDrip={selectedNode.type === 'drip' ? () => {
             setNodes(prev => prev.filter(n => n.type !== 'drip'));
             setSelectedNodeId(null);
