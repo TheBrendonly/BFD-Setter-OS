@@ -272,13 +272,13 @@ RETURNING id, intake_lead_secret;
 -- Save the returned id as <probe-client-id>; intake_lead_secret as <probe-secret>.
 
 -- 1-node workflow that fires a single SMS at T+0 (use a clearly-marked test message).
-INSERT INTO public.engagement_workflows (id, client_id, name, nodes, is_active)
+-- Note: engagement_workflows has no is_active column; rows are treated as active by default.
+INSERT INTO public.engagement_workflows (id, client_id, name, nodes)
 VALUES (
   gen_random_uuid(),
   '<probe-client-id>',
   'Synthetic probe — single SMS',
-  '[{"id":"n1","type":"engage","channels":[{"type":"sms","enabled":true,"message":"[probe] do not respond","delay_seconds":0}]}]'::jsonb,
-  true
+  '[{"id":"n1","type":"engage","channels":[{"type":"sms","enabled":true,"message":"[probe] do not respond","delay_seconds":0}]}]'::jsonb
 )
 RETURNING id;
 
