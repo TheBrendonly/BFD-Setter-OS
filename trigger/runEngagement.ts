@@ -123,6 +123,67 @@ function parseQuietHours(raw: unknown): QuietHoursConfig | null {
   return { start, end, tz, days };
 }
 
+// ── Phase 11f — engage-node SMS via direct Twilio ─────────────────────────
+// Replaces the legacy POST to client.send_engagement_webhook_url. Mirrors
+// processMessages.ts:395-437 exactly: same StatusCallback, same outbound
+// message_queue stamp keyed by twilio_message_sid. WhatsApp keeps using the
+// webhook (Twilio WhatsApp is a separate API and not blocking the funnel).
+async function sendTwilioSmsAndStamp(args: {
+  supabase: any;
+  twilioSid: string;
+  twilioAuth: string;
+  fromNumber: string;
+  toNumber: string;
+  body: string;
+  leadId: string;
+  ghlAccountId: string;
+  contactName: string | null;
+  contactEmail: string | null;
+}): Promise<{ ok: boolean; sid: string | null; errorCode?: number; errorMessage?: string }> {
+  const supabaseUrl = process.env.SUPABASE_URL!;
+  const statusCallbackUrl = `${supabaseUrl}/functions/v1/twilio-status-webhook`;
+  const params: Record<string, string> = {
+    From: args.fromNumber,
+    To: args.toNumber,
+    Body: args.body,
+    StatusCallback: statusCallbackUrl,
+  };
+  const twilioBody = new URLSearchParams(params);
+  const twilioRes = await fetch(
+    `https://api.twilio.com/2010-04-01/Accounts/${args.twilioSid}/Messages.json`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        Authorization: `Basic ${Buffer.from(`${args.twilioSid}:${args.twilioAuth}`).toString("base64")}`,
+      },
+      body: twilioBody.toString(),
+    },
+  );
+  const twilioJson = (await twilioRes.json().catch(() => ({}))) as { sid?: string; error_code?: number; error_message?: string };
+  if (!twilioRes.ok) {
+    return { ok: false, sid: null, errorCode: twilioJson.error_code, errorMessage: twilioJson.error_message };
+  }
+  if (twilioJson.sid) {
+    try {
+      await args.supabase.from("message_queue").insert({
+        lead_id: args.leadId,
+        ghl_account_id: args.ghlAccountId,
+        message_body: args.body,
+        contact_name: args.contactName,
+        contact_email: args.contactEmail,
+        contact_phone: args.toNumber,
+        channel: "sms_outbound",
+        twilio_message_sid: twilioJson.sid,
+        processed: true,
+      });
+    } catch (insErr) {
+      console.warn("runEngagement: outbound message_queue insert failed (non-fatal)", insErr);
+    }
+  }
+  return { ok: true, sid: twilioJson.sid ?? null };
+}
+
 // ── Phase 11d — GHL tag removal at cadence end ────────────────────────────
 // When a workflow is the new-leads auto-enrol campaign and a contact was
 // enrolled via tag, the tag represents "currently in cadence". When the
@@ -433,12 +494,10 @@ export const runEngagement = task({
       if (!client) {
         throw new Error(`Client ${client_id} not found`);
       }
-      if (!client.send_engagement_webhook_url) {
-        // engage-node SMS still goes via the GHL Custom Webhook here.
-        // phase-11f will replace this path with direct Twilio.
-        throw new Error("Missing client send_engagement_webhook_url");
-      }
       clientRow = client as unknown as typeof clientRow;
+      // Phase 11f — SMS now goes via direct Twilio. WhatsApp still requires
+      // send_engagement_webhook_url; we validate that in the WhatsApp branch
+      // and require Twilio creds in the SMS branch.
 
       // Phase 11d — quiet-hours fallback chain: workflow override wins, then
       // per-client default, then DEFAULT_QUIET_HOURS.
@@ -735,88 +794,142 @@ export const runEngagement = task({
             const message = interpolate(ch.message);
             await updateExecution({ stage_description: `Sending ${ch.type === "sms" ? "SMS" : "WhatsApp"}...` });
 
-            const channelLabel = ch.type === "sms" ? "SMS" : "WhatsApp";
-
-            // Build payload — WhatsApp adds Type and optionally Template_Number
-            const webhookPayload: Record<string, unknown> = {
-              Lead_ID: lead_id,
-              Message: message,
-              Channel: channelLabel,
-              Setter_Number: String(textSetterNumber),
-            };
-            if (ch.type === "whatsapp") {
+            if (ch.type === "sms") {
+              // Phase 11f — direct Twilio Messages.create + message_queue stamp.
+              const twilioSid = client.twilio_account_sid as string | null;
+              const twilioAuth = client.twilio_auth_token as string | null;
+              const twilioFrom =
+                (client.twilio_default_phone as string | null) ??
+                (client.retell_phone_1 as string | null);
+              const toNumber = payload.Phone;
+              if (!twilioSid || !twilioAuth || !twilioFrom) {
+                throw new Error("SMS requires twilio_account_sid + twilio_auth_token + (twilio_default_phone || retell_phone_1)");
+              }
+              if (!toNumber) {
+                throw new Error(`engage SMS in node ${node.id} has no phone number on the lead`);
+              }
+              const sendResult = await sendTwilioSmsAndStamp({
+                supabase,
+                twilioSid,
+                twilioAuth,
+                fromNumber: twilioFrom,
+                toNumber,
+                body: message,
+                leadId: lead_id,
+                ghlAccountId: ghl_account_id,
+                contactName: contact_name ?? null,
+                contactEmail: payload.Email ?? null,
+              });
+              if (!sendResult.ok) {
+                throw new Error(
+                  `Twilio SMS failed: ${sendResult.errorCode ?? "?"} ${sendResult.errorMessage ?? "unknown"}`,
+                );
+              }
+              console.log(`Engage SMS sent to lead ${lead_id}: ${redactBody(message)} (sid=${sendResult.sid})`);
+              await updateExecution({
+                last_sms_sent_at: new Date().toISOString(),
+                stage_description: "SMS sent.",
+              });
+              metricsBuffer.sms_sent++;
+              await Promise.all([
+                logCampaignEvent({
+                  event_type: "message_sent",
+                  channel: "sms",
+                  node_index: i,
+                  node_id: node.id,
+                  metadata: { message_body: message, twilio_message_sid: sendResult.sid },
+                }),
+                writeToChatHistory(message),
+              ]);
+            } else if (ch.type === "whatsapp") {
+              if (!client.send_engagement_webhook_url) {
+                throw new Error("WhatsApp requires client.send_engagement_webhook_url");
+              }
               const waType = ch.whatsapp_type ?? "text";
-              webhookPayload.Type = waType === "template" ? "Template" : "Text";
+              const webhookPayload: Record<string, unknown> = {
+                Lead_ID: lead_id,
+                Message: message,
+                Channel: "WhatsApp",
+                Setter_Number: String(textSetterNumber),
+                Type: waType === "template" ? "Template" : "Text",
+              };
               if (waType === "template" && ch.template_name) {
                 webhookPayload.Template_Name = ch.template_name;
               }
+              const resp = await fetch(client.send_engagement_webhook_url as string, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(webhookPayload),
+              });
+              if (!resp.ok) {
+                const errText = await resp.text();
+                throw new Error(`Engagement webhook (whatsapp) failed ${resp.status}: ${errText.slice(0, 200)}`);
+              }
+              console.log(`Engage whatsapp sent to lead ${lead_id}: ${redactBody(message)}`);
+              await updateExecution({ stage_description: "WhatsApp sent." });
+              metricsBuffer.whatsapp_sent++;
+              const isWaTemplate = waType === "template" && !!ch.template_name;
+              const eventMessageBody = isWaTemplate
+                ? `WhatsApp Template from GoHighLevel:\n\n"${ch.template_name}"`
+                : message;
+              await Promise.all([
+                logCampaignEvent({
+                  event_type: "message_sent",
+                  channel: "whatsapp",
+                  node_index: i,
+                  node_id: node.id,
+                  metadata: { message_body: eventMessageBody },
+                }),
+                writeToChatHistory(message),
+              ]);
             }
-
-            const resp = await fetch(client.send_engagement_webhook_url as string, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(webhookPayload),
-            });
-
-            if (!resp.ok) {
-              const errText = await resp.text();
-              throw new Error(`Engagement webhook (${ch.type}) failed ${resp.status}: ${errText.slice(0, 200)}`);
-            }
-
-            console.log(`Engage ${ch.type} sent to lead ${lead_id}: ${redactBody(message)}`);
-            await updateExecution({
-              ...(ch.type === "sms" ? { last_sms_sent_at: new Date().toISOString() } : {}),
-              stage_description: `${ch.type === "sms" ? "SMS" : "WhatsApp"} sent.`,
-            });
-            if (ch.type === "sms") metricsBuffer.sms_sent++;
-            else if (ch.type === "whatsapp") metricsBuffer.whatsapp_sent++;
-            const isWaTemplate = ch.type === "whatsapp" && ch.whatsapp_type === "template" && !!ch.template_name;
-            const eventMessageBody = isWaTemplate
-              ? `WhatsApp Template from GoHighLevel:\n\n"${ch.template_name}"`
-              : message;
-            await Promise.all([
-              logCampaignEvent({
-                event_type: "message_sent",
-                channel: ch.type,
-                node_index: i,
-                node_id: node.id,
-                metadata: { message_body: eventMessageBody },
-              }),
-              writeToChatHistory(message),
-            ]);
           }
 
-        // ── SEND SMS node (legacy) ──────────────────────────────────────────
+        // ── SEND SMS node (legacy; phase-11f routed through direct Twilio) ──
         } else if (node.type === "send_sms") {
           await enforceQuietHoursBeforeSend(`send_sms node ${i}`);
           if (await isCancelled()) { await writeCadenceMetrics("cancelled"); return { status: "cancelled", node_index: i }; }
           const message = interpolate(node.message);
           await updateExecution({ stage_description: "Sending SMS..." });
 
-          const smsResponse = await fetch(client.send_engagement_webhook_url as string, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              Lead_ID: lead_id,
-              Message: message,
-              Channel: "SMS",
-              Setter_Number: String(textSetterNumber),
-            }),
+          const twilioSid = client.twilio_account_sid as string | null;
+          const twilioAuth = client.twilio_auth_token as string | null;
+          const twilioFrom =
+            (client.twilio_default_phone as string | null) ??
+            (client.retell_phone_1 as string | null);
+          const toNumber = payload.Phone;
+          if (!twilioSid || !twilioAuth || !twilioFrom) {
+            throw new Error("send_sms requires twilio_account_sid + twilio_auth_token + (twilio_default_phone || retell_phone_1)");
+          }
+          if (!toNumber) {
+            throw new Error(`send_sms node ${node.id} has no phone number on the lead`);
+          }
+          const sendResult = await sendTwilioSmsAndStamp({
+            supabase,
+            twilioSid,
+            twilioAuth,
+            fromNumber: twilioFrom,
+            toNumber,
+            body: message,
+            leadId: lead_id,
+            ghlAccountId: ghl_account_id,
+            contactName: contact_name ?? null,
+            contactEmail: payload.Email ?? null,
           });
-
-          if (!smsResponse.ok) {
-            const errText = await smsResponse.text();
-            throw new Error(`Engagement webhook (SMS) failed ${smsResponse.status}: ${errText.slice(0, 200)}`);
+          if (!sendResult.ok) {
+            throw new Error(
+              `Twilio SMS failed: ${sendResult.errorCode ?? "?"} ${sendResult.errorMessage ?? "unknown"}`,
+            );
           }
 
-          console.log(`SMS sent to lead ${lead_id}: ${redactBody(message)}`);
+          console.log(`SMS sent to lead ${lead_id}: ${redactBody(message)} (sid=${sendResult.sid})`);
           await updateExecution({
             last_sms_sent_at: new Date().toISOString(),
             stage_description: "SMS sent.",
           });
           metricsBuffer.sms_sent++;
           await Promise.all([
-            logCampaignEvent({ event_type: "message_sent", channel: "sms", node_index: i, node_id: node.id, metadata: { message_body: message } }),
+            logCampaignEvent({ event_type: "message_sent", channel: "sms", node_index: i, node_id: node.id, metadata: { message_body: message, twilio_message_sid: sendResult.sid } }),
             writeToChatHistory(message),
           ]);
 
