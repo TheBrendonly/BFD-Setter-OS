@@ -13,6 +13,7 @@ import { StatusTag } from '@/components/StatusTag';
 import { toast } from 'sonner';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 import { Pencil, Trash2, Plus, GripVertical, Save } from '@/components/icons';
+import { Switch } from '@/components/ui/switch';
 import type { Workflow } from '@/types/workflow';
 import RetroLoader from '@/components/RetroLoader';
 import { insertDefaultCampaignWidgets } from '@/lib/campaignWidgets';
@@ -38,6 +39,9 @@ interface EngagementWorkflow {
   is_active: boolean;
   nodes: any[];
   sort_order?: number;
+  is_new_leads_campaign?: boolean;
+  new_leads_tag?: string | null;
+  client_id?: string;
 }
 
 function SortableCampaignRow({
@@ -46,21 +50,38 @@ function SortableCampaignRow({
   navigate,
   onEdit,
   onDelete,
+  onNewLeadsToggle,
+  onNewLeadsTagChange,
 }: {
   ew: EngagementWorkflow;
   clientId: string;
   navigate: (path: string) => void;
   onEdit: (ew: EngagementWorkflow) => void;
   onDelete: (id: string, name: string, e: React.MouseEvent) => void;
+  onNewLeadsToggle: (ew: EngagementWorkflow, on: boolean) => void;
+  onNewLeadsTagChange: (ew: EngagementWorkflow, tag: string) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: ew.id });
   const { cb } = useCreatorMode();
+  const [tagDraft, setTagDraft] = useState<string>(ew.new_leads_tag ?? '');
+  useEffect(() => { setTagDraft(ew.new_leads_tag ?? ''); }, [ew.new_leads_tag]);
   const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
     transition,
     opacity: isDragging ? 0.4 : 1,
     position: 'relative' as const,
     zIndex: isDragging ? 10 : undefined,
+  };
+
+  const commitTag = () => {
+    const trimmed = tagDraft.trim();
+    if (!trimmed) {
+      toast.error('Tag name cannot be empty');
+      setTagDraft(ew.new_leads_tag ?? '');
+      return;
+    }
+    if (trimmed === (ew.new_leads_tag ?? '')) return;
+    onNewLeadsTagChange(ew, trimmed);
   };
 
   return (
@@ -88,6 +109,30 @@ function SortableCampaignRow({
           {ew.is_active ? 'ACTIVE' : 'INACTIVE'}
         </StatusTag>
         <StatusTag variant="warning">CAMPAIGN</StatusTag>
+        <div
+          className="flex items-center gap-2"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <span className="text-muted-foreground field-text uppercase" style={{ fontSize: 11 }}>NEW LEADS</span>
+          <Switch
+            checked={!!ew.is_new_leads_campaign}
+            onCheckedChange={(on) => onNewLeadsToggle(ew, on)}
+          />
+          {ew.is_new_leads_campaign && (
+            <Input
+              autoFocus
+              value={tagDraft}
+              onChange={(e) => setTagDraft(e.target.value)}
+              onBlur={commitTag}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') { e.currentTarget.blur(); }
+                if (e.key === 'Escape') { setTagDraft(ew.new_leads_tag ?? ''); e.currentTarget.blur(); }
+              }}
+              placeholder="tag name (e.g. new-lead)"
+              className="field-text h-8 w-44"
+            />
+          )}
+        </div>
       </div>
       <div className="flex items-center gap-1 shrink-0">
         <button
@@ -115,6 +160,8 @@ function CampaignsDndList({
   navigate,
   onEdit,
   onDelete,
+  onNewLeadsToggle,
+  onNewLeadsTagChange,
 }: {
   engagementWorkflows: EngagementWorkflow[];
   setEngagementWorkflows: React.Dispatch<React.SetStateAction<EngagementWorkflow[]>>;
@@ -122,6 +169,8 @@ function CampaignsDndList({
   navigate: (path: string) => void;
   onEdit: (ew: EngagementWorkflow) => void;
   onDelete: (id: string, name: string, e: React.MouseEvent) => void;
+  onNewLeadsToggle: (ew: EngagementWorkflow, on: boolean) => void;
+  onNewLeadsTagChange: (ew: EngagementWorkflow, tag: string) => void;
 }) {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
@@ -163,6 +212,8 @@ function CampaignsDndList({
               navigate={navigate}
               onEdit={onEdit}
               onDelete={onDelete}
+              onNewLeadsToggle={onNewLeadsToggle}
+              onNewLeadsTagChange={onNewLeadsTagChange}
             />
           ))}
         </div>
@@ -220,7 +271,7 @@ export default function Workflows() {
         .order('created_at', { ascending: false }),
       (supabase as any)
         .from('engagement_workflows')
-        .select('id, name, is_active, nodes, sort_order')
+        .select('id, name, is_active, nodes, sort_order, is_new_leads_campaign, new_leads_tag, client_id')
         .eq('client_id', clientId)
         .order('sort_order', { ascending: true })
         .order('created_at', { ascending: false }),
@@ -320,6 +371,70 @@ export default function Workflows() {
     setDeleteTarget({ id, name, type });
   }
 
+  // Phase-11c: at-most-one new-leads campaign per client.
+  // Optimistic flip + server-side updates. Partial unique index enforces invariance.
+  async function handleNewLeadsToggle(ew: EngagementWorkflow, on: boolean) {
+    if (!clientId) return;
+    const newTag = on ? (ew.new_leads_tag?.trim() || 'new-lead') : null;
+    const previousState = engagementWorkflows;
+
+    // Optimistic local state: when turning ON, also flip any other ON row in this client OFF.
+    setEngagementWorkflows(prev => prev.map(w => {
+      if (w.id === ew.id) return { ...w, is_new_leads_campaign: on, new_leads_tag: newTag };
+      if (on && w.client_id === ew.client_id && w.is_new_leads_campaign) {
+        return { ...w, is_new_leads_campaign: false, new_leads_tag: null };
+      }
+      return w;
+    }));
+
+    try {
+      if (on) {
+        const { error: clearErr } = await (supabase as any)
+          .from('engagement_workflows')
+          .update({ is_new_leads_campaign: false, new_leads_tag: null })
+          .eq('client_id', clientId)
+          .neq('id', ew.id)
+          .eq('is_new_leads_campaign', true);
+        if (clearErr) throw clearErr;
+      }
+      const { error: setErr } = await (supabase as any)
+        .from('engagement_workflows')
+        .update({ is_new_leads_campaign: on, new_leads_tag: newTag })
+        .eq('id', ew.id);
+      if (setErr) throw setErr;
+      // Keep clients.auto_engagement_workflow_id in sync for the legacy intake-lead path.
+      const { error: clientErr } = await (supabase as any)
+        .from('clients')
+        .update({ auto_engagement_workflow_id: on ? ew.id : null })
+        .eq('id', clientId);
+      if (clientErr) {
+        console.warn('Failed to sync clients.auto_engagement_workflow_id', clientErr);
+      }
+      toast.success(on
+        ? `'${ew.name}' is now the auto-enrol campaign for tag '${newTag}'`
+        : `'${ew.name}' is no longer the auto-enrol campaign`);
+    } catch (err: any) {
+      console.error('handleNewLeadsToggle failed', err);
+      toast.error(err?.message || 'Failed to update auto-enrol campaign');
+      setEngagementWorkflows(previousState);
+    }
+  }
+
+  async function handleNewLeadsTagChange(ew: EngagementWorkflow, tag: string) {
+    const previousState = engagementWorkflows;
+    setEngagementWorkflows(prev => prev.map(w => w.id === ew.id ? { ...w, new_leads_tag: tag } : w));
+    const { error } = await (supabase as any)
+      .from('engagement_workflows')
+      .update({ new_leads_tag: tag })
+      .eq('id', ew.id);
+    if (error) {
+      toast.error('Failed to update tag');
+      setEngagementWorkflows(previousState);
+      return;
+    }
+    toast.success(`Tag updated to '${tag}'`);
+  }
+
   async function confirmDelete() {
     if (!deleteTarget) return;
     const table = deleteTarget.type === 'campaign' ? 'engagement_workflows' : 'workflows';
@@ -393,6 +508,8 @@ export default function Workflows() {
             navigate={navigate}
             onEdit={(ew) => setEditingName({ id: ew.id, name: ew.name, type: 'campaign' })}
             onDelete={(id, name, e) => handleDeleteClick(id, name, 'campaign', e)}
+            onNewLeadsToggle={handleNewLeadsToggle}
+            onNewLeadsTagChange={handleNewLeadsTagChange}
           />
         )}
 
