@@ -234,7 +234,7 @@ Deno.serve(async (req) => {
 
     const { data: clientRow, error: clientErr } = await supabase
       .from("clients")
-      .select("id, sync_ghl_enabled, auto_engagement_workflow_id")
+      .select("id, sync_ghl_enabled, auto_engagement_workflow_id, ghl_last_synced_from_field_id")
       .eq("ghl_location_id", ghlAccountId)
       .single();
 
@@ -277,13 +277,15 @@ Deno.serve(async (req) => {
       if (Array.isArray(contact.customFields)) candidates.push(...(contact.customFields as unknown[]));
       if (Array.isArray(contact.customField)) candidates.push(...(contact.customField as unknown[]));
       if (Array.isArray(contact.custom_field)) candidates.push(...(contact.custom_field as unknown[]));
+      const perClientFieldId = clientRow.ghl_last_synced_from_field_id as string | null;
       const isOurStamp = candidates.some((cf) => {
         if (!isRecord(cf)) return false;
         const fieldKey = typeof cf.key === "string" ? cf.key : (typeof cf.fieldKey === "string" ? cf.fieldKey : "");
         const fieldId = typeof cf.id === "string" ? cf.id : "";
         const isLastSynced = fieldKey === "contact.last_synced_from"
           || fieldKey === "last_synced_from"
-          || fieldId === "PQNTqtTnIw9Uu0XLLE5M";
+          || (perClientFieldId !== null && fieldId === perClientFieldId)
+          || fieldId === "PQNTqtTnIw9Uu0XLLE5M"; // legacy fallback for BFD-only setups
         if (!isLastSynced) return false;
         const value = cf.value ?? cf.field_value ?? cf.fieldValue;
         return typeof value === "string" && value.trim().toLowerCase() === "1prompt-os";

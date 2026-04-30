@@ -25,14 +25,15 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type",
 };
 
-// Custom field id that flags "this update came from 1prompt-OS, ignore the
-// resulting webhook". Created via GHL API on 2026-04-30 against BFD location
-// xo0XjmenBBJxJgSnAdyM (field name `last_synced_from`, dataType TEXT, model
-// contact, fieldKey `contact.last_synced_from`).
+// D-M5 — per-client custom field id, read from clients.ghl_last_synced_from_field_id.
+// Phase 11a migration backfilled BFD's existing field id on the BFD row, so
+// behaviour is unchanged for BFD; new clients have their field id minted at
+// onboarding time per the Docs/CLIENT_ONBOARDING_SOP.md §4.2 click-path.
 //
-// TODO when onboarding non-BFD clients: read clients.ghl_last_synced_from_field_id
-// instead of this constant, and create the field per-location at onboarding time.
-const BFD_LAST_SYNCED_FROM_FIELD_ID = "PQNTqtTnIw9Uu0XLLE5M";
+// The legacy hardcoded constant `PQNTqtTnIw9Uu0XLLE5M` is gone — kept only as
+// a fallback if the column is somehow null on a row that already worked
+// against this id.
+const BFD_LEGACY_FALLBACK_FIELD_ID = "PQNTqtTnIw9Uu0XLLE5M";
 
 class AuthError extends Error {
   status: number;
@@ -106,7 +107,7 @@ Deno.serve(async (req) => {
     const supabase = getSupabaseAdmin();
     const { data: clientRow, error: clientErr } = await supabase
       .from("clients")
-      .select("ghl_api_key, ghl_location_id")
+      .select("ghl_api_key, ghl_location_id, ghl_last_synced_from_field_id")
       .eq("id", clientId)
       .single();
     if (clientErr || !clientRow?.ghl_api_key) {
@@ -115,6 +116,9 @@ Deno.serve(async (req) => {
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
+    const lastSyncedFromFieldId =
+      (clientRow.ghl_last_synced_from_field_id as string | null)
+      ?? BFD_LEGACY_FALLBACK_FIELD_ID;
 
     // Build GHL Contacts API PUT body
     const body: Record<string, unknown> = {};
@@ -126,8 +130,8 @@ Deno.serve(async (req) => {
     if (Array.isArray(contact.tags)) body.tags = contact.tags;
 
     const customFields = Array.isArray(contact.custom_fields) ? [...contact.custom_fields] : [];
-    if (BFD_LAST_SYNCED_FROM_FIELD_ID) {
-      customFields.push({ id: BFD_LAST_SYNCED_FROM_FIELD_ID, field_value: "1prompt-os" });
+    if (lastSyncedFromFieldId) {
+      customFields.push({ id: lastSyncedFromFieldId, field_value: "1prompt-os" });
     }
     if (customFields.length > 0) body.customFields = customFields;
 
