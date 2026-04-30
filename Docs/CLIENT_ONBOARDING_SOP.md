@@ -385,6 +385,16 @@ For each client phone number (the `retell_phone_*` values):
 3. Save.
 4. No per-number status callback config needed — `processMessages` outbound stamps `StatusCallback=<…>/twilio-status-webhook` on each `Messages.create` call automatically.
 
+### 5.10 Tag-based auto-enrolment via `ghl-tag-webhook` (phase-11e)
+
+After cadence copy review (§6) and dry-run (§7), wire GHL → ghl-tag-webhook so contacts auto-enrol when a chosen tag is added:
+
+1. In the 1prompt UI: **Workflows** list → flip the **NEW LEADS** Switch ON for the campaign → enter the tag name (e.g. `new-lead`). At-most-one workflow per client may be ON.
+2. In GHL: **Workflows** → New → Trigger: **Contact Tag** has tag `<tag>` → Action: **Webhook** → URL: `https://bjgrgbgykvjrsuwwruoh.supabase.co/functions/v1/ghl-tag-webhook` → Method: POST → Body: include `contactId`, `locationId`, and the post-update `tags` (or `addedTags`) array.
+3. Save + activate.
+
+The tag is removed at every terminal `stop_reason` (sequence_complete / inbound_reply / booking_created / opt_out / cancelled / error) by `runEngagement.writeCadenceMetrics`. See `Docs/RUNBOOK.md` "Tag-based auto-enrolment" for sig verification + smoke test.
+
 ---
 
 ## 6. Cadence + content review (with the client)

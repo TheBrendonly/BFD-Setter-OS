@@ -225,6 +225,21 @@ Brendan, in GHL:
 1. **Settings** → **Marketplace** → **Webhooks v2** → **Enable**
 2. Note the webhook secret shown — paste into `clients.ghl_webhook_secret` for each client location
 
+### Tag-based auto-enrolment via `ghl-tag-webhook` (Phase 11e)
+
+For tag-driven cadence enrolment, the operator picks ONE workflow per client to be the new-leads campaign and configures the GHL workflow:
+
+1. In the 1prompt UI: **Workflows** list → flip the **NEW LEADS** Switch ON for the chosen campaign → enter the tag name (e.g. `new-lead`). At-most-one workflow per client may be ON (server-enforced via partial unique index).
+2. In GHL: **Workflows** → New → **Contact** → Trigger: **Contact Tag** with **Has Tag** = `<tag-from-step-1>`.
+3. Add Action: **Webhook** → URL: `https://bjgrgbgykvjrsuwwruoh.supabase.co/functions/v1/ghl-tag-webhook` → Method: POST → Body: include at minimum `contactId`, `locationId`, and the post-update `tags` array (or `addedTags`).
+4. Save + activate.
+
+When a contact gets the tag (manually or via any GHL workflow), the webhook fires, the matching workflow is found, the lead is upserted into `leads`, and an `engagement_executions` row is created in `pending` then dispatched via Trigger.dev. The cadence runs to completion; runEngagement removes the tag at every terminal `stop_reason` (`sequence_complete`, `inbound_reply`, `booking_created`, `opt_out`, `cancelled`, `error`).
+
+Sig verification: when `clients.ghl_webhook_secret` is set, an HMAC-SHA256 hex `x-wh-signature` header is required (computed over the raw body). Backwards-compat: skipped when no secret is configured.
+
+Smoke-test (BFD): `curl -i -X POST https://bjgrgbgykvjrsuwwruoh.supabase.co/functions/v1/ghl-tag-webhook -H 'Content-Type: application/json' -d '{"contactId":"<bfd-contact-id>","locationId":"xo0XjmenBBJxJgSnAdyM","addedTags":["new-lead"]}'` → expect `{"ok":true,"enrolled":"<execution-id>"}`.
+
 ## Environment
 
 Local `.env` template at `.env.example`. Required for autonomous sessions:
