@@ -559,6 +559,27 @@ Pricing held until 30 days of cost-per-booking data exists per `FUTURE.md` "Cost
 
 ## 12. Onboarding-script reference
 
-`scripts/onboard-client.mjs` (D-M6 in the dev backlog) does NOT exist yet. When it ships, it will automate §3.1 (Supabase project SQL seed), §4.1 (clients INSERT), §4.2 (GHL custom field + capture), §4.3 (workflow clone), §5.8 (intake-lead snippet generation).
+`scripts/onboard-client.mjs` (phase-11h) automates §4.1 (clients INSERT), §4.2 (GHL custom field create + store the returned id on the clients row), and §4.3 (clone BFD default workflow). It prints the new client_id, intake_lead_secret, cloned workflow_id, and a follow-up checklist with click-path steps to take next.
 
-Until then, the manual SOP above stands. Once the script ships, this SOP gets revised so §3-4 collapses to: "Run `node scripts/onboard-client.mjs --client-config=./client.yaml`" — but §1, §2, §5, §6, §7, §8, §9, §10 remain manual because they require human judgement or external dashboard clicks.
+```
+node --env-file=.env scripts/onboard-client.mjs \
+  --name "Client Display Name" \
+  --agency-id <agency-uuid> \
+  --ghl-location-id <id> \
+  --ghl-pit <pit> \
+  --twilio-sid <sid> \
+  --twilio-token <token> \
+  --twilio-phone <e164> \
+  --default-tz "Australia/Brisbane" \
+  [--retell-api-key <key>] \
+  [--openrouter-key <key>] \
+  [--dry-run]
+```
+
+Required env vars (in `.env`):
+- `SUPABASE_PAT` — Supabase Management API token (`sbp_*`)
+- `SUPABASE_PROJECT_REF` — defaults to `bjgrgbgykvjrsuwwruoh` (BFD platform)
+
+Use `--dry-run` first to preview the SQL + GHL POST without executing. The script writes the `intake_lead_secret` to stdout exactly once — capture it; it can't be retrieved later without admin DB access.
+
+The script does NOT cover §1 (pre-sales discovery), §2 (info collection), §3.1 (per-client external Supabase project), §5 (GHL/Retell/Twilio click-paths), §6 (cadence copy review), §7 (dry-run), §8 (soft launch), §9 (debug), §10 (rollback). Those still require human judgement or external dashboard clicks.

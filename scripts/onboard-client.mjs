@@ -1,0 +1,308 @@
+#!/usr/bin/env node
+// onboard-client.mjs — phase-11h
+//
+// Automates the SQL portion of Docs/CLIENT_ONBOARDING_SOP.md §3-§5 for a new
+// client: INSERT clients row, create the GHL last_synced_from custom field,
+// clone the BFD default workflow, and print a follow-up checklist for the
+// click-path steps that still require human judgement.
+//
+// Usage:
+//   node --env-file=.env scripts/onboard-client.mjs \
+//     --name "Client Display Name" \
+//     --agency-id <agency-uuid> \
+//     --ghl-location-id <id> \
+//     --ghl-pit <pit> \
+//     --twilio-sid <sid> \
+//     --twilio-token <token> \
+//     --twilio-phone <e164> \
+//     --default-tz "Australia/Brisbane" \
+//     [--retell-api-key <key>] \
+//     [--openrouter-key <key>] \
+//     [--dry-run]
+//
+// Env vars (from .env):
+//   SUPABASE_PAT          — Supabase Management API token (sbp_*)
+//   SUPABASE_PROJECT_REF  — defaults to bjgrgbgykvjrsuwwruoh (BFD platform)
+//
+// The script does NOT:
+//   - Repoint Retell custom-tool URLs (use REST API per memory; click-path
+//     in SOP §5.4)
+//   - Wire GHL Calendar workflow → bookings-webhook (click-path in §5.2)
+//   - Set ghl_webhook_secret / retell_webhook_secret (click-path in §5.3,
+//     §5.5 — paste once provider dashboards expose them)
+//   - Set auto_engagement_workflow_id (post copy-review step in SOP §6)
+//   - Provision the client's external Supabase project (SOP §3.1 — manual)
+
+import { randomBytes } from "node:crypto";
+
+const BFD_DEFAULT_WORKFLOW_ID = "40e8bea3-b6f6-4562-98d1-f7e6599af6a1";
+const DEFAULT_PROJECT_REF = "bjgrgbgykvjrsuwwruoh";
+
+function parseArgs(argv) {
+  const flags = {};
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (!a.startsWith("--")) continue;
+    const key = a.slice(2);
+    const next = argv[i + 1];
+    if (next === undefined || next.startsWith("--")) {
+      flags[key] = true;
+    } else {
+      flags[key] = next;
+      i++;
+    }
+  }
+  return flags;
+}
+
+function die(msg) {
+  console.error(`ERROR: ${msg}`);
+  process.exit(1);
+}
+
+function genIntakeSecret() {
+  return randomBytes(24).toString("base64");
+}
+
+function sqlEscapeString(s) {
+  if (s == null) return "NULL";
+  return `'${String(s).replace(/'/g, "''")}'`;
+}
+
+async function runManagementSql({ pat, projectRef, sql, dryRun }) {
+  if (dryRun) {
+    console.log("\n--- [dry-run] SQL would be executed ---");
+    console.log(sql);
+    console.log("--- end SQL ---\n");
+    return null;
+  }
+  const url = `https://api.supabase.com/v1/projects/${projectRef}/database/query`;
+  const r = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${pat}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ query: sql }),
+  });
+  const txt = await r.text();
+  if (!r.ok) {
+    die(`Management API SQL failed ${r.status}: ${txt.slice(0, 400)}`);
+  }
+  try {
+    return JSON.parse(txt);
+  } catch {
+    return txt;
+  }
+}
+
+async function createGhlCustomField({ pit, locationId, dryRun }) {
+  if (dryRun) {
+    console.log(`[dry-run] POST https://services.leadconnectorhq.com/locations/${locationId}/customFields`);
+    console.log(`[dry-run] body: { name: "last_synced_from", dataType: "TEXT", model: "contact" }`);
+    return { id: "<would-be-returned-by-ghl>" };
+  }
+  const r = await fetch(
+    `https://services.leadconnectorhq.com/locations/${locationId}/customFields`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${pit}`,
+        Version: "2021-07-28",
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify({
+        name: "last_synced_from",
+        dataType: "TEXT",
+        model: "contact",
+      }),
+    },
+  );
+  const txt = await r.text();
+  if (!r.ok) {
+    // 400 with existing-field id means it already exists; surface the id.
+    try {
+      const j = JSON.parse(txt);
+      if (j?.meta?.existingId || j?.customField?.id) {
+        const existingId = j?.meta?.existingId ?? j?.customField?.id;
+        console.warn(`GHL custom field already exists; using id ${existingId}`);
+        return { id: existingId };
+      }
+    } catch { /* fall through */ }
+    die(`GHL custom field create failed ${r.status}: ${txt.slice(0, 400)}`);
+  }
+  let json;
+  try {
+    json = JSON.parse(txt);
+  } catch {
+    die(`GHL custom field create returned non-JSON: ${txt.slice(0, 200)}`);
+  }
+  const id = json?.customField?.id ?? json?.id;
+  if (!id) die(`GHL custom field create returned no id: ${txt.slice(0, 200)}`);
+  return { id };
+}
+
+async function main() {
+  const args = parseArgs(process.argv.slice(2));
+  const dryRun = !!args["dry-run"];
+
+  const required = [
+    "name",
+    "agency-id",
+    "ghl-location-id",
+    "ghl-pit",
+    "twilio-sid",
+    "twilio-token",
+    "twilio-phone",
+    "default-tz",
+  ];
+  const missing = required.filter((k) => !args[k] || typeof args[k] !== "string");
+  if (missing.length) {
+    die(`Missing required flags: ${missing.map((m) => "--" + m).join(", ")}`);
+  }
+
+  const pat = process.env.SUPABASE_PAT;
+  if (!pat) die("SUPABASE_PAT env var is required (set in .env)");
+  const projectRef = process.env.SUPABASE_PROJECT_REF || DEFAULT_PROJECT_REF;
+
+  const intakeSecret = genIntakeSecret();
+  const tz = args["default-tz"];
+  const cadenceQH = JSON.stringify({
+    start: "09:00",
+    end: "21:00",
+    tz,
+    days: [1, 2, 3, 4, 5],
+  });
+  const retellApiKey = args["retell-api-key"] || null;
+  const openrouterKey = args["openrouter-key"] || null;
+
+  // 1. INSERT clients row.
+  const insertSql = `
+INSERT INTO public.clients (
+  id, agency_id, name,
+  ghl_location_id, ghl_api_key,
+  twilio_account_sid, twilio_auth_token, twilio_default_phone, retell_phone_1,
+  ${retellApiKey ? "retell_api_key," : ""}
+  ${openrouterKey ? "openrouter_api_key," : ""}
+  llm_model,
+  cadence_quiet_hours,
+  intake_lead_secret,
+  use_native_text_engine,
+  dm_enabled,
+  created_at
+)
+VALUES (
+  gen_random_uuid(),
+  ${sqlEscapeString(args["agency-id"])},
+  ${sqlEscapeString(args["name"])},
+  ${sqlEscapeString(args["ghl-location-id"])},
+  ${sqlEscapeString(args["ghl-pit"])},
+  ${sqlEscapeString(args["twilio-sid"])},
+  ${sqlEscapeString(args["twilio-token"])},
+  ${sqlEscapeString(args["twilio-phone"])},
+  ${sqlEscapeString(args["twilio-phone"])},
+  ${retellApiKey ? sqlEscapeString(retellApiKey) + "," : ""}
+  ${openrouterKey ? sqlEscapeString(openrouterKey) + "," : ""}
+  'openai/gpt-4.1-nano',
+  ${sqlEscapeString(cadenceQH)}::jsonb,
+  ${sqlEscapeString(intakeSecret)},
+  true,
+  false,
+  now()
+)
+RETURNING id, name;
+`.trim();
+
+  console.log(`▶ Creating clients row for "${args["name"]}"...`);
+  const insertResult = await runManagementSql({ pat, projectRef, sql: insertSql, dryRun });
+  const newClientId = dryRun ? "<would-be-returned>" : insertResult?.[0]?.id;
+  if (!dryRun && !newClientId) {
+    die(`clients INSERT did not return id. raw: ${JSON.stringify(insertResult).slice(0, 300)}`);
+  }
+  console.log(`  ✓ client id: ${newClientId}`);
+
+  // 2. Create GHL last_synced_from custom field.
+  console.log(`▶ Creating GHL custom field 'last_synced_from'...`);
+  const { id: fieldId } = await createGhlCustomField({
+    pit: args["ghl-pit"],
+    locationId: args["ghl-location-id"],
+    dryRun,
+  });
+  console.log(`  ✓ field id: ${fieldId}`);
+
+  // 3. UPDATE clients with the field id.
+  const updateFieldSql = `
+UPDATE public.clients
+  SET ghl_last_synced_from_field_id = ${sqlEscapeString(fieldId)}
+WHERE id = ${dryRun ? "'<new-client-id>'" : sqlEscapeString(newClientId)};
+`.trim();
+  console.log(`▶ Storing custom field id on clients row...`);
+  await runManagementSql({ pat, projectRef, sql: updateFieldSql, dryRun });
+  console.log(`  ✓ ghl_last_synced_from_field_id set`);
+
+  // 4. Clone BFD default workflow.
+  const cloneSql = `
+INSERT INTO public.engagement_workflows (id, client_id, name, nodes, is_active, created_at)
+SELECT
+  gen_random_uuid(),
+  ${dryRun ? "'<new-client-id>'" : sqlEscapeString(newClientId)},
+  'Default new-lead cadence',
+  nodes,
+  false,
+  now()
+FROM public.engagement_workflows
+WHERE id = ${sqlEscapeString(BFD_DEFAULT_WORKFLOW_ID)}
+RETURNING id;
+`.trim();
+  console.log(`▶ Cloning BFD default workflow...`);
+  const cloneResult = await runManagementSql({ pat, projectRef, sql: cloneSql, dryRun });
+  const newWorkflowId = dryRun ? "<would-be-returned>" : cloneResult?.[0]?.id;
+  if (!dryRun && !newWorkflowId) {
+    die(`workflow clone did not return id. raw: ${JSON.stringify(cloneResult).slice(0, 300)}`);
+  }
+  console.log(`  ✓ cloned workflow id: ${newWorkflowId}`);
+
+  // 5. Print the follow-up checklist.
+  console.log(`\n${"=".repeat(72)}`);
+  console.log("ONBOARDING SCAFFOLD COMPLETE — manual follow-ups remaining:");
+  console.log("=".repeat(72));
+  console.log("\nClient values to record (these are the only outputs you can't get back):");
+  console.log(`  client_id: ${newClientId}`);
+  console.log(`  intake_lead_secret: ${intakeSecret}`);
+  console.log(`  cloned_workflow_id: ${newWorkflowId}`);
+  console.log(`  ghl_last_synced_from_field_id: ${fieldId}`);
+  console.log("");
+  console.log("Click-path follow-ups (see Docs/CLIENT_ONBOARDING_SOP.md):");
+  console.log("");
+  console.log("§3.1  Provision external Supabase project + run seed SQL.");
+  console.log("§5.1  Configure GHL 'Send Setter Reply' workflow (or skip if");
+  console.log("      use_native_text_engine = true, which is set by default).");
+  console.log("§5.2  Wire GHL Calendar webhook → bookings-webhook (URL:");
+  console.log("        https://bjgrgbgykvjrsuwwruoh.supabase.co/functions/v1/bookings-webhook).");
+  console.log("§5.3  GHL Webhook V2 → paste secret into clients.ghl_webhook_secret.");
+  console.log("§5.4  Repoint Retell custom-tool URLs via REST API (NOT MCP) to:");
+  console.log(`        https://bjgrgbgykvjrsuwwruoh.supabase.co/functions/v1/voice-booking-tools?tool=<tool>&clientId=${newClientId}`);
+  console.log("      Tools: get-available-slots, book-appointments, get-contact-appointments,");
+  console.log("             update-appointment, cancel-appointments.");
+  console.log("§5.5  Retell webhook signing secret → clients.retell_webhook_secret.");
+  console.log("§5.8  Provide intake-lead embed snippet (template in SOP).");
+  console.log("        Replace <client-uuid> + <intake_lead_secret> with values above.");
+  console.log("§5.9  Twilio inbound SMS webhook for each phone number → receive-twilio-sms.");
+  console.log("§5.10 (Optional) GHL workflow on tag-add → ghl-tag-webhook for tag-based");
+  console.log("        auto-enrol. Flip the NEW LEADS toggle in the Workflows UI first.");
+  console.log("§6    Cadence copy review with the client. Replace [BRENDAN: …] placeholders.");
+  console.log("§8.1  Once copy is approved + dry-run is clean:");
+  console.log(`        UPDATE public.clients SET auto_engagement_workflow_id = ${sqlEscapeString(newWorkflowId)},`);
+  console.log(`               dm_enabled = true WHERE id = ${sqlEscapeString(newClientId)};`);
+  console.log("");
+  if (dryRun) {
+    console.log("[dry-run] No SQL or GHL writes were executed.");
+  }
+  console.log("=".repeat(72));
+}
+
+main().catch((e) => {
+  console.error(e);
+  process.exit(1);
+});
