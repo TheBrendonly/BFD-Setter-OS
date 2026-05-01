@@ -129,48 +129,161 @@ async function ghlSend(method: "POST" | "PUT" | "DELETE", path: string, apiKey: 
   return { status: r.status, body: respBody };
 }
 
+// Resolve a GHL contact for a voice-booking request.
+//
+// Retell tool schemas pass `email` (not `contactId`) so we look up or create
+// a GHL contact by email. Honours memory `reference_ghl_contact_create_duplicate`:
+// POST /contacts/ returns 400 with meta.contactId when a duplicate exists —
+// treat that as a successful find.
+async function resolveContactId(args: {
+  client: ClientRow;
+  body: Record<string, unknown>;
+  createIfMissing: boolean;
+}): Promise<string> {
+  const { client, body, createIfMissing } = args;
+  if (typeof body.contactId === "string" && body.contactId) return body.contactId;
+
+  const email = typeof body.email === "string" ? body.email.trim() : "";
+  if (!email) throw new ToolError(400, "email or contactId is required");
+  if (!client.ghl_location_id) throw new ToolError(409, "Client has no GHL locationId configured");
+
+  // Best-effort: pull names if the agent passed them
+  const firstName = typeof body.firstName === "string" ? body.firstName : null;
+  const lastName = typeof body.lastName === "string" ? body.lastName : null;
+  const phone = typeof body.phone === "string" ? body.phone : null;
+
+  // Fall back to deriving a first name from the email so the GHL contact isn't blank
+  const derivedFirst = firstName || (email.split("@")[0] || "Lead").replace(/[._-]+/g, " ").replace(/\s+/g, " ").trim();
+
+  const createBody: Record<string, unknown> = {
+    email,
+    locationId: client.ghl_location_id,
+    firstName: derivedFirst,
+    source: "voice-booking-tools",
+  };
+  if (lastName) createBody.lastName = lastName;
+  if (phone) createBody.phone = phone;
+
+  const r = await ghlSend("POST", "/contacts/", client.ghl_api_key as string, createBody);
+
+  // Created
+  if (r.status >= 200 && r.status < 300) {
+    const id = ((r.body as any)?.contact?.id) || (r.body as any)?.id;
+    if (id) return id as string;
+    throw new ToolError(502, `GHL create-contact returned 2xx with no id: ${JSON.stringify(r.body).slice(0, 300)}`);
+  }
+  // Duplicate — treat as found
+  if (r.status === 400) {
+    const dupId = (r.body as any)?.meta?.contactId;
+    if (dupId) return dupId as string;
+  }
+  if (!createIfMissing) {
+    throw new ToolError(404, `No GHL contact found for email ${email}`);
+  }
+  throw new ToolError(502, `GHL contact resolve failed ${r.status}: ${JSON.stringify(r.body).slice(0, 300)}`);
+}
+
 // ── Tool: get-available-slots ─────────────────────────────────────────────
-// Query: ?startDate=YYYY-MM-DD&endDate=YYYY-MM-DD&calendarId=<override>&timezone=<iana>
+// Inputs (body wins over URL):
+//   startDateTime / endDateTime  (Retell convention, ISO 8601 with offset)
+//   startDate / endDate          (legacy / URL convention; ms epoch or ISO)
+//   timeZone / timezone          (IANA, e.g. Australia/Sydney)
+//   calendarId                   (overrides client default)
+//   userId                       (optional GHL user filter)
+// GHL /calendars/{id}/free-slots requires startDate + endDate as ms epoch
+// query params, so we always normalise to ms before forwarding.
 async function toolGetAvailableSlots(args: {
   client: ClientRow;
   url: URL;
+  body: Record<string, unknown>;
 }) {
-  const { client, url } = args;
-  const calendarId = url.searchParams.get("calendarId") || client.ghl_calendar_id;
+  const { client, url, body } = args;
+
+  const pickStr = (...candidates: unknown[]): string | null => {
+    for (const c of candidates) {
+      if (typeof c === "string" && c.length > 0) return c;
+    }
+    return null;
+  };
+
+  const calendarId = pickStr(body.calendarId, url.searchParams.get("calendarId")) || client.ghl_calendar_id;
   if (!calendarId) throw new ToolError(400, "No calendar id available");
 
-  // GHL accepts startDate/endDate as ms epoch OR as YYYY-MM-DD; we forward
-  // whatever the caller passes (Retell often uses ISO date strings).
+  const startRaw = pickStr(
+    body.startDateTime,
+    body.startDate,
+    url.searchParams.get("startDateTime"),
+    url.searchParams.get("startDate"),
+  );
+  const endRaw = pickStr(
+    body.endDateTime,
+    body.endDate,
+    url.searchParams.get("endDateTime"),
+    url.searchParams.get("endDate"),
+  );
+  if (!startRaw || !endRaw) {
+    throw new ToolError(400, "startDateTime and endDateTime are required (or startDate/endDate)");
+  }
+
+  const toMs = (s: string): string => {
+    const n = Number(s);
+    if (Number.isFinite(n)) return String(Math.trunc(n));
+    const d = new Date(s);
+    if (!Number.isNaN(d.getTime())) return String(d.getTime());
+    return s;
+  };
+
+  const timezone = pickStr(
+    body.timeZone,
+    body.timezone,
+    url.searchParams.get("timeZone"),
+    url.searchParams.get("timezone"),
+  );
+  const userId = pickStr(body.userId, url.searchParams.get("userId"));
+
   const sp = new URLSearchParams();
-  for (const [k, v] of url.searchParams.entries()) {
-    if (["startDate", "endDate", "timezone", "userId"].includes(k)) sp.set(k, v);
-  }
-  if (!sp.has("startDate") || !sp.has("endDate")) {
-    throw new ToolError(400, "startDate and endDate query params required");
-  }
+  sp.set("startDate", toMs(startRaw));
+  sp.set("endDate", toMs(endRaw));
+  if (timezone) sp.set("timezone", timezone);
+  if (userId) sp.set("userId", userId);
+
   const r = await ghlGet(`/calendars/${calendarId}/free-slots?${sp.toString()}`, client.ghl_api_key as string);
   if (r.status >= 400) throw new ToolError(502, `GHL free-slots failed ${r.status}: ${JSON.stringify(r.body).slice(0, 300)}`);
   return r.body;
 }
 
 // ── Tool: book-appointments ───────────────────────────────────────────────
-// Body: { contactId, startDateTime, endDateTime, title?, calendarId?, notes? }
+// Body (matches Retell tool schema):
+//   email           required (used to find or create GHL contact)
+//   timeZone        optional informational (GHL infers slot offset from startDateTime)
+//   startDateTime   required ISO 8601 with offset
+//   endDateTime     optional — defaults to startDateTime + 30 min
+//   firstName/lastName/phone  optional, used when creating a new contact
+//   contactId       optional override (skips email lookup)
+//   title/calendarId/notes    optional
 async function toolBookAppointments(args: {
   client: ClientRow;
   body: Record<string, unknown>;
   supabase: any;
 }) {
   const { client, body, supabase } = args;
-  const contactId = typeof body.contactId === "string" ? body.contactId : null;
   const startDateTime = typeof body.startDateTime === "string" ? body.startDateTime : null;
-  const endDateTime = typeof body.endDateTime === "string" ? body.endDateTime : null;
+  let endDateTime = typeof body.endDateTime === "string" ? body.endDateTime : null;
   const calendarId = (typeof body.calendarId === "string" && body.calendarId) || client.ghl_calendar_id;
 
-  if (!contactId) throw new ToolError(400, "contactId is required");
-  if (!startDateTime || !endDateTime) {
-    throw new ToolError(400, "startDateTime and endDateTime are required (NOT startDate/endDate — GHL returns 422 otherwise)");
-  }
+  if (!startDateTime) throw new ToolError(400, "startDateTime is required");
   if (!calendarId) throw new ToolError(400, "No calendar id available");
+
+  // Default endDateTime to startDateTime + 30 min when the agent didn't supply one
+  if (!endDateTime) {
+    const start = new Date(startDateTime);
+    if (Number.isNaN(start.getTime())) {
+      throw new ToolError(400, `Invalid startDateTime: ${startDateTime}`);
+    }
+    endDateTime = new Date(start.getTime() + 30 * 60 * 1000).toISOString();
+  }
+
+  const contactId = await resolveContactId({ client, body, createIfMissing: true });
 
   const ghlBody: Record<string, unknown> = {
     calendarId,
@@ -251,26 +364,45 @@ async function toolBookAppointments(args: {
 }
 
 // ── Tool: get-contact-appointments ────────────────────────────────────────
-// Query: ?contactId=<id>
-async function toolGetContactAppointments(args: { client: ClientRow; url: URL }) {
-  const { client, url } = args;
-  const contactId = url.searchParams.get("contactId");
-  if (!contactId) throw new ToolError(400, "contactId query param required");
+// Inputs (body wins over URL):
+//   email      required (Retell convention) — looked up to a GHL contact
+//   contactId  optional override
+async function toolGetContactAppointments(args: {
+  client: ClientRow;
+  url: URL;
+  body: Record<string, unknown>;
+}) {
+  const { client, url, body } = args;
+  let contactId: string | null = (typeof body.contactId === "string" && body.contactId)
+    || url.searchParams.get("contactId");
+  if (!contactId) {
+    // Look up by email; do NOT create a contact for a read query
+    const email = (typeof body.email === "string" && body.email) || url.searchParams.get("email");
+    if (!email) throw new ToolError(400, "email or contactId is required");
+    contactId = await resolveContactId({
+      client,
+      body: { email },
+      createIfMissing: false,
+    });
+  }
   const r = await ghlGet(`/contacts/${contactId}/appointments/`, client.ghl_api_key as string);
   if (r.status >= 400) throw new ToolError(502, `GHL get-contact-appointments failed ${r.status}: ${JSON.stringify(r.body).slice(0, 300)}`);
   return r.body;
 }
 
 // ── Tool: update-appointment ──────────────────────────────────────────────
-// Body: { appointmentId, startDateTime?, endDateTime?, title?, appointmentStatus? }
+// Body: { eventId | appointmentId, startDateTime?, endDateTime?, title?, appointmentStatus? }
+// Retell tool schema sends `eventId`; legacy callers used `appointmentId`. Both work.
 async function toolUpdateAppointment(args: {
   client: ClientRow;
   body: Record<string, unknown>;
   supabase: any;
 }) {
   const { client, body, supabase } = args;
-  const appointmentId = typeof body.appointmentId === "string" ? body.appointmentId : null;
-  if (!appointmentId) throw new ToolError(400, "appointmentId is required");
+  const appointmentId = (typeof body.appointmentId === "string" && body.appointmentId)
+    || (typeof body.eventId === "string" && body.eventId)
+    || null;
+  if (!appointmentId) throw new ToolError(400, "appointmentId or eventId is required");
 
   const updateBody: Record<string, unknown> = {};
   if (typeof body.startDateTime === "string") updateBody.startTime = body.startDateTime;
@@ -303,17 +435,27 @@ async function toolUpdateAppointment(args: {
 }
 
 // ── Tool: cancel-appointments ─────────────────────────────────────────────
-// Body: { appointmentId }
+// Body: { eventId | appointmentId }
+// Retell tool schema sends `eventId`; legacy callers used `appointmentId`. Both work.
 async function toolCancelAppointments(args: {
   client: ClientRow;
   body: Record<string, unknown>;
   supabase: any;
 }) {
   const { client, body, supabase } = args;
-  const appointmentId = typeof body.appointmentId === "string" ? body.appointmentId : null;
-  if (!appointmentId) throw new ToolError(400, "appointmentId is required");
+  const appointmentId = (typeof body.appointmentId === "string" && body.appointmentId)
+    || (typeof body.eventId === "string" && body.eventId)
+    || null;
+  if (!appointmentId) throw new ToolError(400, "appointmentId or eventId is required");
 
-  const r = await ghlSend("DELETE", `/calendars/events/appointments/${appointmentId}`, client.ghl_api_key as string);
+  // Soft-cancel via PUT with appointmentStatus="cancelled" rather than DELETE.
+  // GHL DELETE on appointments requires an extra IAM scope on the PIT token
+  // ("This route is not yet supported by the IAM Service.") that BFD's
+  // current key doesn't have. Soft-cancel is the GHL-recommended pattern
+  // anyway: preserves history, frees the calendar slot, suppresses reminders.
+  const r = await ghlSend("PUT", `/calendars/events/appointments/${appointmentId}`, client.ghl_api_key as string, {
+    appointmentStatus: "cancelled",
+  });
   if (r.status >= 400) throw new ToolError(502, `GHL cancel-appointments failed ${r.status}: ${JSON.stringify(r.body).slice(0, 300)}`);
 
   try {
@@ -349,14 +491,14 @@ Deno.serve(async (req) => {
     let result: unknown;
     switch (tool) {
       case "get-available-slots":
-        result = await toolGetAvailableSlots({ client, url });
+        result = await toolGetAvailableSlots({ client, url, body });
         break;
       case "book-appointments":
       case "book-appointment":
         result = await toolBookAppointments({ client, body, supabase });
         break;
       case "get-contact-appointments":
-        result = await toolGetContactAppointments({ client, url });
+        result = await toolGetContactAppointments({ client, url, body });
         break;
       case "update-appointment":
         result = await toolUpdateAppointment({ client, body, supabase });
