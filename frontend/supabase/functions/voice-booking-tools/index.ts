@@ -131,67 +131,114 @@ async function ghlSend(method: "POST" | "PUT" | "DELETE", path: string, apiKey: 
 
 // Resolve a GHL contact for a voice-booking request.
 //
-// Mirrors the canonical 1prompt-os n8n booking workflow:
-//   1. body.contactId wins if explicitly supplied.
-//   2. Otherwise search GHL by email via `GET /contacts/?query=<email>`.
-//   3. If not found AND createIfMissing, create via `POST /contacts/`
-//      (honours memory `reference_ghl_contact_create_duplicate`: a 400 with
-//      meta.contactId means a duplicate already exists — treat as found).
+// Lookup order:
+//   1. body.contactId (explicit override)
+//   2. Phone search via GHL `/contacts/?query=<phone>` — most reliable for
+//      inbound calls (caller phone arrives via Retell's call object, no
+//      transcription required).
+//   3. Email search via GHL `/contacts/?query=<email>` — fallback for cases
+//      where phone didn't match (e.g. caller dialled from a different number).
+//   4. If still nothing AND createIfMissing, create via `POST /contacts/`
+//      and log a `contact_merge_candidates` row so the agency can review
+//      whether this caller is a duplicate of an existing contact.
+//
+// Returns { contactId, createdNew } so callers can decide downstream behaviour.
 async function resolveContactId(args: {
   client: ClientRow;
   body: Record<string, unknown>;
   createIfMissing: boolean;
-}): Promise<string> {
-  const { client, body, createIfMissing } = args;
-  if (typeof body.contactId === "string" && body.contactId) return body.contactId;
+  supabase?: any;
+}): Promise<{ contactId: string; createdNew: boolean }> {
+  const { client, body, createIfMissing, supabase } = args;
+  if (typeof body.contactId === "string" && body.contactId) {
+    return { contactId: body.contactId, createdNew: false };
+  }
 
+  const phone = typeof body.phone === "string" ? body.phone.trim() : "";
   const email = typeof body.email === "string" ? body.email.trim() : "";
-  if (!email) throw new ToolError(400, "email or contactId is required");
+  if (!phone && !email) throw new ToolError(400, "phone, email, or contactId is required");
   if (!client.ghl_location_id) throw new ToolError(409, "Client has no GHL locationId configured");
 
-  // Step 1 — search by email (canonical n8n pattern)
-  const searchPath = `/contacts/?locationId=${encodeURIComponent(client.ghl_location_id)}&limit=1&query=${encodeURIComponent(email)}`;
-  const search = await ghlGet(searchPath, client.ghl_api_key as string);
-  if (search.status >= 200 && search.status < 300) {
-    const contacts = (search.body as any)?.contacts;
-    if (Array.isArray(contacts) && contacts.length > 0 && typeof contacts[0]?.id === "string") {
-      return contacts[0].id as string;
+  const tryQuery = async (term: string): Promise<string | null> => {
+    const path = `/contacts/?locationId=${encodeURIComponent(client.ghl_location_id!)}&limit=1&query=${encodeURIComponent(term)}`;
+    const r = await ghlGet(path, client.ghl_api_key as string);
+    if (r.status >= 200 && r.status < 300) {
+      const contacts = (r.body as any)?.contacts;
+      if (Array.isArray(contacts) && contacts.length > 0 && typeof contacts[0]?.id === "string") {
+        return contacts[0].id as string;
+      }
+    } else if (r.status >= 500) {
+      throw new ToolError(502, `GHL contact search failed ${r.status}: ${JSON.stringify(r.body).slice(0, 300)}`);
     }
-  } else if (search.status >= 500) {
-    throw new ToolError(502, `GHL contact search failed ${search.status}: ${JSON.stringify(search.body).slice(0, 300)}`);
+    return null;
+  };
+
+  // Phone-first (reliable for inbound), then email fallback
+  if (phone) {
+    const found = await tryQuery(phone);
+    if (found) return { contactId: found, createdNew: false };
+  }
+  if (email) {
+    const found = await tryQuery(email);
+    if (found) return { contactId: found, createdNew: false };
   }
 
-  // Step 2 — not found
   if (!createIfMissing) {
-    throw new ToolError(404, `No GHL contact found for email ${email}`);
+    throw new ToolError(404, `No GHL contact found for ${phone || email}`);
   }
 
-  // Step 3 — create. Best-effort name from agent-supplied fields, fallback to email-prefix
+  // Create new contact
   const firstName = typeof body.firstName === "string" ? body.firstName : null;
   const lastName = typeof body.lastName === "string" ? body.lastName : null;
-  const phone = typeof body.phone === "string" ? body.phone : null;
-  const derivedFirst = firstName || (email.split("@")[0] || "Lead").replace(/[._-]+/g, " ").replace(/\s+/g, " ").trim();
+  const derivedFirst = firstName
+    || (email ? (email.split("@")[0] || "Lead").replace(/[._-]+/g, " ").replace(/\s+/g, " ").trim() : "Caller");
 
   const createBody: Record<string, unknown> = {
-    email,
     locationId: client.ghl_location_id,
     firstName: derivedFirst,
     source: "voice-booking-tools",
   };
-  if (lastName) createBody.lastName = lastName;
+  if (email) createBody.email = email;
   if (phone) createBody.phone = phone;
+  if (lastName) createBody.lastName = lastName;
 
   const create = await ghlSend("POST", "/contacts/", client.ghl_api_key as string, createBody);
+  let contactId: string | null = null;
   if (create.status >= 200 && create.status < 300) {
-    const id = ((create.body as any)?.contact?.id) || (create.body as any)?.id;
-    if (id) return id as string;
-    throw new ToolError(502, `GHL create-contact returned 2xx with no id: ${JSON.stringify(create.body).slice(0, 300)}`);
-  }
-  if (create.status === 400) {
+    contactId = ((create.body as any)?.contact?.id) || (create.body as any)?.id || null;
+  } else if (create.status === 400) {
     const dupId = (create.body as any)?.meta?.contactId;
-    if (dupId) return dupId as string;
+    if (dupId) contactId = dupId as string;
   }
-  throw new ToolError(502, `GHL contact resolve failed ${create.status}: ${JSON.stringify(create.body).slice(0, 300)}`);
+  if (!contactId) {
+    throw new ToolError(502, `GHL contact resolve failed ${create.status}: ${JSON.stringify(create.body).slice(0, 300)}`);
+  }
+
+  // Log merge-candidate row (best-effort). Voice-booking flows always create
+  // contacts conservatively; the agency reviews this table to decide whether
+  // a given new contact should actually be merged with an existing one.
+  // High-priority candidates: caller said "yes" to "have we spoken before?".
+  if (supabase) {
+    try {
+      const previouslyContacted = body.previously_contacted === true || body.previouslyContacted === true;
+      const sourceCallId = typeof body.source_call_id === "string" ? body.source_call_id : null;
+      const fullName = [firstName, lastName].filter(Boolean).join(" ").trim() || derivedFirst || null;
+      await supabase.from("contact_merge_candidates").insert({
+        client_id: client.id,
+        ghl_contact_id: contactId,
+        caller_phone: phone || null,
+        caller_email: email || null,
+        caller_name: fullName,
+        caller_claims_prior_contact: previouslyContacted,
+        source_call_id: sourceCallId,
+        raw_payload: { create_response: create.body },
+      });
+    } catch (logErr) {
+      console.warn("voice-booking-tools: contact_merge_candidates insert failed (non-fatal)", logErr);
+    }
+  }
+
+  return { contactId, createdNew: true };
 }
 
 // ── Tool: get-available-slots ─────────────────────────────────────────────
@@ -294,7 +341,7 @@ async function toolBookAppointments(args: {
     endDateTime = new Date(start.getTime() + 30 * 60 * 1000).toISOString();
   }
 
-  const contactId = await resolveContactId({ client, body, createIfMissing: true });
+  const { contactId } = await resolveContactId({ client, body, createIfMissing: true, supabase });
 
   // Body shape mirrors the canonical 1prompt-os n8n workflow's bookAppointment
   // node: meetingLocationType + ignoreDateRange + toNotify + ignoreFreeSlotValidation
@@ -395,14 +442,20 @@ async function toolGetContactAppointments(args: {
   let contactId: string | null = (typeof body.contactId === "string" && body.contactId)
     || url.searchParams.get("contactId");
   if (!contactId) {
-    // Look up by email; do NOT create a contact for a read query
+    // Look up by phone (preferred for inbound) then email; never create a
+    // contact for a read query.
+    const lookupBody: Record<string, unknown> = {};
+    const phone = (typeof body.phone === "string" && body.phone) || url.searchParams.get("phone");
     const email = (typeof body.email === "string" && body.email) || url.searchParams.get("email");
-    if (!email) throw new ToolError(400, "email or contactId is required");
-    contactId = await resolveContactId({
+    if (phone) lookupBody.phone = phone;
+    if (email) lookupBody.email = email;
+    if (!phone && !email) throw new ToolError(400, "phone, email, or contactId is required");
+    const resolved = await resolveContactId({
       client,
-      body: { email },
+      body: lookupBody,
       createIfMissing: false,
     });
+    contactId = resolved.contactId;
   }
   const r = await ghlGet(`/contacts/${contactId}/appointments/`, client.ghl_api_key as string);
   if (r.status >= 400) throw new ToolError(502, `GHL get-contact-appointments failed ${r.status}: ${JSON.stringify(r.body).slice(0, 300)}`);
@@ -505,13 +558,36 @@ Deno.serve(async (req) => {
     const supabase = createClient(supabaseUrl, serviceKey);
     const client = await resolveClient(supabase, clientId, req.headers.get("Authorization"));
 
-    let body = await readJsonBody(req);
+    const rawBody = await readJsonBody(req);
+    let body: Record<string, unknown>;
     // Retell wraps custom-tool calls as { call: {...}, name: "<tool>", args: {...} }
     // when the tool's `args_at_root` setting is false (BFD's default and the
     // canonical 1prompt-os pattern per the original n8n workflow). Unwrap so
-    // every handler can read params at the top level.
-    if (body && typeof body === "object" && body.args && typeof body.args === "object" && !Array.isArray(body.args)) {
-      body = body.args as Record<string, unknown>;
+    // every handler can read params at the top level. ALSO inject the caller's
+    // phone from the Retell call object so tools that need a contact lookup
+    // can search GHL by phone (more reliable than spelled-out email for
+    // inbound calls).
+    const callMeta: Record<string, unknown> | null = (rawBody && typeof rawBody === "object" && rawBody.call && typeof rawBody.call === "object" && !Array.isArray(rawBody.call))
+      ? rawBody.call as Record<string, unknown>
+      : null;
+    if (rawBody && typeof rawBody === "object" && rawBody.args && typeof rawBody.args === "object" && !Array.isArray(rawBody.args)) {
+      body = { ...(rawBody.args as Record<string, unknown>) };
+    } else {
+      body = { ...(rawBody as Record<string, unknown>) };
+    }
+    if (callMeta) {
+      // Inject caller phone if agent didn't pass one explicitly. Inbound = the
+      // caller is `from_number`; outbound = the lead is `to_number`.
+      if (typeof body.phone !== "string" || !body.phone) {
+        const direction = typeof callMeta.direction === "string" ? callMeta.direction : null;
+        const phone = direction === "inbound"
+          ? (typeof callMeta.from_number === "string" ? callMeta.from_number : null)
+          : (typeof callMeta.to_number === "string" ? callMeta.to_number : null);
+        if (phone) body.phone = phone;
+      }
+      if (typeof callMeta.call_id === "string" && (typeof body.source_call_id !== "string" || !body.source_call_id)) {
+        body.source_call_id = callMeta.call_id;
+      }
     }
 
     let result: unknown;
