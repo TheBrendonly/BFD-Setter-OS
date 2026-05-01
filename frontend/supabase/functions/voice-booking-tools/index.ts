@@ -131,10 +131,12 @@ async function ghlSend(method: "POST" | "PUT" | "DELETE", path: string, apiKey: 
 
 // Resolve a GHL contact for a voice-booking request.
 //
-// Retell tool schemas pass `email` (not `contactId`) so we look up or create
-// a GHL contact by email. Honours memory `reference_ghl_contact_create_duplicate`:
-// POST /contacts/ returns 400 with meta.contactId when a duplicate exists —
-// treat that as a successful find.
+// Mirrors the canonical 1prompt-os n8n booking workflow:
+//   1. body.contactId wins if explicitly supplied.
+//   2. Otherwise search GHL by email via `GET /contacts/?query=<email>`.
+//   3. If not found AND createIfMissing, create via `POST /contacts/`
+//      (honours memory `reference_ghl_contact_create_duplicate`: a 400 with
+//      meta.contactId means a duplicate already exists — treat as found).
 async function resolveContactId(args: {
   client: ClientRow;
   body: Record<string, unknown>;
@@ -147,12 +149,27 @@ async function resolveContactId(args: {
   if (!email) throw new ToolError(400, "email or contactId is required");
   if (!client.ghl_location_id) throw new ToolError(409, "Client has no GHL locationId configured");
 
-  // Best-effort: pull names if the agent passed them
+  // Step 1 — search by email (canonical n8n pattern)
+  const searchPath = `/contacts/?locationId=${encodeURIComponent(client.ghl_location_id)}&limit=1&query=${encodeURIComponent(email)}`;
+  const search = await ghlGet(searchPath, client.ghl_api_key as string);
+  if (search.status >= 200 && search.status < 300) {
+    const contacts = (search.body as any)?.contacts;
+    if (Array.isArray(contacts) && contacts.length > 0 && typeof contacts[0]?.id === "string") {
+      return contacts[0].id as string;
+    }
+  } else if (search.status >= 500) {
+    throw new ToolError(502, `GHL contact search failed ${search.status}: ${JSON.stringify(search.body).slice(0, 300)}`);
+  }
+
+  // Step 2 — not found
+  if (!createIfMissing) {
+    throw new ToolError(404, `No GHL contact found for email ${email}`);
+  }
+
+  // Step 3 — create. Best-effort name from agent-supplied fields, fallback to email-prefix
   const firstName = typeof body.firstName === "string" ? body.firstName : null;
   const lastName = typeof body.lastName === "string" ? body.lastName : null;
   const phone = typeof body.phone === "string" ? body.phone : null;
-
-  // Fall back to deriving a first name from the email so the GHL contact isn't blank
   const derivedFirst = firstName || (email.split("@")[0] || "Lead").replace(/[._-]+/g, " ").replace(/\s+/g, " ").trim();
 
   const createBody: Record<string, unknown> = {
@@ -164,23 +181,17 @@ async function resolveContactId(args: {
   if (lastName) createBody.lastName = lastName;
   if (phone) createBody.phone = phone;
 
-  const r = await ghlSend("POST", "/contacts/", client.ghl_api_key as string, createBody);
-
-  // Created
-  if (r.status >= 200 && r.status < 300) {
-    const id = ((r.body as any)?.contact?.id) || (r.body as any)?.id;
+  const create = await ghlSend("POST", "/contacts/", client.ghl_api_key as string, createBody);
+  if (create.status >= 200 && create.status < 300) {
+    const id = ((create.body as any)?.contact?.id) || (create.body as any)?.id;
     if (id) return id as string;
-    throw new ToolError(502, `GHL create-contact returned 2xx with no id: ${JSON.stringify(r.body).slice(0, 300)}`);
+    throw new ToolError(502, `GHL create-contact returned 2xx with no id: ${JSON.stringify(create.body).slice(0, 300)}`);
   }
-  // Duplicate — treat as found
-  if (r.status === 400) {
-    const dupId = (r.body as any)?.meta?.contactId;
+  if (create.status === 400) {
+    const dupId = (create.body as any)?.meta?.contactId;
     if (dupId) return dupId as string;
   }
-  if (!createIfMissing) {
-    throw new ToolError(404, `No GHL contact found for email ${email}`);
-  }
-  throw new ToolError(502, `GHL contact resolve failed ${r.status}: ${JSON.stringify(r.body).slice(0, 300)}`);
+  throw new ToolError(502, `GHL contact resolve failed ${create.status}: ${JSON.stringify(create.body).slice(0, 300)}`);
 }
 
 // ── Tool: get-available-slots ─────────────────────────────────────────────
@@ -285,14 +296,22 @@ async function toolBookAppointments(args: {
 
   const contactId = await resolveContactId({ client, body, createIfMissing: true });
 
+  // Body shape mirrors the canonical 1prompt-os n8n workflow's bookAppointment
+  // node: meetingLocationType + ignoreDateRange + toNotify + ignoreFreeSlotValidation
+  // are all required by GHL for predictable behaviour even though they have
+  // documented defaults.
   const ghlBody: Record<string, unknown> = {
     calendarId,
+    locationId: client.ghl_location_id,
     contactId,
     startTime: startDateTime,
     endTime: endDateTime,
     title: (typeof body.title === "string" && body.title) || client.gohighlevel_booking_title || "Appointment",
+    meetingLocationType: "default",
     appointmentStatus: "confirmed",
-    locationId: client.ghl_location_id,
+    ignoreDateRange: false,
+    toNotify: true,
+    ignoreFreeSlotValidation: false,
   };
   if (client.ghl_assignee_id) ghlBody.assignedUserId = client.ghl_assignee_id;
   if (typeof body.notes === "string") ghlBody.notes = body.notes;
@@ -486,7 +505,14 @@ Deno.serve(async (req) => {
     const supabase = createClient(supabaseUrl, serviceKey);
     const client = await resolveClient(supabase, clientId, req.headers.get("Authorization"));
 
-    const body = await readJsonBody(req);
+    let body = await readJsonBody(req);
+    // Retell wraps custom-tool calls as { call: {...}, name: "<tool>", args: {...} }
+    // when the tool's `args_at_root` setting is false (BFD's default and the
+    // canonical 1prompt-os pattern per the original n8n workflow). Unwrap so
+    // every handler can read params at the top level.
+    if (body && typeof body === "object" && body.args && typeof body.args === "object" && !Array.isArray(body.args)) {
+      body = body.args as Record<string, unknown>;
+    }
 
     let result: unknown;
     switch (tool) {
