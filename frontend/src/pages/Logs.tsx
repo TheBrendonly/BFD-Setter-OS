@@ -18,6 +18,8 @@ import { cn } from '@/lib/utils';
 import { StatusTag } from '@/components/StatusTag';
 import { toast } from 'sonner';
 import { SchemaNode } from '@/components/error-logs/SchemaNode';
+import { useClientCredentials } from '@/hooks/useClientCredentials';
+import { setterLabel } from '@/lib/setterLabels';
 
 interface LiveJob {
   id: string;
@@ -299,7 +301,15 @@ const simplifyModelName = (model: string): string => {
     .replace(/Gpt/g, 'GPT');
 };
 
-const getResourceInfo = (jobType: string, inputPayload: any): { label: string; path?: string; slotId?: string } | null => {
+const getResourceInfo = (
+  jobType: string,
+  inputPayload: any,
+  customNames?: Record<string, string> | null,
+): { label: string; path?: string; slotId?: string } | null => {
+  const customLabel = (kind: 'voice' | 'text', n: number, prefix: string): string => {
+    const trimmed = customNames?.[`${kind}-${n}`]?.trim();
+    return trimmed || `${prefix} ${n}`;
+  };
   const slotId = inputPayload?.slotId || inputPayload?._enrichedSlotId;
   if (!slotId) {
     const agentNumber = inputPayload?.agent_number;
@@ -309,7 +319,7 @@ const getResourceInfo = (jobType: string, inputPayload: any): { label: string; p
         return { label: 'Simulation', path: 'simulator' };
       }
       const simSlotId = `Setter-${agentNumber}`;
-      return { label: `Text Setter ${agentNumber}`, path: `prompts/text?slot=${simSlotId}`, slotId: simSlotId };
+      return { label: customLabel('text', agentNumber, 'Text Setter'), path: `prompts/text?slot=${simSlotId}`, slotId: simSlotId };
     }
     if (jobType.startsWith('generate-simulation') || jobType === 'run-simulation') {
       return { label: 'Simulation', path: 'simulator' };
@@ -317,9 +327,13 @@ const getResourceInfo = (jobType: string, inputPayload: any): { label: string; p
     return null;
   }
   const isVoice = slotId.startsWith('Voice-Setter-');
-  const prettyLabel = isVoice
-    ? slotId.replace('Voice-Setter-', 'Voice Setter ')
-    : slotId.replace('Setter-', 'Text Setter ');
+  const numMatch = slotId.match(/(\d+)$/);
+  const slotNum = numMatch ? parseInt(numMatch[1], 10) : null;
+  const prettyLabel = slotNum
+    ? customLabel(isVoice ? 'voice' : 'text', slotNum, isVoice ? 'Voice Setter' : 'Text Setter')
+    : (isVoice
+        ? slotId.replace('Voice-Setter-', 'Voice Setter ')
+        : slotId.replace('Setter-', 'Text Setter '));
   return {
     label: prettyLabel,
     path: isVoice ? `prompts/voice?slot=${slotId}` : `prompts/text?slot=${slotId}`,
@@ -579,6 +593,8 @@ const Logs = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { cb } = useCreatorMode();
+  const { credentials } = useClientCredentials(clientId);
+  const setterDisplayNames = (credentials?.setter_display_names || {}) as Record<string, string>;
   const [tab, setTabRaw] = useState<TabKey>(() => {
     const saved = localStorage.getItem(`logs-tab-${clientId}`);
     if (saved && ['ai-jobs', 'errors', 'followups', 'outbound-calls', 'bookings'].includes(saved)) return saved as TabKey;
@@ -1261,7 +1277,7 @@ const Logs = () => {
   const renderAIJobsRow = (log: LogEntry) => {
     const ctx = log.context || {};
     const actualJobType = ctx.job_type || (log.title || '').replace(/ completed$/, '') || log.error_type || log.source || '';
-    const resource = getResourceInfo(actualJobType, ctx);
+    const resource = getResourceInfo(actualJobType, ctx, setterDisplayNames);
     const status = getLogStatus(log);
     const rawJobType = log.error_type === 'ai_job_completed' ? (log.title || '').replace(/ completed$/, '') : (log.error_type || log.title || '');
     const jobTypeLabel = JOB_TYPE_LABELS[rawJobType] || JOB_TYPE_LABELS[log.error_type || ''] || JOB_TYPE_LABELS[log.title || ''] || log.title || log.error_type || '—';
@@ -1305,7 +1321,7 @@ const Logs = () => {
   };
 
   const renderLiveJobRow = (job: LiveJob) => {
-    const resource = getResourceInfo(job.job_type, job.input_payload);
+    const resource = getResourceInfo(job.job_type, job.input_payload, setterDisplayNames);
     const jobLabel = JOB_TYPE_LABELS[job.job_type] || job.job_type;
     return (
       <tr key={`live-${job.id}`} className="bg-muted/20">
@@ -1368,7 +1384,7 @@ const Logs = () => {
   };
 
   const renderFollowupRow = (entry: FollowupEntry) => {
-    const setterLabel = entry.setter_number != null ? `Setter ${entry.setter_number}` : '—';
+    const setterLabelText = entry.setter_number != null ? setterLabel('text', entry.setter_number, setterDisplayNames) : '—';
     const setterSlotId = entry.setter_number != null ? `Setter-${entry.setter_number}` : null;
     const followupNum = entry.sequence_index != null ? entry.sequence_index + 1 : '—';
     const decision = entry.decision?.toLowerCase();
@@ -1403,7 +1419,7 @@ const Logs = () => {
               style={FONT}
               onClick={(e) => { e.stopPropagation(); navigate(`/client/${clientId}/prompts/text?slot=${setterSlotId}`); }}
             >
-              {setterLabel}
+              {setterLabelText}
               <ExternalLink className="w-3 h-3 shrink-0" />
             </button>
           ) : '—'}
@@ -1451,7 +1467,10 @@ const Logs = () => {
     if (!setterId) return '—';
     // Handle various formats: Voice-Setter-1, voice-setter-1, voice_setter_1, Setter-1, setter-1
     const match = setterId.match(/(?:voice[-_])?setter[-_](\d+)/i);
-    if (match) return `Voice Setter ${match[1]}`;
+    if (match) {
+      const n = parseInt(match[1], 10);
+      return setterLabel('voice', n, setterDisplayNames);
+    }
     return setterId;
   };
 
@@ -2164,7 +2183,7 @@ const Logs = () => {
                   </div>
                   <div>
                     <label className={LABEL_CLS} style={FONT}>Setter</label>
-                    <span className="text-foreground block mt-1" style={FONT}>{selectedFollowup.setter_number != null ? `Setter-${selectedFollowup.setter_number}` : '—'}</span>
+                    <span className="text-foreground block mt-1" style={FONT}>{selectedFollowup.setter_number != null ? setterLabel('text', selectedFollowup.setter_number, setterDisplayNames) : '—'}</span>
                   </div>
                   <div>
                     <label className={LABEL_CLS} style={FONT}>Follow-up #</label>

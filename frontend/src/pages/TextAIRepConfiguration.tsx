@@ -8,6 +8,7 @@ import { ChevronRight, User, Database, FileUp, Wrench, MessageSquarePlus, Key, S
 import { cn } from '@/lib/utils';
 import TextAIRepSetupGuide, { TEXT_AI_REP_PHASES, isPhaseComplete } from '@/components/setup-guide/TextAIRepSetupGuide';
 import { usePageHeader } from '@/contexts/PageHeaderContext';
+import { SetterDisplayNamesCard } from '@/components/setters/SetterDisplayNamesCard';
 
 // Phase definitions for the cards grid (core setup phases only)
 const TEXT_PHASES = [
@@ -219,7 +220,27 @@ const TextAIRepConfiguration = () => {
         </div>
 
         {/* Setup Phases Grid - Scrollable */}
-        <div className="flex-1 min-h-0 overflow-auto pb-6">
+        <div className="flex-1 min-h-0 overflow-auto pb-6 space-y-6">
+          {clientId && (
+            <SetterDisplayNamesCard
+              clientId={clientId}
+              kind="text"
+              title="Text Setter Names"
+              description="Custom labels shown in Simulator, Logs, and Conversations. Empty falls back to 'Setter N'."
+              slots={[
+                { slot: 1 },
+                { slot: 2 },
+                { slot: 3 },
+                { slot: 4 },
+                { slot: 5 },
+                { slot: 6 },
+                { slot: 7 },
+                { slot: 8 },
+                { slot: 9 },
+                { slot: 10 },
+              ]}
+            />
+          )}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {TEXT_PHASES.map(phase => {
               const status = getPhaseStatus(phase);

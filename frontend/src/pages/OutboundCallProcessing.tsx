@@ -12,6 +12,8 @@ import RetroLoader from '@/components/RetroLoader';
 import WorkflowCanvas, { type CanvasNode } from '@/components/workflow/WorkflowCanvas';
 import type { NodeExecutionStatus } from '@/components/workflow/StaticWorkflowNode';
 import { format } from 'date-fns';
+import { useClientCredentials } from '@/hooks/useClientCredentials';
+import { setterLabel } from '@/lib/setterLabels';
 
 const fieldStyle = { fontFamily: "'IBM Plex Mono', monospace", fontSize: '13px' } as const;
 const tabStyle = { fontFamily: "'VT323', monospace", fontSize: '16px', letterSpacing: '0.06em' } as const;
@@ -563,6 +565,8 @@ type RightPanel = 'config' | 'executions' | 'execution-detail' | null;
 export default function OutboundCallProcessing() {
   const { clientId } = useParams<{ clientId: string }>();
   const navigate = useNavigate();
+  const { credentials } = useClientCredentials(clientId);
+  const setterDisplayNames = (credentials?.setter_display_names || {}) as Record<string, string>;
   const [loading, setLoading] = useState(false);
   const [executions, setExecutions] = useState<CallExecution[]>([]);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
@@ -605,7 +609,7 @@ export default function OutboundCallProcessing() {
           client_id: row.client_id,
           lead_id: row.contact_id || '',
           contact_name: row.to_number || 'Unknown',
-          setter_name: row.setter_id ? `Voice Setter ${row.setter_id}` : row.agent_id ? `Agent ${row.agent_id.slice(0, 8)}...` : null,
+          setter_name: row.setter_id ? setterLabel('voice', row.setter_id, setterDisplayNames) : row.agent_id ? `Agent ${row.agent_id.slice(0, 8)}...` : null,
           campaign_id: null,
           status: row.call_status === 'ended' || row.call_status === 'completed' ? 'success' : row.call_status === 'error' ? 'failed' : row.call_status || 'unknown',
           error_message: row.disconnect_reason === 'error' ? 'Call failed' : null,

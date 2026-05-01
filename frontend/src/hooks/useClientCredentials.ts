@@ -55,6 +55,7 @@ export interface ClientCredentials {
   twilio_auth_token: string | null;
   twilio_default_phone: string | null;
   llm_model: string | null;
+  setter_display_names: Record<string, string> | null;
 }
 
 const CREDENTIALS_FIELDS = `
@@ -110,7 +111,8 @@ const CREDENTIALS_FIELDS = `
   twilio_account_sid,
   twilio_auth_token,
   twilio_default_phone,
-  llm_model
+  llm_model,
+  setter_display_names
 `.replace(/\s+/g, '');
 
 async function fetchClientCredentials(clientId: string): Promise<ClientCredentials | null> {
@@ -131,7 +133,7 @@ async function fetchClientCredentials(clientId: string): Promise<ClientCredentia
 async function updateClientCredential(
   clientId: string,
   field: string,
-  value: string | null
+  value: string | null | Record<string, unknown>
 ): Promise<void> {
   const { data, error } = await supabase
     .from('clients')
@@ -150,7 +152,7 @@ async function updateClientCredential(
 
 async function updateMultipleClientCredentials(
   clientId: string,
-  updates: Record<string, string | null>
+  updates: Record<string, string | null | Record<string, unknown>>
 ): Promise<void> {
   const { data, error } = await supabase
     .from('clients')
@@ -182,7 +184,7 @@ export function useClientCredentials(clientId: string | undefined) {
   });
 
   const updateMutation = useMutation({
-    mutationFn: async ({ field, value }: { field: string; value: string | null }) => {
+    mutationFn: async ({ field, value }: { field: string; value: string | null | Record<string, unknown> }) => {
       if (!clientId) throw new Error('No client ID');
       await updateClientCredential(clientId, field, value);
 
@@ -218,10 +220,10 @@ export function useClientCredentials(clientId: string | undefined) {
   });
 
   const updateMultipleMutation = useMutation({
-    mutationFn: async ({ updates }: { updates: Record<string, string | null> }) => {
+    mutationFn: async ({ updates }: { updates: Record<string, string | null | Record<string, unknown>> }) => {
       if (!clientId) throw new Error('No client ID');
       await updateMultipleClientCredentials(clientId, updates);
-      
+
     },
     onMutate: async ({ updates }) => {
       // Cancel outgoing refetches

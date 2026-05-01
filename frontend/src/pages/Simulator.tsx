@@ -27,6 +27,7 @@ import { SimulationSetupFlow, DEFAULT_ICP } from '@/components/simulator/Simulat
 import { UnsavedChangesDialog } from '@/components/UnsavedChangesDialog';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 import type { ICPProfile } from '@/components/simulator/ICPNodeGraph';
+import { useClientCredentials } from '@/hooks/useClientCredentials';
 
 interface Simulation {
   id: string;
@@ -241,7 +242,9 @@ function WaitingMessageIndicator() {
   );
 }
 
-function getSetterLabel(num: number): string {
+function getSetterLabel(num: number, customNames?: Record<string, string> | null): string {
+  const custom = customNames?.[`text-${num}`]?.trim();
+  if (custom) return custom;
   const found = SETTER_OPTIONS.find(s => s.value === String(num));
   return found?.label || `Setter ${num}`;
 }
@@ -251,6 +254,8 @@ function getSetterLabel(num: number): string {
 export default function Simulator() {
   const { clientId } = useParams();
   const { registerGuard, unregisterGuard } = useNavigationGuard();
+  const { credentials } = useClientCredentials(clientId);
+  const setterDisplayNames = (credentials?.setter_display_names || {}) as Record<string, string>;
 
   const [step, setStep] = useState<Step>('list');
   const [cameFromPersonas, setCameFromPersonas] = useState(false);
@@ -927,7 +932,7 @@ export default function Simulator() {
             simulationId: simulationRow.id,
             icpProfileId: icpRow.id,
             businessInfo: simulationDraftPayload.business_info,
-            testGoal: getSetterLabel(simulationDraftPayload.agent_number),
+            testGoal: getSetterLabel(simulationDraftPayload.agent_number, setterDisplayNames),
             testSpecifics: richTestSpecifics,
             numPersonas: icp.persona_count || 3,
             minMessages: icp.min_messages || simulationDraftPayload.min_messages,
@@ -1722,7 +1727,7 @@ export default function Simulator() {
                         <div className="flex-1 min-w-0">
                           <p className="text-foreground font-medium field-text truncate">{displayName}</p>
                           <p className="text-muted-foreground field-text truncate">
-                            {getSetterLabel(sim.agent_number).toUpperCase()} · {sim.num_conversations} conversations
+                            {getSetterLabel(sim.agent_number, setterDisplayNames).toUpperCase()} · {sim.num_conversations} conversations
                           </p>
                         </div>
                       </div>
@@ -2269,7 +2274,7 @@ export default function Simulator() {
                         }`}
                       >
                         <p className={`text-[11px] mb-1 capitalize ${msg.role === 'user' ? 'text-foreground/70' : 'text-foreground/80'}`} style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
-                          {msg.role === 'user' ? selectedPersona.name : getSetterLabel(currentSimulation?.agent_number || 1)}
+                          {msg.role === 'user' ? selectedPersona.name : getSetterLabel(currentSimulation?.agent_number || 1, setterDisplayNames)}
                         </p>
                         <p className="whitespace-pre-wrap break-words overflow-wrap-anywhere" style={{ overflowWrap: 'anywhere', wordBreak: 'break-word' }}>{msg.content}</p>
                       </div>
@@ -2370,7 +2375,7 @@ export default function Simulator() {
             <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
               <div className="p-6 space-y-4" style={{ paddingBottom: '24px' }}>
                 <p className="field-text">
-                  <span className="text-foreground">{selectedPersona.name}</span> <span className="text-muted-foreground">· {getSetterLabel(currentSimulation?.agent_number || 1)}</span>
+                  <span className="text-foreground">{selectedPersona.name}</span> <span className="text-muted-foreground">· {getSetterLabel(currentSimulation?.agent_number || 1, setterDisplayNames)}</span>
                 </p>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="groove-border p-3 bg-muted/20">

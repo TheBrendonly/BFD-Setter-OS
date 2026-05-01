@@ -16,6 +16,7 @@ import RetellAgentsTab from '@/components/retell/RetellAgentsTab';
 
 import RetellPhoneNumbersTab from '@/components/retell/RetellPhoneNumbersTab';
 import RetellCallLogsTab from '@/components/retell/RetellCallLogsTab';
+import { SetterDisplayNamesCard } from '@/components/setters/SetterDisplayNamesCard';
 
 // Phase definitions for the cards grid
 const VOICE_PHASES = [
@@ -256,7 +257,21 @@ const VoiceAIRepConfiguration = () => {
               </Card>
             ) : (
               <>
-                <TabsContent value="agents">
+                <TabsContent value="agents" className="space-y-4">
+                  {clientId && (
+                    <SetterDisplayNamesCard
+                      clientId={clientId}
+                      kind="voice"
+                      title="Voice Setter Names"
+                      description="Custom labels shown in Simulator, Logs, Outbound runs, and Conversations. Empty falls back to 'Setter N'."
+                      slots={[
+                        { slot: 1, hint: 'Inbound' },
+                        { slot: 2, hint: 'Outbound' },
+                        { slot: 3, hint: 'Followup' },
+                        { slot: 4, hint: 'Slot 4' },
+                      ]}
+                    />
+                  )}
                   {clientId && <RetellAgentsTab clientId={clientId} />}
                 </TabsContent>
 
