@@ -543,6 +543,154 @@ async function toolCancelAppointments(args: {
   return r.body;
 }
 
+// ── Tool: lookup-contact ──────────────────────────────────────────────────
+// Identity tool — designed to be called once near the start of every call so
+// the LLM knows whether the caller is a known lead before asking questions.
+// Body (via Retell args wrapper or top-level):
+//   phone     optional — defaults to the caller's `from_number` from Retell
+//             call meta (injected at dispatch). Passing it explicitly lets the
+//             LLM re-check after the caller corrects the number.
+//   email     optional secondary lookup
+// Response shape:
+//   {
+//     match_quality: "phone" | "email" | "none",
+//     contact: { id, firstName, lastName, fullName, email, phone, tags, customFieldValues } | null,
+//     recent_bookings: Array<{ id, ghl_appointment_id, appointment_time, status, source }>,
+//     latest_engagement: { status, current_node_index, started_at } | null,
+//     last_message_preview: string | null,
+//   }
+// NEVER creates a new contact — strictly a read.
+async function toolLookupContact(args: {
+  client: ClientRow;
+  body: Record<string, unknown>;
+  supabase: any;
+}) {
+  const { client, body, supabase } = args;
+
+  const phone = typeof body.phone === "string" ? body.phone.trim() : "";
+  const email = typeof body.email === "string" ? body.email.trim() : "";
+  if (!phone && !email) {
+    return {
+      match_quality: "none",
+      contact: null,
+      recent_bookings: [],
+      latest_engagement: null,
+      last_message_preview: null,
+      reason: "no phone or email available",
+    };
+  }
+  if (!client.ghl_location_id) throw new ToolError(409, "Client has no GHL locationId configured");
+
+  // Phone-first, then email — same precedence as resolveContactId reads
+  const tryQuery = async (term: string): Promise<string | null> => {
+    const path = `/contacts/?locationId=${encodeURIComponent(client.ghl_location_id!)}&limit=1&query=${encodeURIComponent(term)}`;
+    const r = await ghlGet(path, client.ghl_api_key as string);
+    if (r.status >= 200 && r.status < 300) {
+      const contacts = (r.body as any)?.contacts;
+      if (Array.isArray(contacts) && contacts.length > 0 && typeof contacts[0]?.id === "string") {
+        return contacts[0].id as string;
+      }
+    } else if (r.status >= 500) {
+      throw new ToolError(502, `GHL contact search failed ${r.status}`);
+    }
+    return null;
+  };
+
+  let contactId: string | null = null;
+  let matchQuality: "phone" | "email" | "none" = "none";
+  if (phone) {
+    contactId = await tryQuery(phone);
+    if (contactId) matchQuality = "phone";
+  }
+  if (!contactId && email) {
+    contactId = await tryQuery(email);
+    if (contactId) matchQuality = "email";
+  }
+
+  if (!contactId) {
+    return {
+      match_quality: "none",
+      contact: null,
+      recent_bookings: [],
+      latest_engagement: null,
+      last_message_preview: null,
+    };
+  }
+
+  // Pull the full contact record from GHL — adds firstName/lastName/email/tags/customFieldValues
+  const detail = await ghlGet(`/contacts/${contactId}`, client.ghl_api_key as string);
+  const c = ((detail.body as any)?.contact) ?? {};
+  const firstName = typeof c.firstName === "string" ? c.firstName : null;
+  const lastName = typeof c.lastName === "string" ? c.lastName : null;
+  const fullName = [firstName, lastName].filter(Boolean).join(" ").trim() || null;
+
+  // Recent bookings for this contact in this client (DB-side, not GHL)
+  let recent_bookings: Array<Record<string, unknown>> = [];
+  try {
+    const { data } = await supabase
+      .from("bookings")
+      .select("id, ghl_appointment_id, appointment_time, status, source")
+      .eq("client_id", client.id)
+      .eq("lead_id", contactId)
+      .order("appointment_time", { ascending: false })
+      .limit(3);
+    if (Array.isArray(data)) recent_bookings = data as Array<Record<string, unknown>>;
+  } catch (bookingsErr) {
+    console.warn("voice-booking-tools/lookup-contact: bookings lookup failed (non-fatal)", bookingsErr);
+  }
+
+  // Latest engagement_executions row keyed by ghl_contact_id (matches book-appointments cadence-end query)
+  let latest_engagement: Record<string, unknown> | null = null;
+  try {
+    const { data } = await supabase
+      .from("engagement_executions")
+      .select("status, current_node_index, started_at, completed_at, stop_reason")
+      .eq("client_id", client.id)
+      .eq("ghl_contact_id", contactId)
+      .order("started_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (data) latest_engagement = data as Record<string, unknown>;
+  } catch (engErr) {
+    console.warn("voice-booking-tools/lookup-contact: engagement lookup failed (non-fatal)", engErr);
+  }
+
+  // Last inbound message preview from leads.last_message_preview (best-effort; column exists per memory)
+  let last_message_preview: string | null = null;
+  try {
+    const { data } = await supabase
+      .from("leads")
+      .select("last_message_preview")
+      .eq("client_id", client.id)
+      .eq("ghl_contact_id", contactId)
+      .order("updated_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (data && typeof (data as any).last_message_preview === "string") {
+      last_message_preview = (data as any).last_message_preview;
+    }
+  } catch (leadErr) {
+    console.warn("voice-booking-tools/lookup-contact: leads preview lookup failed (non-fatal)", leadErr);
+  }
+
+  return {
+    match_quality: matchQuality,
+    contact: {
+      id: contactId,
+      firstName,
+      lastName,
+      fullName,
+      email: typeof c.email === "string" ? c.email : null,
+      phone: typeof c.phone === "string" ? c.phone : null,
+      tags: Array.isArray(c.tags) ? c.tags : [],
+      customFieldValues: Array.isArray(c.customFields) ? c.customFields : [],
+    },
+    recent_bookings,
+    latest_engagement,
+    last_message_preview,
+  };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -608,6 +756,10 @@ Deno.serve(async (req) => {
       case "cancel-appointment":
       case "cancel-appointments":
         result = await toolCancelAppointments({ client, body, supabase });
+        break;
+      case "lookup-contact":
+      case "lookup_contact":
+        result = await toolLookupContact({ client, body, supabase });
         break;
       default:
         throw new ToolError(400, `Unknown tool: ${tool}`);
