@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { loggedFetch } from "../_shared/request-logger.ts"
+import { assertClientAccess, AssertAccessError } from "../_shared/assert-client-access.ts"
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -23,6 +24,21 @@ serve(async (req) => {
         JSON.stringify({ error: 'Client ID is required' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
+    }
+
+    // SEC-001 hardening: verify the caller's JWT owns this clientId before
+    // touching any tenant data. Without this an attacker who knows another
+    // client's UUID could read that client's chat-analytics output.
+    try {
+      await assertClientAccess(req.headers.get("Authorization"), clientId);
+    } catch (authErr) {
+      if (authErr instanceof AssertAccessError) {
+        return new Response(
+          JSON.stringify({ error: authErr.message }),
+          { status: authErr.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      throw authErr;
     }
 
     const supabase = createClient(

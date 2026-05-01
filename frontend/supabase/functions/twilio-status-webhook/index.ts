@@ -144,19 +144,22 @@ Deno.serve(async (req) => {
       return new Response("Forbidden", { status: 403 });
     }
 
-    // Insert delivery event row (one per status update)
+    // Upsert delivery event row (one per status update). Twilio retries
+    // status callbacks on transient failures, so the DB-side
+    // sms_delivery_events_sid_status_unique constraint dedupes
+    // (twilio_message_sid, status) pairs idempotently.
     const { error: insertErr } = await supabase
       .from("sms_delivery_events")
-      .insert({
+      .upsert({
         twilio_message_sid: messageSid,
         client_id: clientRow.id,
         status,
         error_code: errorCode,
         error_message: errorMessage,
         raw_payload: params,
-      });
+      }, { onConflict: "twilio_message_sid,status" });
     if (insertErr) {
-      console.error("twilio-status-webhook: sms_delivery_events insert failed", insertErr);
+      console.error("twilio-status-webhook: sms_delivery_events upsert failed", insertErr);
     }
 
     // Mirror terminal status to message_queue for the inbox UI
