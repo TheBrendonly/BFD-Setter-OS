@@ -691,9 +691,25 @@ export const ContactConversationHistory: React.FC<ContactConversationHistoryProp
       const cacheId = contactDataId || externalId;
       if (cacheId) setCache(`conv_${cacheId}`, deduped);
     } catch (err: any) {
+      const errMsg = err?.message || err?.error?.message || (typeof err === 'string' ? err : 'unknown error');
+      const errCode = err?.code || err?.error?.code || null;
       console.error('Failed to load conversation history:', err);
+      // Best-effort log to platform error_logs so the failure is server-visible
+      try {
+        if (clientId) {
+          await supabase.from('error_logs').insert({
+            client_id: clientId,
+            source: 'frontend.ContactConversationHistory.fetchMessages',
+            error_type: 'conversation_history_load_failed',
+            error_message: `${errMsg}${errCode ? ` (${errCode})` : ''}`,
+            lead_id: contactDataId || externalId || null,
+          });
+        }
+      } catch { /* never let logging mask the original error */ }
       // Only show error if we don't have any preloaded data
-      if (messagesRef.current.length === 0) setError('Failed to load conversation history.');
+      if (messagesRef.current.length === 0) {
+        setError(`Failed to load conversation history: ${errMsg}`);
+      }
     } finally {
       if (activeContactRef.current === searchId) {
         setLoading(false);
