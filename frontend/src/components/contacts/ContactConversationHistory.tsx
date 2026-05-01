@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { createClient } from '@supabase/supabase-js';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
@@ -363,23 +362,16 @@ export const ContactConversationHistory: React.FC<ContactConversationHistoryProp
       .filter(Boolean) as Message[];
   }, []);
 
-  const externalHistoryClient = React.useMemo(() => {
-    if (!supabaseUrl || !supabaseServiceKey) return null;
-
-    return createClient(supabaseUrl, supabaseServiceKey, {
-      auth: {
-        persistSession: false,
-        autoRefreshToken: false,
-        detectSessionInUrl: false,
-      },
-    });
-  }, [supabaseServiceKey, supabaseUrl]);
+  // NOTE: chat_history is now fetched via the get-chat-history edge function
+  // instead of a per-client Supabase client created in the browser. As of the
+  // 2026-04-30 sb_secret_*/sb_publishable_* key rotation, Supabase rejects
+  // service-role keys when called from a browser ("Forbidden use of secret
+  // API key in browser"). The edge function holds the secret server-side.
 
   const fetchMessages = useCallback(async () => {
-    if (supabaseUrl === undefined || supabaseServiceKey === undefined) return;
-    if (!supabaseUrl || !supabaseServiceKey || !externalHistoryClient) { onLoadComplete?.(); return; }
     const searchId = contactDataId || externalId;
     if (!searchId) { onLoadComplete?.(); return; }
+    if (!clientId) { onLoadComplete?.(); return; }
 
     // Track which contact this fetch is for — discard results if contact changed
     activeContactRef.current = searchId;
@@ -392,49 +384,25 @@ export const ContactConversationHistory: React.FC<ContactConversationHistoryProp
     setError(null);
 
     try {
-      // Fetch chat_history and completed executions in parallel
-      const clientSupabase = externalHistoryClient;
+      const altSessionId = (contactDataId && externalId && contactDataId !== externalId)
+        ? externalId
+        : null;
 
-      const [completedExecs] = await Promise.all([fetchCompletedExecutions()]);
+      const [completedExecs, historyResp] = await Promise.all([
+        fetchCompletedExecutions(),
+        supabase.functions.invoke('get-chat-history', {
+          body: { clientId, sessionId: searchId, altSessionId },
+        }),
+      ]);
 
-      const pageSize = 1000;
-      const allRows: any[] = [];
-      let from = 0;
-
-      while (true) {
-        const { data, error: fetchError } = await clientSupabase
-          .from('chat_history')
-          .select('id,session_id,timestamp,message')
-          .eq('session_id', searchId)
-          .order('timestamp', { ascending: true })
-          .range(from, from + pageSize - 1);
-
-        if (fetchError) throw new Error(fetchError.message);
-        if (!data || data.length === 0) break;
-
-        allRows.push(...data);
-        if (data.length < pageSize) break;
-        from += pageSize;
+      if (historyResp.error) {
+        throw new Error(historyResp.error.message || 'get-chat-history failed');
       }
-
-      // If no results with primary ID, try the other ID
-      if (allRows.length === 0 && contactDataId && externalId && contactDataId !== externalId) {
-        let altFrom = 0;
-        while (true) {
-          const { data, error: fetchError } = await clientSupabase
-            .from('chat_history')
-            .select('id,session_id,timestamp,message')
-            .eq('session_id', externalId)
-            .order('timestamp', { ascending: true })
-            .range(altFrom, altFrom + pageSize - 1);
-
-          if (fetchError) break;
-          if (!data || data.length === 0) break;
-          allRows.push(...data);
-          if (data.length < pageSize) break;
-          altFrom += pageSize;
-        }
+      const payload = historyResp.data as { ok: boolean; rows?: any[]; error?: string } | null;
+      if (!payload?.ok) {
+        throw new Error(payload?.error || 'get-chat-history returned ok=false');
       }
+      const allRows: any[] = Array.isArray(payload.rows) ? payload.rows : [];
 
       // Build a set of execution time windows that have setter_messages
       // We'll suppress chat_history AI rows that fall within these windows
@@ -716,7 +684,7 @@ export const ContactConversationHistory: React.FC<ContactConversationHistoryProp
         onLoadComplete?.();
       }
     }
-  }, [externalHistoryClient, externalId, contactDataId, supabaseUrl, supabaseServiceKey, fetchCompletedExecutions, clientId, parseRawRows, onLoadComplete]);
+  }, [externalId, contactDataId, fetchCompletedExecutions, clientId, parseRawRows, onLoadComplete]);
 
   fetchMessagesRef.current = fetchMessages;
 
