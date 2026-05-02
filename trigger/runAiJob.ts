@@ -98,14 +98,15 @@ async function callOpenRouter(
   response_format: { type: string },
   chunkIndex?: number
 ): Promise<string> {
-  // Always use the model's maximum possible output — more headroom = fewer truncation failures.
-  // Cost and speed are not affected by a higher ceiling; the model only generates what it needs.
+  // Cap at the model's max completion tokens so we never send a value the model rejects.
+  // If the caller provided a lower value, honour it — don't inflate to the model ceiling,
+  // since prompt tokens + output tokens must fit within the total context window.
   const modelMax = await getModelMaxTokens(apiKey, model);
   if (modelMax !== null) {
-    max_tokens = modelMax;
-    console.log(`max_tokens set to model maximum: ${modelMax} for ${model}`);
+    const callerValue = max_tokens;
+    max_tokens = callerValue !== undefined ? Math.min(callerValue, modelMax) : modelMax;
+    console.log(`max_tokens: ${max_tokens} (caller: ${callerValue ?? "unset"}, model cap: ${modelMax}) for ${model}`);
   } else {
-    // Unknown limit — fall back to whatever was passed (default 32k from our override)
     console.log(`max_tokens limit unknown for ${model}, using: ${max_tokens}`);
   }
 
