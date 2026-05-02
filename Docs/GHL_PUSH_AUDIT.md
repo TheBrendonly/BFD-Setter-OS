@@ -4,7 +4,7 @@ description: Inventory of every event the 1prompt-OS platform pushes to GoHighLe
 
 # GHL Push Audit — what 1prompt mirrors back to GoHighLevel
 
-**Last updated:** 2026-05-01 (post Phase 9 cutover, BFD on native text engine day 2 of 14)
+**Last updated:** 2026-05-02 (gaps 2+3 closed — SMS bodies now mirrored both directions)
 
 GHL is the source-of-truth CRM for every BFD-platform tenant. Every event that 1prompt knows about should ideally be visible in GHL too — call summaries on the contact timeline, opt-outs flipping `dndSettings.SMS=true`, cadence steps showing up as Activities. Today some flows mirror cleanly, some only stamp a tag, and some stop entirely at the platform DB.
 
@@ -62,6 +62,14 @@ These are GHL → platform writes (the inverse direction), included here because
 - **Endpoint side:** No outbound write to GHL on enrolment (the platform reads, then runs the cadence). At cadence END (Phase 11d `removeNewLeadsTag`), if the workflow's `new_leads_tag` is set, that tag is removed from the GHL contact via `DELETE /contacts/{id}/tags` (so the contact doesn't auto-re-enrol on the next webhook).
 - **Where:** [`trigger/runEngagement.ts:193-219`](../trigger/runEngagement.ts#L193-L219).
 
+### 7. SMS body mirror — both directions (Phase B, gaps 2+3, 2026-05-02)
+
+- **Triggers:** every inbound Twilio SMS at `receive-twilio-sms`, every direct-Twilio outbound from `processMessages.ts` setter-reply block (native engine only), every direct-Twilio outbound from `runEngagement.ts` cadence engine, and STOP/START auto-replies.
+- **Endpoints:** `POST /conversations/messages/inbound` or `/outbound` when `clients.ghl_conversation_provider_id` is set (Custom Conversation Provider provisioned in GHL Marketplace); `POST /contacts/{id}/notes` fallback otherwise.
+- **Payload:** `{ type: "SMS", contactId, message, conversationProviderId, direction, altId, date }` for Conversations; `{ body: "[platform → SMS <direction>] <message>" }` for Notes.
+- **Where:** helper at [`frontend/supabase/functions/_shared/ghl-conversations.ts`](../frontend/supabase/functions/_shared/ghl-conversations.ts) (Deno) + [`trigger/_shared/ghl-conversations.ts`](../trigger/_shared/ghl-conversations.ts) (Node copy). Wired into `receive-twilio-sms`, `processMessages.ts`, `runEngagement.ts`.
+- **Idempotency:** `altId = twilio_message_sid` so Conversations endpoint dedupes on retry. Notes fallback is not deduped — call sites only fire once per outbound.
+
 ---
 
 ## B. NOT pushed to GHL today (gap list, in priority order)
@@ -74,20 +82,15 @@ These are GHL → platform writes (the inverse direction), included here because
 - **GHL impact:** the agency owner sees nothing on the GHL contact timeline about what was said in the call, what the lead's sentiment was, or what came out of it. Anyone reading the contact in GHL is blind.
 - **Suggested fix:** after the analysis webhook stores the call_summary, write the summary (or full transcript, or both) to the GHL contact as a Note (`POST /contacts/{id}/notes`) and set 2-3 custom fields (`last_call_sentiment`, `last_call_appointment_booked`, `last_call_summary`).
 
-### Gap 2 — Inbound SMS message bodies (HIGH leverage)
+### Gap 2 — Inbound SMS message bodies (HIGH leverage) — **CLOSED 2026-05-02**
 
-- **What we have:** Full text, timestamp, Twilio metadata, sender phone.
-- **Where it stops:** `message_queue` + `dm_executions` tables; the body lands in `leads.last_message_preview` for UI but never goes back to GHL.
-- **Source:** `receive-twilio-sms/index.ts` full flow.
-- **GHL impact:** GHL has no record of the inbound SMS body. The agency can see "channel = SMS" on the contact (gap 3 mitigant) but can't read what the lead actually said. Outbound mirror (gap 6) is also absent in the native engine path, so the GHL conversation thread stays empty.
-- **Suggested fix:** after the inbound is received, write to GHL via the Conversations API (`POST /conversations/messages` with `type=Inbound, channel=SMS, contactId=…, message=<body>`). If Conversations API isn't enabled on the location, fallback: write a Note.
+- **Resolution:** `phase-night-ghl-push-gaps-2-3` — `receive-twilio-sms/index.ts` now schedules `pushSmsToGhl(direction='inbound', altId=messageSid)` via `EdgeRuntime.waitUntil` after the GHL contact resolves. STOP/START keyword inbound is also mirrored (when matched-lead is resolvable). Helper at [`frontend/supabase/functions/_shared/ghl-conversations.ts`](../frontend/supabase/functions/_shared/ghl-conversations.ts).
+- **Path:** Conversations API when `clients.ghl_conversation_provider_id` is set; Notes API fallback otherwise.
 
-### Gap 3 — Outbound setter SMS replies (HIGH — regression of pre-Phase 9)
+### Gap 3 — Outbound setter SMS replies (HIGH — regression of pre-Phase 9) — **CLOSED 2026-05-02**
 
-- **What we have:** LLM-generated reply text, sent timestamp, delivery status (Twilio `MessageStatus` callback).
-- **Where it stops:** Twilio outbound only. Pre-Phase 9 the reply went via n8n → optionally to GHL. With `use_native_text_engine=true` the n8n hop is bypassed entirely, so the GHL conversation thread no longer reflects the platform's outbound replies for BFD.
-- **Source:** [`trigger/processMessages.ts:209+`](../trigger/processMessages.ts#L209).
-- **Suggested fix:** same `POST /conversations/messages` pattern as gap 2 but with `type=Outbound`. Done in the same edge function so inbound + outbound stay together. This single fix closes gap 2 + gap 3.
+- **Resolution:** `phase-night-ghl-push-gaps-2-3` — three outbound paths now mirror to GHL after the Twilio send succeeds: (a) `trigger/processMessages.ts` setter-reply Twilio block (gated on `client.use_native_text_engine === true` to avoid double-mirror via the legacy n8n workflow path); (b) `trigger/runEngagement.ts` `sendTwilioSmsAndStamp` (engage-node + legacy `send_sms` node, always — Phase-11f direct Twilio); (c) `receive-twilio-sms` STOP/START auto-reply.
+- **Path:** Same helper as gap 2. `altId = twilio_message_sid` for Conversations-API dedupe.
 
 ### Gap 4 — Engagement cadence events (MEDIUM)
 
@@ -121,11 +124,11 @@ These are GHL → platform writes (the inverse direction), included here because
 
 Closing the top 3 gaps (1, 2, 3) gets every BFD agency-owner most of the way to "GHL is the source of truth and shows the full lead story":
 
-1. Voice call summary as a GHL Note + 2 custom fields (~1 hr work, 1 edge function diff).
-2. Inbound + outbound SMS bodies as GHL Conversation messages (~2 hr work, single edge function diff covers both directions).
-3. Opt-out → GHL `dndSettings.SMS=true` (~30 min work, single edge function diff).
+1. Voice call summary as a GHL Note + 2 custom fields (~1 hr work, 1 edge function diff). **Open.**
+2. ~~Inbound~~ + ~~outbound SMS bodies as GHL Conversation messages~~. **CLOSED 2026-05-02 — `phase-night-ghl-push-gaps-2-3`.**
+3. Opt-out → GHL `dndSettings.SMS=true` (~30 min work, single edge function diff). **Open.**
 
-Gaps 4–7 are nice-to-haves and can wait until clients ask. Sequencing: do gaps 2+3 first (single PR), then gap 1, then gap 5 (compliance), then defer the rest until the second agency client lands.
+Remaining sequencing: gap 1 (voice call summary), then gap 5 (opt-out compliance), then defer the rest until the second agency client lands.
 
 **Out of scope for this audit:** none of these need new tables or new infrastructure. Every fix is a `PATCH /contacts/{id}` or `POST /conversations/messages` from an existing edge function. They're cheap.
 
@@ -140,5 +143,6 @@ Gaps 4–7 are nice-to-haves and can wait until clients ask. Sequencing: do gaps
 | `receive-twilio-sms/index.ts` | `PATCH /contacts/{id}` with channel custom field | Inbound SMS arrives |
 | `voice-booking-tools/index.ts` | `POST/PUT /calendars/events/appointments`, `POST /contacts/` | Retell voice agent calls a booking tool |
 | `runEngagement.ts` (tag-removal helper) | `DELETE /contacts/{id}/tags/{tag}` | Cadence reaches a terminal stop_reason and the workflow had `new_leads_tag` set |
+| `_shared/ghl-conversations.ts` (Deno + Node copies) | `POST /conversations/messages/{inbound\|outbound}` (when provider id set) OR `POST /contacts/{id}/notes` (fallback) | Every inbound Twilio SMS + every direct-Twilio outbound (setter reply on native engine, cadence engine, STOP/START auto-reply) |
 
 Anything not in that table is either NOT pushed (see section B) or is a GHL→platform read (`sync-ghl-contact`, `sync-ghl-booking`, `ghl-tag-webhook`).

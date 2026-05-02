@@ -1,6 +1,7 @@
 import { task, wait } from "@trigger.dev/sdk";
 import { createClient } from "@supabase/supabase-js";
 import { placeOutboundCall } from "./placeOutboundCall";
+import { pushSmsToGhl } from "./_shared/ghl-conversations";
 
 const getMainSupabase = () =>
   createClient(
@@ -139,6 +140,13 @@ async function sendTwilioSmsAndStamp(args: {
   ghlAccountId: string;
   contactName: string | null;
   contactEmail: string | null;
+  // Phase B (gap 3) — GHL mirror fields. When ghlApiKey is set, every
+  // successful Twilio send is mirrored to the GHL contact (Conversations API
+  // when conversationProviderId is set, Notes fallback otherwise).
+  ghlApiKey: string | null;
+  ghlLocationId: string | null;
+  ghlContactId: string | null;
+  ghlConversationProviderId: string | null;
 }): Promise<{ ok: boolean; sid: string | null; errorCode?: number; errorMessage?: string }> {
   const supabaseUrl = process.env.SUPABASE_URL!;
   const statusCallbackUrl = `${supabaseUrl}/functions/v1/twilio-status-webhook`;
@@ -179,6 +187,20 @@ async function sendTwilioSmsAndStamp(args: {
       });
     } catch (insErr) {
       console.warn("runEngagement: outbound message_queue insert failed (non-fatal)", insErr);
+    }
+  }
+  if (args.ghlApiKey && args.ghlLocationId && args.ghlContactId) {
+    const mirrorResult = await pushSmsToGhl({
+      ghlApiKey: args.ghlApiKey,
+      ghlLocationId: args.ghlLocationId,
+      contactId: args.ghlContactId,
+      conversationProviderId: args.ghlConversationProviderId,
+      message: args.body,
+      direction: "outbound",
+      altId: twilioJson.sid ?? null,
+    });
+    if (!mirrorResult.ok) {
+      console.warn("runEngagement: GHL mirror non-OK", mirrorResult);
     }
   }
   return { ok: true, sid: twilioJson.sid ?? null };
@@ -487,7 +509,7 @@ export const runEngagement = task({
       // ── Load client config ────────────────────────────────────────────────
       const { data: client } = await supabase
         .from("clients")
-        .select("send_engagement_webhook_url, supabase_url, supabase_service_key, cadence_quiet_hours, twilio_account_sid, twilio_auth_token, twilio_default_phone, retell_phone_1, ghl_api_key, ghl_location_id")
+        .select("send_engagement_webhook_url, supabase_url, supabase_service_key, cadence_quiet_hours, twilio_account_sid, twilio_auth_token, twilio_default_phone, retell_phone_1, ghl_api_key, ghl_location_id, ghl_conversation_provider_id")
         .eq("id", client_id)
         .single();
 
@@ -819,6 +841,11 @@ export const runEngagement = task({
                 ghlAccountId: ghl_account_id,
                 contactName: contact_name ?? null,
                 contactEmail: payload.Email ?? null,
+                ghlApiKey: (client.ghl_api_key as string | null) ?? null,
+                ghlLocationId: (client.ghl_location_id as string | null) ?? null,
+                ghlContactId: lead_id,
+                ghlConversationProviderId:
+                  (client.ghl_conversation_provider_id as string | null) ?? null,
               });
               if (!sendResult.ok) {
                 throw new Error(
@@ -915,6 +942,11 @@ export const runEngagement = task({
             ghlAccountId: ghl_account_id,
             contactName: contact_name ?? null,
             contactEmail: payload.Email ?? null,
+            ghlApiKey: (client.ghl_api_key as string | null) ?? null,
+            ghlLocationId: (client.ghl_location_id as string | null) ?? null,
+            ghlContactId: lead_id,
+            ghlConversationProviderId:
+              (client.ghl_conversation_provider_id as string | null) ?? null,
           });
           if (!sendResult.ok) {
             throw new Error(

@@ -17,6 +17,21 @@
 //   6. Return empty TwiML (Twilio expects <Response/>).
 
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { pushSmsToGhl } from "../_shared/ghl-conversations.ts";
+
+// Schedule a fire-and-forget GHL mirror that completes after the TwiML response
+// returns. EdgeRuntime.waitUntil keeps the runtime alive past the response so
+// the fetch isn't cancelled. Falls back to a plain async call (best-effort) if
+// the runtime doesn't expose waitUntil.
+function scheduleGhlMirror(p: Promise<unknown>): void {
+  const rt = (globalThis as { EdgeRuntime?: { waitUntil?: (p: Promise<unknown>) => void } })
+    .EdgeRuntime;
+  if (rt?.waitUntil) {
+    rt.waitUntil(p);
+  } else {
+    p.catch(() => {});
+  }
+}
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -400,7 +415,7 @@ Deno.serve(async (req) => {
     const { data: client, error: clientError } = await supabase
       .from("clients")
       .select(
-        "id, ghl_location_id, ghl_api_key, dm_enabled, debounce_seconds, twilio_account_sid, twilio_auth_token, supabase_url, supabase_service_key",
+        "id, ghl_location_id, ghl_api_key, dm_enabled, debounce_seconds, twilio_account_sid, twilio_auth_token, supabase_url, supabase_service_key, ghl_conversation_provider_id",
       )
       .eq("retell_phone_1", toPhone)
       .maybeSingle();
@@ -460,6 +475,14 @@ Deno.serve(async (req) => {
     if (isStop || isStart) {
       const triggerKey = Deno.env.get("TRIGGER_SECRET_KEY") ?? null;
 
+      // Resolve matching lead rows once — used by STOP cadence cancellation
+      // and by the GHL mirror for both STOP and START.
+      const { data: matchedLeads } = await supabase
+        .from("leads")
+        .select("lead_id")
+        .eq("client_id", client.id)
+        .eq("phone", fromPhone);
+
       if (isStop) {
         // Record opt-out
         await supabase
@@ -480,11 +503,6 @@ Deno.serve(async (req) => {
           .eq("client_id", client.id)
           .eq("phone", fromPhone);
         // Cancel active cadences for any matching ghl_contact_id under this client
-        const { data: matchedLeads } = await supabase
-          .from("leads")
-          .select("lead_id")
-          .eq("client_id", client.id)
-          .eq("phone", fromPhone);
         if (matchedLeads && client.ghl_location_id) {
           for (const lead of matchedLeads) {
             await endActiveCadences({
@@ -512,13 +530,51 @@ Deno.serve(async (req) => {
       }
 
       // Compliance reply (single send, no AI loop)
+      const complianceBody = isStop ? STOP_REPLY : START_REPLY;
       await sendTwilioCompliance({
         twilioSid: client.twilio_account_sid as string | null,
         twilioAuth: client.twilio_auth_token as string | null,
         fromNumber: toPhone,
         toNumber: fromPhone,
-        body: isStop ? STOP_REPLY : START_REPLY,
+        body: complianceBody,
       });
+
+      // Phase B (gap 2/3) — mirror both the inbound STOP/START keyword and
+      // the outbound auto-reply to GHL for every matched contact, so the
+      // conversation thread reflects the opt-out exchange. Skipped silently
+      // when the sender has no matching lead row (no contactId to mirror to).
+      if (
+        matchedLeads
+        && matchedLeads.length > 0
+        && client.ghl_api_key
+        && client.ghl_location_id
+      ) {
+        for (const lead of matchedLeads) {
+          if (!lead.lead_id) continue;
+          scheduleGhlMirror(
+            pushSmsToGhl({
+              ghlApiKey: client.ghl_api_key,
+              ghlLocationId: client.ghl_location_id,
+              contactId: lead.lead_id,
+              conversationProviderId: client.ghl_conversation_provider_id ?? null,
+              message: messageBody,
+              direction: "inbound",
+              altId: messageSid ?? null,
+            }),
+          );
+          scheduleGhlMirror(
+            pushSmsToGhl({
+              ghlApiKey: client.ghl_api_key,
+              ghlLocationId: client.ghl_location_id,
+              contactId: lead.lead_id,
+              conversationProviderId: client.ghl_conversation_provider_id ?? null,
+              message: complianceBody,
+              direction: "outbound",
+              altId: null,
+            }),
+          );
+        }
+      }
 
       console.info(`Phase 4a ${isStop ? "STOP" : "START"} keyword handled`, {
         clientId: client.id,
@@ -564,6 +620,22 @@ Deno.serve(async (req) => {
     // "Which Channel?" decision (sourced from contact.channel) routes here.
     // Fire-and-forget — don't block the inbound on a slow GHL response.
     setGhlContactChannel(client.ghl_api_key, contactId, "SMS");
+
+    // Phase B (gap 2) — mirror the inbound SMS body to GHL so the agency
+    // owner sees the conversation thread. Best-effort, runs after the TwiML
+    // response returns. Uses Conversations API when ghl_conversation_provider_id
+    // is set on the client; falls back to a Note otherwise.
+    scheduleGhlMirror(
+      pushSmsToGhl({
+        ghlApiKey: client.ghl_api_key,
+        ghlLocationId: client.ghl_location_id,
+        contactId,
+        conversationProviderId: client.ghl_conversation_provider_id ?? null,
+        message: messageBody,
+        direction: "inbound",
+        altId: messageSid ?? null,
+      }),
+    );
 
     const ghlAccountId = client.ghl_location_id;
     const setterNumber = "1"; // SMS via Twilio direct → default Setter-1 slot

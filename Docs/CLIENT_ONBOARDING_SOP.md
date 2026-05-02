@@ -395,6 +395,26 @@ After cadence copy review (§6) and dry-run (§7), wire GHL → ghl-tag-webhook 
 
 The tag is removed at every terminal `stop_reason` (sequence_complete / inbound_reply / booking_created / opt_out / cancelled / error) by `runEngagement.writeCadenceMetrics`. See `Docs/RUNBOOK.md` "Tag-based auto-enrolment" for sig verification + smoke test.
 
+### 5.11 GHL Custom Conversation Provider (optional — polished SMS-thread mirror)
+
+Phase B (`phase-night-ghl-push-gaps-2-3`, 2026-05-02) added a server-side mirror that pushes every inbound and outbound SMS body to GHL so the conversation thread on the contact reflects the full lead story. Two endpoint paths:
+
+- **Conversations API** (polished, recommended): `POST /conversations/messages/{inbound|outbound}`. Requires a Custom Conversation Provider id provisioned in GHL Marketplace — agency owner sees real Conversation messages on the Conversations tab.
+- **Notes API** (default fallback): `POST /contacts/{id}/notes` with body `[platform -> SMS <direction>] <message>`. Visible on the Notes tab. No setup required.
+
+The mirror runs regardless of which path is used; if `clients.ghl_conversation_provider_id` is null, the helper falls back to Notes automatically.
+
+**To wire the polished path:**
+
+1. In the agency's GHL account: **Settings -> Marketplace -> Conversation Providers -> Add custom provider**. Or via the developer portal at `https://marketplace.gohighlevel.com/`. Name it something like "1prompt-os SMS mirror". Set type = SMS.
+2. Copy the provider id (looks like a 24-char hex string).
+3. `UPDATE clients SET ghl_conversation_provider_id = '<id>' WHERE id = '<client-uuid>';`
+4. Smoke-test: send one inbound SMS to the client's Twilio number; expect a new message on the GHL contact's Conversations tab within ~5s. If it lands in Notes instead, double-check the provider id is correctly pasted and the marketplace integration is published.
+
+**To verify the fallback is working when no provider is configured:** trigger the same inbound, then check the contact's Notes tab in GHL for an entry prefixed `[platform -> SMS inbound]`.
+
+The helper is at `frontend/supabase/functions/_shared/ghl-conversations.ts` (Deno) and `trigger/_shared/ghl-conversations.ts` (Node copy). Wired into `receive-twilio-sms`, `processMessages.ts` (gated on `client.use_native_text_engine === true`), and `runEngagement.ts` `sendTwilioSmsAndStamp` (engage + send_sms nodes).
+
 ---
 
 ## 6. Cadence + content review (with the client)

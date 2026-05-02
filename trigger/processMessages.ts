@@ -2,6 +2,7 @@ import { task, wait } from "@trigger.dev/sdk";
 import { createClient } from "@supabase/supabase-js";
 import { sendFollowup } from "./sendFollowup";
 import { processSetterReply } from "./processSetterReply";
+import { pushSmsToGhl } from "./_shared/ghl-conversations";
 
 const getMainSupabase = () =>
   createClient(
@@ -92,7 +93,7 @@ export const processMessages = task({
       // Done BEFORE the debounce wait so the lead appears in the CRM immediately.
       const { data: client, error: clientError } = await supabase
         .from("clients")
-        .select("id, text_engine_webhook, ghl_send_setter_reply_webhook_url, supabase_url, supabase_service_key, supabase_table_name, twilio_account_sid, twilio_auth_token, retell_phone_1, use_native_text_engine")
+        .select("id, text_engine_webhook, ghl_send_setter_reply_webhook_url, supabase_url, supabase_service_key, supabase_table_name, twilio_account_sid, twilio_auth_token, retell_phone_1, use_native_text_engine, ghl_api_key, ghl_location_id, ghl_conversation_provider_id")
         .eq("ghl_location_id", ghl_account_id)
         .single();
 
@@ -432,6 +433,29 @@ export const processMessages = task({
                 });
               } catch (insErr) {
                 console.warn("processMessages: outbound message_queue insert failed (non-fatal)", insErr);
+              }
+            }
+            // Phase B (gap 3) — mirror outbound setter SMS body to GHL so
+            // the agency owner sees the conversation thread. Gated on the
+            // native text engine flag: when use_native_text_engine=false the
+            // legacy n8n→GHL workflow path may already mirror, and we'd
+            // double-log otherwise.
+            if (
+              client.use_native_text_engine
+              && (client as any).ghl_api_key
+              && (client as any).ghl_location_id
+            ) {
+              const mirrorResult = await pushSmsToGhl({
+                ghlApiKey: (client as any).ghl_api_key as string,
+                ghlLocationId: (client as any).ghl_location_id as string,
+                contactId: lead_id,
+                conversationProviderId: ((client as any).ghl_conversation_provider_id as string | null) ?? null,
+                message: msg,
+                direction: "outbound",
+                altId: twilioJson.sid ?? null,
+              });
+              if (!mirrorResult.ok) {
+                console.warn("processMessages: GHL mirror non-OK", mirrorResult);
               }
             }
           }
