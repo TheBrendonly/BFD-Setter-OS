@@ -434,7 +434,16 @@ export const MiniPromptAIDialog: React.FC<MiniPromptAIDialogProps> = ({
         });
 
         if (error) {
-          const errorMessage = error.message || String(error);
+          let errorMessage = error.message || String(error);
+          const ctx = (error as { context?: Response | undefined }).context;
+          if (ctx && typeof ctx.json === 'function') {
+            try {
+              const body: unknown = await ctx.json();
+              if (body && typeof body === 'object' && 'error' in body && typeof (body as { error: unknown }).error === 'string') {
+                errorMessage = (body as { error: string }).error;
+              }
+            } catch { /* body unreadable, keep generic message */ }
+          }
           if ((errorMessage.includes('Failed to send') || errorMessage.includes('Failed to fetch')) && attempt < MAX_RETRIES) {
             await new Promise(r => setTimeout(r, 2000 * (attempt + 1)));
             continue;

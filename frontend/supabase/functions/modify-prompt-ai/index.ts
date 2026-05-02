@@ -6,7 +6,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-const SYSTEM_PROMPT = `You are an expert AI prompt engineer. Your job is to modify an existing AI setter prompt based on the user's request.
+const SYSTEM_PROMPT_MODIFY = `You are an expert AI prompt engineer. Your job is to modify an existing AI setter prompt based on the user's request.
 
 ## HOW THIS SYSTEM WORKS
 
@@ -66,13 +66,48 @@ You MUST respond with a JSON object containing exactly two fields:
 
 IMPORTANT: Return ONLY the JSON object. No markdown, no code blocks, no extra text.`;
 
+const SYSTEM_PROMPT_GENERATE = `You are an expert AI prompt engineer. Your job is to write the content for a SINGLE mini-prompt section based on the user's request.
+
+## CONTEXT
+
+A mini-prompt is a focused instruction block that controls one specific behaviour of an AI setter (for example: identity, tone, response length, emoji usage, objection handling, storytelling, custom instructions). The user has opened the editor for one such mini-prompt and the section is currently empty — you are generating it from scratch.
+
+You will NOT receive a separator-delimited multi-section prompt. You receive only:
+- The user's request describing what this mini-prompt should do
+- (Optionally) a section title or label for context
+
+## WHAT TO PRODUCE
+
+Write the mini-prompt content as plain text instructions addressed to an AI setter. The content should:
+- Be self-contained — readable as a standalone instruction block
+- Be specific and actionable, not vague platitudes
+- Match the user's intent precisely
+- Use clear, direct language; avoid filler
+- Stay within the scope the user described — do not bolt on unrelated guidance
+
+DO NOT include:
+- Section separators (── ── ──)
+- A section heading (## ...) — the UI handles headings outside of this content
+- Quotes around the whole thing or markdown code fences
+- Meta-commentary about what you wrote
+
+## RESPONSE FORMAT
+
+You MUST respond with a JSON object containing exactly two fields:
+1. "modifiedPrompt": The mini-prompt content you generated (raw text, no markdown code blocks)
+2. "summary": A brief, friendly summary (1-3 sentences) describing what you produced.
+
+IMPORTANT: Return ONLY the JSON object. No markdown, no code blocks, no extra text.`;
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const { fullPrompt, userMessage, conversationHistory, clientId, sectionOrder, slotId } = await req.json();
+    const { fullPrompt: rawFullPrompt, userMessage, conversationHistory, clientId, sectionOrder, slotId } = await req.json();
+    const fullPrompt = typeof rawFullPrompt === "string" ? rawFullPrompt : "";
+    const isEmptyPrompt = fullPrompt.trim() === "";
 
     if (!clientId) {
       return new Response(
@@ -81,9 +116,9 @@ serve(async (req) => {
       );
     }
 
-    if (!fullPrompt || !userMessage) {
+    if (!userMessage) {
       return new Response(
-        JSON.stringify({ error: "Full prompt and user message are required." }),
+        JSON.stringify({ error: "User message is required." }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -127,29 +162,54 @@ serve(async (req) => {
       );
     }
 
-    // Build messages array
-    const sectionCount = fullPrompt.split('── ── ── ── ── ── ── ── ── ── ── ── ── ──').length;
-    const sectionLabels = sectionOrder || [];
-    const sectionMapInfo = sectionLabels.length > 0 
-      ? `\n\nThe current sections in order are: ${sectionLabels.map((s: string, i: number) => `${i + 1}. ${s}`).join(', ')}`
-      : '';
-
-    const trimmedHistory = (conversationHistory && Array.isArray(conversationHistory)) 
-      ? conversationHistory.slice(-10) 
+    // Build messages array — branch on empty vs non-empty fullPrompt.
+    // Non-empty: "modify multi-section prompt" path (preserves section count).
+    // Empty: "generate single mini-prompt section from scratch" path.
+    const trimmedHistory = (conversationHistory && Array.isArray(conversationHistory))
+      ? conversationHistory.slice(-10)
       : [];
 
-    const messages: Array<{role: string; content: string}> = [
-      { role: "system", content: SYSTEM_PROMPT + `\n\nCRITICAL: The current prompt has exactly ${sectionCount} sections (${sectionCount - 1} separators). Your output MUST have EXACTLY ${sectionCount} sections (${sectionCount - 1} separators). NO EXCEPTIONS.${sectionMapInfo}` },
-    ];
+    let sectionCount: number;
+    const messages: Array<{ role: string; content: string }> = [];
 
-    for (const msg of trimmedHistory) {
-      messages.push({ role: msg.role, content: msg.content });
+    if (isEmptyPrompt) {
+      sectionCount = 1;
+      const sectionLabels = sectionOrder || [];
+      const sectionLabelHint = sectionLabels.length > 0
+        ? `\n\nThis mini-prompt is for the section labelled: ${sectionLabels.join(", ")}.`
+        : (slotId ? `\n\nThis mini-prompt is identified by slot: ${slotId}.` : "");
+      messages.push({ role: "system", content: SYSTEM_PROMPT_GENERATE + sectionLabelHint });
+
+      for (const msg of trimmedHistory) {
+        messages.push({ role: msg.role, content: msg.content });
+      }
+
+      messages.push({
+        role: "user",
+        content: `The mini-prompt is currently empty. Generate the content from scratch based on this request:\n\n${userMessage}`,
+      });
+    } else {
+      sectionCount = fullPrompt.split("── ── ── ── ── ── ── ── ── ── ── ── ── ──").length;
+      const sectionLabels = sectionOrder || [];
+      const sectionMapInfo = sectionLabels.length > 0
+        ? `\n\nThe current sections in order are: ${sectionLabels.map((s: string, i: number) => `${i + 1}. ${s}`).join(", ")}`
+        : "";
+      messages.push({
+        role: "system",
+        content:
+          SYSTEM_PROMPT_MODIFY +
+          `\n\nCRITICAL: The current prompt has exactly ${sectionCount} sections (${sectionCount - 1} separators). Your output MUST have EXACTLY ${sectionCount} sections (${sectionCount - 1} separators). NO EXCEPTIONS.${sectionMapInfo}`,
+      });
+
+      for (const msg of trimmedHistory) {
+        messages.push({ role: msg.role, content: msg.content });
+      }
+
+      messages.push({
+        role: "user",
+        content: `Here is the CURRENT FULL PROMPT:\n\n---START OF PROMPT---\n${fullPrompt}\n---END OF PROMPT---\n\nUser request: ${userMessage}`,
+      });
     }
-
-    messages.push({
-      role: "user",
-      content: `Here is the CURRENT FULL PROMPT:\n\n---START OF PROMPT---\n${fullPrompt}\n---END OF PROMPT---\n\nUser request: ${userMessage}`
-    });
 
     // Insert job row
     const { data: jobRow, error: insertError } = await supabase

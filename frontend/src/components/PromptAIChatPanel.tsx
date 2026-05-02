@@ -99,7 +99,16 @@ export const PromptAIChatPanel: React.FC<PromptAIChatPanelProps> = ({
         });
 
         if (error) {
-          const errorMessage = error.message || String(error);
+          let errorMessage = error.message || String(error);
+          const ctx = (error as { context?: Response | undefined }).context;
+          if (ctx && typeof ctx.json === 'function') {
+            try {
+              const body: unknown = await ctx.json();
+              if (body && typeof body === 'object' && 'error' in body && typeof (body as { error: unknown }).error === 'string') {
+                errorMessage = (body as { error: string }).error;
+              }
+            } catch { /* body unreadable, keep generic message */ }
+          }
           if (errorMessage.includes('Failed to send a request') || errorMessage.includes('Failed to fetch')) {
             lastError = `Network error (attempt ${attempt + 1}/${MAX_RETRIES + 1}): Could not reach the AI service.`;
             if (attempt < MAX_RETRIES) {
