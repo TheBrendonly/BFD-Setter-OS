@@ -445,6 +445,89 @@ Deno.serve(async (req) => {
 
       console.log(`✅ Call ${record.call_id} stored successfully`);
 
+      // ── GHL gap 1: Push call summary + sentiment + appointment_booked ──
+      // Best-effort: never throws; failure only logs a console.warn.
+      // Fires only when contactId is known (Retell dynamic variable contact_id).
+      // Uses per-client ghl_call_sentiment_field_id / ghl_call_appt_booked_field_id
+      // columns — if either is null the corresponding custom-field PATCH is skipped
+      // (the Note is always written when ghl_api_key is present).
+      if (contactId) {
+        try {
+          const { data: ghlClientRow } = await supabase
+            .from("clients")
+            .select("ghl_api_key, ghl_location_id, ghl_call_sentiment_field_id, ghl_call_appt_booked_field_id")
+            .eq("id", clientId)
+            .maybeSingle();
+
+          const ghlApiKey = ghlClientRow?.ghl_api_key as string | null;
+          const sentimentFieldId = ghlClientRow?.ghl_call_sentiment_field_id as string | null;
+          const apptBookedFieldId = ghlClientRow?.ghl_call_appt_booked_field_id as string | null;
+
+          if (ghlApiKey) {
+            const ghlHeaders = {
+              "Authorization": `Bearer ${ghlApiKey}`,
+              "Version": "2021-07-28",
+              "Content-Type": "application/json",
+            };
+            const ghlBase = "https://services.leadconnectorhq.com";
+
+            // Build note content
+            const callSummary = (record.call_summary as string | null) || "No summary available.";
+            const durationStr = record.duration_seconds ? `${record.duration_seconds}s` : "unknown";
+            const sentimentStr = (record.user_sentiment as string | null) || "unknown";
+            const apptStr = record.appointment_booked ? "Yes" : "No";
+            const noteContent = [
+              "[Voice Call Summary]",
+              `Duration: ${durationStr}`,
+              `Sentiment: ${sentimentStr}`,
+              `Appointment booked: ${apptStr}`,
+              "",
+              callSummary,
+            ].join("\n");
+
+            // 1. Write Note (always when ghl_api_key is present)
+            const noteRes = await fetch(`${ghlBase}/contacts/${contactId}/notes`, {
+              method: "POST",
+              headers: ghlHeaders,
+              body: JSON.stringify({ body: noteContent }),
+            });
+            if (!noteRes.ok) {
+              const noteRespBody = await noteRes.text().catch(() => "");
+              console.warn(`⚠️ GHL gap-1 note failed ${noteRes.status}: ${noteRespBody.slice(0, 200)}`);
+            } else {
+              console.log(`✅ GHL gap-1 note pushed for contact ${contactId}`);
+            }
+
+            // 2. PATCH custom fields (only for fields that are configured)
+            const customFields: { id: string; field_value: string }[] = [];
+            if (sentimentFieldId && record.user_sentiment) {
+              customFields.push({ id: sentimentFieldId, field_value: String(record.user_sentiment) });
+            }
+            if (apptBookedFieldId) {
+              customFields.push({ id: apptBookedFieldId, field_value: record.appointment_booked ? "true" : "false" });
+            }
+
+            if (customFields.length > 0) {
+              const patchRes = await fetch(`${ghlBase}/contacts/${contactId}`, {
+                method: "PUT",
+                headers: ghlHeaders,
+                body: JSON.stringify({ customFields }),
+              });
+              if (!patchRes.ok) {
+                const patchRespBody = await patchRes.text().catch(() => "");
+                console.warn(`⚠️ GHL gap-1 custom fields failed ${patchRes.status}: ${patchRespBody.slice(0, 200)}`);
+              } else {
+                console.log(`✅ GHL gap-1 custom fields patched for contact ${contactId}`);
+              }
+            }
+          } else {
+            console.log(`ℹ️ GHL gap-1 skipped for client ${clientId}: no ghl_api_key`);
+          }
+        } catch (ghlErr) {
+          console.warn("⚠️ GHL gap-1 push exception:", ghlErr);
+        }
+      }
+
       // ── Step 4: Sync to client's external Supabase ──
 
       if (!externalSupabaseUrl || !externalServiceKey) {

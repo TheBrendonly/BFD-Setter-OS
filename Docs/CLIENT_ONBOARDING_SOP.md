@@ -415,6 +415,34 @@ The mirror runs regardless of which path is used; if `clients.ghl_conversation_p
 
 The helper is at `frontend/supabase/functions/_shared/ghl-conversations.ts` (Deno) and `trigger/_shared/ghl-conversations.ts` (Node copy). Wired into `receive-twilio-sms`, `processMessages.ts` (gated on `client.use_native_text_engine === true`), and `runEngagement.ts` `sendTwilioSmsAndStamp` (engage + send_sms nodes).
 
+### 5.12 Voice call summary push to GHL (optional — populates contact timeline)
+
+Phase night (`phase-night-ghl-push-gap-1`, 2026-05-02) added automatic GHL Note creation + custom field updates after every completed Retell call analysis. This closes GHL push gap 1: previously the agency owner saw nothing on the GHL contact timeline about calls made through the platform.
+
+**What gets pushed:**
+- A GHL Note on the contact: `[Voice Call Summary]`, duration, sentiment, appointment booked flag, and the full Retell-generated call summary.
+- Two custom fields (when configured): `last_call_sentiment` and `last_call_appointment_booked`.
+
+The push fires automatically whenever `retell-call-analysis-webhook` receives a `call_analyzed` event AND the call's `contact_id` dynamic variable is set (i.e. the agent knew which GHL contact it was talking to). It is best-effort: failures only log a `console.warn` and never affect the core call record.
+
+**To wire the custom fields (optional but recommended):**
+
+1. In the new client's GHL location, create two custom fields of type **Text**:
+   - Field label: `Last Call Sentiment`, field key: `last_call_sentiment`
+   - Field label: `Last Call Appointment Booked`, field key: `last_call_appointment_booked`
+2. Copy each field's id (visible in the field's URL or via `GET /locations/{locationId}/customFields`).
+3. Run:
+   ```sql
+   UPDATE clients
+   SET
+     ghl_call_sentiment_field_id = '<sentiment-field-id>',
+     ghl_call_appt_booked_field_id = '<appt-booked-field-id>'
+   WHERE id = '<client-uuid>';
+   ```
+4. On the next completed call, open the GHL contact's Notes tab. Expect a note starting with `[Voice Call Summary]` within seconds of the call ending. The two custom fields should also reflect the latest values.
+
+**Notes fallback:** the Note is always written when `clients.ghl_api_key` is present (no custom field ids required). The custom field PATCH is silently skipped if either field id is null.
+
 ---
 
 ## 6. Cadence + content review (with the client)

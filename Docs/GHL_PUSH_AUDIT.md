@@ -4,7 +4,7 @@ description: Inventory of every event the 1prompt-OS platform pushes to GoHighLe
 
 # GHL Push Audit — what 1prompt mirrors back to GoHighLevel
 
-**Last updated:** 2026-05-02 (gaps 2+3 closed — SMS bodies now mirrored both directions)
+**Last updated:** 2026-05-02 (gaps 1, 2+3 closed — voice call summary + SMS bodies now mirrored)
 
 GHL is the source-of-truth CRM for every BFD-platform tenant. Every event that 1prompt knows about should ideally be visible in GHL too — call summaries on the contact timeline, opt-outs flipping `dndSettings.SMS=true`, cadence steps showing up as Activities. Today some flows mirror cleanly, some only stamp a tag, and some stop entirely at the platform DB.
 
@@ -70,17 +70,25 @@ These are GHL → platform writes (the inverse direction), included here because
 - **Where:** helper at [`frontend/supabase/functions/_shared/ghl-conversations.ts`](../frontend/supabase/functions/_shared/ghl-conversations.ts) (Deno) + [`trigger/_shared/ghl-conversations.ts`](../trigger/_shared/ghl-conversations.ts) (Node copy). Wired into `receive-twilio-sms`, `processMessages.ts`, `runEngagement.ts`.
 - **Idempotency:** `altId = twilio_message_sid` so Conversations endpoint dedupes on retry. Notes fallback is not deduped — call sites only fire once per outbound.
 
+### 8. Voice call summary + sentiment + appointment_booked → GHL Note + custom fields (Phase night, gap 1, 2026-05-02)
+
+- **Trigger:** `retell-call-analysis-webhook` receives a `call_analyzed` event AND the call's `contact_id` Retell dynamic variable is set.
+- **Endpoints:** `POST /contacts/{contactId}/notes` (always when ghl_api_key is present); `PUT /contacts/{contactId}` with `customFields` array for `last_call_sentiment` + `last_call_appointment_booked` (when the per-client field ids are configured).
+- **Payload (note):** `{ body: "[Voice Call Summary]\nDuration: Xs\nSentiment: <sentiment>\nAppointment booked: Yes|No\n\n<call_summary>" }`.
+- **Payload (custom fields):** `{ customFields: [{ id: "<field_id>", field_value: "<value>" }] }`.
+- **Where:** [`frontend/supabase/functions/retell-call-analysis-webhook/index.ts`](../frontend/supabase/functions/retell-call-analysis-webhook/index.ts) — GHL gap 1 block inserted after the call_history upsert (Step 3). Schema: `clients.ghl_call_sentiment_field_id` + `clients.ghl_call_appt_booked_field_id` added in migration `20260502130000_phase_night_ghl_call_fields.sql`.
+- **Onboarding:** see `CLIENT_ONBOARDING_SOP.md §5.12`.
+
 ---
 
 ## B. NOT pushed to GHL today (gap list, in priority order)
 
-### Gap 1 — Voice call transcripts + summaries (HIGH leverage)
+### Gap 1 — Voice call transcripts + summaries (HIGH leverage) — **CLOSED 2026-05-02**
 
-- **What we have:** Full call transcript, Retell-generated call summary, sentiment, `appointment_booked` flag, recording URL, duration, cost.
-- **Where it stops:** `call_history` table only.
-- **Source:** [`frontend/supabase/functions/retell-call-analysis-webhook/index.ts:379-416`](../frontend/supabase/functions/retell-call-analysis-webhook/index.ts#L379-L416).
-- **GHL impact:** the agency owner sees nothing on the GHL contact timeline about what was said in the call, what the lead's sentiment was, or what came out of it. Anyone reading the contact in GHL is blind.
-- **Suggested fix:** after the analysis webhook stores the call_summary, write the summary (or full transcript, or both) to the GHL contact as a Note (`POST /contacts/{id}/notes`) and set 2-3 custom fields (`last_call_sentiment`, `last_call_appointment_booked`, `last_call_summary`).
+- **Resolution:** `phase-night-ghl-push-gap-1` — after `call_history` upsert, `retell-call-analysis-webhook` now writes a GHL Note (`POST /contacts/{id}/notes`) with the call summary, duration, sentiment, and appointment_booked flag. Also PATCHes two custom fields (`last_call_sentiment`, `last_call_appointment_booked`) when the client has `ghl_call_sentiment_field_id` / `ghl_call_appt_booked_field_id` set. Best-effort: never throws, failures only log `console.warn`.
+- **Where:** [`frontend/supabase/functions/retell-call-analysis-webhook/index.ts`](../frontend/supabase/functions/retell-call-analysis-webhook/index.ts) — GHL gap 1 block after the call_history upsert (Step 3). Schema: `clients.ghl_call_sentiment_field_id` + `clients.ghl_call_appt_booked_field_id` (nullable text columns added in `20260502130000_phase_night_ghl_call_fields.sql`).
+- **Gating:** fires only when the call's `contact_id` Retell dynamic variable is set and the client has `ghl_api_key` populated. The Note is always written; custom field PATCH is silently skipped if field ids are null.
+- **Onboarding:** see `CLIENT_ONBOARDING_SOP.md §5.12` for the two GHL field creation + SQL steps.
 
 ### Gap 2 — Inbound SMS message bodies (HIGH leverage) — **CLOSED 2026-05-02**
 
@@ -124,11 +132,11 @@ These are GHL → platform writes (the inverse direction), included here because
 
 Closing the top 3 gaps (1, 2, 3) gets every BFD agency-owner most of the way to "GHL is the source of truth and shows the full lead story":
 
-1. Voice call summary as a GHL Note + 2 custom fields (~1 hr work, 1 edge function diff). **Open.**
+1. ~~Voice call summary as a GHL Note + 2 custom fields~~. **CLOSED 2026-05-02 — `phase-night-ghl-push-gap-1`.**
 2. ~~Inbound~~ + ~~outbound SMS bodies as GHL Conversation messages~~. **CLOSED 2026-05-02 — `phase-night-ghl-push-gaps-2-3`.**
 3. Opt-out → GHL `dndSettings.SMS=true` (~30 min work, single edge function diff). **Open.**
 
-Remaining sequencing: gap 1 (voice call summary), then gap 5 (opt-out compliance), then defer the rest until the second agency client lands.
+Remaining sequencing: gap 5 (opt-out compliance PATCH), then defer gaps 4/6/7 until the second agency client lands.
 
 **Out of scope for this audit:** none of these need new tables or new infrastructure. Every fix is a `PATCH /contacts/{id}` or `POST /conversations/messages` from an existing edge function. They're cheap.
 
