@@ -12,11 +12,12 @@ Effort: S = under 30 min, M = 30 min - 2 hr, L = half day+.
 
 These are sequential. 8 items. Total ~half day of effort spread over 2-3 weeks (most of the time is the soak window).
 
-### A1. Cadence copy review on workflow `40e8bea3-…`  *(M, ~1-2 hr)*
-- Open the workflow editor in the app, or PATCH the `nodes` jsonb directly.
-- Replace every `[BRENDAN: ...]` placeholder.
-- Tone notes are in `Docs/CADENCE_DESIGN.md` "Tone notes" — Aussie-warm, < 160 chars first-touch, `{{first_name}}`, sign off with first name only.
-- DO NOT enable auto-enrolment yet — that's A8.
+### A1. ~~Cadence copy review on workflow~~ `40e8bea3-…`  ✅ DONE 2026-05-03
+- Workflow nodes restructured from `delay`-between-engages to `wait_for_reply`-between-engages so the Engagement editor canvas renders (3 schema bugs surfaced + fixed: `engagement_workflows` missing `sort_order`/`is_active`, `engagement_campaigns` missing `enroll_webhook_token`/`text_setter_number`, BFD's nodes incompatible with the editor's expected model).
+- Copy edits applied via SQL in the same migration (n1 SMS dropped "Building Flow Digital", n2 timing 2m→1m, n4 timing 28m→1s, n7 SMS dropped "got a window today", n9 instructions stripped voicemail line).
+- Editor at `/client/e467dabc-.../workflows/engagement?wf=40e8bea3-...` now renders cleanly. Cards visible on Campaigns tab.
+- Tags shipped: `phase-night-engagement-workflows-missing-cols` (`9578fd5`), `phase-night-engagement-campaigns-missing-cols` (`9233674`), `phase-night-bfd-cadence-restructure-for-editor` (`4595805`).
+- DO NOT enable auto-enrolment yet — that's A7.
 
 ### A2. Phase 9 cutover for BFD only  *(S, 10 min + 48h passive watch)*
 - Wait until the next session ships D-M1 (diff harness — see "Next session prompt" below).

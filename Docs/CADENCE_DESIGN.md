@@ -209,23 +209,27 @@ Retell-native voicemail costs the standard call rate (~$0.04-0.10 per voicemail)
 - Implementation: `frontend/supabase/functions/make-retell-outbound-call/index.ts` — `ensureVoicemailConfig` + `voicemailHashCache`
 - Workflow plumbing: `trigger/runEngagement.ts` (reads `voicemail_config`) → `trigger/placeOutboundCall.ts` (forwards to edge fn body) → `make-retell-outbound-call`
 
-## Default new-lead cadence (placeholder copy)
+## Default new-lead cadence (BFD, post-A1 review)
 
-Already inserted as `engagement_workflows.id = 40e8bea3-b6f6-4562-98d1-f7e6599af6a1` for BFD. Brendan to review and rewrite copy:
+Live as `engagement_workflows.id = 40e8bea3-b6f6-4562-98d1-f7e6599af6a1` for BFD. Reviewed + rewritten 2026-05-03 in `phase-night-bfd-cadence-restructure-for-editor` (`4595805`).
 
-| Node | Type | Timing | Channel | Placeholder copy |
+**Important model note:** the Engagement editor canvas (`frontend/src/pages/Engagement.tsx:3010-3181`) was built assuming `engage → wait_for_reply → engage → wait_for_reply → ...`. It will crash with `TypeError: Cannot read properties of undefined (reading 'id')` if a workflow uses `delay` nodes between engages instead. **Always use `wait_for_reply` between engagements**, never bare `delay` nodes (delay is fine ONLY as a single optional initial wait before the first engage). Phase 4c webhook cancellation already handles reply-stops-cadence so the inline reply check inside `wait_for_reply` is redundant but harmless, and gives a free `time_to_first_response_seconds` metric.
+
+| Node | Type | Timing | Channel | Copy / instructions |
 |---|---|---|---|---|
-| n1 | engage | T+0 | SMS | "Hey {{first_name}}, calling you in 2 min about your enquiry." |
-| n2 | delay | 2m | — | — |
-| n3 | engage | T+2m | phone_call (live, treat_pickup_as_reply=true) | Voice agent picks up |
-| n4 | delay | 28m | — | — |
-| n5 | engage | T+30m | SMS | "Hey {{first_name}}, just tried to call. Sent through some info that should help — let me know when works for you." |
-| n6 | delay | 8h | — | — |
-| n7 | engage | T+8h30m | SMS | "Bumping this — happy to find a window today if you're around." |
-| n8 | delay | 16h | — | — |
-| n9 | engage | T+24h | phone_call (voicemail_drop in Phase 4d) | Pre-recorded |
+| n1 | engage | T+0 | SMS | "Hey {{first_name}}, Brendan here — calling you in 1 min about your enquiry." |
+| n2 | wait_for_reply | 1m | — | — |
+| n3 | engage | T+1m | phone_call (Voice-Setter-2, treat_pickup_as_reply=true) | "First outbound call to a fresh lead… Open: 'Hey {{first_name}}, Brendan here, you enquired earlier, got 2 minutes?'… Do NOT leave a voicemail." |
+| n4 | wait_for_reply | 1s | — | (immediate; min=1 in editor) |
+| n5 | engage | T+1m1s | SMS | "Hey {{first_name}}, just tried calling about your enquiry. When suits for a quick chat? Happy to lock something in. Brendan" |
+| n6 | wait_for_reply | 8h | — | — |
+| n7 | engage | T+8h | SMS | "Hey {{first_name}}, still keen for a quick chat about your enquiry? Brendan" |
+| n8 | wait_for_reply | 16h | — | — |
+| n9 | engage | T+24h | phone_call (Voice-Setter-2, treat_pickup_as_reply=true) | "Day-2 follow-up call… Open: 'Hey {{first_name}}, Brendan here, just trying you again about your enquiry, do you have a quick minute?'… Keep casual and low-pressure." |
 
-**To enable for BFD after copy review:**
+Voicemail handling for n9 is intentionally NOT configured (`voicemail_config = null`) — deferred to Phase B4 UI ("Cadence Settings" bar, mode = static or dynamic, persisted to `engagement_workflows.voicemail_config jsonb`).
+
+**To enable for BFD after Phase A2-A6 are clean:**
 ```sql
 UPDATE clients SET auto_engagement_workflow_id = '40e8bea3-b6f6-4562-98d1-f7e6599af6a1'
 WHERE id = 'e467dabc-57ee-416c-8831-83ecd9c7c925';
