@@ -26,14 +26,13 @@ These are sequential. 8 items. Total ~half day of effort spread over 2-3 weeks (
 - Watch `error_logs WHERE source='process-setter-reply'` for 48 hr.
 - Roll back instantly with the inverse SQL if anything spikes.
 
-### A3. Repoint Retell + ElevenLabs voice tool URLs  *(S, 30 min)*
-- For each Retell agent: PATCH the LLM's tool URLs to:
-  `https://bjgrgbgykvjrsuwwruoh.supabase.co/functions/v1/voice-booking-tools?tool=<tool>&clientId=e467dabc-57ee-416c-8831-83ecd9c7c925`
-- Use REST API, not MCP (memory `reference_retell_rest_vs_mcp` — MCP strips custom-tool params).
-- Tools to repoint: `get-available-slots`, `book-appointments`, `get-contact-appointments`, `update-appointment`, `cancel-appointments`.
-- ElevenLabs URL is hardcoded at `frontend/supabase/functions/elevenlabs-manage-agent/index.ts:56-57` — change there if you use 11Labs.
-- Add `Authorization: Bearer <intake_lead_secret>` to each tool's custom-headers config (optional but recommended). Mint the secret with: `UPDATE clients SET intake_lead_secret = encode(gen_random_bytes(24), 'base64') WHERE id = 'e467dabc-…' RETURNING intake_lead_secret;`
-- Test ONE real booking end-to-end after repoint. Confirm a `bookings` row appears with `cadence_execution_id` linked.
+### A3. ~~Repoint Retell + ElevenLabs voice tool URLs~~  ✅ DONE 2026-05-04
+- BFD has ONE Retell agent (`agent_5ec5eb…`) on ONE LLM (`llm_22e795de…`). The "3 agents" assumption in the original spec was wrong — only inbound is provisioned. ElevenLabs is not in active use for BFD, so its hardcoded URL was not touched.
+- All 5 tool URLs repointed in the Retell UI from `https://n8n-1prompt.99players.com/webhook/e4cffeea-…` to `https://bjgrgbgykvjrsuwwruoh.supabase.co/functions/v1/voice-booking-tools?tool=<name>&clientId=e467dabc-…`.
+- `Authorization: Bearer <intake_lead_secret>` header added to all 5 tools (mandatory, not optional — `voice-booking-tools/index.ts:106-113` enforces 401 when the client has a secret set).
+- End-to-end test passed: call `call_211ba69142d19f295bbcef6e904` (92s, agent_hangup, sentiment Positive) → `bookings` row `aa10c0dc-…` written with `source=voice_call`, `ghl_appointment_id=j1dUa0ySnaIr0KSdmHzH` (since cancelled + DB row deleted as test-data cleanup). Zero errors in `error_logs`.
+- New artefacts: `Docs/WEBHOOKS.md` (every webhook URL in the system, per-client templates), `scripts/snapshot_voice_tools.mjs` (read-only inventory tool).
+- Known follow-ups (none block A3): (a) `bookings.cadence_execution_id` was null because auto-enrolment (A7) is still off; (b) `call_history.appointment_booked=false` despite booking — `retell-call-analysis-webhook` not mapping `custom_analysis_data["Call result"]` to the boolean; (c) agent first offered Pacific Time slots before the user said "I'm in Australia" — timezone default needs tuning in the LLM prompt.
 
 ### A4. Wire GHL Calendar workflow → `bookings-webhook`  *(S, 15 min)*
 - GHL → Workflows → New → Calendar Events.
@@ -156,6 +155,7 @@ Once BFD has been live cleanly for ≥ 14 days.
 
 ## Reference
 
+- **Webhooks (every URL in the system):** `Docs/WEBHOOKS.md`
 - **Master plan:** `Docs/MASTER_PLAN.md`
 - **Master state-of-play (handoff):** `Operations/handoffs/2026-04-30-1prompt-master-rebuild-handoff.md`
 - **Onboarding SOP:** `Docs/CLIENT_ONBOARDING_SOP.md`
