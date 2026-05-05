@@ -45,6 +45,21 @@ function pickString(...candidates: unknown[]): string | null {
   return null;
 }
 
+// GHL workflow custom-webhook merge tags emit times as TZ-naive locale
+// strings ("Tuesday, 5 May 2026 2:06 PM") rendered in the location's wall
+// clock. Interpret them as being in `tz` and return ISO-with-offset.
+// ISO-shaped inputs (with T + Z|±hh:mm) are passed through unchanged.
+function parseGhlTimestamp(s: string | null, tz: string): string | null {
+  if (!s) return null;
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}.*(Z|[+-]\d{2}:?\d{2})$/.test(s)) return s;
+  const naive = new Date(s);
+  if (isNaN(naive.getTime())) return null;
+  const wallInTz = naive.toLocaleString("sv-SE", { timeZone: tz, hour12: false });
+  const tzAsIfUtc = new Date(wallInTz.replace(" ", "T") + "Z").getTime();
+  const offsetMs = naive.getTime() - tzAsIfUtc;
+  return new Date(naive.getTime() + offsetMs).toISOString();
+}
+
 async function verifyGhlSignature(
   rawBody: string,
   signatureHeader: string | null,
@@ -153,7 +168,7 @@ Deno.serve(async (req) => {
     // Resolve client by GHL location id (so we can look up its webhook secret)
     const { data: client, error: clientErr } = await supabase
       .from("clients")
-      .select("id, ghl_webhook_secret")
+      .select("id, ghl_webhook_secret, timezone")
       .eq("ghl_location_id", ghlLocationId)
       .maybeSingle();
     if (clientErr || !client) {
@@ -181,10 +196,13 @@ Deno.serve(async (req) => {
       status: mappedStatus,
       raw_payload: body,
     };
+    const clientTz = (client.timezone as string | null) || "Australia/Sydney";
+    const startIso = parseGhlTimestamp(startTime, clientTz);
+    const endIso = parseGhlTimestamp(endTime, clientTz);
     if (contactId) upsertRow.lead_id = contactId;
     if (calendarId) upsertRow.ghl_calendar_id = calendarId;
-    if (startTime) upsertRow.appointment_time = startTime;
-    if (endTime) upsertRow.appointment_end_time = endTime;
+    if (startIso) upsertRow.appointment_time = startIso;
+    if (endIso) upsertRow.appointment_end_time = endIso;
     if (mappedStatus === "confirmed" || mappedStatus === "attended") {
       upsertRow.source = "ghl_calendar";
     }

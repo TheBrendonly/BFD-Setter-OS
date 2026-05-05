@@ -22,7 +22,7 @@ For client-specific examples below the BFD client id `e467dabc-57ee-416c-8831-83
 
 | Endpoint | Function | What it does | Where to wire it in GHL | Auth |
 |---|---|---|---|---|
-| `bookings-webhook` | [bookings-webhook](../frontend/supabase/functions/bookings-webhook/index.ts) | Receives Calendar Events (Created / Updated / Cancelled). Inserts/updates `bookings` row + cross-links to `cadence_executions` so manual GHL bookings show up in the funnel. | Workflows → New → Trigger: Calendar Events → Action: Webhook | Optional `clients.ghl_webhook_secret` (HMAC). Currently best-effort. |
+| `bookings-webhook` | [bookings-webhook](../frontend/supabase/functions/bookings-webhook/index.ts) | Receives Appointment Status events. Inserts/updates `bookings` row + cross-links to `cadence_executions` so manual GHL bookings show up in the funnel. Reads `clients.timezone` to parse the TZ-naive merge-tag date strings GHL emits. | **Two workflows per client** (see §G below) — GHL workflow merge tags don't expose `appointmentStatus` / `calendarId` / `locationId`, so each status case needs its own workflow with the values hardcoded. | Optional `clients.ghl_webhook_secret` (HMAC). Currently best-effort. |
 | `ghl-tag-webhook` | [ghl-tag-webhook](../frontend/supabase/functions/ghl-tag-webhook/index.ts) | Receives "contact tag added" events. Auto-enrols the lead in any engagement workflow whose `is_new_leads_campaign=true AND new_leads_tag=<added_tag>`. | Workflows → Trigger: Contact Tag Added → Action: Webhook | None today (B5 will add) |
 | `sync-ghl-contact` | [sync-ghl-contact](../frontend/supabase/functions/sync-ghl-contact/index.ts) | Inbound contact create/update mirror; populates `leads` row. Used as a webhook target for GHL "Contact Created" workflow. | Workflows → Trigger: Contact Created → Action: Webhook | Optional `ghl_webhook_secret` |
 
@@ -190,4 +190,44 @@ https://bjgrgbgykvjrsuwwruoh.supabase.co/functions/v1/intake-lead?clientId={clie
 
 ---
 
-**Last updated:** 2026-05-04 (A3 in flight — voice tool repoint pending)
+---
+
+## §G — `bookings-webhook` GHL workflow setup (per-tenant)
+
+The GHL **workflow custom-webhook** action only exposes a curated subset of merge tags — `{{contact.id}}`, `{{appointment.id}}`, `{{appointment.start_time}}`, `{{appointment.end_time}}`, and `{{appointment.user.*}}`. **Not** exposed: `appointmentStatus`, `calendarId`, `locationId`, `contactId` as `{{appointment.contact_id}}`. (The full payload IS available via the marketplace-app webhook subscription, but that requires a registered GHL Marketplace app — out of scope for now.)
+
+Workaround: build **two workflows per tenant**, each filtered to one status case, with the missing fields hardcoded in the body. For BFD this is one calendar + one location, so two workflows total. For multi-calendar tenants in the future, build one pair per calendar.
+
+**Workflow #1 — BOOKED**
+- Trigger × 2 rows (OR'd): Appointment Status, Event Type=Normal, "Appointment status is" filter set to `new` on row 1 and `confirmed` on row 2. Both rows feed the same downstream action.
+- Custom Webhook action — `application/x-www-form-urlencoded`, `POST` to `https://bjgrgbgykvjrsuwwruoh.supabase.co/functions/v1/bookings-webhook`, no auth header.
+- Body (8 key-value rows):
+  ```
+  appointmentId = {{appointment.id}}
+  contactId     = {{contact.id}}
+  calendarId    = <hardcode the tenant's calendar id>
+  locationId    = <hardcode the tenant's location id>
+  startTime     = {{appointment.start_time}}
+  endTime       = {{appointment.end_time}}
+  status        = confirmed       # hardcoded — workflow only fires on new/confirmed
+  type          = appointment
+  ```
+
+**Workflow #2 — CANCELLED**
+- Trigger: Appointment Status, Event Type=Normal, "Appointment status is" = `cancelled`.
+- Same Custom Webhook URL + body shape, except: `status = cancelled` (hardcoded).
+
+**Optional — SHOWED / NO-SHOW:** copy the CANCELLED workflow, change the filter to `Showed` (status=`attended`) or `No-show` (status=`no_show`). Not required for the funnel today; add when those events need tracking.
+
+**Per-client values to substitute:**
+
+| Key | BFD value | Where to find it |
+|---|---|---|
+| `calendarId` | `2p9eg0Qv7QoKknk1Sp2d` | `clients.ghl_calendar_id` |
+| `locationId` | `xo0XjmenBBJxJgSnAdyM` | `clients.ghl_location_id` |
+
+Per-client `timezone` (`clients.timezone`, default `Australia/Sydney`) is read by the function to interpret the TZ-naive date strings GHL emits — set it correctly per tenant during onboarding or `appointment_time` will land off by the offset.
+
+---
+
+**Last updated:** 2026-05-05 (A4 closed — bookings-webhook live, two-workflow GHL pattern documented, `clients.timezone` added)
