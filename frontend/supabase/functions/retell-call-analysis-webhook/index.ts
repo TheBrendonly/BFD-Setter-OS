@@ -365,8 +365,14 @@ Deno.serve(async (req) => {
 
       // Extract appointment data from custom_analysis_data if available
       const customAnalysis = call.call_analysis?.custom_analysis_data || {};
+      const callResultStr = typeof customAnalysis["Call result"] === "string"
+        ? customAnalysis["Call result"]
+        : typeof customAnalysis.call_result === "string"
+          ? customAnalysis.call_result
+          : "";
       const appointmentBooked = customAnalysis.appointment_booked === true
         || customAnalysis.booked === true
+        || /\bbook(?:ed|ing)?\b/i.test(callResultStr)
         || false;
       const appointmentTime = customAnalysis.appointment_time || customAnalysis.booked_time || null;
 
