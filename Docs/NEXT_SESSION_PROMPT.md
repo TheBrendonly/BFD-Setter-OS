@@ -9,15 +9,15 @@ Resuming 1prompt-OS — Phase 11 (Cadence UI completion + Retell voicemail
 native + ghl-tag-webhook + dev-backlog hardening). Read these FIRST in
 this order:
 
-1. C:\Projects\Projects\1prompt-os\User Todos.md  (canonical user-side checklist)
-2. C:\Projects\Projects\1prompt-os\Docs\CLIENT_ONBOARDING_SOP.md  (the SOP that this work makes possible)
-3. C:\Projects\Projects\1prompt-os\Docs\CHANGES_LOG.md  (10 phase tags shipped 2026-04-30; see how each row is formatted)
-4. C:\Projects\Operations\handoffs\2026-04-30-1prompt-master-rebuild-handoff.md  (state-of-play; especially §F open follow-ups)
-5. C:\Projects\Projects\1prompt-os\Docs\MASTER_PLAN.md
-6. C:\Projects\Projects\1prompt-os\Docs\CADENCE_DESIGN.md
+1. /srv/bfd/Projects/1prompt-os/User Todos.md  (canonical user-side checklist)
+2. /srv/bfd/Projects/1prompt-os/Docs/CLIENT_ONBOARDING_SOP.md  (the SOP that this work makes possible)
+3. /srv/bfd/Projects/1prompt-os/Docs/CHANGES_LOG.md  (10 phase tags shipped 2026-04-30; see how each row is formatted)
+4. /srv/bfd/Operations/handoffs/2026-04-30-1prompt-master-rebuild-handoff.md  (state-of-play; especially §F open follow-ups)
+5. /srv/bfd/Projects/1prompt-os/Docs/MASTER_PLAN.md
+6. /srv/bfd/Projects/1prompt-os/Docs/CADENCE_DESIGN.md
 7. C:\Users\brend\.claude\projects\c--Projects-Projects-1prompt-os\memory\MEMORY.md
 
-Repo: c:\Projects\Projects\1prompt-os. HEAD on origin/main is whatever
+Repo: /srv/bfd/Projects/1prompt-os. HEAD on origin/main is whatever
 the prior session pushed (check with `git log --oneline -5`). Brendan
 will run /loop or fast mode for this work — execute autonomously.
 
@@ -119,7 +119,7 @@ After each phase's deploy:
 
 # End-of-run deliverable
 
-Final handoff at `C:\Projects\Operations\handoffs\<date>-1prompt-phase11-handoff.md` summarising every phase shipped, tag, and Brendan's next manual action.
+Final handoff at `/srv/bfd/Operations/handoffs\<date>-1prompt-phase11-handoff.md` summarising every phase shipped, tag, and Brendan's next manual action.
 
 ---
 

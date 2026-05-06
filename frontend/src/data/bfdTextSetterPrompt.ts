@@ -1,7 +1,7 @@
 // BFD Production Text Setter Prompt — v1 (2026-04-28)
 // ICP: Property investment + finance coaches, educators, consultants (AU)
 // Calendar: Mon-Fri, 30 min, calendar 2p9eg0Qv7QoKknk1Sp2d
-// Grounded in: c:\Projects\Company\knowledge\bfd_canonical_kb.md (APPROVED v1)
+// Grounded in: /srv/bfd/Company/knowledge/bfd_canonical_kb.md (APPROVED v1)
 
 export const BFD_TEXT_SETTER_PROMPT = `## WHO YOU ARE
 

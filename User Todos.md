@@ -158,7 +158,7 @@ Once BFD has been live cleanly for ≥ 14 days.
   - `frontend/package.json` `name` field, `frontend/.env.example` comments
   - `frontend/supabase/functions/*/index.ts` header comments mentioning "1prompt-os"
   - The hardcoded `"AI Strategy with Eugene x 1Prompt"` booking title fallback in `voice-booking-tools/index.ts` (replace with BFD-tenant default; the per-client `clients.gohighlevel_booking_title` already overrides)
-  - The Retell agent prompts (currently the upstream "Anne / Eugene from 1Prompt" persona; see `C:/Projects/Company/knowledge/voice-agents/1prompt-upstream-voice-setter-prompt.md` for the full text to replace)
+  - The Retell agent prompts (currently the upstream "Anne / Eugene from 1Prompt" persona; see `/srv/bfd/Company/knowledge/voice-agents/1prompt-upstream-voice-setter-prompt.md` for the full text to replace)
   - `Operations/handoffs/*` newer docs are already "BFD"-leaning; older 1prompt-named files are historical and can stay as-is
   - GitHub repo name (`TheBrendonly/1prompt-os` → `TheBrendonly/bfd-setter` if/when desired; coordinate with any external integrations that reference the URL)
 - E2. **Remove all Lovable/dev-tool leftovers and document that this project runs on Railway** (frontend + n8n) + Supabase (edge fns + DB) + Trigger.dev (background tasks):
@@ -166,7 +166,7 @@ Once BFD has been live cleanly for ≥ 14 days.
   - Audit `package.json`/`vite.config.ts`/build configs for Lovable-specific plugins or scripts
   - Update `README.md` and `Docs/RUNBOOK.md` deployment topology section to read "Frontend on Railway, n8n on Railway, edge fns on Supabase, Trigger.dev tasks on Trigger cloud" with no Lovable references
   - `Docs/RAILWAY_ENV.md` already documents the Railway env shape; ensure it is the canonical place new devs are pointed to
-- E3. **Voice agent prompts: full BFD rewrite.** Inbound and outbound prompts currently inherit the upstream Anne/Eugene/1Prompt persona. They need a ground-up rewrite using BFD's brand voice (Aussie-warm professional, never salesy), BFD's actual ICP and offer, and a clean inbound-vs-outbound split. Use `C:/Projects/Company/knowledge/voice-agents/1prompt-upstream-voice-setter-prompt.md` as a structural reference (study the framework, replace the content). Touch points: 3 Retell LLMs (`llm_22e795de…` inbound, `llm_692b220d…` outbound, `llm_1807516860…` outbound followup) plus the post-call analysis fields on each agent definition.
+- E3. **Voice agent prompts: full BFD rewrite.** Inbound and outbound prompts currently inherit the upstream Anne/Eugene/1Prompt persona. They need a ground-up rewrite using BFD's brand voice (Aussie-warm professional, never salesy), BFD's actual ICP and offer, and a clean inbound-vs-outbound split. Use `/srv/bfd/Company/knowledge/voice-agents/1prompt-upstream-voice-setter-prompt.md` as a structural reference (study the framework, replace the content). Touch points: 3 Retell LLMs (`llm_22e795de…` inbound, `llm_692b220d…` outbound, `llm_1807516860…` outbound followup) plus the post-call analysis fields on each agent definition.
 
 ---
 
