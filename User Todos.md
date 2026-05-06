@@ -32,7 +32,10 @@ These are sequential. 8 items. Total ~half day of effort spread over 2-3 weeks (
 - `Authorization: Bearer <intake_lead_secret>` header added to all 5 tools (mandatory, not optional — `voice-booking-tools/index.ts:106-113` enforces 401 when the client has a secret set).
 - End-to-end test passed: call `call_211ba69142d19f295bbcef6e904` (92s, agent_hangup, sentiment Positive) → `bookings` row `aa10c0dc-…` written with `source=voice_call`, `ghl_appointment_id=j1dUa0ySnaIr0KSdmHzH` (since cancelled + DB row deleted as test-data cleanup). Zero errors in `error_logs`.
 - New artefacts: `Docs/WEBHOOKS.md` (every webhook URL in the system, per-client templates), `scripts/snapshot_voice_tools.mjs` (read-only inventory tool).
-- Known follow-ups (none block A3): (a) `bookings.cadence_execution_id` was null because auto-enrolment (A7) is still off; (b) `call_history.appointment_booked=false` despite booking — `retell-call-analysis-webhook` not mapping `custom_analysis_data["Call result"]` to the boolean; (c) agent first offered Pacific Time slots before the user said "I'm in Australia" — timezone default needs tuning in the LLM prompt.
+- Follow-ups (all closed 2026-05-06):
+  - (a) `bookings.cadence_execution_id` null because A7 was off — A7 now flipped (see A7 below); next live booking should populate this.
+  - (b) ✅ `call_history.appointment_booked` mapping fixed — `phase-night-a3-followup2-appointment-booked-mapping` (`72823a8`) extends the OR-chain to recognise Retell's `custom_analysis_data["Call result"] = "Call Booked"` shape.
+  - (c) ✅ Voice-tool timezone default fixed — `phase-night-a3-followup3-timezone-default` (`c4499ed`) makes `get-available-slots` fall back to `clients.timezone` when none provided. BFD's default is `Australia/Sydney`.
 
 ### A4. ~~Wire GHL Calendar workflow → `bookings-webhook`~~  ✅ DONE 2026-05-05
 - Two workflows shipped (one per status, since GHL workflow merge tags don't expose `appointmentStatus` / `calendarId` / `locationId` — those have to be hardcoded per-trigger):
@@ -68,10 +71,12 @@ These are sequential. 8 items. Total ~half day of effort spread over 2-3 weeks (
   -- Unipile is not in active use yet for BFD — defer if not configured.
   ```
 
-### A7. Enable BFD auto-enrolment  *(S, 1 min)*
-- Only after A1-A6 are clean.
-- `UPDATE clients SET auto_engagement_workflow_id = '40e8bea3-b6f6-4562-98d1-f7e6599af6a1' WHERE id = 'e467dabc-…';`
-- New leads created via `sync-ghl-contact` will start auto-enrolling immediately.
+### A7. ~~Enable BFD auto-enrolment~~  ✅ DONE 2026-05-06
+- Flipped: `UPDATE clients SET auto_engagement_workflow_id = '40e8bea3-b6f6-4562-98d1-f7e6599af6a1' WHERE id = 'e467dabc-…';` (1 row updated).
+- Pre-flight clean: `engagement_workflows.40e8bea3-…` is_active=true, 9 nodes, zero `[BRENDAN:…]` placeholders, `clients.subscription_status='active'`, `clients.timezone='Australia/Sydney'`.
+- Auto-enrolment fires from `sync-ghl-contact/index.ts:380-400` (GHL Contact Created webhook path) and `intake-lead/index.ts:136-250` (web form path). `receive-twilio-sms` does NOT auto-enrol (existing-leads-only by design).
+- Tag: `phase-night-a7-bfd-auto-enrolment-on` (`e4beaca`). Logged in `Docs/CHANGES_LOG.md` with revert SQL.
+- **Done. NEXT:** end-to-end real-lead test (recipe in `Operations/handoffs/2026-05-06-1prompt-phase-a-near-close-handoff.md` §F) before Phase A is officially closed.
 
 ### A8. 14-day soak  *(passive, watch 15 min/day)*
 - Three queries to run daily. Scheduled agent will check `error_logs` + `cadence_funnel` automatically (see /schedule below) and ping you if anything breaks.
