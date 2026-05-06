@@ -91,12 +91,13 @@ type ClientRow = {
   ghl_assignee_id: string | null;
   gohighlevel_booking_title: string | null;
   intake_lead_secret: string | null;
+  timezone: string | null;
 };
 
 async function resolveClient(supabase: any, clientId: string, authHeader: string | null): Promise<ClientRow> {
   const { data: client, error } = await supabase
     .from("clients")
-    .select("id, ghl_api_key, ghl_calendar_id, ghl_location_id, ghl_assignee_id, gohighlevel_booking_title, intake_lead_secret")
+    .select("id, ghl_api_key, ghl_calendar_id, ghl_location_id, ghl_assignee_id, gohighlevel_booking_title, intake_lead_secret, timezone")
     .eq("id", clientId)
     .maybeSingle();
   if (error || !client) throw new ToolError(404, "Client not found");
@@ -296,7 +297,7 @@ async function toolGetAvailableSlots(args: {
     body.timezone,
     url.searchParams.get("timeZone"),
     url.searchParams.get("timezone"),
-  );
+  ) || client.timezone;
   const userId = pickStr(body.userId, url.searchParams.get("userId"));
 
   const sp = new URLSearchParams();
