@@ -92,6 +92,16 @@ The next session's prompt covers all of these technically. You don't need to do 
 - B4. **Voicemail config** in "Cadence Settings" — radio: Dynamic (LLM-generated per call) vs Static text. Pushed to Retell `voicemail_option` agent setting via the existing `retell-proxy` function. Replaces the Twilio AMD path from A5.
 - B5. **`ghl-tag-webhook`** — new edge function. Receives GHL contact-tag-added webhook, enrols the lead in whichever workflow has `is_new_leads_campaign=true AND new_leads_tag = <added_tag>`. Tag is removed at cadence end.
 - B6. **GHL Custom Conversation Provider** *(S, ~10 min)* — provision a Custom Conversation Provider for BFD inside GHL Marketplace (Settings → Marketplace → Custom Conversations Provider, or via the developer portal), then `UPDATE clients SET ghl_conversation_provider_id = '<id>' WHERE id = 'e467dabc-...';`. **Optional** — until you do this, the SMS body mirror (closed 2026-05-02 in `phase-night-ghl-push-gaps-2-3`) falls back to writing GHL Notes (`POST /contacts/{id}/notes`) which appear on the contact's Notes tab. Once the provider id is set, mirroring switches to real Conversation messages on the Conversations tab. Both work; Conversations is the polished path.
+- B7. **Email channel for engagement cadences** *(L, 1-2 days dev)* — `trigger/runEngagement.ts:18-19` `EngageChannel.type` today is `"sms" \| "whatsapp" \| "phone_call"`. To support email-drip-style nurture for leads who opt out of phone calls, extend the type with `"email"`, add a subject-line field on `EngageChannel`, implement a send path (likely GHL Conversations API `POST /conversations/messages` with `type: "Email"` since per-client GHL credentials are already loaded; alt: per-client Resend / SMTP), extend the Engagement editor channel picker, and verify reply-detection works at the `message_queue` level (channel-agnostic, so it should just work). Effort lives in the schema + UI, not the runtime — `runEngagement` already has the `engage` node abstraction. Tracked as B7 because it's a feature add, not a soak prerequisite.
+
+## Phase B addenda — operational tasks (Brendan-side, no 1prompt code)
+
+- B-OP1. **GHL appointment reminder workflows.** Per `Docs/FUTURE.md`, these live in GHL natively, not in 1prompt code — `bookings-webhook` (Phase 7c, A4-wired) ends the active 1prompt cadence on appointment-create so GHL reminder workflows can run unimpeded. Build in GHL Workflows once Phase A is closed:
+  - 24h-before reminder (SMS + email)
+  - 1h-before reminder (SMS)
+  - At-appointment-time auto-trigger (optional — could fire a Retell call to confirm the lead is ready)
+  - Post no-show follow-up (SMS + book-new-time link)
+  - Effort: half-day for Brendan in GHL UI. **No 1prompt code change required.** 1prompt cadences must NOT include reminder nodes — that's GHL's territory and prevents double-messaging.
 
 ---
 
