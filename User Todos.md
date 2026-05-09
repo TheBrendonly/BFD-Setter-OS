@@ -76,7 +76,29 @@ These are sequential. 8 items. Total ~half day of effort spread over 2-3 weeks (
 - Pre-flight clean: `engagement_workflows.40e8bea3-…` is_active=true, 9 nodes, zero `[BRENDAN:…]` placeholders, `clients.subscription_status='active'`, `clients.timezone='Australia/Sydney'`.
 - Auto-enrolment fires from `sync-ghl-contact/index.ts:380-400` (GHL Contact Created webhook path) and `intake-lead/index.ts:136-250` (web form path). `receive-twilio-sms` does NOT auto-enrol (existing-leads-only by design).
 - Tag: `phase-night-a7-bfd-auto-enrolment-on` (`e4beaca`). Logged in `Docs/CHANGES_LOG.md` with revert SQL.
-- **Done. NEXT:** end-to-end real-lead test (recipe in `Operations/handoffs/2026-05-06-1prompt-phase-a-near-close-handoff.md` §F) before Phase A is officially closed.
+
+### Phase A end-to-end real-lead tests  ✅ ALL PASSED 2026-05-09
+Live test of Phase A using Brendan's own phone (+61405482446). Three scenarios. Surfaced 4 real bugs that were fixed in-session before the gate could close.
+
+| Test | Result | Notes |
+|---|---|---|
+| 1. Voice-booking happy path | ✅ PASS | Lead intake → SMS → call → tool-booked Friday 8 May 10:30 AM AEST. `bookings` row `7ad909cf-…`, `call_history.appointment_booked=true`, cadence stop_reason=`booking_created`. Booking soft-cancelled in cleanup. |
+| 2. SMS reply path | ✅ PASS | "Hi" reply → cadence stop_reason=`inbound_reply`. AI setter reply landed at +1m58s ("Hey there! So, just to get us on the right track..."). |
+| 3. STOP keyword opt-out | ✅ PASS | STOP → `lead_optouts` row, `setter_stopped=true`, cadence stop_reason=`setter_stopped`, no further outbound, "You've been unsubscribed" compliance reply received. |
+
+Bugs surfaced + fixed mid-session:
+1. `intake-lead` + `sync-ghl-contact` auto-enroll trigger payload missing `make_retell_call_url` → `runEngagement` threw at first phone_call node.
+2. BFD `clients.retell_outbound_agent_id` + `retell_outbound_followup_agent_id` were NULL — cadence references Voice-Setter-2/3. Filled both slots with the single existing agent (`agent_5ec5eb…`) via SQL UPDATE.
+3. `intake-lead` + `sync-ghl-contact` trigger payload missing `contact_fields.phone` → `make-retell-outbound-call` returned 400 "No phone number provided".
+4. `runEngagement.isCancelled()` only checked `engagement_executions.status`, not `leads.setter_stopped` → STOP cancellation lost the race with cadence advance, voice call fired post-STOP. Extended `isCancelled` to also check `leads.setter_stopped` and self-cancel the exec with `stop_reason=setter_stopped`. Trigger.dev redeployed to `v20260509.2`. Also pinned `@supabase/supabase-js` to `2.101.0` (a transient bump to 2.105.x broke Trigger.dev runtime via eager WebSocket init on Node 21).
+
+Tag: `phase-night-a-end-to-end-verified`. Phase A officially closed pending the A8 soak.
+
+Punch list (deferred to follow-up sessions):
+- (a) Voice agent fetched slots in `America/New_York` despite `clients.timezone=Australia/Sydney`. Agent prompt or tool-arg default has ET baked in.
+- (b) Cadence node n4 (`wait_for_reply` after phone_call) has `timeout_seconds=1`, so node n5 SMS fires while the live call is still in flight. Bump to ~180s. Same for n8.
+- (c) Retell `custom_analysis_data.success_rate` is a boolean — looks like a schema typo.
+- (d) Manual end-to-end test from the BFD website lead form (covers the form-integration path that the API test bypasses).
 
 ### A8. 14-day soak  *(passive, watch 15 min/day)*
 - Three queries to run daily. Scheduled agent will check `error_logs` + `cadence_funnel` automatically (see /schedule below) and ping you if anything breaks.
