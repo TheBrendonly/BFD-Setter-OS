@@ -288,14 +288,48 @@ export const runEngagement = task({
         .eq("id", execution_id);
     };
 
-    // Check if execution was cancelled externally (Stop button)
+    // Check if execution was cancelled externally (Stop button, STOP keyword,
+    // or inbound reply). Also checks leads.setter_stopped as a belt-and-braces
+    // guard: if STOP arrives mid-cadence, receive-twilio-sms sets setter_stopped
+    // before endActiveCadences runs — without this check, an already-queued node
+    // can fire before the cadence row is updated.
     const isCancelled = async (): Promise<boolean> => {
-      const { data } = await supabase
-        .from("engagement_executions")
-        .select("status")
-        .eq("id", execution_id)
-        .single();
-      return !data || data.status === "cancelled" || data.status === "stopped" || data.status === "replied";
+      const [execRes, leadRes] = await Promise.all([
+        supabase
+          .from("engagement_executions")
+          .select("status")
+          .eq("id", execution_id)
+          .single(),
+        supabase
+          .from("leads")
+          .select("setter_stopped")
+          .eq("client_id", client_id)
+          .eq("lead_id", lead_id)
+          .maybeSingle(),
+      ]);
+      const execData = execRes.data;
+      if (!execData) return true;
+      if (
+        execData.status === "cancelled" ||
+        execData.status === "stopped" ||
+        execData.status === "replied"
+      ) {
+        return true;
+      }
+      if (leadRes.data?.setter_stopped === true) {
+        // Self-cancel the exec so analytics + UI reflect the opt-out cleanly.
+        await supabase
+          .from("engagement_executions")
+          .update({
+            status: "cancelled",
+            stop_reason: "setter_stopped",
+            completed_at: new Date().toISOString(),
+            stage_description: "Cancelled — lead opted out (setter_stopped).",
+          })
+          .eq("id", execution_id);
+        return true;
+      }
+      return false;
     };
 
     // Log a campaign analytics event — non-fatal if it fails (table may not exist yet).

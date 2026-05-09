@@ -107,6 +107,9 @@ async function enrollLeadInEngagement(args: {
   const triggerKey = Deno.env.get("TRIGGER_SECRET_KEY");
   if (!triggerKey) throw new Error("TRIGGER_SECRET_KEY not configured");
 
+  const supabaseUrlEnv = Deno.env.get("SUPABASE_URL")!;
+  const makeRetellCallUrl = `${supabaseUrlEnv}/functions/v1/make-retell-outbound-call`;
+
   const triggerResp = await fetch(
     "https://api.trigger.dev/api/v1/tasks/run-engagement/trigger",
     {
@@ -126,6 +129,13 @@ async function enrollLeadInEngagement(args: {
           Name: contactName ?? undefined,
           Email: contactEmail ?? undefined,
           Phone: contactPhone ?? undefined,
+          make_retell_call_url: makeRetellCallUrl,
+          contact_fields: {
+            phone: contactPhone ?? "",
+            email: contactEmail ?? "",
+            name: contactName ?? "",
+            first_name: (contactName ?? "").trim().split(/\s+/)[0] || "",
+          },
         },
       }),
     },

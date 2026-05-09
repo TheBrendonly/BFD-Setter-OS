@@ -2,7 +2,7 @@
   "name": "1prompt-os",
   "version": "1.0.0",
   "dependencies": {
-    "@supabase/supabase-js": "^2.101.0",
+    "@supabase/supabase-js": "2.101.0",
     "@trigger.dev/sdk": "4.4.4"
   },
   "devDependencies": {
