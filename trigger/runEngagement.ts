@@ -240,6 +240,58 @@ async function removeNewLeadsTag(args: {
   }
 }
 
+// ── Bug 1 — wait for Retell call_ended before advancing cadence ───────────
+// retell-call-webhook stamps engagement_executions.last_call_outcome on
+// call_ended (see frontend/supabase/functions/retell-call-webhook/index.ts).
+// Poll until the matching call_id appears, or hard ceiling fires.
+// wait.for is frozen — zero compute during the wait.
+type CallOutcome = {
+  call_id?: string | null;
+  disconnect_reason?: string | null;
+  call_status?: string | null;
+  ended_at?: string | null;
+};
+
+async function waitForCallOutcome(args: {
+  supabase: any;
+  executionId: string;
+  callId: string;
+  isCancelled: () => Promise<boolean>;
+  maxWaitSeconds?: number;
+  pollIntervalSeconds?: number;
+}): Promise<CallOutcome | "cancelled" | null> {
+  const maxWaitMs = (args.maxWaitSeconds ?? 600) * 1000;
+  const pollInterval = args.pollIntervalSeconds ?? 15;
+  const startMs = Date.now();
+  while (Date.now() - startMs < maxWaitMs) {
+    await wait.for({ seconds: pollInterval });
+    if (await args.isCancelled()) return "cancelled";
+    const { data: pollRow } = await args.supabase
+      .from("engagement_executions")
+      .select("last_call_outcome")
+      .eq("id", args.executionId)
+      .maybeSingle();
+    const lc = pollRow?.last_call_outcome as CallOutcome | null;
+    if (lc?.call_id === args.callId) return lc;
+  }
+  return null;
+}
+
+// Classify a Retell disconnect_reason / call_status. Must stay in sync with
+// the inline classifier in retell-call-analysis-webhook/index.ts:740-750.
+function classifyCallOutcome(outcome: CallOutcome | null):
+  "human_pickup" | "voicemail" | "no_connect" | "error" | "unknown" {
+  if (!outcome) return "unknown";
+  const dr = (outcome.disconnect_reason || "").toLowerCase();
+  const cs = (outcome.call_status || "").toLowerCase();
+  const voicemailSignals = ["voicemail_reached", "voicemail", "machine_detected"];
+  const noConnectSignals = ["no_answer", "busy", "failed", "invalid_number", "service_unavailable"];
+  if (voicemailSignals.some(s => dr.includes(s) || cs.includes(s))) return "voicemail";
+  if (noConnectSignals.some(s => dr.includes(s) || cs.includes(s))) return "no_connect";
+  if (cs === "error") return "error";
+  return "human_pickup";
+}
+
 export const runEngagement = task({
   id: "run-engagement",
   // maxDuration only counts active CPU time — wait.until() is frozen (zero compute,
@@ -835,7 +887,7 @@ export const runEngagement = task({
               }
               const callId = callRun.output?.call_id;
               console.log(`Engage phone_call placed for ${lead_id}: call_id=${callId}`);
-              await updateExecution({ stage_description: "Phone call placed." });
+              metricsBuffer.calls_attempted++;
               await logCampaignEvent({
                 event_type: "message_sent",
                 channel: "phone_call",
@@ -843,7 +895,48 @@ export const runEngagement = task({
                 node_id: node.id,
                 metadata: { call_id: callId, voice_setter_id: ch.voice_setter_id },
               });
-              metricsBuffer.calls_attempted++;
+
+              // Bug 1 — wait for call_ended before advancing.
+              if (callId) {
+                await updateExecution({ stage_description: "Call in progress — awaiting outcome..." });
+                const waitResult = await waitForCallOutcome({
+                  supabase,
+                  executionId: execution_id,
+                  callId,
+                  isCancelled,
+                });
+                if (waitResult === "cancelled") {
+                  console.log(`Engagement ${execution_id} cancelled during phone_call wait`);
+                  await writeCadenceMetrics("cancelled");
+                  return { status: "cancelled", node_index: i };
+                }
+                if (waitResult === null) {
+                  console.warn(
+                    `Engagement ${execution_id}: call ${callId} outcome timed out — assuming missed`
+                  );
+                }
+                const outcomeClass = classifyCallOutcome(waitResult);
+                console.log(
+                  `Engagement ${execution_id}: call ${callId} outcome=${outcomeClass} ` +
+                  `(disconnect=${waitResult?.disconnect_reason ?? "?"}, status=${waitResult?.call_status ?? "?"})`
+                );
+                if (outcomeClass === "human_pickup") {
+                  metricsBuffer.calls_picked_up++;
+                  if (ch.treat_pickup_as_reply) {
+                    await updateExecution({
+                      status: "completed",
+                      stop_reason: "call_engaged",
+                      stage_description: "Call answered by human — engagement complete.",
+                      completed_at: new Date().toISOString(),
+                      last_completed_node_index: i,
+                    });
+                    await writeCadenceMetrics("call_engaged");
+                    return { status: "completed", stop_reason: "call_engaged" };
+                  }
+                }
+              }
+
+              await updateExecution({ stage_description: "Phone call ended." });
               continue;
             }
 
@@ -1060,7 +1153,7 @@ export const runEngagement = task({
           }
           const legacyCallId = legacyCallRun.output?.call_id;
           console.log(`Phone call placed for ${lead_id}: call_id=${legacyCallId}`);
-          await updateExecution({ stage_description: "Phone call placed." });
+          metricsBuffer.calls_attempted++;
           await logCampaignEvent({
             event_type: "message_sent",
             channel: "phone_call",
@@ -1068,6 +1161,48 @@ export const runEngagement = task({
             node_id: node.id,
             metadata: { call_id: legacyCallId, voice_setter_id: legacyVoiceSetter },
           });
+
+          // Bug 1 — wait for call_ended before advancing.
+          if (legacyCallId) {
+            await updateExecution({ stage_description: "Call in progress — awaiting outcome..." });
+            const legacyWaitResult = await waitForCallOutcome({
+              supabase,
+              executionId: execution_id,
+              callId: legacyCallId,
+              isCancelled,
+            });
+            if (legacyWaitResult === "cancelled") {
+              console.log(`Engagement ${execution_id} cancelled during legacy phone_call wait`);
+              await writeCadenceMetrics("cancelled");
+              return { status: "cancelled", node_index: i };
+            }
+            if (legacyWaitResult === null) {
+              console.warn(
+                `Engagement ${execution_id}: legacy call ${legacyCallId} outcome timed out — assuming missed`
+              );
+            }
+            const legacyOutcomeClass = classifyCallOutcome(legacyWaitResult);
+            console.log(
+              `Engagement ${execution_id}: legacy call ${legacyCallId} outcome=${legacyOutcomeClass} ` +
+              `(disconnect=${legacyWaitResult?.disconnect_reason ?? "?"}, status=${legacyWaitResult?.call_status ?? "?"})`
+            );
+            if (legacyOutcomeClass === "human_pickup") {
+              metricsBuffer.calls_picked_up++;
+              if (legacyTreatPickupAsReply) {
+                await updateExecution({
+                  status: "completed",
+                  stop_reason: "call_engaged",
+                  stage_description: "Call answered by human — engagement complete.",
+                  completed_at: new Date().toISOString(),
+                  last_completed_node_index: i,
+                });
+                await writeCadenceMetrics("call_engaged");
+                return { status: "completed", stop_reason: "call_engaged" };
+              }
+            }
+          }
+
+          await updateExecution({ stage_description: "Phone call ended." });
 
         // ── WAIT FOR REPLY node ─────────────────────────────────────────────
         } else if (node.type === "wait_for_reply") {

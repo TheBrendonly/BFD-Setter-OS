@@ -96,6 +96,38 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Bug 1 — cadence coordination. On call_ended, stamp the outcome onto
+    // the engagement_execution that placed this call so runEngagement.ts can
+    // break its poll loop and decide whether to advance (missed → next
+    // channel sends the missed-call SMS) or terminate (human pickup +
+    // treat_pickup_as_reply → stop_reason='call_engaged').
+    if (payload.event === "call_ended") {
+      const executionId: string | null = (dynamicVars.execution_id as string | undefined) || null;
+      if (executionId) {
+        const callId = call.call_id || call.id || null;
+        const { error: execErr } = await internalSupabase
+          .from("engagement_executions")
+          .update({
+            last_call_outcome: {
+              call_id: callId,
+              disconnect_reason: call.disconnection_reason || null,
+              call_status: call.call_status || call.status || null,
+              ended_at: new Date().toISOString(),
+            },
+          })
+          .eq("id", executionId);
+        if (execErr) {
+          console.warn(
+            `retell-call-webhook: last_call_outcome write failed for exec ${executionId}: ${execErr.message}`
+          );
+        } else {
+          console.log(
+            `📞 last_call_outcome stamped on exec ${executionId} (call_id=${callId}, reason=${call.disconnection_reason || "?"})`
+          );
+        }
+      }
+    }
+
     if (!client.supabase_url || !client.supabase_service_key) {
       console.warn(`Client ${client.id} has no external Supabase configured`);
       return new Response(JSON.stringify({ ok: true, skipped: true, reason: "no_external_db" }), {

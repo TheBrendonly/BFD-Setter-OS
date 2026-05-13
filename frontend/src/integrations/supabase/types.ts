@@ -1961,6 +1961,7 @@ export type Database = {
           ghl_account_id: string
           id: string
           is_new_lead: boolean | null
+          last_call_outcome: Json | null
           last_completed_node_index: number | null
           last_sms_sent_at: string | null
           lead_id: string
@@ -1987,6 +1988,7 @@ export type Database = {
           ghl_account_id: string
           id?: string
           is_new_lead?: boolean | null
+          last_call_outcome?: Json | null
           last_completed_node_index?: number | null
           last_sms_sent_at?: string | null
           lead_id: string
@@ -2013,6 +2015,7 @@ export type Database = {
           ghl_account_id?: string
           id?: string
           is_new_lead?: boolean | null
+          last_call_outcome?: Json | null
           last_completed_node_index?: number | null
           last_sms_sent_at?: string | null
           lead_id?: string
