@@ -124,6 +124,23 @@ function parseQuietHours(raw: unknown): QuietHoursConfig | null {
   return { start, end, tz, days };
 }
 
+// Cadence v2 — workflow-level schedule gating. Shape mirrors ScheduleConfig
+// at the bottom of this file (0=Sun..6=Sat per Date.getDay()). The
+// getScheduleAwareBatchTime / getNextScheduleWindow helpers expect this
+// exact field shape — keep them in sync.
+function parseSchedule(raw: unknown): ScheduleConfig | null {
+  if (!raw || typeof raw !== "object") return null;
+  const r = raw as Record<string, unknown>;
+  const timezone = typeof r.timezone === "string" ? r.timezone : null;
+  const start_time = typeof r.start_time === "string" ? r.start_time : null;
+  const end_time = typeof r.end_time === "string" ? r.end_time : null;
+  const days = Array.isArray(r.days)
+    ? r.days.filter((d): d is number => typeof d === "number" && d >= 0 && d <= 6)
+    : null;
+  if (!timezone || !start_time || !end_time || !days || days.length === 0) return null;
+  return { timezone, start_time, end_time, days };
+}
+
 // ── Phase 11f — engage-node SMS via direct Twilio ─────────────────────────
 // Replaces the legacy POST to client.send_engagement_webhook_url. Mirrors
 // processMessages.ts:395-437 exactly: same StatusCallback, same outbound
@@ -136,6 +153,7 @@ async function sendTwilioSmsAndStamp(args: {
   fromNumber: string;
   toNumber: string;
   body: string;
+  clientId: string;
   leadId: string;
   ghlAccountId: string;
   contactName: string | null;
@@ -187,6 +205,16 @@ async function sendTwilioSmsAndStamp(args: {
       });
     } catch (insErr) {
       console.warn("runEngagement: outbound message_queue insert failed (non-fatal)", insErr);
+    }
+    // Cadence v2 — bump leads.last_outbound_at for the cold-reply nudge task.
+    try {
+      await args.supabase
+        .from("leads")
+        .update({ last_outbound_at: new Date().toISOString() })
+        .eq("client_id", args.clientId)
+        .eq("lead_id", args.leadId);
+    } catch (tsErr) {
+      console.warn("runEngagement: last_outbound_at bump failed (non-fatal)", tsErr);
     }
   }
   if (args.ghlApiKey && args.ghlLocationId && args.ghlContactId) {
@@ -579,7 +607,7 @@ export const runEngagement = task({
       // ── Load workflow ─────────────────────────────────────────────────────
       const { data: workflow } = await supabase
         .from("engagement_workflows")
-        .select("nodes, name, quiet_hours_override, voicemail_config, is_new_leads_campaign, new_leads_tag")
+        .select("nodes, name, quiet_hours_override, voicemail_config, is_new_leads_campaign, new_leads_tag, schedule")
         .eq("id", workflow_id)
         .single();
 
@@ -589,8 +617,10 @@ export const runEngagement = task({
       workflowRow = workflow as unknown as typeof workflowRow;
 
       const nodes = workflow.nodes as EngagementNode[];
-      // schedule column doesn't exist in DB yet — disabled until added
-      const schedule = null as ScheduleConfig | null;
+      // Cadence v2 — workflow-level schedule gating (e.g., "Mon-Fri 9am-5pm
+      // Sydney only"). The runtime primitives (getScheduleAwareBatchTime,
+      // getNextScheduleWindow) have always been built; this hooks them up.
+      const schedule = parseSchedule((workflow as any).schedule);
 
       // ── Load client config ────────────────────────────────────────────────
       const { data: client } = await supabase
@@ -887,6 +917,16 @@ export const runEngagement = task({
               }
               const callId = callRun.output?.call_id;
               console.log(`Engage phone_call placed for ${lead_id}: call_id=${callId}`);
+              // Cadence v2 — bump leads.last_outbound_at for cold-reply nudge accounting.
+              try {
+                await supabase
+                  .from("leads")
+                  .update({ last_outbound_at: new Date().toISOString() })
+                  .eq("client_id", client_id)
+                  .eq("lead_id", lead_id);
+              } catch (tsErr) {
+                console.warn("runEngagement: last_outbound_at bump (engage call) failed (non-fatal)", tsErr);
+              }
               metricsBuffer.calls_attempted++;
               await logCampaignEvent({
                 event_type: "message_sent",
@@ -964,6 +1004,7 @@ export const runEngagement = task({
                 fromNumber: twilioFrom,
                 toNumber,
                 body: message,
+                clientId: client_id,
                 leadId: lead_id,
                 ghlAccountId: ghl_account_id,
                 contactName: contact_name ?? null,
@@ -1065,6 +1106,7 @@ export const runEngagement = task({
             fromNumber: twilioFrom,
             toNumber,
             body: message,
+            clientId: client_id,
             leadId: lead_id,
             ghlAccountId: ghl_account_id,
             contactName: contact_name ?? null,
@@ -1153,6 +1195,16 @@ export const runEngagement = task({
           }
           const legacyCallId = legacyCallRun.output?.call_id;
           console.log(`Phone call placed for ${lead_id}: call_id=${legacyCallId}`);
+          // Cadence v2 — bump leads.last_outbound_at for cold-reply nudge accounting.
+          try {
+            await supabase
+              .from("leads")
+              .update({ last_outbound_at: new Date().toISOString() })
+              .eq("client_id", client_id)
+              .eq("lead_id", lead_id);
+          } catch (tsErr) {
+            console.warn("runEngagement: last_outbound_at bump (legacy call) failed (non-fatal)", tsErr);
+          }
           metricsBuffer.calls_attempted++;
           await logCampaignEvent({
             event_type: "message_sent",

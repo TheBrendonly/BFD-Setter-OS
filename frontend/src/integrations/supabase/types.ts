@@ -2054,6 +2054,7 @@ export type Database = {
           is_active: boolean
           name: string
           nodes: Json
+          schedule: Json | null
           sort_order: number
           updated_at: string | null
         }
@@ -2064,6 +2065,7 @@ export type Database = {
           is_active?: boolean
           name?: string
           nodes?: Json
+          schedule?: Json | null
           sort_order?: number
           updated_at?: string | null
         }
@@ -2074,6 +2076,7 @@ export type Database = {
           is_active?: boolean
           name?: string
           nodes?: Json
+          schedule?: Json | null
           sort_order?: number
           updated_at?: string | null
         }
@@ -2491,13 +2494,18 @@ export type Database = {
           email: string | null
           first_name: string | null
           id: string
+          last_inbound_at: string | null
           last_message_at: string | null
           last_message_preview: string | null
           last_name: string | null
+          last_outbound_at: string | null
+          last_reply_at: string | null
           lead_id: string | null
+          nudge_count: number
           phone: string | null
           phone_valid: boolean
           setter_stopped: boolean
+          tagged_silent_after_engagement: boolean
           tags: Json | null
           updated_at: string
         }
@@ -2509,13 +2517,18 @@ export type Database = {
           email?: string | null
           first_name?: string | null
           id?: string
+          last_inbound_at?: string | null
           last_message_at?: string | null
           last_message_preview?: string | null
           last_name?: string | null
+          last_outbound_at?: string | null
+          last_reply_at?: string | null
           lead_id?: string | null
+          nudge_count?: number
           phone?: string | null
           phone_valid?: boolean
           setter_stopped?: boolean
+          tagged_silent_after_engagement?: boolean
           tags?: Json | null
           updated_at?: string
         }
@@ -2527,13 +2540,18 @@ export type Database = {
           email?: string | null
           first_name?: string | null
           id?: string
+          last_inbound_at?: string | null
           last_message_at?: string | null
           last_message_preview?: string | null
           last_name?: string | null
+          last_outbound_at?: string | null
+          last_reply_at?: string | null
           lead_id?: string | null
+          nudge_count?: number
           phone?: string | null
           phone_valid?: boolean
           setter_stopped?: boolean
+          tagged_silent_after_engagement?: boolean
           tags?: Json | null
           updated_at?: string
         }

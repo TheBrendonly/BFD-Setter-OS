@@ -465,11 +465,16 @@ export const processMessages = task({
       // ── STEP 6.1: Bump last_message_at + preview for conversation list ──────
       if (setterMessages.length > 0) {
         const preview = setterMessages[0].slice(0, 200);
+        const nowIso = new Date().toISOString();
         await supabase
           .from("leads")
           .update({
             last_message_preview: preview,
-            last_message_at: new Date().toISOString(),
+            last_message_at: nowIso,
+            // Cadence v2 — direction-aware tracking. AI setter reply is an
+            // outbound message; the cold-reply nudge task uses this to detect
+            // "we replied, lead went quiet" windows.
+            last_outbound_at: nowIso,
           })
           .eq("client_id", client.id)
           .eq("lead_id", lead_id);

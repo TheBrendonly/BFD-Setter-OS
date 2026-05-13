@@ -87,6 +87,14 @@ Deno.serve(async (req) => {
       if (leadPhone) upsertRow.phone = leadPhone;
       if (dvFirst) upsertRow.first_name = dvFirst;
       if (dvLast) upsertRow.last_name = dvLast;
+      // Cadence v2 — direction-aware tracking. Inbound calls count as a
+      // reply (resets nudge_count). Outbound call placement is bumped in
+      // runEngagement.ts where the call originates.
+      if (isInbound) {
+        upsertRow.last_inbound_at = ts;
+        upsertRow.last_reply_at = ts;
+        upsertRow.nudge_count = 0;
+      }
 
       const { error: leadUpsertErr } = await internalSupabase
         .from("leads")

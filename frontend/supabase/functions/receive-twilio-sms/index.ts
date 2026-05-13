@@ -676,6 +676,9 @@ Deno.serve(async (req) => {
           email: contactEmail || null,
           last_message_at: nowTs,
           last_message_preview: (messageBody || "").substring(0, 200),
+          // Cadence v2 — direction-aware tracking for cold-reply nudge.
+          last_inbound_at: nowTs,
+          last_reply_at: nowTs,
         }, { onConflict: "client_id,lead_id" });
       return new Response(TWIML_EMPTY, {
         status: 200,
@@ -770,6 +773,12 @@ Deno.serve(async (req) => {
         email: contactEmail || null,
         last_message_at: nowISO,
         last_message_preview: (messageBody || "").substring(0, 200),
+        // Cadence v2 — direction-aware tracking. last_reply_at is reset on
+        // every inbound; the cold-reply nudge resets nudge_count too so a
+        // re-engaged lead is back at zero.
+        last_inbound_at: nowISO,
+        last_reply_at: nowISO,
+        nudge_count: 0,
       }, { onConflict: "client_id,lead_id" });
 
     // Phase 4c — reply-detected cadence-end. Inbound SMS means the human
