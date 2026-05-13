@@ -2,6 +2,7 @@ import { task, wait } from "@trigger.dev/sdk";
 import { createClient } from "@supabase/supabase-js";
 import { placeOutboundCall } from "./placeOutboundCall";
 import { pushSmsToGhl, pushEmailToGhl } from "./_shared/ghl-conversations";
+import { aiGenerateEngagementCopy } from "./_shared/aiGenerateEngagementCopy";
 
 const getMainSupabase = () =>
   createClient(
@@ -28,9 +29,16 @@ type EngageChannel = {
   instructions?: string;               // custom call instructions
   treat_pickup_as_reply?: boolean;     // end sequence when human answers
   // Email-specific fields (Cadence v2)
-  subject?: string;                    // email subject line
+  subject?: string;                    // email subject line (used when ai_generate=false)
   body_format?: "html" | "text";       // defaults to "html"
   from_email?: string;                 // per-channel from override
+  // AI-generated copy (Cadence v2 Day 4-5). When ai_generate is true the
+  // runtime calls aiGenerateEngagementCopy with ai_prompt as the touch
+  // intent and uses the LLM output as the message (and subject for email).
+  // The static `message` and `subject` fields are kept as fallback content
+  // if the AI call fails.
+  ai_generate?: boolean;
+  ai_prompt?: string;                  // short description of the touch intent
   // Voicemail behaviour is handled by Retell natively (phase-11d) — see
   // engagement_workflows.voicemail_config + make-retell-outbound-call's
   // ensureVoicemailConfig PATCH. The legacy Twilio AMD voicemail-drop
@@ -633,7 +641,7 @@ export const runEngagement = task({
       // ── Load client config ────────────────────────────────────────────────
       const { data: client } = await supabase
         .from("clients")
-        .select("send_engagement_webhook_url, supabase_url, supabase_service_key, cadence_quiet_hours, twilio_account_sid, twilio_auth_token, twilio_default_phone, retell_phone_1, ghl_api_key, ghl_location_id, ghl_conversation_provider_id")
+        .select("send_engagement_webhook_url, supabase_url, supabase_service_key, cadence_quiet_hours, twilio_account_sid, twilio_auth_token, twilio_default_phone, retell_phone_1, ghl_api_key, ghl_location_id, ghl_conversation_provider_id, openrouter_api_key, llm_model")
         .eq("id", client_id)
         .single();
 
@@ -988,7 +996,49 @@ export const runEngagement = task({
               continue;
             }
 
-            const message = interpolate(ch.message);
+            // Cadence v2 Day 4-5 — AI-generated copy. When ch.ai_generate is
+            // true, call the LLM with lead context + node intent and override
+            // message (+ subject for email) with the result. Falls back to
+            // the static ch.message / ch.subject on any error so a single
+            // bad LLM call can't kill the whole cadence run.
+            let message = interpolate(ch.message);
+            let aiSubject: string | undefined = undefined;
+            if (ch.ai_generate && (ch.type === "sms" || ch.type === "email")) {
+              const orKey = (client as any).openrouter_api_key as string | null;
+              if (!orKey) {
+                console.warn(
+                  `runEngagement: ai_generate channel in node ${node.id} but client has no openrouter_api_key — falling back to static template`,
+                );
+              } else {
+                try {
+                  const ai = await aiGenerateEngagementCopy({
+                    openrouterApiKey: orKey,
+                    model: (client as any).llm_model as string | undefined,
+                    externalSupabaseUrl: (client as any).supabase_url as string | null,
+                    externalSupabaseServiceKey: (client as any).supabase_service_key as string | null,
+                    clientId: client_id,
+                    leadId: lead_id,
+                    firstName: firstName || null,
+                    email: payload.Email || null,
+                    phone: payload.Phone || null,
+                    businessName: payload.contact_fields?.business_name || null,
+                    customFields: payload.contact_fields,
+                    channelType: ch.type as "sms" | "email",
+                    nodeIntent: interpolate(ch.ai_prompt || ch.message || ""),
+                  });
+                  message = ai.body;
+                  aiSubject = ai.subject;
+                  metricsBuffer.ai_cost_cents += ai.costCents;
+                  console.log(
+                    `Engage AI-generated ${ch.type} for ${lead_id}: cost=${ai.costCents}c tokens=${ai.promptTokens}/${ai.completionTokens} (node ${node.id})`,
+                  );
+                } catch (aiErr) {
+                  console.warn(
+                    `runEngagement: aiGenerateEngagementCopy failed in node ${node.id} (${ch.type}) — falling back to static. Error: ${(aiErr as Error).message}`,
+                  );
+                }
+              }
+            }
             const channelLabel = ch.type === "sms" ? "SMS" : ch.type === "whatsapp" ? "WhatsApp" : "email";
             await updateExecution({ stage_description: `Sending ${channelLabel}...` });
 
@@ -1095,7 +1145,7 @@ export const runEngagement = task({
               if (!ghlApiKey || !ghlLocationId) {
                 throw new Error("email channel requires client.ghl_api_key + ghl_location_id");
               }
-              const subject = interpolate(ch.subject || "").trim();
+              const subject = (aiSubject ?? interpolate(ch.subject || "")).trim();
               if (!subject) {
                 throw new Error(`email channel in node ${node.id} is missing a subject`);
               }
