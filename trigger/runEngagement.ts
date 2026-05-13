@@ -580,6 +580,18 @@ export const runEngagement = task({
               whatsapp_sent: metricsBuffer.whatsapp_sent,
               emails_sent: metricsBuffer.emails_sent,
               ai_cost_cents: metricsBuffer.ai_cost_cents,
+              // Cadence v2 Day 7 — rough cost estimate. Conservative
+              // weights: SMS=1.4c (Twilio AU avg), email=0.5c (GHL
+              // Conversations or SMTP), voice=50c (Retell ~$0.07/min × ~7
+              // min avg attempt incl. ring time), whatsapp=1c. AI cost
+              // already in cents. Alerts at >500c via error_logs (see
+              // post-upsert guard below).
+              cost_estimate_cents:
+                Math.round(metricsBuffer.sms_sent * 1.4) +
+                Math.round(metricsBuffer.emails_sent * 0.5) +
+                metricsBuffer.calls_attempted * 50 +
+                metricsBuffer.whatsapp_sent +
+                metricsBuffer.ai_cost_cents,
               calls_attempted: metricsBuffer.calls_attempted,
               calls_picked_up: metricsBuffer.calls_picked_up,
               voicemails_dropped: metricsBuffer.voicemails_dropped,
@@ -593,6 +605,39 @@ export const runEngagement = task({
             },
             { onConflict: "execution_id" },
           );
+
+        // Cadence v2 Day 7 — cost-ceiling alert. Fires only on completed
+        // runs (the calculation is finalized here). 500c = $5/lead, well
+        // above the modelled $2.50/lead ceiling. Investigation-trigger,
+        // not a runtime hard stop.
+        const costCents =
+          Math.round(metricsBuffer.sms_sent * 1.4) +
+          Math.round(metricsBuffer.emails_sent * 0.5) +
+          metricsBuffer.calls_attempted * 50 +
+          metricsBuffer.whatsapp_sent +
+          metricsBuffer.ai_cost_cents;
+        if (costCents > 500) {
+          try {
+            await supabase.from("error_logs").insert({
+              client_ghl_account_id: ghl_account_id,
+              error_type: "cadence_cost_ceiling",
+              error_message: `Cadence run cost estimate ${costCents}c exceeds 500c ceiling`,
+              severity: "warning",
+              source: "trigger.runEngagement.writeCadenceMetrics",
+              execution_id,
+              lead_id,
+              context: {
+                cost_estimate_cents: costCents,
+                sms_sent: metricsBuffer.sms_sent,
+                emails_sent: metricsBuffer.emails_sent,
+                calls_attempted: metricsBuffer.calls_attempted,
+                whatsapp_sent: metricsBuffer.whatsapp_sent,
+                ai_cost_cents: metricsBuffer.ai_cost_cents,
+                stop_reason: finalStop,
+              },
+            });
+          } catch { /* non-fatal */ }
+        }
       } catch (metricsErr) {
         console.warn("writeCadenceMetrics failed (non-fatal):", (metricsErr as Error).message);
       }
