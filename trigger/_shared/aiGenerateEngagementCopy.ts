@@ -14,13 +14,40 @@ import { createClient } from "@supabase/supabase-js";
 const DEFAULT_MODEL = "openai/gpt-4.1-nano";
 const TIMEOUT_MS = 30000;
 
-// gpt-4.1-nano rough pricing (per OpenRouter, 2026-05):
-//   $0.10 / 1M prompt tokens   →  $0.0000001 / token
-//   $0.40 / 1M completion tokens → $0.0000004 / token
-// We hard-code these for the cost estimate; if model changes,
-// override via OPENROUTER_PRICE_* (see end of file).
-const PRICE_PROMPT_PER_TOKEN_USD = 0.0000001;
-const PRICE_COMPLETION_PER_TOKEN_USD = 0.0000004;
+// Model-aware pricing table (USD per token, 2026-05 OpenRouter list prices).
+// Keys are matched as substrings against the model id passed by the caller,
+// so e.g. "openai/gpt-4.1-nano" and "anthropic/claude-sonnet-4-6" resolve to
+// the right row. Unknown models fall back to gpt-4.1-nano (cheap default).
+//
+// If a per-client cost is wildly wrong because of model drift, update this
+// table — the cost_estimate_cents in cadence_metrics + the >500c
+// error_logs ceiling guard both depend on it.
+const MODEL_PRICING: Array<{ match: string; prompt: number; completion: number }> = [
+  // OpenAI cheap class
+  { match: "gpt-4.1-nano", prompt: 0.0000001, completion: 0.0000004 },
+  { match: "gpt-4o-mini",  prompt: 0.00000015, completion: 0.0000006 },
+  // Anthropic
+  { match: "claude-haiku-4", prompt: 0.000001, completion: 0.000005 },
+  { match: "claude-sonnet",  prompt: 0.000003, completion: 0.000015 },
+  { match: "claude-opus",    prompt: 0.000015, completion: 0.000075 },
+  // Google Gemini (BFD's current setting via clients.llm_model)
+  { match: "gemini-2.5-pro", prompt: 0.00000125, completion: 0.000005 },
+  { match: "gemini-2.0-flash", prompt: 0.0000001, completion: 0.0000004 },
+  { match: "gemini-2.5-flash", prompt: 0.0000003, completion: 0.0000025 },
+  // Catch-all gemini family (anything not matched above)
+  { match: "gemini", prompt: 0.000001, completion: 0.000004 },
+];
+
+function priceFor(model: string): { prompt: number; completion: number } {
+  const lc = model.toLowerCase();
+  for (const row of MODEL_PRICING) {
+    if (lc.includes(row.match)) return { prompt: row.prompt, completion: row.completion };
+  }
+  // Unknown model: assume gpt-4.1-nano. Cost will be underestimated for
+  // pricier models but the 500c per-lead ceiling guard still catches
+  // runaway usage.
+  return { prompt: 0.0000001, completion: 0.0000004 };
+}
 
 export type AiCopyInput = {
   // per-client OpenRouter creds
@@ -134,7 +161,8 @@ export async function aiGenerateEngagementCopy(args: AiCopyInput): Promise<AiCop
 
     const pt = json.usage?.prompt_tokens ?? 0;
     const ct = json.usage?.completion_tokens ?? 0;
-    const costUsd = pt * PRICE_PROMPT_PER_TOKEN_USD + ct * PRICE_COMPLETION_PER_TOKEN_USD;
+    const price = priceFor(model);
+    const costUsd = pt * price.prompt + ct * price.completion;
     const costCents = Math.max(0, Math.round(costUsd * 100 * 100) / 100); // round to 0.01¢
     return {
       subject: parsed.subject?.trim() || undefined,

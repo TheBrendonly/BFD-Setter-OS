@@ -209,31 +209,58 @@ Retell-native voicemail costs the standard call rate (~$0.04-0.10 per voicemail)
 - Implementation: `frontend/supabase/functions/make-retell-outbound-call/index.ts` — `ensureVoicemailConfig` + `voicemailHashCache`
 - Workflow plumbing: `trigger/runEngagement.ts` (reads `voicemail_config`) → `trigger/placeOutboundCall.ts` (forwards to edge fn body) → `make-retell-outbound-call`
 
-## Default new-lead cadence (BFD, post-A1 review)
+## Default new-lead cadence (BFD)
 
-Live as `engagement_workflows.id = 40e8bea3-b6f6-4562-98d1-f7e6599af6a1` for BFD. Reviewed + rewritten 2026-05-03 in `phase-night-bfd-cadence-restructure-for-editor` (`4595805`).
+Two workflows exist for BFD as of 2026-05-13:
 
-**Important model note:** the Engagement editor canvas (`frontend/src/pages/Engagement.tsx:3010-3181`) was built assuming `engage → wait_for_reply → engage → wait_for_reply → ...`. It will crash with `TypeError: Cannot read properties of undefined (reading 'id')` if a workflow uses `delay` nodes between engages instead. **Always use `wait_for_reply` between engagements**, never bare `delay` nodes (delay is fine ONLY as a single optional initial wait before the first engage). Phase 4c webhook cancellation already handles reply-stops-cadence so the inline reply check inside `wait_for_reply` is redundant but harmless, and gives a free `time_to_first_response_seconds` metric.
+- **v1 (live)** — `engagement_workflows.id = 40e8bea3-b6f6-4562-98d1-f7e6599af6a1`, `is_active=true`. 9 nodes, 25-hour active phase (3 SMS + 2 calls then silence). Currently wired to `clients.auto_engagement_workflow_id` for BFD.
+- **v2 (DRAFT)** — `engagement_workflows.id = c206da3e-b8b7-41f8-9de0-997679abefcb`, `is_active=false`. 28 nodes, 21-day multi-phase cadence (12-14 touches: Hot Burst → Warm Pursuit → Cool Down). Inserted via migration `20260513170000_cadence_v2_day7_bfd_28_node_workflow.sql` as part of `phase-cadence-v2-mvp`. NOT yet active.
+
+**Important model note:** the Engagement editor canvas (`frontend/src/pages/Engagement.tsx:3010-3181`) was built assuming `engage → wait_for_reply → engage → wait_for_reply → ...`. It will crash with `TypeError: Cannot read properties of undefined (reading 'id')` if a workflow uses `delay` nodes between engages instead. **Always use `wait_for_reply` between engagements**, never bare `delay` nodes. Phase 4c webhook cancellation already handles reply-stops-cadence so the inline reply check inside `wait_for_reply` is redundant but harmless, and gives a free `time_to_first_response_seconds` metric.
+
+### v1 (live, 9 nodes)
 
 | Node | Type | Timing | Channel | Copy / instructions |
 |---|---|---|---|---|
 | n1 | engage | T+0 | SMS | "Hey {{first_name}}, Brendan here — calling you in 1 min about your enquiry." |
 | n2 | wait_for_reply | 1m | — | — |
 | n3 | engage | T+1m | phone_call (Voice-Setter-2, treat_pickup_as_reply=true) | "First outbound call to a fresh lead… Open: 'Hey {{first_name}}, Brendan here, you enquired earlier, got 2 minutes?'… Do NOT leave a voicemail." |
-| n4 | wait_for_reply | 1s | — | (immediate; min=1 in editor) |
-| n5 | engage | T+1m1s | SMS | "Hey {{first_name}}, just tried calling about your enquiry. When suits for a quick chat? Happy to lock something in. Brendan" |
+| n4 | wait_for_reply | 1s | — | (post Bug-1 fix the runtime waits for call_ended before crossing this) |
+| n5 | engage | post-call (if missed) | SMS | "Hey {{first_name}}, just tried calling about your enquiry. When suits for a quick chat? Happy to lock something in. Brendan" |
 | n6 | wait_for_reply | 8h | — | — |
 | n7 | engage | T+8h | SMS | "Hey {{first_name}}, still keen for a quick chat about your enquiry? Brendan" |
 | n8 | wait_for_reply | 16h | — | — |
 | n9 | engage | T+24h | phone_call (Voice-Setter-2, treat_pickup_as_reply=true) | "Day-2 follow-up call… Open: 'Hey {{first_name}}, Brendan here, just trying you again about your enquiry, do you have a quick minute?'… Keep casual and low-pressure." |
 
-Voicemail handling for n9 is intentionally NOT configured (`voicemail_config = null`) — deferred to Phase B4 UI ("Cadence Settings" bar, mode = static or dynamic, persisted to `engagement_workflows.voicemail_config jsonb`).
+### v2 (DRAFT, 28 nodes, 21-day multi-phase)
 
-**To enable for BFD after Phase A2-A6 are clean:**
+Built per the cadence-redesign plan approved 2026-05-13. Phase 1 preserves v1's first 9 nodes plus a post-Day-2-call SMS pair (n10+n11) for symmetry; Phase 2 + Phase 3 are net-new and use the email channel + AI-generated copy.
+
+| Phase | Days | Touches | Channels |
+|---|---|---|---|
+| Phase 1 — Hot Burst | 0-2 | 6 (n1, n3, n5, n7, n9, n11) | 4 SMS (static) + 2 phone_call |
+| Phase 2 — Warm Pursuit | 4-10 | 5 (n13, n15, n17, n19, n21) | 1 email + 1 SMS + 1 phone_call + 1 SMS + 1 email (AI-generated from Phase 2 onwards) |
+| Phase 3 — Cool Down | 14-21 | 3 (n23, n25, n27) | 3 email (AI-generated, educational, no ask) |
+
+Phase 2's AI-generated touches use lead context + chat_history (last 10 rows from client's external supabase). Phase 3 emails reference the lead's industry / prior conversation but make no ask — the goal is to keep the relationship warm for behavioral re-warm (Phase B).
+
+**Cold-reply re-engagement** runs in parallel via the `nudgeColdReply` scheduled task (06:00 UTC daily). Nudges fire at +24h and +72h since last outbound; at +7d (or anything >14d cold) the lead is tagged `tagged_silent_after_engagement=true` and stops receiving nudges. Code: `trigger/nudgeColdReply.ts`.
+
+**Cost ceiling:** `cadence_metrics.cost_estimate_cents` is written on every cadence terminal state (SMS=1.4c, email=0.5c, voice=50c, AI in ¢). Above 500c, `error_logs` gets a `cadence_cost_ceiling` warning entry. Modelled max for v2 is ~250c (~$2.50/lead).
+
+Voicemail handling for v2's phone_call nodes (n3, n9, n17) is intentionally NOT configured (`voicemail_config = null`) — deferred to Phase B4 UI ("Cadence Settings" bar).
+
+**To activate v2 for BFD (when ready):**
 ```sql
-UPDATE clients SET auto_engagement_workflow_id = '40e8bea3-b6f6-4562-98d1-f7e6599af6a1'
-WHERE id = 'e467dabc-57ee-416c-8831-83ecd9c7c925';
+UPDATE engagement_workflows SET is_active=true
+  WHERE id='c206da3e-b8b7-41f8-9de0-997679abefcb';
+UPDATE engagement_workflows SET is_active=false
+  WHERE id='40e8bea3-b6f6-4562-98d1-f7e6599af6a1';
+UPDATE clients SET auto_engagement_workflow_id='c206da3e-b8b7-41f8-9de0-997679abefcb'
+  WHERE id='e467dabc-57ee-416c-8831-83ecd9c7c925';
 ```
+
+**To roll back to v1:** invert the three updates above (point `auto_engagement_workflow_id` back to `40e8bea3-…` and flip the `is_active` flags). Any in-flight v2 cadence runs continue to completion unless manually cancelled via `stop-engagement`.
 
 ## Tone notes
 
