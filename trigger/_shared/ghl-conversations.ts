@@ -107,3 +107,103 @@ export async function pushSmsToGhl(args: PushSmsToGhlArgs): Promise<PushSmsToGhl
     return { ok: false, via: "notes", error: (e as Error).message };
   }
 }
+
+// ── Cadence v2 — outbound email via GHL Conversations API ────────────────
+// Uses POST /conversations/messages with type: "Email" so GHL both SENDS
+// the email (via the location's configured email infra) AND logs it on
+// the contact's conversation thread.
+//
+// If GHL returns non-2xx (email channel not configured, no email on
+// contact, etc.), falls back to a Notes write so the agent owner at least
+// sees the intent on the contact timeline. Caller can inspect the via
+// field to know which path was taken.
+
+export type PushEmailToGhlArgs = {
+  ghlApiKey: string;
+  ghlLocationId: string;
+  contactId: string;
+  subject: string;
+  body: string;
+  bodyFormat?: "html" | "text";
+  fromEmail?: string;
+  toEmail?: string;
+  altId?: string | null;
+};
+
+export type PushEmailToGhlResult = {
+  ok: boolean;
+  via: "conversations" | "notes" | "skipped";
+  status?: number;
+  emailMessageId?: string;
+  error?: string;
+};
+
+export async function pushEmailToGhl(args: PushEmailToGhlArgs): Promise<PushEmailToGhlResult> {
+  const { ghlApiKey, contactId, subject, body, bodyFormat, fromEmail, toEmail, altId } = args;
+
+  if (!ghlApiKey || !contactId || !subject?.trim() || !body?.trim()) {
+    return { ok: false, via: "skipped", error: "missing ghlApiKey/contactId/subject/body" };
+  }
+
+  const headers = {
+    Authorization: `Bearer ${ghlApiKey}`,
+    "Content-Type": "application/json",
+    Version: "2021-04-15",
+    Accept: "application/json",
+  };
+
+  // Try GHL Conversations Email send.
+  try {
+    const isHtml = (bodyFormat ?? "html") === "html";
+    const payload: Record<string, unknown> = {
+      type: "Email",
+      contactId,
+      subject,
+    };
+    if (isHtml) payload.html = body;
+    else payload.message = body;
+    if (fromEmail) payload.emailFrom = fromEmail;
+    if (toEmail) payload.emailTo = [toEmail];
+    if (altId) payload.altId = altId;
+
+    const r = await fetch(`${GHL_API_BASE}/conversations/messages`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(payload),
+    });
+    if (r.ok) {
+      let emailMessageId: string | undefined;
+      try {
+        const j = (await r.json()) as { emailMessageId?: string; messageId?: string };
+        emailMessageId = j.emailMessageId ?? j.messageId;
+      } catch { /* ignore parse errors */ }
+      return { ok: true, via: "conversations", status: r.status, emailMessageId };
+    }
+    const errText = await r.text().catch(() => "");
+    console.warn(`pushEmailToGhl conversations non-OK ${r.status}: ${errText.slice(0, 300)}`);
+    // fall through to notes
+  } catch (e) {
+    console.warn("pushEmailToGhl conversations threw", e);
+  }
+
+  // Fallback — log intent on the contact timeline as a Note so the agent
+  // sees what would have been sent. Best-effort, non-blocking for caller.
+  try {
+    const noteBody = `[platform → Email outbound]\nSubject: ${subject}\n\n${body.slice(0, 4000)}`;
+    const r = await fetch(`${GHL_API_BASE}/contacts/${contactId}/notes`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${ghlApiKey}`,
+        "Content-Type": "application/json",
+        Version: "2021-07-28",
+        Accept: "application/json",
+      },
+      body: JSON.stringify({ body: noteBody }),
+    });
+    if (r.ok) return { ok: false, via: "notes", status: r.status };
+    const errText = await r.text().catch(() => "");
+    return { ok: false, via: "notes", status: r.status, error: errText.slice(0, 200) };
+  } catch (e) {
+    return { ok: false, via: "notes", error: (e as Error).message };
+  }
+}

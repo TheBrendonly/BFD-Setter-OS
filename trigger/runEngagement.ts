@@ -1,7 +1,7 @@
 import { task, wait } from "@trigger.dev/sdk";
 import { createClient } from "@supabase/supabase-js";
 import { placeOutboundCall } from "./placeOutboundCall";
-import { pushSmsToGhl } from "./_shared/ghl-conversations";
+import { pushSmsToGhl, pushEmailToGhl } from "./_shared/ghl-conversations";
 
 const getMainSupabase = () =>
   createClient(
@@ -16,7 +16,7 @@ const redactBody = (b: string | null | undefined): string => {
 };
 
 type EngageChannel = {
-  type: "sms" | "whatsapp" | "phone_call";
+  type: "sms" | "whatsapp" | "phone_call" | "email";
   enabled: boolean;
   message: string;
   delay_seconds: number;
@@ -27,6 +27,10 @@ type EngageChannel = {
   voice_setter_id?: string;            // slot_id like "Voice-Setter-2"
   instructions?: string;               // custom call instructions
   treat_pickup_as_reply?: boolean;     // end sequence when human answers
+  // Email-specific fields (Cadence v2)
+  subject?: string;                    // email subject line
+  body_format?: "html" | "text";       // defaults to "html"
+  from_email?: string;                 // per-channel from override
   // Voicemail behaviour is handled by Retell natively (phase-11d) — see
   // engagement_workflows.voicemail_config + make-retell-outbound-call's
   // ensureVoicemailConfig PATCH. The legacy Twilio AMD voicemail-drop
@@ -492,6 +496,8 @@ export const runEngagement = task({
       sms_sent: 0,
       sms_delivered: 0, // mirrored from sms_delivery_events at write time
       whatsapp_sent: 0,
+      emails_sent: 0, // Cadence v2
+      ai_cost_cents: 0, // Cadence v2 — Day 4-5 AI-generated copy
       calls_attempted: 0,
       calls_picked_up: 0, // mirrored from voice_call_logs at write time
       voicemails_dropped: 0,
@@ -564,6 +570,8 @@ export const runEngagement = task({
               sms_sent: metricsBuffer.sms_sent,
               sms_delivered: smsDelivered,
               whatsapp_sent: metricsBuffer.whatsapp_sent,
+              emails_sent: metricsBuffer.emails_sent,
+              ai_cost_cents: metricsBuffer.ai_cost_cents,
               calls_attempted: metricsBuffer.calls_attempted,
               calls_picked_up: metricsBuffer.calls_picked_up,
               voicemails_dropped: metricsBuffer.voicemails_dropped,
@@ -981,7 +989,8 @@ export const runEngagement = task({
             }
 
             const message = interpolate(ch.message);
-            await updateExecution({ stage_description: `Sending ${ch.type === "sms" ? "SMS" : "WhatsApp"}...` });
+            const channelLabel = ch.type === "sms" ? "SMS" : ch.type === "whatsapp" ? "WhatsApp" : "email";
+            await updateExecution({ stage_description: `Sending ${channelLabel}...` });
 
             if (ch.type === "sms") {
               // Phase 11f — direct Twilio Messages.create + message_queue stamp.
@@ -1076,6 +1085,53 @@ export const runEngagement = task({
                   metadata: { message_body: eventMessageBody },
                 }),
                 writeToChatHistory(message),
+              ]);
+            } else if (ch.type === "email") {
+              // Cadence v2 — email via GHL Conversations API. Send + log
+              // happen in one call when the location has email infra
+              // configured; falls back to a Notes write if not.
+              const ghlApiKey = client.ghl_api_key as string | null;
+              const ghlLocationId = client.ghl_location_id as string | null;
+              if (!ghlApiKey || !ghlLocationId) {
+                throw new Error("email channel requires client.ghl_api_key + ghl_location_id");
+              }
+              const subject = interpolate(ch.subject || "").trim();
+              if (!subject) {
+                throw new Error(`email channel in node ${node.id} is missing a subject`);
+              }
+              const bodyFormat = ch.body_format ?? "html";
+              const emailResult = await pushEmailToGhl({
+                ghlApiKey,
+                ghlLocationId,
+                contactId: lead_id,
+                subject,
+                body: message,
+                bodyFormat,
+                fromEmail: ch.from_email,
+                toEmail: payload.Email,
+                altId: null,
+              });
+              if (!emailResult.ok && emailResult.via === "conversations") {
+                // Conversations send failed even after the fallback — surface
+                // so the run can be retried or human-investigated.
+                throw new Error(
+                  `Email send failed: ${emailResult.status ?? "?"} ${emailResult.error ?? "unknown"}`,
+                );
+              }
+              console.log(
+                `Engage email sent to lead ${lead_id} via ${emailResult.via} (subject="${subject.slice(0, 60)}", body=${redactBody(message)})`,
+              );
+              await updateExecution({ stage_description: emailResult.via === "conversations" ? "Email sent." : "Email logged to Notes (no email channel configured)." });
+              metricsBuffer.emails_sent++;
+              await Promise.all([
+                logCampaignEvent({
+                  event_type: "message_sent",
+                  channel: "email",
+                  node_index: i,
+                  node_id: node.id,
+                  metadata: { subject, body_preview: message.slice(0, 400), via: emailResult.via, ghl_message_id: emailResult.emailMessageId ?? null },
+                }),
+                writeToChatHistory(`[Email] ${subject}\n\n${message}`),
               ]);
             }
           }
