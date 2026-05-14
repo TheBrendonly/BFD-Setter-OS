@@ -1,6 +1,6 @@
 # Next-session prompt
 
-Paste this into a fresh Claude Code session opened on `/srv/bfd/Projects/1prompt-os`. Start in **plan mode**, get user approval, then switch to execution mode.
+Paste this into a fresh Claude Code session opened on `/srv/bfd/Projects/bfd-setter`. Start in **plan mode**, get user approval, then switch to execution mode.
 
 The prior session (2026-05-13) closed the last Phase A punch-list item (manual form test) AND shipped the Bug 1 fix (mid-call SMS during active Retell call). Full GHL form → AI setter cadence chain is now verified end-to-end via Pattern B with proper call-outcome coordination. Two bugs remain — Bug 3 is the small momentum win, Bug 2 is the agent-prompt timezone fix.
 
@@ -12,11 +12,11 @@ Resuming BFD-setter bug triage from /srv/bfd/Operations/handoffs/2026-05-11-ghl-
 Read these FIRST in this order:
 1. /srv/bfd/Operations/handoffs/2026-05-11-ghl-to-1prompt-wiring.md §D
    (the closed state from 2026-05-13 + three bugs flagged)
-2. /srv/bfd/Projects/1prompt-os/Docs/CLIENT_ONBOARDING_SOP.md §5.13
+2. /srv/bfd/Projects/bfd-setter/Docs/CLIENT_ONBOARDING_SOP.md §5.13
    (Pattern B architecture, just written — context for the bugs)
-3. /srv/bfd/Projects/1prompt-os/Docs/CHANGES_LOG.md row 1
+3. /srv/bfd/Projects/bfd-setter/Docs/CHANGES_LOG.md row 1
    (2026-05-13 "night-ghl-form-pattern-b-verified" — what got wired)
-4. /srv/bfd/Projects/1prompt-os/User Todos.md Phase A punch list
+4. /srv/bfd/Projects/bfd-setter/User Todos.md Phase A punch list
    (items (a), (b), (e) are the three open bugs)
 5. /home/brendan/.claude/projects/-srv-bfd-Projects-1prompt-os/memory/MEMORY.md
    (see [[session-2026-05-13-state]], [[call-outcome-cadence-bug]],
@@ -55,7 +55,7 @@ Steps:
    `code?: number; message?: string` (instead of error_code/error_message).
 3. Smoke test: craft a curl to Twilio's REST API with a bogus number,
    see the response. Confirm the field names.
-4. Redeploy Trigger.dev: `cd /srv/bfd/Projects/1prompt-os/trigger &&
+4. Redeploy Trigger.dev: `cd /srv/bfd/Projects/bfd-setter/trigger &&
    TRIGGER_ACCESS_TOKEN=$(grep '^TRIGGER_DEPLOY_PAT=' /etc/bfd-secrets/bfd-os.env
    | awk -F= '{print $2}' | awk '{print $1}') npx trigger.dev@4.4.4 deploy`.
 5. Commit + tag `phase-night-runengagement-twilio-error-extraction`.
