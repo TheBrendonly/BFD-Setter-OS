@@ -1,5 +1,5 @@
 {
-  "name": "1prompt-os",
+  "name": "bfd-setter",
   "version": "1.0.0",
   "dependencies": {
     "@supabase/supabase-js": "2.101.0",
