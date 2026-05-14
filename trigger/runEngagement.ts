@@ -198,9 +198,14 @@ async function sendTwilioSmsAndStamp(args: {
       body: twilioBody.toString(),
     },
   );
-  const twilioJson = (await twilioRes.json().catch(() => ({}))) as { sid?: string; error_code?: number; error_message?: string };
+  // Bug 3 — Twilio's REST API returns failed-send fields as `code` + `message`,
+  // not `error_code` / `error_message`. Reading the wrong keys silently surfaced
+  // failures as "Twilio SMS failed: ? unknown" (e.g. cost 10 min of guessing on
+  // a 21610 carrier opt-out 2026-05-13). Keep the helper's external return shape
+  // (errorCode / errorMessage) so callers stay unchanged.
+  const twilioJson = (await twilioRes.json().catch(() => ({}))) as { sid?: string; code?: number; message?: string };
   if (!twilioRes.ok) {
-    return { ok: false, sid: null, errorCode: twilioJson.error_code, errorMessage: twilioJson.error_message };
+    return { ok: false, sid: null, errorCode: twilioJson.code, errorMessage: twilioJson.message };
   }
   if (twilioJson.sid) {
     try {

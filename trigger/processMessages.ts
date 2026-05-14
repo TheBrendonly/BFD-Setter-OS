@@ -410,10 +410,12 @@ export const processMessages = task({
               body: twilioBody.toString(),
             }
           );
-          const twilioJson = (await twilioRes.json()) as { sid?: string; error_code?: number; error_message?: string };
+          // Bug 3 — Twilio returns `code` + `message`, not `error_code` /
+          // `error_message`. See runEngagement.ts sendTwilioSmsAndStamp note.
+          const twilioJson = (await twilioRes.json()) as { sid?: string; code?: number; message?: string };
           if (!twilioRes.ok) {
-            await logError("twilio_sms_error", `Twilio SMS failed: ${twilioJson.error_code} ${twilioJson.error_message}`, { to: redactPhone(contact_phone), error_code: twilioJson.error_code });
-            console.warn(`Twilio SMS failed for msg: ${twilioJson.error_code} ${twilioJson.error_message}`);
+            await logError("twilio_sms_error", `Twilio SMS failed: ${twilioJson.code} ${twilioJson.message}`, { to: redactPhone(contact_phone), error_code: twilioJson.code });
+            console.warn(`Twilio SMS failed for msg: ${twilioJson.code} ${twilioJson.message}`);
           } else {
             console.log(`Twilio SMS sent: ${twilioJson.sid} → ${redactPhone(contact_phone)}`);
             // Stamp the outbound on message_queue so the status webhook can
