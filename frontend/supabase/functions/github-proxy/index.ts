@@ -44,7 +44,7 @@ async function gh(url: string, token: string, accept = "application/vnd.github+j
       Authorization: `Bearer ${token}`,
       Accept: accept,
       "X-GitHub-Api-Version": "2022-11-28",
-      "User-Agent": "lovable-source-files-page",
+      "User-Agent": "bfd-setter-source-files-page",
     },
   });
   const text = await res.text();
@@ -154,7 +154,7 @@ Deno.serve(async (req) => {
           Authorization: `Bearer ${token}`,
           Accept: accept,
           "X-GitHub-Api-Version": "2022-11-28",
-          "User-Agent": "lovable-source-files-page",
+          "User-Agent": "bfd-setter-source-files-page",
         },
       });
       const text = await res.text();

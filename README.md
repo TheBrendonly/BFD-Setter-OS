@@ -48,6 +48,15 @@ Dashboard  (frontend/src/)
   - Analytics, contacts, campaigns
 ```
 
+**Deployment topology** (hosts that run BFD-setter in production):
+
+- **Frontend dashboard** → Railway service `1prompt-os-production` (auto-deploys on `git push origin main`)
+- **n8n workflows** → Railway (separate service, being retired in Phase 10)
+- **Edge functions + platform Postgres** → Supabase (`bjgrgbgykvjrsuwwruoh`)
+- **Background tasks** → Trigger.dev cloud (`proj_fdozaybvhgxnzopabtse`)
+
+Lovable hosts nothing for BFD. Canonical env reference: [`Docs/RAILWAY_ENV.md`](./Docs/RAILWAY_ENV.md). Operational runbook: [`Docs/RUNBOOK.md`](./Docs/RUNBOOK.md).
+
 ---
 
 ## What's In This Repo

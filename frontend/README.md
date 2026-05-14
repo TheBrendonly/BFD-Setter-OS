@@ -1,73 +1,35 @@
-# Welcome to your Lovable project
+# BFD-setter — Frontend
 
-## Project info
+Vite + React + TypeScript + Tailwind + shadcn/ui admin dashboard for the BFD-setter codebase (which powers BFD's **Building Flow** AI appointment-setter platform).
 
-**URL**: https://lovable.dev/projects/76b05143-0415-4b27-aa25-f154d03532c9
+Repo root: `/srv/bfd/Projects/1prompt-os/`. Canonical project README: [`../README.md`](../README.md). Deployment topology + Railway env reference: [`../Docs/RUNBOOK.md`](../Docs/RUNBOOK.md) and [`../Docs/RAILWAY_ENV.md`](../Docs/RAILWAY_ENV.md).
 
-## How can I edit this code?
-
-There are several ways of editing your application.
-
-**Use Lovable**
-
-Simply visit the [Lovable Project](https://lovable.dev/projects/76b05143-0415-4b27-aa25-f154d03532c9) and start prompting.
-
-Changes made via Lovable will be committed automatically to this repo.
-
-**Use your preferred IDE**
-
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
+## Local development
 
 ```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
+# From this directory
+pnpm install
+pnpm run dev    # serves http://localhost:8080 (port set in vite.config.ts)
 ```
 
-**Edit a file directly in GitHub**
+For typecheck before commit:
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+```sh
+npx tsc --noEmit
+```
 
-**Use GitHub Codespaces**
+## Production
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+The frontend deploys to **Railway** service `1prompt-os-production` on every push to `main`. Build command: `vite build`. Start command: `npx serve dist -s`. There is no `Dockerfile`; Railway uses nixpacks auto-detection. Required environment variables are documented in [`../Docs/RAILWAY_ENV.md`](../Docs/RAILWAY_ENV.md).
 
-## What technologies are used for this project?
+## Stack notes
 
-This project is built with:
+- Vite 5 with `@vitejs/plugin-react-swc`
+- Path alias `@/*` → `./src/*` (configured in `vite.config.ts` + `tsconfig.app.json`)
+- Supabase JS client (`@supabase/supabase-js`) for both auth and DB access
+- TanStack Query for server state
+- shadcn/ui for primitives (built on Radix)
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+## Upstream
 
-## How can I deploy this project?
-
-Simply open [Lovable](https://lovable.dev/projects/76b05143-0415-4b27-aa25-f154d03532c9) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
+This frontend is BFD's fork of `genokadzin/1prompt-os`. The repo was originally scaffolded with the Lovable AI builder; some legacy asset paths under `/lovable-uploads/` remain but no production runtime depends on Lovable. See the project root's [`README.md`](../README.md) for full upstream attribution.

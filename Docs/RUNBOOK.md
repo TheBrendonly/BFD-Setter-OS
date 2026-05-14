@@ -1,5 +1,18 @@
 # Runbook
 
+## Deployment topology
+
+BFD-setter runs on four independent services. No one host owns the whole stack.
+
+| Layer | Where it runs | What it does | Canonical env reference |
+|---|---|---|---|
+| Frontend dashboard | **Railway** service `1prompt-os-production` | Vite-built React admin UI (`frontend/`). Auto-deploys on push to `main`. | [`Docs/RAILWAY_ENV.md`](RAILWAY_ENV.md) |
+| n8n workflows | **Railway** (separate service, being decommissioned in Phase 10) | Legacy text-engine + booking workflows. Native edge-fn replacements live behind `clients.use_native_text_engine`. | n8n URLs catalogued in [`Docs/WEBHOOKS.md`](WEBHOOKS.md) |
+| Edge functions + platform DB | **Supabase** (`bjgrgbgykvjrsuwwruoh`) | All webhooks, integrations, and `bfd-platform` Postgres. Deploy with `supabase functions deploy`. | See "Deploys → Edge function" below |
+| Background tasks | **Trigger.dev** cloud (`proj_fdozaybvhgxnzopabtse`) | Long-running cadence + AI generation tasks under `trigger/`. Deploy with `npx trigger.dev deploy`. | See "Deploys → Trigger.dev tasks" below |
+
+**Lovable hosts nothing for BFD.** The repo was originally scaffolded with the Lovable AI builder (which previously hosted a preview of the frontend), but BFD's production runs on Railway. The `frontend/.lovable/` directory and any `lovable-tagger` plugin references are inert artifacts from the import; safe to delete. The orphan `.lovable/plan.md` was removed 2026-05-14.
+
 ## Deploys
 
 ### Edge function (single)

@@ -16,7 +16,7 @@ This is a technical reference — not a step-by-step tutorial. It is intended fo
 6. [n8n — The AI Engine](#6-n8n--the-ai-engine)
 7. [Client Supabase Projects](#7-client-supabase-projects)
 8. [OpenRouter](#8-openrouter)
-9. [Lovable — Frontend Dashboard](#9-lovable--frontend-dashboard)
+9. [Frontend Dashboard (Railway)](#9-frontend-dashboard-railway)
 10. [Environment Variables Reference](#10-environment-variables-reference)
 11. [Database Tables Reference](#11-database-tables-reference)
 12. [Webhook Payload Reference](#12-webhook-payload-reference)
@@ -116,7 +116,7 @@ Enable Row Level Security (RLS) as appropriate for your setup. The Edge Function
 
 ### Edge Functions
 
-The Edge Functions are the inbound API layer — they receive webhooks from GHL and trigger Trigger.dev. They are not in this repo. They are deployed via Lovable.
+The Edge Functions are the inbound API layer — they receive webhooks from GHL and trigger Trigger.dev. They live in this repo at `frontend/supabase/functions/` and are deployed to Supabase via the CLI: `supabase functions deploy <slug> --project-ref bjgrgbgykvjrsuwwruoh --no-verify-jwt` (see [`Docs/RUNBOOK.md`](Docs/RUNBOOK.md) for the canonical command).
 
 Edge Functions that must be deployed:
 - `receive-dm-webhook` — main inbound message handler
@@ -394,9 +394,9 @@ Token usage is logged to the `openrouter_usage` table after every job.
 
 ---
 
-## 9. Lovable — Frontend Dashboard
+## 9. Frontend Dashboard (Railway)
 
-The frontend dashboard is built on Lovable (React + TypeScript + Vite + Tailwind + shadcn/ui) connected to Supabase.
+The frontend dashboard is a Vite + React + TypeScript + Tailwind + shadcn/ui app deployed to Railway (service `1prompt-os-production`). It auto-deploys on push to `main`. The build command is `vite build`; the start command is `npx serve dist -s`.
 
 The dashboard provides:
 - Client management (add clients, configure credentials)
@@ -406,9 +406,9 @@ The dashboard provides:
 - Analytics (message volume, response times, booking rates)
 - Follow-up management (view and cancel pending timers)
 
-The Lovable project must be connected to your platform Supabase project. All Supabase Edge Functions are deployed from Lovable.
+**Source layout.** The frontend lives in this repo under `frontend/`. Same tree also contains all Supabase Edge Functions (`frontend/supabase/functions/`) and all SQL migrations (`frontend/supabase/migrations/`), which deploy to Supabase via the CLI rather than via Railway.
 
-The frontend source is included in this repo under `frontend/`. It contains the full React app, all Supabase Edge Functions (`frontend/supabase/functions/`), and all SQL migrations (`frontend/supabase/migrations/`).
+**Historical note.** The repo was originally scaffolded with the Lovable AI builder; some leftover asset paths under `/lovable-uploads/` and HTTP-header `origin` strings in legacy workflow JSONs still reference `lovable.app` domains, but no production runtime depends on Lovable. See [`Docs/RAILWAY_ENV.md`](Docs/RAILWAY_ENV.md) for canonical Railway env vars and [`Docs/RUNBOOK.md`](Docs/RUNBOOK.md) for the full deploy topology.
 
 ---
 
