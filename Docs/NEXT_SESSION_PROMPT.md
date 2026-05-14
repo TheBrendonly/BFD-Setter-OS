@@ -7,7 +7,7 @@ The prior session (2026-05-13) closed the last Phase A punch-list item (manual f
 ---
 
 ```
-Resuming 1prompt-OS bug triage from /srv/bfd/Operations/handoffs/2026-05-11-ghl-to-1prompt-wiring.md.
+Resuming BFD-setter bug triage from /srv/bfd/Operations/handoffs/2026-05-11-ghl-to-1prompt-wiring.md.
 
 Read these FIRST in this order:
 1. /srv/bfd/Operations/handoffs/2026-05-11-ghl-to-1prompt-wiring.md §D

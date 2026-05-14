@@ -1,5 +1,5 @@
 ---
-description: How to compose the existing 1prompt-OS engagement engine (Workflows tab + DB Reactivation page + voice-call-in-cadence step) into the three workflows BFD actually wants to run — new-lead, reactivation, and archived-list. Practical recipes, node JSON, and the gap list for what's still missing.
+description: How to compose the existing BFD-setter engagement engine (Workflows tab + DB Reactivation page + voice-call-in-cadence step) into the three workflows BFD actually wants to run — new-lead, reactivation, and archived-list. Practical recipes, node JSON, and the gap list for what's still missing.
 ---
 
 # Campaign Playbook — using what's shipped today

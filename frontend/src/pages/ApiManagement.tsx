@@ -1171,7 +1171,7 @@ const ApiManagement = () => {
         type: 'ghl_webhook_test',
         timestamp: new Date().toISOString(),
         test: true,
-        message: 'This is a test webhook request from 1Prompt',
+        message: 'This is a test webhook request from BFD-setter',
         client_id: clientId,
         sample_data: {
           contact: {
@@ -1180,7 +1180,7 @@ const ApiManagement = () => {
             phone: '+1234567890'
           },
           event: 'test_event',
-          source: '1Prompt API Management'
+          source: 'BFD-setter API Management'
         }
       };
       const response = await fetch(ghlTestWebhookUrl, {

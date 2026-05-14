@@ -49,14 +49,14 @@ const Auth = () => {
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="flex items-center justify-center">
-          <img src={logoImg} alt="1Prompt Logo" className="h-12 sm:h-16 w-auto" />
+          <img src={logoImg} alt="BFD-setter Logo" className="h-12 sm:h-16 w-auto" />
         </div>
 
         {/* Title */}
         <div className="text-center mt-6">
-          <h1 className="mobile-heading-2 text-on-surface font-semibold">Operating System</h1>
+          <h1 className="mobile-heading-2 text-on-surface font-semibold">BFD-setter</h1>
           <p className="text-on-surface-variant mt-1 field-text">
-            Sign in to manage your 1Prompt Setters
+            Sign in to manage your Building Flow setters
           </p>
         </div>
 

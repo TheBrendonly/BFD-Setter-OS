@@ -837,7 +837,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"calendarId\": \"{{ $('Set_Calendar_Id').item.json.Calendar_Id }}\",\n  \"locationId\": \"{{ $('Set_Location_Id').item.json.location_Id }}\",\n  \"contactId\": \"{{ $('getContact').item.json.contacts[0].id }}\",\n  \"startTime\": \"{{ $('Webhook1').item.json.body.args.startDateTime }}\",\n  \"title\": \"AI Strategy with Eugene x 1Prompt\",\n  \"meetingLocationType\": \"default\",\n  \"appointmentStatus\": \"confirmed\",\n  \"assignedUserId\": \"{{ $('Set_Assignee_Id_User_Id').item.json.assignee_Id }}\",\n  \"ignoreDateRange\": false,\n  \"toNotify\": true,\n  \"ignoreFreeSlotValidation\": false\n}",
+        "jsonBody": "={\n  \"calendarId\": \"{{ $('Set_Calendar_Id').item.json.Calendar_Id }}\",\n  \"locationId\": \"{{ $('Set_Location_Id').item.json.location_Id }}\",\n  \"contactId\": \"{{ $('getContact').item.json.contacts[0].id }}\",\n  \"startTime\": \"{{ $('Webhook1').item.json.body.args.startDateTime }}\",\n  \"title\": \"Strategy Call with Brendan\",\n  \"meetingLocationType\": \"default\",\n  \"appointmentStatus\": \"confirmed\",\n  \"assignedUserId\": \"{{ $('Set_Assignee_Id_User_Id').item.json.assignee_Id }}\",\n  \"ignoreDateRange\": false,\n  \"toNotify\": true,\n  \"ignoreFreeSlotValidation\": false\n}",
         "options": {}
       },
       "type": "n8n-nodes-base.httpRequest",
@@ -6929,7 +6929,7 @@
                 {
                   "role": "tool_call_result",
                   "tool_call_id": "484bd2c0ea3ba138",
-                  "content": "{\"events\":[{\"appointmentStatus\":\"cancelled\",\"assignedUserId\":\"6XbRCGDsI2kKCCq3jrLi\",\"address\":\"https://us06web.zoom.us/j/86943903369?pwd=Kx2Xwx8tcJKbVfPmkK1MkMCwSrJ5DE.1\",\"calendarId\":\"sOweuQGXpXqgsckc1Hua\",\"contactId\":\"6HV2SaIAdzqrtgIBa4lX\",\"dateAdded\":\"2025-09-02 20:45:33\",\"dateUpdated\":\"2025-09-03 11:13:04\",\"endTime\":\"2025-09-04 13:30:00\",\"id\":\"eVfSvI1272Mqz7freu84\",\"locationId\":\"dzTOfajR3YuQKAqE1myz\",\"startTime\":\"2025-09-04 13:00:00\",\"title\":\"AI Strategy with Eugene x 1Prompt\",\"assignedResources\":[],\"appoinmentStatus\":\"cancelled\"}],\"traceId\":\"4acbfb13-4f21-4965-a18e-02826a45a901\"}"
+                  "content": "{\"events\":[{\"appointmentStatus\":\"cancelled\",\"assignedUserId\":\"6XbRCGDsI2kKCCq3jrLi\",\"address\":\"https://us06web.zoom.us/j/86943903369?pwd=Kx2Xwx8tcJKbVfPmkK1MkMCwSrJ5DE.1\",\"calendarId\":\"sOweuQGXpXqgsckc1Hua\",\"contactId\":\"6HV2SaIAdzqrtgIBa4lX\",\"dateAdded\":\"2025-09-02 20:45:33\",\"dateUpdated\":\"2025-09-03 11:13:04\",\"endTime\":\"2025-09-04 13:30:00\",\"id\":\"eVfSvI1272Mqz7freu84\",\"locationId\":\"dzTOfajR3YuQKAqE1myz\",\"startTime\":\"2025-09-04 13:00:00\",\"title\":\"Strategy Call with Brendan\",\"assignedResources\":[],\"appoinmentStatus\":\"cancelled\"}],\"traceId\":\"4acbfb13-4f21-4965-a18e-02826a45a901\"}"
                 },
                 {
                   "role": "agent",
@@ -7253,7 +7253,7 @@
                 {
                   "role": "tool_call_result",
                   "tool_call_id": "e33681b27a05a0d9",
-                  "content": "{\"id\":\"f2EWLoUMsQupCsdXSI8x\",\"calendarId\":\"sOweuQGXpXqgsckc1Hua\",\"contactId\":\"6HV2SaIAdzqrtgIBa4lX\",\"title\":\"AI Strategy with Eugene x 1Prompt\",\"status\":\"booked\",\"appoinmentStatus\":\"confirmed\",\"assignedUserId\":\"6XbRCGDsI2kKCCq3jrLi\",\"address\":\"https://us06web.zoom.us/j/87055135310?pwd=j4PqACpZfuBaBaOmcVoE79beJWAco9.1\",\"isRecurring\":false,\"traceId\":\"b9ae1183-9ca9-4b85-a672-39b3c7c3b964\"}"
+                  "content": "{\"id\":\"f2EWLoUMsQupCsdXSI8x\",\"calendarId\":\"sOweuQGXpXqgsckc1Hua\",\"contactId\":\"6HV2SaIAdzqrtgIBa4lX\",\"title\":\"Strategy Call with Brendan\",\"status\":\"booked\",\"appoinmentStatus\":\"confirmed\",\"assignedUserId\":\"6XbRCGDsI2kKCCq3jrLi\",\"address\":\"https://us06web.zoom.us/j/87055135310?pwd=j4PqACpZfuBaBaOmcVoE79beJWAco9.1\",\"isRecurring\":false,\"traceId\":\"b9ae1183-9ca9-4b85-a672-39b3c7c3b964\"}"
                 },
                 {
                   "role": "agent",

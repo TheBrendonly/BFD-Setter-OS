@@ -2,7 +2,7 @@
   "agent_id": "",
   "channel": "voice",
   "last_modification_timestamp": 1765708597076,
-  "agent_name": "Outbound Agent",
+  "agent_name": "Gary - Outbound Setter (BFD template)",
   "response_engine": {
     "type": "retell-llm",
     "llm_id": "llm_3d30dfeecefed8301ccd805135b8",
@@ -85,12 +85,17 @@
     "model_high_priority": true,
     "general_prompt": "# Bot Persona\n- {{botPersona}}\n\n# System Prompt:\n- {{retellPrompt}}\n\n# Booking Instructions\n- {{bookingFunction}}",
     "general_tools": [
-      { "name": "end_call", "type": "end_call" },
+      {
+        "name": "end_call",
+        "type": "end_call"
+      },
       {
         "headers": {},
         "parameter_type": "json",
         "method": "POST",
-        "query_params": { "function-type": "update-appointment" },
+        "query_params": {
+          "function-type": "update-appointment"
+        },
         "description": "Use this function to update the appointment. Use the eventId from the appointment chosen by the user. Use the timezone given by the user and startDateTime given by user from the list of slots or directly. Use the \"id\" from the appointment list as the eventId which is chosen by the user from the list.",
         "type": "custom",
         "url": "https://n8n-1prompt.99players.com/webhook/e4cffeea-b611-4722-907d-4fc7554efe30",
@@ -104,19 +109,38 @@
         "parameters": {
           "type": "object",
           "properties": {
-            "timeZone": { "type": "string", "description": "The timeZone of the user." },
-            "eventId": { "type": "string", "description": "The eventId of the user." },
-            "startDateTime": { "type": "string", "description": "The startDateTime of the user. for example (2025-07-02T13:30:00-07:00)" },
-            "email": { "type": "string", "description": "The email address of the user." }
+            "timeZone": {
+              "type": "string",
+              "description": "The timeZone of the user."
+            },
+            "eventId": {
+              "type": "string",
+              "description": "The eventId of the user."
+            },
+            "startDateTime": {
+              "type": "string",
+              "description": "The startDateTime of the user. for example (2025-07-02T13:30:00-07:00)"
+            },
+            "email": {
+              "type": "string",
+              "description": "The email address of the user."
+            }
           },
-          "required": ["eventId", "timeZone", "startDateTime", "email"]
+          "required": [
+            "eventId",
+            "timeZone",
+            "startDateTime",
+            "email"
+          ]
         }
       },
       {
         "headers": {},
         "parameter_type": "json",
         "method": "POST",
-        "query_params": { "function-type": "get-available-slots" },
+        "query_params": {
+          "function-type": "get-available-slots"
+        },
         "description": "Use this function to get the list of appointments. Use the timezone given by the get-timezone function. Use the startDateTime given by the user to get the list of appointments.",
         "type": "custom",
         "url": "https://n8n-1prompt.99players.com/webhook/e4cffeea-b611-4722-907d-4fc7554efe30",
@@ -130,19 +154,38 @@
         "parameters": {
           "type": "object",
           "properties": {
-            "timeZone": { "type": "string", "description": "The timezone of the user for which the availability will be checked." },
-            "startDateTime": { "type": "string", "description": "The start date and time for the booking window. Set to the beginning of the selected day (e.g., 2025-06-19T00:00:00)." },
-            "endDateTime": { "type": "string", "description": "The end date and time for the booking window. Set to the end of the selected day (e.g., 2025-06-19T23:59:59)." },
-            "email": { "type": "string", "description": "The email address of the user requesting the booking." }
+            "timeZone": {
+              "type": "string",
+              "description": "The timezone of the user for which the availability will be checked."
+            },
+            "startDateTime": {
+              "type": "string",
+              "description": "The start date and time for the booking window. Set to the beginning of the selected day (e.g., 2025-06-19T00:00:00)."
+            },
+            "endDateTime": {
+              "type": "string",
+              "description": "The end date and time for the booking window. Set to the end of the selected day (e.g., 2025-06-19T23:59:59)."
+            },
+            "email": {
+              "type": "string",
+              "description": "The email address of the user requesting the booking."
+            }
           },
-          "required": ["timeZone", "startDateTime", "endDateTime", "email"]
+          "required": [
+            "timeZone",
+            "startDateTime",
+            "endDateTime",
+            "email"
+          ]
         }
       },
       {
         "headers": {},
         "parameter_type": "json",
         "method": "POST",
-        "query_params": { "function-type": "book-appointments" },
+        "query_params": {
+          "function-type": "book-appointments"
+        },
         "description": "Use this function to book the appointments. Use the user's timezone, email, and booking date and time.",
         "type": "custom",
         "url": "https://n8n-1prompt.99players.com/webhook/e4cffeea-b611-4722-907d-4fc7554efe30",
@@ -156,18 +199,33 @@
         "parameters": {
           "type": "object",
           "properties": {
-            "timeZone": { "type": "string", "description": "The timeZone of the user." },
-            "email": { "type": "string", "description": "The email of the user." },
-            "startDateTime": { "type": "string", "description": "The startDateTime of the user. Example Format: 2025-06-27T18:30:00+05:30 (Make sure to have the correct timezone according to the user)" }
+            "timeZone": {
+              "type": "string",
+              "description": "The timeZone of the user."
+            },
+            "email": {
+              "type": "string",
+              "description": "The email of the user."
+            },
+            "startDateTime": {
+              "type": "string",
+              "description": "The startDateTime of the user. Example Format: 2025-06-27T18:30:00+05:30 (Make sure to have the correct timezone according to the user)"
+            }
           },
-          "required": ["email", "timeZone", "startDateTime"]
+          "required": [
+            "email",
+            "timeZone",
+            "startDateTime"
+          ]
         }
       },
       {
         "headers": {},
         "parameter_type": "json",
         "method": "POST",
-        "query_params": { "function-type": "cancel-appointments" },
+        "query_params": {
+          "function-type": "cancel-appointments"
+        },
         "description": "Use this function to cancel the event. User will select from the given list of user's appointments. Use the eventId of that appointment.",
         "type": "custom",
         "url": "https://n8n-1prompt.99players.com/webhook/e4cffeea-b611-4722-907d-4fc7554efe30",
@@ -181,17 +239,28 @@
         "parameters": {
           "type": "object",
           "properties": {
-            "eventId": { "type": "string", "description": "The eventId of the appointment." },
-            "email": { "type": "string", "description": "The email address associated with the appointment." }
+            "eventId": {
+              "type": "string",
+              "description": "The eventId of the appointment."
+            },
+            "email": {
+              "type": "string",
+              "description": "The email address associated with the appointment."
+            }
           },
-          "required": ["eventId", "email"]
+          "required": [
+            "eventId",
+            "email"
+          ]
         }
       },
       {
         "headers": {},
         "parameter_type": "json",
         "method": "POST",
-        "query_params": { "function-type": "get-contact-appointments" },
+        "query_params": {
+          "function-type": "get-contact-appointments"
+        },
         "description": "Use this function to get the contact appointments when user asks to update the booking. Use the timezone determined by the user location.",
         "type": "custom",
         "url": "https://n8n-1prompt.99players.com/webhook/e4cffeea-b611-4722-907d-4fc7554efe30",
@@ -205,10 +274,19 @@
         "parameters": {
           "type": "object",
           "properties": {
-            "timeZone": { "type": "string", "description": "The timeZone of the user to get events." },
-            "email": { "type": "string", "description": "The email of the user to get events." }
+            "timeZone": {
+              "type": "string",
+              "description": "The timeZone of the user to get events."
+            },
+            "email": {
+              "type": "string",
+              "description": "The email of the user to get events."
+            }
           },
-          "required": ["email", "timeZone"]
+          "required": [
+            "email",
+            "timeZone"
+          ]
         }
       }
     ],

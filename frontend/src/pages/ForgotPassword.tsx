@@ -57,7 +57,7 @@ const ForgotPassword = () => {
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="flex items-center justify-center">
-          <img src={logoImg} alt="1Prompt Logo" className="h-12 sm:h-16 w-auto" />
+          <img src={logoImg} alt="BFD-setter Logo" className="h-12 sm:h-16 w-auto" />
         </div>
 
         {/* Title */}

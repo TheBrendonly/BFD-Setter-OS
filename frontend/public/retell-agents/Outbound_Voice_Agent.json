@@ -2,7 +2,7 @@
   "agent_id": "",
   "channel": "voice",
   "last_modification_timestamp": 1766142608975,
-  "agent_name": "Outbound Voice AI Rep",
+  "agent_name": "Gary - Outbound Voice Setter (BFD template)",
   "response_engine": {
     "type": "retell-llm",
     "llm_id": "llm_2d4647b8e6451842c72a9f9e67a1",

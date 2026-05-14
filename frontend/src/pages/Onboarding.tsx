@@ -142,7 +142,7 @@ const Onboarding = () => {
         {/* Header */}
         <div className="text-center mb-4 sm:mb-6">
           <div className="flex items-center justify-center mb-4 sm:mb-6">
-            <img src={logoImg} alt="1Prompt Logo" className="h-12 sm:h-16 w-auto" />
+            <img src={logoImg} alt="BFD-setter Logo" className="h-12 sm:h-16 w-auto" />
           </div>
           <h1 className="mobile-heading-2 text-on-surface font-semibold">Welcome! Let's Get You Started</h1>
           <p className="text-on-surface-variant mt-2 field-text">

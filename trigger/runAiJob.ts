@@ -356,7 +356,7 @@ Every single line you write must feel like it was written specifically for THIS 
 ## HOW TO PERSONALIZE
 - Use the actual words, phrases, and jargon their leads use every day
 - Reference their specific offer, service type, and delivery model
-- If the user notes describe a persona (e.g. "talk like Eugene, casual, uses slang") — write every prompt in that voice
+- If the user notes describe a persona (e.g. "talk like Gary, casual, uses slang") — write every prompt in that voice
 - Replace every generic example with an example from their world
 - If a parameter mentions "the product" — name it. If it mentions "the lead" — describe them specifically
 - The setter reading these prompts should instantly feel like: "yes, I know exactly what I'm doing, who I'm talking to, and how I talk"

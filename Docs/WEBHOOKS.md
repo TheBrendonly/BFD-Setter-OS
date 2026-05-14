@@ -1,10 +1,10 @@
 ---
-description: Single source of truth for every webhook URL in 1prompt-OS — inbound (external systems calling us), outbound (us calling them), and legacy/n8n. Use during client onboarding to wire external systems and to know what to test after a deploy.
+description: Single source of truth for every webhook URL in BFD-setter — inbound (external systems calling us), outbound (us calling them), and legacy/n8n. Use during client onboarding to wire external systems and to know what to test after a deploy.
 ---
 
 # WEBHOOKS
 
-Catalogue of every HTTP endpoint involved in the 1prompt-OS / BFD-setter platform.
+Catalogue of every HTTP endpoint involved in the BFD-setter platform.
 
 - **Inbound** = external system calls one of our Supabase edge functions
 - **Outbound** = our edge function calls an external service

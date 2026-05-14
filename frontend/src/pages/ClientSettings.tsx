@@ -468,7 +468,7 @@ function SubAccountBilling({ clientId, checkoutEmail }: { clientId: string | und
 
       <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
         <div>
-          <p className={`font-medium ${cb}`}>{isDefault ? 'Free Tier' : 'OnePrompt Setters'}</p>
+          <p className={`font-medium ${cb}`}>{isDefault ? 'Free Tier' : 'Building Flow setters'}</p>
           <p className={`text-sm text-muted-foreground ${cb}`}>{isDefault ? 'Included with your account' : '$10/month'}</p>
         </div>
         <div className="text-right">

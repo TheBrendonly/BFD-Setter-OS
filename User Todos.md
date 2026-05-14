@@ -1,6 +1,6 @@
-# User Todos — 1prompt-OS
+# User Todos — BFD-setter
 
-Brendan's checklist to take 1prompt-OS from "shipped behind flags" to "first paying client live + onboarded."
+Brendan's checklist to take BFD-setter from "shipped behind flags" to "first paying client live + onboarded."
 
 Items are sequenced. Order matters — do them top-to-bottom. Each item links to the section in `Operations/handoffs/2026-04-30-1prompt-master-rebuild-handoff.md` (the master state-of-play) or to the SOP at `Docs/CLIENT_ONBOARDING_SOP.md`.
 
@@ -135,14 +135,14 @@ The cadence-v2 MVP shipped in one session as 5 commits (`35d1925` → `524ac08`)
 - **CV2-7. Brand voice prompt overrides.** `clients.brand_voice` column (NEW) + per-workflow override on `engagement_workflows`. `aiGenerateEngagementCopy` already accepts `brandVoice`; just wire it from the DB row. S effort.
 - **CV2-8. Cost ceiling: per-week + per-month aggregates.** Today's guard is per-lead (>500c/lead → error_logs warning). Add per-tenant rolling-window aggregate so a runaway tenant gets flagged before any individual lead does. S effort.
 
-## Phase B addenda — operational tasks (Brendan-side, no 1prompt code)
+## Phase B addenda — operational tasks (Brendan-side, no BFD-setter code)
 
-- B-OP1. **GHL appointment reminder workflows.** Per `Docs/FUTURE.md`, these live in GHL natively, not in 1prompt code — `bookings-webhook` (Phase 7c, A4-wired) ends the active 1prompt cadence on appointment-create so GHL reminder workflows can run unimpeded. Build in GHL Workflows once Phase A is closed:
+- B-OP1. **GHL appointment reminder workflows.** Per `Docs/FUTURE.md`, these live in GHL natively, not in BFD-setter code — `bookings-webhook` (Phase 7c, A4-wired) ends the active BFD-setter cadence on appointment-create so GHL reminder workflows can run unimpeded. Build in GHL Workflows once Phase A is closed:
   - 24h-before reminder (SMS + email)
   - 1h-before reminder (SMS)
   - At-appointment-time auto-trigger (optional — could fire a Retell call to confirm the lead is ready)
   - Post no-show follow-up (SMS + book-new-time link)
-  - Effort: half-day for Brendan in GHL UI. **No 1prompt code change required.** 1prompt cadences must NOT include reminder nodes — that's GHL's territory and prevents double-messaging.
+  - Effort: half-day for Brendan in GHL UI. **No BFD-setter code change required.** BFD-setter cadences must NOT include reminder nodes — that's GHL's territory and prevents double-messaging.
 
 ---
 
@@ -189,7 +189,7 @@ Once BFD has been live cleanly for ≥ 14 days.
 
 ## Phase E — Cleanup & Rebrand (do later, before Client #2 onboarding gets serious)
 
-- E1. **Rebrand the project from "1prompt" to "BFD-setter"** across all docs and code. Touch points include (non-exhaustive):
+- E1. ~~**Rebrand the project from "1prompt" to "BFD-setter"**~~ **✅ DONE 2026-05-14** — Aria→Gary (he/him), 1prompt→Building Flow (customer-facing) / BFD-setter (internal), upstream Geno/Katherine/Eugene Kadzin/Quimple/1Prompt name-swapped in default templates, n8n workflow booking titles updated, Retell agent JSON templates in `frontend/public/retell-agents/` replaced with Gary persona. ~45 files modified across docs, frontend UI, n8n templates, Retell JSONs. Live infra (n8n URLs, GHL tag/workflow names, Retell agent IDs, package.json `name`, shipped migrations) intentionally untouched per hard constraints. Original touch points (now historical):
   - `User Todos.md` and all `Docs/*.md` references to "1prompt-os" / "1Prompt"
   - `frontend/package.json` `name` field, `frontend/.env.example` comments
   - `frontend/supabase/functions/*/index.ts` header comments mentioning "1prompt-os"
@@ -202,7 +202,9 @@ Once BFD has been live cleanly for ≥ 14 days.
   - Audit `package.json`/`vite.config.ts`/build configs for Lovable-specific plugins or scripts
   - Update `README.md` and `Docs/RUNBOOK.md` deployment topology section to read "Frontend on Railway, n8n on Railway, edge fns on Supabase, Trigger.dev tasks on Trigger cloud" with no Lovable references
   - `Docs/RAILWAY_ENV.md` already documents the Railway env shape; ensure it is the canonical place new devs are pointed to
-- E3. **Voice agent prompts: full BFD rewrite.** Inbound and outbound prompts currently inherit the upstream Anne/Eugene/1Prompt persona. They need a ground-up rewrite using BFD's brand voice (Aussie-warm professional, never salesy), BFD's actual ICP and offer, and a clean inbound-vs-outbound split. Use `/srv/bfd/Company/knowledge/voice-agents/1prompt-upstream-voice-setter-prompt.md` as a structural reference (study the framework, replace the content). Touch points: 3 Retell LLMs (`llm_22e795de…` inbound, `llm_692b220d…` outbound, `llm_1807516860…` outbound followup) plus the post-call analysis fields on each agent definition.
+- E3. **Voice agent prompts: full BFD rewrite (Retell-side).** The downloadable Retell agent JSON templates at `frontend/public/retell-agents/` were rebranded to Gary on 2026-05-14 as part of E1. The live Retell agents in BFD's Retell dashboard still run the upstream Anne/Eugene/1Prompt persona and require a ground-up rewrite using BFD's brand voice (Aussie-warm professional, never salesy), BFD's actual ICP and offer, and a clean inbound-vs-outbound split. Use `/srv/bfd/Company/knowledge/voice-agents/1prompt-upstream-voice-setter-prompt.md` as a structural reference (study the framework, replace the content). Touch points: 3 Retell LLMs (`llm_22e795de…` inbound, `llm_692b220d…` outbound, `llm_1807516860…` outbound followup) plus the post-call analysis fields on each agent definition.
+- E4. **Retell-folder setup-guide screenshots re-shoot.** `frontend/src/components/SetupGuideDialog.tsx` lines 6090, 6151, 6207, 6521, 6527, 6794, 7104, 7110 (and the `retell1PromptFolder` asset import at line 148) tell admins to create a Retell folder literally named "1Prompt" and the paired screenshots show that folder name. After all client testing is fully complete, decide on the canonical BFD folder name ("Building Flow" recommended), update the instruction text + button labels in `SetupGuideDialog.tsx`, re-shoot the matching screenshots in Retell with the new folder name, replace `frontend/src/assets/setup-guide/retell-1prompt-folder.png` (and any other screenshots showing the old folder name), and update the asset import + alt-text. Deferred from the 2026-05-14 rebrand pass because re-shooting screenshots without first locking the new folder convention risks two divergences (text says X, screenshot still says Y). DO BEFORE next client onboarding.
+- E5. **Upstream pun-quiz lesson rewrite.** `frontend/src/components/setup-guide/MultiAgentLogicStep.tsx` lines 71-75 and `frontend/src/components/setup-guide/VoiceInboundLogicStep.tsx` line 427 contain quiz/lesson content that puns on the upstream project name ("one prompt = one AI Rep"). In BFD-setter the pun loses its connection to the product name. Rewrite the quiz questions and inbound-voice-architecture lesson around BFD-setter concepts (setter slots / `text_prompts` table model, voice-prompt three-section composition) rather than the upstream pun. Deferred because this is content rewrite (not a rename), not blocking, and admins onboarding before the rewrite still get the upstream-style lesson which is internally consistent.
 
 ---
 

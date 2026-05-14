@@ -182,7 +182,7 @@ If 0:
 Drop this on the form's success handler:
 ```html
 <script>
-async function intake1prompt(formData) {
+async function intakeBuildingFlow(formData) {
   const r = await fetch('https://bjgrgbgykvjrsuwwruoh.supabase.co/functions/v1/intake-lead', {
     method: 'POST',
     headers: {
@@ -229,7 +229,7 @@ Brendan, in GHL:
 
 For tag-driven cadence enrolment, the operator picks ONE workflow per client to be the new-leads campaign and configures the GHL workflow:
 
-1. In the 1prompt UI: **Workflows** list → flip the **NEW LEADS** Switch ON for the chosen campaign → enter the tag name (e.g. `new-lead`). At-most-one workflow per client may be ON (server-enforced via partial unique index).
+1. In the BFD-setter UI: **Workflows** list → flip the **NEW LEADS** Switch ON for the chosen campaign → enter the tag name (e.g. `new-lead`). At-most-one workflow per client may be ON (server-enforced via partial unique index).
 2. In GHL: **Workflows** → New → **Contact** → Trigger: **Contact Tag** with **Has Tag** = `<tag-from-step-1>`.
 3. Add Action: **Webhook** → URL: `https://bjgrgbgykvjrsuwwruoh.supabase.co/functions/v1/ghl-tag-webhook` → Method: POST → Body: include at minimum `contactId`, `locationId`, and the post-update `tags` array (or `addedTags`).
 4. Save + activate.

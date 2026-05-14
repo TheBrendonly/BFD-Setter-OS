@@ -23,8 +23,8 @@ const onboardingSteps: OnboardingStep[] = [
   {
     id: 'technical-course',
     step: 1,
-    title: 'Complete Technical Course',
-    description: 'Go through the technical course on Skool to understand how everything works before setting up the system',
+    title: 'Complete Technical Course (upstream)',
+    description: 'Walk through the upstream 1prompt-os technical course on Skool to understand how the underlying system works before configuring BFD-setter.',
     icon: GraduationCap,
     externalUrl: 'https://www.skool.com/1prompt/classroom/174df031?md=9a229dd14bb947c1bdd263fb2d38afa4',
     buttonText: 'Go to Course',

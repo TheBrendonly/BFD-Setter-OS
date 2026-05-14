@@ -1,12 +1,12 @@
 ---
-description: Inventory of every event the 1prompt-OS platform pushes to GoHighLevel today, what is NOT pushed (gap list), and recommended fixes ranked by leverage. Reference doc — keep current as new push paths land.
+description: Inventory of every event the BFD-setter platform pushes to GoHighLevel today, what is NOT pushed (gap list), and recommended fixes ranked by leverage. Reference doc — keep current as new push paths land.
 ---
 
-# GHL Push Audit — what 1prompt mirrors back to GoHighLevel
+# GHL Push Audit — what BFD-setter mirrors back to GoHighLevel
 
 **Last updated:** 2026-05-02 (gaps 1, 2+3 closed — voice call summary + SMS bodies now mirrored)
 
-GHL is the source-of-truth CRM for every BFD-platform tenant. Every event that 1prompt knows about should ideally be visible in GHL too — call summaries on the contact timeline, opt-outs flipping `dndSettings.SMS=true`, cadence steps showing up as Activities. Today some flows mirror cleanly, some only stamp a tag, and some stop entirely at the platform DB.
+GHL is the source-of-truth CRM for every BFD-platform tenant. Every event that BFD-setter knows about should ideally be visible in GHL too — call summaries on the contact timeline, opt-outs flipping `dndSettings.SMS=true`, cadence steps showing up as Activities. Today some flows mirror cleanly, some only stamp a tag, and some stop entirely at the platform DB.
 
 This doc is the canonical "what's mirrored" inventory. It feeds three downstream things:
 1. Client onboarding SOP §4.X (so a new client knows which fields they need to provision in GHL)
@@ -17,7 +17,7 @@ This doc is the canonical "what's mirrored" inventory. It feeds three downstream
 
 ## A. Pushed to GHL today (canonical 6 paths)
 
-### 1. Contact edits from the 1prompt UI → GHL contact PUT
+### 1. Contact edits from the BFD-setter UI → GHL contact PUT
 
 - **Trigger:** User edits a contact in the dashboard.
 - **Endpoint:** `PUT /contacts/{contactId}` (Contacts API, `services.leadconnectorhq.com`).

@@ -295,7 +295,7 @@ export default function Templates() {
                 GitHub Source Code
               </CardTitle>
               <CardDescription>
-                The full OS source code is available on GitHub. Browse the live repository directly below or open it on GitHub.
+                Browse the upstream open-source repository (genokadzin/1prompt-os) that BFD-setter is forked from. Useful as a reference; BFD's own fork lives in a separate repo.
               </CardDescription>
             </CardHeader>
             <CardContent>

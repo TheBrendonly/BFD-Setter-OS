@@ -1,10 +1,10 @@
-# 1prompt-OS — Master Rebuild Plan
+# BFD-setter — Master Rebuild Plan
 
 > Mirror of `C:\Users\brend\.claude\plans\resuming-1prompt-os-work-read-reactive-puffin.md`. The plan file is the canonical source; this is the in-repo copy so a fresh session sees it via the codebase.
 
 ## Context
 
-The product is: leads come in, 1prompt-OS runs the optimal multi-channel cadence (SMS / WhatsApp / voice) to maximise booked appointments, and tracks every step of the funnel. Today the system has the right components but isn't wired end-to-end for that goal.
+The product is: leads come in, BFD-setter runs the optimal multi-channel cadence (SMS / WhatsApp / voice) to maximise booked appointments, and tracks every step of the funnel. Today the system has the right components but isn't wired end-to-end for that goal.
 
 **What is broken or missing:**
 
@@ -127,7 +127,7 @@ After 2 weeks soak: remove n8n callsites in processMessages, decommission n8n se
 - Frontend on Railway, n8n on Railway (separate service), Edge fns on Supabase, Trigger.dev on Trigger.dev cloud
 - All Supabase keys are `sb_secret_*` / `sb_publishable_*`; legacy JWTs disabled since 2026-04-29T04:09:21Z
 - Phone `+61481614530` pinned to `agent_5ec5eb` at inbound_agent_version 6
-- 1prompt-OS uses persistent Retell agents
+- BFD-setter uses persistent Retell agents
 - UNIQUE on `leads(client_id, lead_id)`; UNIQUE on `message_queue(twilio_message_sid) WHERE NOT NULL`
 - RLS on with agency-scoped policies (migration `20260426100000`)
 - Inside Supabase Deno edge functions, `req.url` is the INTERNAL URL — reconstruct from `SUPABASE_URL` for HMAC verification

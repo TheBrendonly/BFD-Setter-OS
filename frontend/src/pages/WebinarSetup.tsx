@@ -388,7 +388,7 @@ const WebinarSetup = () => {
               <div>
                 <CardTitle className="text-lg">Webinar Setup Progress</CardTitle>
                 <CardDescription className="mt-1">
-                  Complete all phases to setup your webinar and the 1Prompt system
+                  Complete all phases to setup your webinar and the BFD-setter system
                 </CardDescription>
               </div>
               <div className="text-right">

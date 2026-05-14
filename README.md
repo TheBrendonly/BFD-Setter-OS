@@ -1,6 +1,8 @@
-# 1Prompt — AI Setter Operating System
+# BFD-setter — Building Flow's AI Appointment Setter
 
-An open-source platform for deploying AI setters that handle inbound lead conversations on behalf of businesses — across SMS, Instagram DMs, and Facebook messages — using GoHighLevel, n8n, Supabase, and Trigger.dev.
+BFD-setter is Building Flow Digital's internal codebase for the **Building Flow** AI appointment-setter platform — an AI receptionist (Gary) that handles inbound lead conversations on behalf of businesses across SMS, Instagram DMs, and Facebook messages, using GoHighLevel, n8n, Supabase, and Trigger.dev.
+
+> Forked from upstream OSS [`genokadzin/1prompt-os`](https://github.com/genokadzin/1prompt-os) on 2026-04-14. BFD maintains a divergent fork; upstream attribution preserved.
 
 ---
 
@@ -51,7 +53,7 @@ Dashboard  (frontend/src/)
 ## What's In This Repo
 
 ```
-1prompt-os/
+1prompt-os/                          ← directory name unchanged (forked-repo legacy)
 │
 ├── frontend/                        ← React dashboard + all Edge Functions
 │   ├── src/
@@ -133,14 +135,12 @@ See [SETUP_OVERVIEW.md](./SETUP_OVERVIEW.md) for the full technical reference.
 
 ## This Is Not a Tutorial
 
-This repo gives you the complete source code, all Edge Functions, database schemas, workflow templates, and background tasks. It does not walk you through how to configure each service, wire the webhooks, structure your GHL sub-account, or connect all five layers together.
+This repo is BFD's internal codebase. It is not a step-by-step setup guide. It contains the complete source code, all Edge Functions, database schemas, workflow templates, and background tasks, but it does not walk you through how to configure each service, wire the webhooks, structure your GHL sub-account, or connect all five layers together.
 
-If you want it fully installed and running — we deploy, debug, monitor, and report on the setters so you don't have to.
-
-**→ [Learn about our fully managed setter service](https://us.1prompt.com/widget/bookings/1prompt-clarity-sessionich4ko)**
+BFD offers Building Flow as a done-for-you service: we deploy, debug, monitor, and tune Gary (the AI receptionist) on your real inbound. Contact Brendan at brendan@buildingflowdigital.com to scope a 7-day Building Flow Pilot.
 
 ---
 
 ## License
 
-MIT — free to use, modify, and deploy.
+MIT — inherited from the upstream `genokadzin/1prompt-os` project. Free to use, modify, and deploy.

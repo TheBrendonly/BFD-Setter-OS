@@ -2,7 +2,7 @@
   "agent_id": "",
   "channel": "voice",
   "last_modification_timestamp": 1761229145384,
-  "agent_name": "Webinar - Inbound Agent",
+  "agent_name": "Gary - Inbound Setter (BFD template)",
   "response_engine": {
     "type": "retell-llm",
     "llm_id": "llm_1515c1d7dea3f7b1e9f09a9f524e",

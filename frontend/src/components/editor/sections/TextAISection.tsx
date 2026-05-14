@@ -82,7 +82,7 @@ export default function TextAISection({ section, isEditor, onUpdateProperty, cli
   const getInitialMessage = () => {
     if (formUserData?.name) {
       const firstName = formUserData.name.split(' ')[0];
-      return `Hey ${firstName}, it's Eugene, just saw your booking and have a few questions. Can we chat here?`;
+      return `Hey ${firstName}, it's Gary from Building Flow, just saw your booking and have a few questions. Can we chat here?`;
     }
     return textConfig.initialMessage;
   };
@@ -98,7 +98,7 @@ export default function TextAISection({ section, isEditor, onUpdateProperty, cli
   useEffect(() => {
     if (formUserData?.name) {
       const firstName = formUserData.name.split(' ')[0];
-      const personalizedMessage = `Hey ${firstName}, it's Eugene, just saw your booking and have a few questions. Can we chat here?`;
+      const personalizedMessage = `Hey ${firstName}, it's Gary from Building Flow, just saw your booking and have a few questions. Can we chat here?`;
       setMessages([{
         id: Date.now(),
         type: 'bot',

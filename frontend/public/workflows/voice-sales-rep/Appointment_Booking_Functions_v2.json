@@ -642,7 +642,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"calendarId\": \"{{ $('Set_Calendar_Id').item.json.Calendar_Id }}\",\n  \"locationId\": \"{{ $('Set_Location_Id').item.json.location_Id }}\",\n  \"contactId\": \"{{ $('getContact').item.json.contacts[0].id }}\",\n  \"startTime\": \"{{ $('Webhook1').item.json.body.args.startDateTime }}\",\n  \"title\": \"AI Strategy with Eugene x 1Prompt\",\n  \"meetingLocationType\": \"default\",\n  \"appointmentStatus\": \"confirmed\",\n  \"assignedUserId\": \"{{ $('Set_Assignee_Id_User_Id').item.json.assignee_Id }}\",\n  \"ignoreDateRange\": false,\n  \"toNotify\": true,\n  \"ignoreFreeSlotValidation\": false\n}",
+        "jsonBody": "={\n  \"calendarId\": \"{{ $('Set_Calendar_Id').item.json.Calendar_Id }}\",\n  \"locationId\": \"{{ $('Set_Location_Id').item.json.location_Id }}\",\n  \"contactId\": \"{{ $('getContact').item.json.contacts[0].id }}\",\n  \"startTime\": \"{{ $('Webhook1').item.json.body.args.startDateTime }}\",\n  \"title\": \"Strategy Call with Brendan\",\n  \"meetingLocationType\": \"default\",\n  \"appointmentStatus\": \"confirmed\",\n  \"assignedUserId\": \"{{ $('Set_Assignee_Id_User_Id').item.json.assignee_Id }}\",\n  \"ignoreDateRange\": false,\n  \"toNotify\": true,\n  \"ignoreFreeSlotValidation\": false\n}",
         "options": {}
       },
       "type": "n8n-nodes-base.httpRequest",
@@ -6905,7 +6905,7 @@
                   "role": "tool_call_result",
                   "tool_call_id": "de79ef6871d0e045",
                   "successful": true,
-                  "content": "{\"id\":\"bEkOty5hn0s6c8Bd3BnI\",\"calendarId\":\"sozMFEEdHjE8ti8KVxiR\",\"locationId\":\"dzTOfajR3YuQKAqE1myz\",\"contactId\":\"xKm6x4YzEdIFgYWZsZwB\",\"title\":\"AI Strategy with Eugene x 1Prompt\",\"status\":\"booked\",\"appointmentStatus\":\"confirmed\",\"appoinmentStatus\":\"confirmed\",\"assignedUserId\":\"UqBWG7Qvf2OEaVHds5ou\",\"address\":\"\",\"isRecurring\":false,\"traceId\":\"d9ec14ab-728e-4439-a22c-ab29c6741f60\"}",
+                  "content": "{\"id\":\"bEkOty5hn0s6c8Bd3BnI\",\"calendarId\":\"sozMFEEdHjE8ti8KVxiR\",\"locationId\":\"dzTOfajR3YuQKAqE1myz\",\"contactId\":\"xKm6x4YzEdIFgYWZsZwB\",\"title\":\"Strategy Call with Brendan\",\"status\":\"booked\",\"appointmentStatus\":\"confirmed\",\"appoinmentStatus\":\"confirmed\",\"assignedUserId\":\"UqBWG7Qvf2OEaVHds5ou\",\"address\":\"\",\"isRecurring\":false,\"traceId\":\"d9ec14ab-728e-4439-a22c-ab29c6741f60\"}",
                   "time_sec": 93.099
                 },
                 {
@@ -8427,7 +8427,7 @@
                   "role": "tool_call_result",
                   "tool_call_id": "2dfd794d7807ace2",
                   "successful": true,
-                  "content": "{\"events\":[{\"appointmentStatus\":\"confirmed\",\"assignedUserId\":\"UqBWG7Qvf2OEaVHds5ou\",\"address\":\"\",\"calendarId\":\"sozMFEEdHjE8ti8KVxiR\",\"contactId\":\"xKm6x4YzEdIFgYWZsZwB\",\"dateAdded\":\"2026-04-15 00:07:44\",\"dateUpdated\":\"2026-04-15 00:07:44\",\"endTime\":\"2026-04-15 02:00:00\",\"id\":\"bEkOty5hn0s6c8Bd3BnI\",\"locationId\":\"dzTOfajR3YuQKAqE1myz\",\"startTime\":\"2026-04-15 01:00:00\",\"title\":\"AI Strategy with Eugene x 1Prompt\",\"assignedResources\":[],\"appointmentMeta\":{\"slotType\":\"default\"},\"deleted\":false,\"appoinmentStatus\":\"confirmed\"}],\"traceId\":\"50c102a6-3333-4f1b-9863-73c591666ca2\"}",
+                  "content": "{\"events\":[{\"appointmentStatus\":\"confirmed\",\"assignedUserId\":\"UqBWG7Qvf2OEaVHds5ou\",\"address\":\"\",\"calendarId\":\"sozMFEEdHjE8ti8KVxiR\",\"contactId\":\"xKm6x4YzEdIFgYWZsZwB\",\"dateAdded\":\"2026-04-15 00:07:44\",\"dateUpdated\":\"2026-04-15 00:07:44\",\"endTime\":\"2026-04-15 02:00:00\",\"id\":\"bEkOty5hn0s6c8Bd3BnI\",\"locationId\":\"dzTOfajR3YuQKAqE1myz\",\"startTime\":\"2026-04-15 01:00:00\",\"title\":\"Strategy Call with Brendan\",\"assignedResources\":[],\"appointmentMeta\":{\"slotType\":\"default\"},\"deleted\":false,\"appoinmentStatus\":\"confirmed\"}],\"traceId\":\"50c102a6-3333-4f1b-9863-73c591666ca2\"}",
                   "time_sec": 260.836
                 },
                 {
@@ -9714,7 +9714,7 @@
                   "role": "tool_call_result",
                   "tool_call_id": "ab4b9cee77429b72",
                   "successful": true,
-                  "content": "{\"id\":\"bEkOty5hn0s6c8Bd3BnI\",\"calendarId\":\"sozMFEEdHjE8ti8KVxiR\",\"locationId\":\"dzTOfajR3YuQKAqE1myz\",\"contactId\":\"xKm6x4YzEdIFgYWZsZwB\",\"title\":\"AI Strategy with Eugene x 1Prompt\",\"status\":\"booked\",\"appointmentStatus\":\"confirmed\",\"appoinmentStatus\":\"confirmed\",\"assignedUserId\":\"UqBWG7Qvf2OEaVHds5ou\",\"address\":\"\",\"isRecurring\":false,\"traceId\":\"05c6b57b-1442-427f-8e7c-61a6c95d94f6\"}",
+                  "content": "{\"id\":\"bEkOty5hn0s6c8Bd3BnI\",\"calendarId\":\"sozMFEEdHjE8ti8KVxiR\",\"locationId\":\"dzTOfajR3YuQKAqE1myz\",\"contactId\":\"xKm6x4YzEdIFgYWZsZwB\",\"title\":\"Strategy Call with Brendan\",\"status\":\"booked\",\"appointmentStatus\":\"confirmed\",\"appoinmentStatus\":\"confirmed\",\"assignedUserId\":\"UqBWG7Qvf2OEaVHds5ou\",\"address\":\"\",\"isRecurring\":false,\"traceId\":\"05c6b57b-1442-427f-8e7c-61a6c95d94f6\"}",
                   "time_sec": 385.663
                 },
                 {
@@ -10282,7 +10282,7 @@
                   "role": "tool_call_result",
                   "tool_call_id": "0f1832bb965b0261",
                   "successful": true,
-                  "content": "{\"events\":[{\"appointmentStatus\":\"confirmed\",\"assignedUserId\":\"UqBWG7Qvf2OEaVHds5ou\",\"address\":\"\",\"calendarId\":\"sozMFEEdHjE8ti8KVxiR\",\"contactId\":\"xKm6x4YzEdIFgYWZsZwB\",\"dateAdded\":\"2026-04-15 00:07:44\",\"dateUpdated\":\"2026-04-15 00:12:36\",\"endTime\":\"2026-04-15 23:30:00\",\"id\":\"bEkOty5hn0s6c8Bd3BnI\",\"locationId\":\"dzTOfajR3YuQKAqE1myz\",\"startTime\":\"2026-04-15 22:30:00\",\"title\":\"AI Strategy with Eugene x 1Prompt\",\"assignedResources\":[],\"appointmentMeta\":{\"slotType\":\"default\"},\"deleted\":false,\"appoinmentStatus\":\"confirmed\"}],\"traceId\":\"bd40bfa4-f3c7-4800-8fa2-bd3fef887846\"}",
+                  "content": "{\"events\":[{\"appointmentStatus\":\"confirmed\",\"assignedUserId\":\"UqBWG7Qvf2OEaVHds5ou\",\"address\":\"\",\"calendarId\":\"sozMFEEdHjE8ti8KVxiR\",\"contactId\":\"xKm6x4YzEdIFgYWZsZwB\",\"dateAdded\":\"2026-04-15 00:07:44\",\"dateUpdated\":\"2026-04-15 00:12:36\",\"endTime\":\"2026-04-15 23:30:00\",\"id\":\"bEkOty5hn0s6c8Bd3BnI\",\"locationId\":\"dzTOfajR3YuQKAqE1myz\",\"startTime\":\"2026-04-15 22:30:00\",\"title\":\"Strategy Call with Brendan\",\"assignedResources\":[],\"appointmentMeta\":{\"slotType\":\"default\"},\"deleted\":false,\"appoinmentStatus\":\"confirmed\"}],\"traceId\":\"bd40bfa4-f3c7-4800-8fa2-bd3fef887846\"}",
                   "time_sec": 442.187
                 },
                 {

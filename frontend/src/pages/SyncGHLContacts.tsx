@@ -62,7 +62,7 @@ function SyncNodeConfig({
             <div className="space-y-1">
               <Label className="field-text text-foreground">GoHighLevel Webhook URL</Label>
               <p className="text-muted-foreground" style={fieldStyle}>
-                Paste this URL into your GoHighLevel workflow as a webhook action. When a new lead is created in GHL, it will be automatically synced to 1Prompt.
+                Paste this URL into your GoHighLevel workflow as a webhook action. When a new lead is created in GHL, it will be automatically synced to BFD-setter.
               </p>
               <div className="pt-1 flex items-center gap-2">
                 <Input value={ghlWebhookUrl} readOnly className="field-text text-xs flex-1" />

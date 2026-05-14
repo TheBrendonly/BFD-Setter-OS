@@ -548,7 +548,7 @@ export default function Workflows() {
               <div className="flex min-w-0 flex-1 items-center gap-4">
                 <div className="flex-1 min-w-0">
                   <p className="text-foreground font-medium field-text truncate">New Lead from GoHighLevel</p>
-                  <p className="text-muted-foreground field-text truncate">Sync incoming leads from GoHighLevel into 1Prompt</p>
+                  <p className="text-muted-foreground field-text truncate">Sync incoming leads from GoHighLevel into BFD-setter</p>
                 </div>
               </div>
               <div className="flex items-center gap-3 shrink-0">
@@ -573,7 +573,7 @@ export default function Workflows() {
               <div className="flex min-w-0 flex-1 items-center gap-4">
                 <div className="flex-1 min-w-0">
                   <p className="text-foreground font-medium field-text truncate">New Booking from GoHighLevel</p>
-                  <p className="text-muted-foreground field-text truncate">Sync incoming bookings from GoHighLevel into 1Prompt</p>
+                  <p className="text-muted-foreground field-text truncate">Sync incoming bookings from GoHighLevel into BFD-setter</p>
                 </div>
               </div>
               <div className="flex items-center gap-3 shrink-0">

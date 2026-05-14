@@ -6,19 +6,19 @@ Tracked here so they don't get lost. Each entry: what, why-deferred, rough-effor
 
 ## Appointment Reminder GHL Campaign (separate workstream)
 
-**What:** Once a lead books an appointment via 1prompt-OS (voice tool or GHL native), they should receive reminder messages before the appointment:
+**What:** Once a lead books an appointment via BFD-setter (voice tool or GHL native), they should receive reminder messages before the appointment:
 - 24h before: "Reminder — your call with [client] is tomorrow at [time]"
 - 1h before: "About to call you in 1h"
 - At appointment time: "Calling you now" (or auto-trigger Retell call)
 - After no-show: "Sorry we missed you — book a new time here: [link]"
 
-**Why deferred:** Brendan said this lives in GHL natively, not 1prompt-OS code. GHL has an "Event Triggers" workflow type that fires on Calendar Appointment Created → wait until N hours before → SMS. No 1prompt-OS code needed if we use GHL's native scheduling.
+**Why deferred:** Brendan said this lives in GHL natively, not BFD-setter code. GHL has an "Event Triggers" workflow type that fires on Calendar Appointment Created → wait until N hours before → SMS. No BFD-setter code needed if we use GHL's native scheduling.
 
-**Effort:** half-day for Brendan in GHL UI. No 1prompt-OS dev work.
+**Effort:** half-day for Brendan in GHL UI. No BFD-setter dev work.
 
-**Touch points (so 1prompt-OS doesn't conflict):**
+**Touch points (so BFD-setter doesn't conflict):**
 - bookings-webhook (Phase 7c) ends the active engagement_executions cadence on appointment-create — leaves the GHL reminder workflow free to run
-- 1prompt-OS native cadences MUST NOT include reminder nodes; that's GHL's territory
+- BFD-setter native cadences MUST NOT include reminder nodes; that's GHL's territory
 
 ---
 
@@ -34,7 +34,7 @@ Tracked here so they don't get lost. Each entry: what, why-deferred, rough-effor
 
 ## Native Calendar (drop GHL Calendar)
 
-**What:** Build 1prompt-OS native calendar — own the slot/availability/booking UX. Replace GHL Calendar API calls with internal calendar.
+**What:** Build BFD-setter native calendar — own the slot/availability/booking UX. Replace GHL Calendar API calls with internal calendar.
 
 **Why deferred:** GHL Calendar works fine. 2-4 weeks for a v1 with own UI. Only worth it when GHL feature gaps actively hurt — clients won't notice the boundary today.
 

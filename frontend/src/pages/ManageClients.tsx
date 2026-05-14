@@ -526,7 +526,7 @@ function SubAccountBillingCard({ clientId }: { clientId: string }) {
       <CardContent className="space-y-4">
         <div className="flex items-center justify-between rounded-lg border border-border bg-muted/40 p-4">
           <div>
-            <p className={`font-medium ${cb}`}>{isDefault ? 'Free Tier' : 'OnePrompt Setters'}</p>
+            <p className={`font-medium ${cb}`}>{isDefault ? 'Free Tier' : 'Building Flow setters'}</p>
             <p className={`text-sm text-muted-foreground ${cb}`}>
               {isDefault ? 'Included with your account' : `$10/month — Status: ${statusLabel}`}
             </p>

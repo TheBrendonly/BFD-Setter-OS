@@ -265,7 +265,7 @@ function ClientBillingCard({ clientId }: { clientId: string }) {
       <CardContent className="space-y-4">
         <div className="flex items-center justify-between rounded-lg border border-border bg-muted/40 p-4">
           <div>
-            <p className="font-medium">OnePrompt Setters</p>
+            <p className="font-medium">Building Flow setters</p>
             <p className="text-sm text-muted-foreground">Current status: {statusLabel}</p>
           </div>
            <div className="text-sm text-muted-foreground">$10/month</div>

@@ -1,6 +1,6 @@
 # Setup Overview
 
-This document describes how the 1Prompt platform is structured, how every service connects, what data flows where, and what you need to configure for the system to work end-to-end.
+This document describes how the BFD-setter codebase (which powers Building Flow) is structured, how every service connects, what data flows where, and what you need to configure for the system to work end-to-end.
 
 This is a technical reference — not a step-by-step tutorial. It is intended for developers or technically inclined operators who understand the services involved. Reading through this in full before starting will save you significant time.
 
@@ -341,7 +341,7 @@ Run `supabase/client-schema.sql` in each client's Supabase SQL Editor when onboa
 |---|---|
 | `leads` | Contact records. Primary key is the GHL Contact_ID (text, not UUID). Trigger.dev upserts here when a new lead is seen for the first time. |
 | `chat_history` | Full conversation log. `session_id` = GHL Contact_ID. n8n reads the last 30 messages for context before every LLM call. Follow-up task writes here after sending a follow-up. |
-| `text_prompts` | Setter system prompts. n8n reads the row where `card_name = 'Setter-1'` (or `'Setter-2'`, etc.). Written and managed from the 1Prompt dashboard. |
+| `text_prompts` | Setter system prompts. n8n reads the row where `card_name = 'Setter-1'` (or `'Setter-2'`, etc.). Written and managed from the BFD-setter dashboard. |
 
 ### chat_history Message Format
 
@@ -658,4 +658,4 @@ The fully managed service includes:
 - Model and workflow updates as AI capabilities improve
 - Reporting on setter performance
 
-**→ [Learn about our fully managed setter service](https://us.1prompt.com/widget/bookings/1prompt-clarity-sessionich4ko)**
+**→ Contact Brendan at brendan@buildingflowdigital.com to scope a 7-day Building Flow Pilot.**

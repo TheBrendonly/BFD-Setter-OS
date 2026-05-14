@@ -1012,7 +1012,7 @@ const ApiCredentials = () => {
                   onChange={(value) => handleInputChange('gohighlevel_booking_title', value)}
                   disabled={false}
                   isSavedConfigured={isCredentialConfigured((credentials as any)?.gohighlevel_booking_title)}
-                  placeholder="e.g. Repair visit from Eugene"
+                  placeholder="e.g. Strategy call with Brendan"
                 />
                 <CredentialInputField
                   id="ghl_assignee_id"

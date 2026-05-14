@@ -35,7 +35,7 @@ interface LlmOption {
   cost_per_minute: number | null;
 }
 
-const DEFAULT_SYSTEM_PROMPT = `You are an AI voice assistant for One Prompt. You are professional, friendly, and helpful. Your job is to handle inbound calls, answer questions, and assist callers with their needs.
+const DEFAULT_SYSTEM_PROMPT = `You are an AI voice assistant for Building Flow. You are professional, friendly, and helpful. Your job is to handle inbound calls, answer questions, and assist callers with their needs.
 
 Key guidelines:
 - Be conversational and natural — avoid sounding robotic

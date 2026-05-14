@@ -1,4 +1,4 @@
-# 1prompt-OS Architecture
+# BFD-setter Architecture
 
 ## Component map (target state, end of rebuild)
 
@@ -44,7 +44,7 @@ External lead sources
    └──────────────────────────┘
 
 Cross-cutting:
-─ push-contact-to-ghl: 1prompt UI edits → GHL Contacts API
+─ push-contact-to-ghl: BFD-setter UI edits → GHL Contacts API
 ─ voice-booking-tools: Retell tools → GHL Calendar API direct
 ─ kb-ingest: KB content → bfd-setter-live.documents
 ─ twilio-status-webhook: SMS delivery callbacks → sms_delivery_events

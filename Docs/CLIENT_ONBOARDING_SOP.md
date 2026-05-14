@@ -1,4 +1,4 @@
-# Client Onboarding SOP — 1prompt-OS
+# Client Onboarding SOP — BFD-setter
 
 Standard operating procedure for onboarding a new client end-to-end. Written so a non-technical operator (or a future Claude session) can run it without making decisions in the moment.
 
@@ -190,7 +190,7 @@ The 5 slots that always matter (`make-retell-outbound-call/index.ts:14-16`):
 4. Voice setter slots `retell_agent_id_4..10` — used when cadence specifies `voice_setter_id` in an `engage` channel.
 5. **Voicemail is now Retell-native** (per the next-session prompt). On every Retell agent we set `voicemail_option` either `{ type: 'static_text', text: ... }` or `{ type: 'prompt', prompt: ... }`. No separate voicemail agent.
 
-Reuse existing Retell agents if the client already has them. Otherwise create persistent agents per `MASTER_PLAN.md` invariant ("1prompt-OS uses persistent Retell agents").
+Reuse existing Retell agents if the client already has them. Otherwise create persistent agents per `MASTER_PLAN.md` invariant ("BFD-setter uses persistent Retell agents").
 
 ---
 
@@ -356,7 +356,7 @@ Hand the client this snippet, replacing `<intake_lead_secret>` and `<client-uuid
 
 ```html
 <script>
-async function intake1prompt(formData) {
+async function intakeBuildingFlow(formData) {
   const r = await fetch('https://bjgrgbgykvjrsuwwruoh.supabase.co/functions/v1/intake-lead', {
     method: 'POST',
     headers: {
@@ -385,11 +385,13 @@ For each client phone number (the `retell_phone_*` values):
 3. Save.
 4. No per-number status callback config needed — `processMessages` outbound stamps `StatusCallback=<…>/twilio-status-webhook` on each `Messages.create` call automatically.
 
-### 5.10 Tag-based auto-enrolment via `ghl-tag-webhook` (phase-11e)
+### 5.10 Tag-based auto-enrolment via `ghl-tag-webhook` (Pattern A — greenfield)
+
+Use Pattern A when the client does NOT have the 1Prompt SetterOS GHL snapshot installed. For snapshot-imported clients (BFD and most agency clients), use **Pattern B in §5.13 instead** — the snapshot's `Add Lead to 1Prompt OS` workflow already implements the tag-based ingress via `sync-ghl-contact`.
 
 After cadence copy review (§6) and dry-run (§7), wire GHL → ghl-tag-webhook so contacts auto-enrol when a chosen tag is added:
 
-1. In the 1prompt UI: **Workflows** list → flip the **NEW LEADS** Switch ON for the campaign → enter the tag name (e.g. `new-lead`). At-most-one workflow per client may be ON.
+1. In the BFD-setter UI: **Workflows** list → flip the **NEW LEADS** Switch ON for the campaign → enter the tag name (e.g. `new-lead`). At-most-one workflow per client may be ON.
 2. In GHL: **Workflows** → New → Trigger: **Contact Tag** has tag `<tag>` → Action: **Webhook** → URL: `https://bjgrgbgykvjrsuwwruoh.supabase.co/functions/v1/ghl-tag-webhook` → Method: POST → Body: include `contactId`, `locationId`, and the post-update `tags` (or `addedTags`) array.
 3. Save + activate.
 
@@ -406,7 +408,7 @@ The mirror runs regardless of which path is used; if `clients.ghl_conversation_p
 
 **To wire the polished path:**
 
-1. In the agency's GHL account: **Settings -> Marketplace -> Conversation Providers -> Add custom provider**. Or via the developer portal at `https://marketplace.gohighlevel.com/`. Name it something like "1prompt-os SMS mirror". Set type = SMS.
+1. In the agency's GHL account: **Settings -> Marketplace -> Conversation Providers -> Add custom provider**. Or via the developer portal at `https://marketplace.gohighlevel.com/`. Name it something like "BFD-setter SMS mirror". Set type = SMS.
 2. Copy the provider id (looks like a 24-char hex string).
 3. `UPDATE clients SET ghl_conversation_provider_id = '<id>' WHERE id = '<client-uuid>';`
 4. Smoke-test: send one inbound SMS to the client's Twilio number; expect a new message on the GHL contact's Conversations tab within ~5s. If it lands in Notes instead, double-check the provider id is correctly pasted and the marketplace integration is published.
@@ -442,6 +444,120 @@ The push fires automatically whenever `retell-call-analysis-webhook` receives a 
 4. On the next completed call, open the GHL contact's Notes tab. Expect a note starting with `[Voice Call Summary]` within seconds of the call ending. The two custom fields should also reflect the latest values.
 
 **Notes fallback:** the Note is always written when `clients.ghl_api_key` is present (no custom field ids required). The custom field PATCH is silently skipped if either field id is null.
+
+### 5.13 GHL Snapshot ingress — `Add Lead to 1Prompt OS` (Pattern B — snapshot-imported clients)
+
+Use Pattern B when the client imported the 1Prompt SetterOS GHL snapshot (BFD and most agency clients). The snapshot ships with a `Add Lead to 1Prompt OS` workflow that uses **tag-add → `sync-ghl-contact`** as the new-lead ingress, NOT `ghl-tag-webhook` (which is Pattern A in §5.10). Tag is the trigger; data flows through `sync-ghl-contact` and auto-enrolment fires via `clients.auto_engagement_workflow_id`.
+
+**Architecture:**
+
+```
+Lead source (form / LinkedIn / manual / CSV)
+    ↓ adds tag "1prompt - new lead"  (per-source tagging workflow OR form's built-in tag setting)
+GHL workflow "Add Lead to 1Prompt OS"
+    Trigger: Contact Tag Added = "1prompt - new lead"
+    Action 1: Update Contact Field "GHL Account ID" = <client-location-id>
+    Action 2: Custom Webhook POST → sync-ghl-contact
+        Body: { Lead_ID, Name, Email, Phone, GHL_Account_ID }
+    ↓
+sync-ghl-contact (Supabase edge function)
+    - Resolves client via clients.ghl_location_id = GHL_Account_ID match
+    - CREATE path: inserts leads row + (if auto_engagement_workflow_id set) fires Trigger.dev run-engagement
+    - UPDATE path: bumps leads.updated_at, does NOT re-enrol (idempotent on duplicate tag-add)
+```
+
+**Per-client config (5 places):**
+
+#### 5.13.1 The "Add Lead to 1Prompt OS" workflow
+
+In the GHL UI for the client's location, open workflow `Add Lead to 1Prompt OS`:
+
+1. **Trigger:** confirm "Contact Tag Added" with value `1prompt - new lead` (or whatever convention the client uses — must match `clients.new_leads_tag` if you also want `ghl-tag-webhook` to fire, but Pattern B doesn't require this column).
+2. **Action 1 — Update Contact Field "GHL Account ID":** set value to `<client-location-id>` (the same as `clients.ghl_location_id`). This is what the next action's body uses to resolve the tenant in `sync-ghl-contact`.
+3. **Action 2 — Custom Webhook:**
+   - Method: `POST`
+   - URL: `https://bjgrgbgykvjrsuwwruoh.supabase.co/functions/v1/sync-ghl-contact?clientId=<client-uuid>` (the `clientId` query param is ignored by the function but kept for grep-ability/audit; tenant resolution happens via `GHL_Account_ID` in the body).
+   - Headers: **none** (sync-ghl-contact does not enforce auth today — deferred to A6 sig verification).
+   - Content-Type: `application/json`
+   - Body (exact JSON; do NOT rename keys):
+     ```json
+     {
+       "Lead_ID": "{{contact.id}}",
+       "Name": "{{contact.name}}",
+       "Email": "{{contact.email}}",
+       "Phone": "{{contact.phone}}",
+       "GHL_Account_ID": "{{contact.ghl_account_id}}"
+     }
+     ```
+4. **Publish.**
+
+#### 5.13.2 The form-to-tag bridge workflow (one per lead source)
+
+For each lead source (website form, LinkedIn DM, manual entry), build a small workflow that just adds the `1prompt - new lead` tag. This decouples lead sourcing from cadence enrollment — adding new sources is a small workflow, not a touch to sync-ghl-contact.
+
+**For a website GHL form:**
+1. In **Campaigns** folder → **+ Create Workflow** → name e.g. `Form Submit - "1prompt - new lead" tag added`.
+2. **Trigger:** `Form Submitted` → filter `Form is <form-name>` (e.g. `New Lead to GHL`, form id `<form-id>`). **MUST filter to the specific form** — otherwise every form submit on the location triggers a cadence.
+3. **Action 1:** `Add Contact Tag` → `1prompt - new lead`.
+4. **Publish.**
+
+**Why two workflows and not one combined form-to-webhook:** decoupling means LinkedIn / CSV / manual / future form X all converge on the same tag. Single sync-ghl-contact ingress, multiple lead sources, zero per-source webhook config.
+
+**Conventional tags (BFD location uses these — copy to new clients):**
+- `1prompt - new lead` — triggers Add Lead to 1Prompt OS
+- `1prompt - stop setter` — set when STOP keyword received; triggers `Stop / Activate Setter` workflow
+- `1prompt - text setter`, `1prompt voice setter` — internal routing tags
+
+#### 5.13.3 Disable the snapshot's bookings workflow
+
+The snapshot ships with `Add Booking to 1Prompt OS` (single workflow for all appointment events). **Do not use it.** GHL's workflow merge tags don't expose `appointmentStatus`, so it can't tell booked vs cancelled apart. BFD's pattern (§G of `Docs/WEBHOOKS.md`) is two workflows: `<client> bookings → 1prompt (BOOKED)` and `<client> bookings → 1prompt (CANCELLED)`, each filtering to one status case and hardcoding it in the body.
+
+1. Open `Add Booking to 1Prompt OS` in the GHL editor.
+2. Toggle **Publish OFF** (move slider to Draft).
+3. Confirm the two BFD-pattern booking workflows exist (see §5.2 above for `bookings-webhook` wiring; build a per-client equivalent of `BFD bookings → 1prompt (BOOKED)` + `(CANCELLED)`).
+
+#### 5.13.4 Other snapshot workflows — dormant under native engine
+
+Under `clients.use_native_text_engine=true` (BFD's mode), these snapshot workflows are **vestigial** — their URLs are stored in `clients` for validation, but the runtime path bypasses them entirely:
+
+| Workflow | Column it expects | Used by | Status under native engine |
+|---|---|---|---|
+| `Send Setter Reply` | `clients.ghl_send_setter_reply_webhook_url` | `processMessages` (legacy n8n branch only) | Dormant; URL validated but never called |
+| `Send Engagement` | `clients.send_engagement_webhook_url` | `runEngagement` WhatsApp branch only | Dormant for SMS+voice clients |
+| `Send Followup` | (column exists, not actively referenced) | n/a | Dormant |
+| `Send Message` | (column exists, not actively referenced) | n/a | Dormant |
+| `Receive Message` | n/a (Twilio webhook handles inbound) | n/a | Dormant |
+| `Stop / Activate Setter` | called via tag-add | Parallel path; primary STOP is `receive-twilio-sms` → `setter_stopped` flag | Tag-add path runs in parallel; safe to leave published |
+
+**You can leave them published** — they don't fire under native engine and don't double-fire anything. They become load-bearing again only if you roll back `use_native_text_engine=false` or add a WhatsApp node to a cadence. Phase 10 (post-soak) will likely retire the URL columns entirely.
+
+For each Send* workflow, do confirm the Inbound Webhook URL in the workflow's trigger matches what's stored in the client's BFD admin UI config. They were upstream-default URLs at snapshot import time and need updating per new GHL location.
+
+#### 5.13.5 End-to-end verification (8 hops)
+
+Once §5.13.1-3 are done and the cadence is published (§6), run a real form submission against the client's website. Watch all 8 hops:
+
+| # | Where to check | Pass criteria |
+|---|---|---|
+| 1 | GHL UI · Contacts | New contact created with submitted fields, tagged `1prompt - new lead` |
+| 2 | GHL UI · Workflows → Form-to-tag workflow → History | Run shows "Completed" within ~10s |
+| 3 | GHL UI · Workflows → `Add Lead to 1Prompt OS` → History | Run shows "Completed" within ~5s of the form-to-tag run, no failed actions |
+| 4 | `SELECT * FROM leads WHERE lead_id='<ghl-contact-id>'` | New row, fields populated from the form |
+| 5 | `SELECT * FROM engagement_executions WHERE ghl_contact_id='<ghl-contact-id>' ORDER BY created_at DESC LIMIT 1` | New row, `status` in (`pending`,`running`), `trigger_run_id` populated |
+| 6 | Trigger.dev console · `proj_fdozaybvhgxnzopabtse` · runs | `run-engagement` run started within ~5s |
+| 7 | `SELECT * FROM message_queue WHERE contact_phone='<phone>' ORDER BY created_at DESC` | Outbound SMS row, `twilio_message_sid` populated, body matches first cadence node |
+| 8 | Tester's phone | SMS n1 lands within ~30s of submit |
+
+**If Hop 4 fails** (no leads row): sync-ghl-contact returned non-200. Common causes:
+- `sync_ghl_enabled` column missing on `clients` (run `ALTER TABLE clients ADD COLUMN IF NOT EXISTS sync_ghl_enabled BOOLEAN NOT NULL DEFAULT true`). Pre-2026-05-13 deployments may not have this column.
+- `clients.ghl_location_id` doesn't match the GHL_Account_ID action value in 5.13.1 step 2.
+- The `clientId` query param is wrong — but the function ignores it; check the body has the right `GHL_Account_ID`.
+
+**If Hop 5 fails but Hop 4 passes**: sync-ghl-contact reached UPDATE path (existing leads row). Delete the row and re-trigger to test from CREATE path. UPDATE path is idempotent-by-design and does not re-enrol.
+
+**If Hop 8 fails with no message_queue row visible**: check Trigger.dev run logs at `https://cloud.trigger.dev/projects/proj_fdozaybvhgxnzopabtse`. Run-engagement may have thrown at the SMS node. Common cause is Twilio carrier opt-out (error code `21610`) from prior STOP keyword testing — the tester texts `START` from their phone to `<from_number>` to clear it.
+
+**If SMS lands but with `Twilio SMS failed: ? unknown` in Trigger.dev logs**: known bug — `runEngagement.ts:171` reads `error_code`/`error_message` from Twilio's response but Twilio uses `code`/`message`. Track down the actual error by querying `https://api.twilio.com/2010-04-01/Accounts/<sid>/Messages.json` directly.
 
 ---
 

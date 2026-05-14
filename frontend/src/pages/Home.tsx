@@ -246,7 +246,7 @@ export default function Home() {
       {/* ── Header ── */}
       <nav className="fixed inset-x-0 top-0 z-50 border-b border-border bg-sidebar">
         <div className="relative mx-auto flex max-w-7xl items-center justify-center px-4 py-2 sm:px-6">
-          <img src={logo} alt="1Prompt" className="h-11 w-auto" />
+          <img src={logo} alt="BFD-setter" className="h-11 w-auto" />
           <div className="absolute right-4 sm:right-6 flex items-center gap-2">
             <Button
               variant="outline"

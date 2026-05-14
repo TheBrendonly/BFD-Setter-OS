@@ -2,7 +2,7 @@
 
 Last verified: 2026-05-01.
 
-This is the canonical list of environment variables required by each Railway service in the 1prompt-OS deployment. Brendan owns the Railway dashboard; future Claude sessions can't reach Railway without a `RAILWAY_API_TOKEN` in the local `.env`.
+This is the canonical list of environment variables required by each Railway service in the BFD-setter deployment. Brendan owns the Railway dashboard; future Claude sessions can't reach Railway without a `RAILWAY_API_TOKEN` in the local `.env`.
 
 Deployment topology reminder (memory `reference_deployment_topology`):
 - **Frontend** → Railway (`1prompt-os-production.up.railway.app`)

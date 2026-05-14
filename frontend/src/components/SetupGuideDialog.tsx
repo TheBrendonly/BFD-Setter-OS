@@ -3870,7 +3870,7 @@ const [loading, setLoading] = useState(false);
                     id="bot-persona-name"
                     value={botPersonaPrompt.name}
                     onChange={(e) => setBotPersonaPrompt(prev => ({ ...prev, name: e.target.value }))}
-                    placeholder="e.g., Geno - AI Sales Rep"
+                    placeholder="e.g., Gary - AI Sales Rep"
                     className="w-full"
                   />
                 </div>
@@ -3946,7 +3946,7 @@ const [loading, setLoading] = useState(false);
                           Example prompts you can send:
                         </p>
                         <ul className="text-sm text-blue-900 dark:text-blue-200 space-y-1 ml-2">
-                          <li>• "Change the name of the bot from Geno to Alex"</li>
+                          <li>• "Change the name of the bot from Gary to Alex"</li>
                           <li>• "Alex is a senior sales manager at X company, he is professional and ready to help"</li>
                           <li>• "Make the bot more formal and less casual in its responses"</li>
                           <li>• "Add information about our company's services to the prompt"</li>
@@ -4759,7 +4759,7 @@ const [loading, setLoading] = useState(false);
                 </div>
 
                 <div className="space-y-2">
-                  <p><strong>Step 4:</strong> Enter a <strong>Name</strong> for your integration (e.g., "1Prompt" or your preferred name).</p>
+                  <p><strong>Step 4:</strong> Enter a <strong>Name</strong> for your integration (e.g., "Building Flow" or your preferred name).</p>
                   <SmoothImage src="/lovable-uploads/ghl-name-integration.png" alt="HighLevel naming the integration" />
                 </div>
 

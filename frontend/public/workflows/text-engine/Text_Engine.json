@@ -1269,7 +1269,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"calendarId\": \"{{ $('Set_Calendar_Id').item.json.Calendar_Id }}\",\n  \"locationId\": \"{{ $('Set_Location_Id').item.json.location_Id }}\",\n  \"contactId\": \"{{ $('Set_User_ID').item.json.User_ID }}\",\n  \"startTime\": \"{starDate}\",\n  \"title\": \"AI Strategy with Eugene x 1Prompt\",\n  \"meetingLocationType\": \"default\",\n  \"appointmentStatus\": \"confirmed\",\n  \"assignedUserId\": \"{{ $('Set_Assignee_Id').item.json.assignee_Id }}\",\n  \"ignoreDateRange\": false,\n  \"toNotify\": true,\n  \"ignoreFreeSlotValidation\": false\n}",
+        "jsonBody": "={\n  \"calendarId\": \"{{ $('Set_Calendar_Id').item.json.Calendar_Id }}\",\n  \"locationId\": \"{{ $('Set_Location_Id').item.json.location_Id }}\",\n  \"contactId\": \"{{ $('Set_User_ID').item.json.User_ID }}\",\n  \"startTime\": \"{starDate}\",\n  \"title\": \"Strategy Call with Brendan\",\n  \"meetingLocationType\": \"default\",\n  \"appointmentStatus\": \"confirmed\",\n  \"assignedUserId\": \"{{ $('Set_Assignee_Id').item.json.assignee_Id }}\",\n  \"ignoreDateRange\": false,\n  \"toNotify\": true,\n  \"ignoreFreeSlotValidation\": false\n}",
         "placeholderDefinitions": {
           "values": [
             {

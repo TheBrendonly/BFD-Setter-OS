@@ -1534,7 +1534,7 @@ const WebinarSetupGuideDialog: React.FC<WebinarSetupGuideDialogProps> = ({
               <div className="bg-primary/10 border border-primary/20 rounded-lg p-4">
                 <p className="font-medium mb-2">Example message:</p>
                 <p className="font-mono text-sm">
-                  {"Hey {{contact.first_name}}, it's Eugene! Just saw you registered for my webinar and I need to clarify a few things. Can we chat here?"}
+                  {"Hey {{contact.first_name}}, it's Gary from Building Flow. Just saw you registered for the webinar and I need to clarify a few things. Can we chat here?"}
                 </p>
               </div>
             </div>
