@@ -6,6 +6,17 @@ Items are sequenced. Order matters — do them top-to-bottom. Each item links to
 
 Effort: S = under 30 min, M = 30 min - 2 hr, L = half day+.
 
+**State of play (2026-05-14, post Phase E rebrand):**
+
+- HEAD: `86d6eac` on both Forgejo origin AND GitHub
+- Production: `https://app.buildingflowdigital.com/` (Railway-hosted, custom domain)
+- Repo path: `/srv/bfd/Projects/bfd-setter/` (back-compat symlink at `.../1prompt-os/`)
+- Brand hierarchy locked: **BFD** agency / **Building Flow** product / **Gary** persona (he/him) / **BFD-setter** codebase / `genokadzin/1prompt-os` upstream attribution only
+- Phase A end-to-end verified, all 3 bugs closed, native text engine running for BFD
+- Phase E1 (rebrand) ✅ DONE. Phase E2 (Lovable cleanup) ✅ DONE. E3 (Retell agents), E4 (setup-guide screenshots), E5 (pun-quiz rewrite) deferred.
+- Cadence v2 draft at `engagement_workflows.c206da3e-...`, `is_active=false`; awaiting Brendan's eyeball + activation
+- Latest handoff: `Operations/handoffs/2026-05-14-phase-e-rebrand-handoff.md`
+
 ---
 
 ## Phase A — Make BFD live on the new stack (before sign Client #2)
