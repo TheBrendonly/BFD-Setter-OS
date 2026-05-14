@@ -2,7 +2,7 @@
 
 Vite + React + TypeScript + Tailwind + shadcn/ui admin dashboard for the BFD-setter codebase (which powers BFD's **Building Flow** AI appointment-setter platform).
 
-Repo root: `/srv/bfd/Projects/1prompt-os/`. Canonical project README: [`../README.md`](../README.md). Deployment topology + Railway env reference: [`../Docs/RUNBOOK.md`](../Docs/RUNBOOK.md) and [`../Docs/RAILWAY_ENV.md`](../Docs/RAILWAY_ENV.md).
+Repo root: `/srv/bfd/Projects/bfd-setter/` (back-compat symlink at `/srv/bfd/Projects/1prompt-os/`). Canonical project README: [`../README.md`](../README.md). Deployment topology + Railway env reference: [`../Docs/RUNBOOK.md`](../Docs/RUNBOOK.md) and [`../Docs/RAILWAY_ENV.md`](../Docs/RAILWAY_ENV.md).
 
 ## Local development
 
