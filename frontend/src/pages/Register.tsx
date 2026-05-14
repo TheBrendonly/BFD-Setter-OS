@@ -5,7 +5,7 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { Navigate, Link, useNavigate } from 'react-router-dom';
-import logoImg from '@/assets/1prompt-logo.png';
+import logoImg from '@/assets/bfd-logo.png';
 
 const Register = () => {
   const [firstName, setFirstName] = useState('');

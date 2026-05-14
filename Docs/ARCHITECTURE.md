@@ -159,7 +159,7 @@ sequenceDiagram
 
 ## Deployment topology
 
-- **Frontend dashboard:** Railway service. URL `https://1prompt-os-production.up.railway.app/`. Build deploys via Railway on push to main.
+- **Frontend dashboard:** Railway service. Customer URL `https://app.buildingflowdigital.com/`. Build deploys via Railway on push to main.
 - **n8n (legacy):** Railway service. To be decommissioned after Phase 10. Pinned to 2.17.7.
 - **Supabase Edge Functions:** auto-deployed via `supabase functions deploy <slug>`. Project ref `bjgrgbgykvjrsuwwruoh`.
 - **Trigger.dev tasks:** deployed via `npx trigger.dev deploy --env prod`. Project `proj_fdozaybvhgxnzopabtse`.

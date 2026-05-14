@@ -5,7 +5,7 @@ import { Label } from '@/components/ui/label';
 import { useAuth } from '@/hooks/useAuth';
 import { Navigate, Link } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
-import logoImg from '@/assets/1prompt-logo.png';
+import logoImg from '@/assets/bfd-logo.png';
 import { ArrowLeft, Mail, ShieldAlert } from 'lucide-react';
 
 const ForgotPassword = () => {

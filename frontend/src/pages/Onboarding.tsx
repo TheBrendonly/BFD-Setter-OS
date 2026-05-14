@@ -8,7 +8,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { Upload } from '@/components/icons';
-import logoImg from '@/assets/1prompt-logo.png';
+import logoImg from '@/assets/bfd-logo.png';
 
 const Onboarding = () => {
   const navigate = useNavigate();

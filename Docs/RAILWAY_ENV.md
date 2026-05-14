@@ -5,7 +5,7 @@ Last verified: 2026-05-01.
 This is the canonical list of environment variables required by each Railway service in the BFD-setter deployment. Brendan owns the Railway dashboard; future Claude sessions can't reach Railway without a `RAILWAY_API_TOKEN` in the local `.env`.
 
 Deployment topology reminder (memory `reference_deployment_topology`):
-- **Frontend** → Railway (`1prompt-os-production.up.railway.app`)
+- **Frontend** → `app.buildingflowdigital.com` (Railway-hosted, custom domain)
 - **n8n** → Railway (separate service, being decommissioned in Phase 10)
 - **Edge functions** → Supabase (not Railway)
 - **Trigger.dev tasks** → Trigger.dev cloud (not Railway)
@@ -46,7 +46,7 @@ Deployment topology reminder (memory `reference_deployment_topology`):
 1. Railway dashboard → `Building Flow Digital` workspace → `1prompt-os-production` service → **Variables** tab.
 2. Click **+ New Variable** for each missing var.
 3. After all four are set, redeploy (Railway will offer a rebuild button).
-4. Verification: open `https://1prompt-os-production.up.railway.app/api-credentials` (after auth) — should load the API credentials list. If the page shows blank/loading forever, one of the vars is still missing or wrong.
+4. Verification: open `https://app.buildingflowdigital.com/api-credentials` (after auth) — should load the API credentials list. If the page shows blank/loading forever, one of the vars is still missing or wrong.
 
 **Optional Railway-managed vars (don't set these manually):**
 - `PORT` — Railway sets automatically for the HTTP listener.

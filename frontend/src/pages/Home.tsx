@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import PhoneInputComponent from "react-phone-number-input";
 import "react-phone-number-input/style.css";
-import logo from "@/assets/1prompt-logo.png";
+import logo from "@/assets/bfd-logo.png";
 
 const LAUNCH_DATE = new Date("2026-04-16T14:00:00-04:00");
 const WEBHOOK_1 = "https://services.leadconnectorhq.com/hooks/dzTOfajR3YuQKAqE1myz/webhook-trigger/3aa90d78-9fc1-43fe-b147-ae578a6d2bd3";

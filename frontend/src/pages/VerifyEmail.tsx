@@ -6,7 +6,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { Navigate, Link, useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
-import logoImg from '@/assets/1prompt-logo.png';
+import logoImg from '@/assets/bfd-logo.png';
 
 const VerifyEmail = () => {
   const [token, setToken] = useState('');

@@ -12,7 +12,7 @@ import {
   BreadcrumbSeparator,
   BreadcrumbPage
 } from '@/components/ui/breadcrumb';
-const defaultLogo = '/lovable-uploads/796b8677-66ff-4cc9-914b-a38b48b1871f.png';
+const defaultLogo = '/bfd-logo.png';
 
 // Cache for logo URLs to avoid repeated API calls
 const logoCache = new Map<string, string>();

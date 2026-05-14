@@ -11,7 +11,7 @@ import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { useToast } from '@/hooks/use-toast';
 import { ArrowLeft, Upload, Save, User, Lock, Mail, Building2 } from '@/components/icons';
 import AppHeader, { refreshUserLogo } from '@/components/AppHeader';
-const defaultLogo = '/lovable-uploads/796b8677-66ff-4cc9-914b-a38b48b1871f.png';
+const defaultLogo = '/bfd-logo.png';
 
 interface UserProfile {
   id: string;
