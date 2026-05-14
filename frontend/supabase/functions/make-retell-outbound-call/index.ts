@@ -171,6 +171,8 @@ function buildAvailabilityDynamicVariable(result: AvailabilityFetchResult): stri
 async function fetchGhlFreeSlots(
   ghlApiKey: string,
   calendarId: string,
+  // Default kept as an absolute fallback for programmer error. All
+  // in-codebase call sites resolve client.timezone first (Bug 2 fix).
   timezone: string = "America/New_York",
 ): Promise<AvailabilityFetchResult> {
   const windowStart = new Date();
@@ -392,7 +394,9 @@ Deno.serve(async (req) => {
           execution_id,
           treat_pickup_as_reply,
           custom_instructions: custom_instructions ? custom_instructions.slice(0, 200) + "..." : "(default)",
-          timezone: timezone || "America/New_York",
+          // Pre-resolution telemetry — actual tz used is logged later
+          // alongside `tz` (Bug 2 fix: client.timezone or ET fallback).
+          timezone: timezone || "(client default)",
           contact_fields,
         },
       });
@@ -405,7 +409,7 @@ Deno.serve(async (req) => {
     const { data: client, error: clientErr } = await supabase
       .from("clients")
       .select(
-        "retell_api_key, retell_inbound_agent_id, retell_outbound_agent_id, retell_outbound_followup_agent_id, retell_agent_id_4, retell_agent_id_5, retell_agent_id_6, retell_agent_id_7, retell_agent_id_8, retell_agent_id_9, retell_agent_id_10, retell_phone_1, retell_phone_2, retell_phone_3, ghl_location_id, ghl_api_key, ghl_calendar_id",
+        "retell_api_key, retell_inbound_agent_id, retell_outbound_agent_id, retell_outbound_followup_agent_id, retell_agent_id_4, retell_agent_id_5, retell_agent_id_6, retell_agent_id_7, retell_agent_id_8, retell_agent_id_9, retell_agent_id_10, retell_phone_1, retell_phone_2, retell_phone_3, ghl_location_id, ghl_api_key, ghl_calendar_id, timezone",
       )
       .eq("id", client_id)
       .single();
@@ -494,7 +498,13 @@ Deno.serve(async (req) => {
     const ghlApiKey = client.ghl_api_key;
     const calendarId = client.ghl_calendar_id;
     const locationId = ghl_account_id || client.ghl_location_id || "";
-    const tz = timezone || "America/New_York";
+    // Bug 2 — default the timezone from clients.timezone (added 2026-05-05
+    // in phase-night-a4-clients-timezone), falling back to ET only when
+    // the column is null. Previously this was hardcoded to ET regardless
+    // of the client's actual timezone, which surfaced as the voice agent
+    // offering booking slots in ET to AU leads.
+    const clientTz = (client as { timezone?: string | null }).timezone || "America/New_York";
+    const tz = timezone || clientTz;
 
     const leadLookupId = ghl_contact_id || body.lead_id || "";
     const [availableSlots, ghlContactDetails, chatHistory, callHistory] = await Promise.all([
@@ -513,8 +523,9 @@ Deno.serve(async (req) => {
     // 6. Build dynamic variables
     const fields = contact_fields || {};
     const nowTs = new Date();
-    const currentTimeET = nowTs.toLocaleString("en-US", {
-      timeZone: "America/New_York",
+    // Bug 2 — render current_time in the client's actual timezone, not ET.
+    const currentTimeLocal = nowTs.toLocaleString("en-US", {
+      timeZone: tz,
       dateStyle: "full",
       timeStyle: "short",
     });
@@ -530,7 +541,8 @@ Deno.serve(async (req) => {
       execution_id: execution_id || "",
       voice_setter_id: voice_setter_id || "",
       treat_pickup_as_reply: treat_pickup_as_reply ? "true" : "false",
-      current_time: currentTimeET,
+      current_time: currentTimeLocal,
+      current_timezone: tz,
       custom_instructions:
         custom_instructions ||
         `Keep the conversation natural and human-like. Speak casually as if you're a real person, not a bot. Use filler words occasionally (like "yeah", "I mean", "for sure"). Keep responses short - 1 to 2 sentences max unless they ask for more detail. Mirror the prospect's energy and pace. If they sound busy, get to the point fast. If they're chatty, match that vibe. Never sound scripted or robotic.`,
