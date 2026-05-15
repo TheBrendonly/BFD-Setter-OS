@@ -221,10 +221,20 @@ You have access to the following dynamic variables about the lead you are callin
   // Use explicit !== undefined checks so falsy values (0, false, null) are properly sent
   const agentUpdates: Record<string, unknown> = {};
   if (voiceSettings) {
-    if (voiceSettings.voice_id !== undefined) agentUpdates.voice_id = voiceSettings.voice_id;
-    // Only send voice_model for ElevenLabs voices (prefix "11labs-")
-    if (voiceSettings.voice_model && typeof voiceSettings.voice_id === 'string' && voiceSettings.voice_id.startsWith('11labs-')) {
-      agentUpdates.voice_model = voiceSettings.voice_model;
+    if (typeof voiceSettings.voice_id === 'string' && voiceSettings.voice_id.trim().length > 0) {
+      agentUpdates.voice_id = voiceSettings.voice_id.trim();
+    }
+    // voice_model rules per Retell: required for 11labs-* presets AND raw ElevenLabs IDs;
+    // NOT accepted for Retell-managed prefixes (custom_voice_*, openai-*, cartesia-*, play-*).
+    if (voiceSettings.voice_model && typeof voiceSettings.voice_id === 'string') {
+      const vid = voiceSettings.voice_id.trim();
+      const isRetellManaged = vid.startsWith('custom_voice_')
+        || vid.startsWith('openai-')
+        || vid.startsWith('cartesia-')
+        || vid.startsWith('play-');
+      if (!isRetellManaged) {
+        agentUpdates.voice_model = voiceSettings.voice_model;
+      }
     }
     if (voiceSettings.voice_temperature !== undefined) agentUpdates.voice_temperature = voiceSettings.voice_temperature;
     if (voiceSettings.voice_speed !== undefined) agentUpdates.voice_speed = voiceSettings.voice_speed;

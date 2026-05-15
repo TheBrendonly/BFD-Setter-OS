@@ -72,6 +72,18 @@ export function RetellVoiceSelector({ value, onChange, disabled }: RetellVoiceSe
   const selectedVoice = HARDCODED_VOICES.find(v => v.voice_id === value);
   const selectedName = selectedVoice?.voice_name || value || '';
 
+  // Flag a pasted ID that doesn't match any known Retell prefix so the user
+  // knows to register raw ElevenLabs IDs as a Retell custom voice first.
+  const isCustomPaste = !!value && !selectedVoice;
+  const hasKnownPrefix = !!value && (
+    value.startsWith('custom_voice_')
+    || value.startsWith('11labs-')
+    || value.startsWith('openai-')
+    || value.startsWith('cartesia-')
+    || value.startsWith('play-')
+  );
+  const showRawIdWarning = isCustomPaste && !hasKnownPrefix;
+
   return (
     <div className="space-y-2">
       <Popover open={open} onOpenChange={setOpen}>
@@ -107,7 +119,7 @@ export function RetellVoiceSelector({ value, onChange, disabled }: RetellVoiceSe
             <Search className="h-3.5 w-3.5 shrink-0 opacity-50" />
             <input
               ref={searchRef}
-              placeholder="Search voice or paste custom ID..."
+              placeholder="Search or paste custom_voice_xxx / 11labs-Name..."
               value={search}
               onChange={e => setSearch(e.target.value)}
               onKeyDown={e => {
@@ -173,6 +185,16 @@ export function RetellVoiceSelector({ value, onChange, disabled }: RetellVoiceSe
           </div>
         </PopoverContent>
       </Popover>
+      {isCustomPaste && (
+        <div className="text-muted-foreground" style={{ ...monoStyle, fontSize: '11px' }}>
+          Custom voice ID: <span className="text-foreground">{value}</span>
+        </div>
+      )}
+      {showRawIdWarning && (
+        <div className="text-amber-500" style={{ ...monoStyle, fontSize: '11px' }}>
+          This looks like a raw ID without a Retell prefix. Retell expects custom_voice_xxx (register the ElevenLabs voice in your Retell dashboard first) or 11labs-VoiceName presets. Bare ElevenLabs IDs may not resolve correctly.
+        </div>
+      )}
     </div>
   );
 }
