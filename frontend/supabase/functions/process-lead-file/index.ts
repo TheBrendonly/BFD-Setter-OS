@@ -1,7 +1,16 @@
-import { encodeBase64 } from 'jsr:@std/encoding/base64';
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { z } from 'https://esm.sh/zod@3.25.76';
-import { parsePhoneNumberFromString } from 'https://esm.sh/libphonenumber-js@1.12.41/min';
+import { createClient } from 'npm:@supabase/supabase-js@2';
+
+// Inline base64 encoder (jsr:@std/encoding/base64 is blocked by Supabase's
+// edge runtime --no-remote flag; native btoa works fine here).
+function encodeBase64(bytes: Uint8Array): string {
+  let s = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) {
+    s += String.fromCharCode.apply(null, Array.from(bytes.subarray(i, i + 0x8000)));
+  }
+  return btoa(s);
+}
+import { z } from 'npm:zod@3.25.76';
+import { parsePhoneNumberFromString } from 'npm:libphonenumber-js@1.12.41/min';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',

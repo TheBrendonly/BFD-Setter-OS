@@ -1,4 +1,4 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { createClient } from 'npm:@supabase/supabase-js@2'
 import { loggedFetch } from "../_shared/request-logger.ts"
 import { assertClientAccess, AssertAccessError } from "../_shared/assert-client-access.ts"
 
