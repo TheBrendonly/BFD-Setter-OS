@@ -123,6 +123,7 @@ export const DEFAULT_RETELL_VOICE_SETTINGS: RetellVoiceSettings = {
 const LANGUAGES = [
   { value: 'en-US', label: 'English (US)' },
   { value: 'en-GB', label: 'English (UK)' },
+  { value: 'en-AU', label: 'English (Australia)' },
   { value: 'es-ES', label: 'Spanish (Spain)' },
   { value: 'es-419', label: 'Spanish (Latin America)' },
   { value: 'fr-FR', label: 'French' },

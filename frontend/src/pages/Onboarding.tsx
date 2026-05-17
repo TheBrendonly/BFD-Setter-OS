@@ -87,6 +87,13 @@ const Onboarding = () => {
         clientId = existingClient.id;
       } else {
         // Create a new sub-account
+        // Auto-mint intake_lead_secret for this tenant so the platform's edge fns
+        // (voice-booking-tools, intake-lead) can authenticate the tenant's
+        // tool-calls + form submissions without manual credential setup.
+        // Mirrors scripts/onboard-client.mjs:169.
+        const secretBytes = new Uint8Array(24);
+        crypto.getRandomValues(secretBytes);
+        const intakeLeadSecret = btoa(String.fromCharCode(...secretBytes));
         const { data: newClient, error: createError } = await supabase
           .from('clients')
           .insert({
@@ -95,6 +102,7 @@ const Onboarding = () => {
             description: description.trim() || null,
             agency_id: profile.agency_id,
             subscription_status: 'free',
+            intake_lead_secret: intakeLeadSecret,
           })
           .select('id')
           .single();

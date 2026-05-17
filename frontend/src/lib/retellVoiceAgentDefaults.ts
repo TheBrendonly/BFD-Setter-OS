@@ -37,6 +37,12 @@ export const DEFAULT_RETELL_POST_CALL_ANALYSIS_DATA = [
   },
 ] as const;
 
+// Sentinel URL value for the 5 booking tools below. retell-proxy/sync-voice-setter
+// rewrites this placeholder (or any legacy n8n-1prompt.99players.com URL) to the
+// platform's own voice-booking-tools edge fn with per-tenant clientId + Bearer
+// auth at push time. Keep both strings in sync if either changes.
+export const BFD_VOICE_BOOKING_TOOLS_PLACEHOLDER = "__BFD_VOICE_BOOKING_TOOLS__";
+
 export const DEFAULT_RETELL_GENERAL_TOOLS = [
   {
     name: "end_call",
@@ -52,7 +58,7 @@ export const DEFAULT_RETELL_GENERAL_TOOLS = [
     description:
       'Use this function to update the appointment . Use the eventId from the appointment  chosen by the user. Use the timezone given by the user and startDateTime given by user from the list of slots or directly. Use the "id" from the appointment list as the eventId which is chosen by the user from the list.',
     type: "custom",
-    url: "https://n8n-1prompt.99players.com/webhook/e4cffeea-b611-4722-907d-4fc7554efe30",
+    url: "__BFD_VOICE_BOOKING_TOOLS__",
     args_at_root: false,
     timeout_ms: 120000,
     speak_after_execution: true,
@@ -94,7 +100,7 @@ export const DEFAULT_RETELL_GENERAL_TOOLS = [
     description:
       "Use this function to get the list of appointments. Use the timezone given by the get-timezone function. Use the startDateTime given by the user to get the list of appointments.",
     type: "custom",
-    url: "https://n8n-1prompt.99players.com/webhook/e4cffeea-b611-4722-907d-4fc7554efe30",
+    url: "__BFD_VOICE_BOOKING_TOOLS__",
     args_at_root: false,
     execution_message_description:
       'Based on what the user asked, say a brief natural phrase like "Let me check what I have open for you" or "One sec, pulling up the calendar". Keep it casual, under 10 words, never sound scripted.',
@@ -138,7 +144,7 @@ export const DEFAULT_RETELL_GENERAL_TOOLS = [
     description:
       "Use this function to book the appointments. Use the user's timezone, email, and booking date and time.",
     type: "custom",
-    url: "https://n8n-1prompt.99players.com/webhook/e4cffeea-b611-4722-907d-4fc7554efe30",
+    url: "__BFD_VOICE_BOOKING_TOOLS__",
     args_at_root: false,
     execution_message_description:
       'Based on the slot the user just picked, say something natural like "Yep, great, let me finalize your booking on my side" or "Perfect, locking that in for you now". Confirm their choice casually, under 12 words.',
@@ -177,7 +183,7 @@ export const DEFAULT_RETELL_GENERAL_TOOLS = [
     description:
       'Use this function to cancel the event. User will select from the given list of user\'s appointments. Use the eventId of that appointment. Get the eventId from the appointment which user choose to cancel. You can get it from the list. it would be like "iJmJNN7ZeiIrIID1JmkW" for example it would be the "id" from the appointment detail you got from get-contact-appointment response',
     type: "custom",
-    url: "https://n8n-1prompt.99players.com/webhook/e4cffeea-b611-4722-907d-4fc7554efe30",
+    url: "__BFD_VOICE_BOOKING_TOOLS__",
     args_at_root: false,
     execution_message_description:
       'Based on the user\'s cancellation request, say something brief like "Good, give me a second to process your cancellation" or "Understood, cancelling that for you now". Confirm naturally, under 12 words.',
@@ -211,7 +217,7 @@ export const DEFAULT_RETELL_GENERAL_TOOLS = [
     description:
       "Use this function to get the contact appointment when user ask to update the booking. Use the contact Id by finding the contact though get-contact function. Use the timezone determined by the user location.",
     type: "custom",
-    url: "https://n8n-1prompt.99players.com/webhook/e4cffeea-b611-4722-907d-4fc7554efe30",
+    url: "__BFD_VOICE_BOOKING_TOOLS__",
     args_at_root: false,
     execution_message_description:
       'Based on what the user asked, say a brief natural phrase like "Yes, please bear with me while I check my system" or "Let me pull up your appointments real quick". Acknowledge naturally, under 12 words.',

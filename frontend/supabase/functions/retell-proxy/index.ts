@@ -148,6 +148,34 @@ async function syncVoiceSetter(
   const agentColumn = SLOT_TO_AGENT_COLUMN[slotNumber];
   if (!agentColumn) throw new Error(`Invalid voice setter slot number: ${slotNumber}`);
 
+  // Multi-tenant: fetch this client's intake_lead_secret so booking-tool URLs can
+  // be rewritten to point at our own voice-booking-tools edge fn with per-tenant
+  // auth. Auto-mint the secret if missing (one-time backfill per tenant).
+  const { data: clientRow, error: clientErr } = await supabase
+    .from("clients")
+    .select("id, intake_lead_secret")
+    .eq("id", clientId)
+    .single();
+  if (clientErr || !clientRow) {
+    throw new Error(`[sync-voice-setter] Failed to fetch client ${clientId}: ${clientErr?.message ?? "not found"}`);
+  }
+  let intakeSecret = (clientRow as { intake_lead_secret: string | null }).intake_lead_secret;
+  if (!intakeSecret) {
+    const bytes = new Uint8Array(24);
+    crypto.getRandomValues(bytes);
+    intakeSecret = btoa(String.fromCharCode(...bytes));
+    console.log(`[sync-voice-setter] Auto-minting intake_lead_secret for client ${clientId}`);
+    const { error: mintErr } = await supabase
+      .from("clients")
+      .update({ intake_lead_secret: intakeSecret })
+      .eq("id", clientId);
+    if (mintErr) console.warn(`[sync-voice-setter] intake_lead_secret persist failed: ${mintErr.message}`);
+  }
+
+  // Diagnostic for voice paste-in bug: log raw voice_id received from the UI
+  // payload so we can confirm whether the paste survives the round-trip.
+  console.log(`[sync-voice-setter] voiceSettings.voice_id received:`, JSON.stringify((voiceSettings as Record<string, unknown> | undefined)?.voice_id ?? null));
+
   const DEPRECATED_TOOLS = ['create-contact', 'get_contact', 'get-contact'];
   const isValidUrl = (u: unknown): boolean => {
     if (typeof u !== 'string' || !u.trim()) return false;
@@ -175,9 +203,37 @@ async function syncVoiceSetter(
     }
     return true;
   });
-  const generalTools = validatedTools.length > 0 ? validatedTools : [{ type: "end_call", name: "end_call" }];
+  // Multi-tenant booking-tool URL substitution:
+  // The frontend defaults file (retellVoiceAgentDefaults.ts) ships with either the
+  // legacy upstream n8n URL or a sentinel placeholder for the 5 booking tools.
+  // Rewrite both into our own voice-booking-tools edge fn URL with per-tenant
+  // clientId query param + Bearer auth. End-call / transfer-call pass through
+  // unchanged. Tools that already point at a custom user-defined URL also pass
+  // through (only substitute the known upstream patterns + the placeholder).
+  const supabaseUrlForTools = Deno.env.get("SUPABASE_URL")!;
+  const VOICE_BOOKING_TOOLS_URL = `${supabaseUrlForTools}/functions/v1/voice-booking-tools`;
+  const BFD_VOICE_BOOKING_TOOLS_PLACEHOLDER = "__BFD_VOICE_BOOKING_TOOLS__";
+  const LEGACY_N8N_HOST = "n8n-1prompt.99players.com";
+  const substitutedTools = validatedTools.map((t) => {
+    if (t.type === "end_call" || t.type === "transfer_call") return t;
+    const url = typeof t.url === "string" ? t.url : "";
+    const needsSubstitution = url === BFD_VOICE_BOOKING_TOOLS_PLACEHOLDER || url.includes(LEGACY_N8N_HOST);
+    if (!needsSubstitution) return t;
+    const toolName = typeof t.name === "string" ? t.name.trim() : "";
+    return {
+      ...t,
+      url: VOICE_BOOKING_TOOLS_URL,
+      query_params: { tool: toolName, clientId },
+      headers: intakeSecret ? { Authorization: `Bearer ${intakeSecret}` } : {},
+    };
+  });
+  const generalTools = substitutedTools.length > 0 ? substitutedTools : [{ type: "end_call", name: "end_call" }];
   console.log(`[sync-voice-setter] Tools received (${rawTools.length}):`, JSON.stringify(rawTools.map((t: any) => t.name || t.type)));
   console.log(`[sync-voice-setter] Tools to sync (${generalTools.length}):`, JSON.stringify(generalTools.map((t: any) => t.name || t.type)));
+  const substitutedCount = substitutedTools.filter((t) => t.url === VOICE_BOOKING_TOOLS_URL).length;
+  if (substitutedCount > 0) {
+    console.log(`[sync-voice-setter] Rewrote ${substitutedCount} booking-tool URL(s) to voice-booking-tools for client ${clientId}`);
+  }
   const knowledgeBaseIds = Array.isArray(llmSettings?.knowledge_base_ids)
     ? (llmSettings.knowledge_base_ids as unknown[]).filter(
       (value): value is string => typeof value === "string" && value.trim().length > 0,
