@@ -132,6 +132,80 @@ function getAutoWebhookUrl(): string {
   return `${supabaseUrl}/functions/v1/retell-call-analysis-webhook`;
 }
 
+// EE2: After publishing an agent, Retell phone-number version pins do NOT auto-update.
+// Without this, every UI push silently fails to make tool changes live on real calls
+// because the phone keeps routing to the previously-pinned (stale) agent version.
+// Slot 1 → inbound_agent_version; slots 2 + 3 → outbound_agent_version.
+// Slots 4-10 currently have no canonical phone routing and are skipped with a log.
+async function repointPhoneVersionsAfterPublish(
+  supabase: ReturnType<typeof getSupabaseAdmin>,
+  apiKey: string,
+  clientId: string,
+  slotNumber: number,
+  agentId: string,
+  publishedVersionFromResp: unknown,
+): Promise<void> {
+  let publishedVersion: number | undefined;
+  if (typeof publishedVersionFromResp === "number") {
+    publishedVersion = publishedVersionFromResp;
+  } else {
+    try {
+      const agent = await retellFetch(apiKey, "GET", `get-agent/${agentId}`) as { version?: number };
+      if (typeof agent?.version === "number") publishedVersion = agent.version;
+    } catch (err) {
+      console.warn(`[repoint-phones] GET get-agent fallback failed for ${agentId}:`, err);
+    }
+  }
+  if (typeof publishedVersion !== "number") {
+    console.warn(`[repoint-phones] No published version found for agent ${agentId} (slot ${slotNumber}); skipping phone repoint`);
+    return;
+  }
+
+  const fields: { inbound_agent_version?: number; outbound_agent_version?: number } = {};
+  if (slotNumber === 1) {
+    fields.inbound_agent_version = publishedVersion;
+  } else if (slotNumber === 2 || slotNumber === 3) {
+    fields.outbound_agent_version = publishedVersion;
+  } else {
+    console.log(`[repoint-phones] Slot ${slotNumber} has no canonical phone routing; skipping phone repoint`);
+    return;
+  }
+
+  const { data: phoneRow, error: phoneErr } = await supabase
+    .from("clients")
+    .select("retell_phone_1, retell_phone_2, retell_phone_3")
+    .eq("id", clientId)
+    .maybeSingle();
+  if (phoneErr) {
+    console.warn(`[repoint-phones] Failed to fetch phones for client ${clientId}: ${phoneErr.message}`);
+    return;
+  }
+  const phones = [
+    (phoneRow as Record<string, unknown> | null)?.retell_phone_1,
+    (phoneRow as Record<string, unknown> | null)?.retell_phone_2,
+    (phoneRow as Record<string, unknown> | null)?.retell_phone_3,
+  ].filter((p): p is string => typeof p === "string" && p.trim().length > 0);
+
+  if (phones.length === 0) {
+    console.log(`[repoint-phones] Client ${clientId} has no configured phones; skipping repoint`);
+    return;
+  }
+
+  for (const phone of phones) {
+    try {
+      await retellFetch(
+        apiKey,
+        "PATCH",
+        `update-phone-number/${encodeURIComponent(phone)}`,
+        fields,
+      );
+      console.log(`[repoint-phones] Repointed ${phone} to ${JSON.stringify(fields)} (slot ${slotNumber}, agent ${agentId})`);
+    } catch (phoneErr) {
+      console.warn(`[repoint-phones] Failed to repoint phone ${phone}:`, phoneErr);
+    }
+  }
+}
+
 async function syncVoiceSetter(
   apiKey: string,
   clientId: string,
@@ -370,8 +444,9 @@ You have access to the following dynamic variables about the lead you are callin
       await retellFetch(apiKey, "PATCH", `update-agent/${existingAgentId}`, agentPatch);
       // Auto-publish so changes go live immediately
       try {
-        await retellFetch(apiKey, "POST", `publish-agent/${existingAgentId}`);
-        console.log(`[sync-voice-setter] Auto-published agent ${existingAgentId}`);
+        const publishResp = await retellFetch(apiKey, "POST", `publish-agent/${existingAgentId}`) as { version?: number };
+        console.log(`[sync-voice-setter] Auto-published agent ${existingAgentId} (v${publishResp?.version ?? "?"})`);
+        await repointPhoneVersionsAfterPublish(supabase, apiKey, clientId, slotNumber, existingAgentId, publishResp?.version);
       } catch (pubErr) {
         console.warn(`[sync-voice-setter] Auto-publish failed (non-blocking):`, pubErr);
       }
@@ -391,8 +466,9 @@ You have access to the following dynamic variables about the lead you are callin
       });
       // Auto-publish so changes go live immediately
       try {
-        await retellFetch(apiKey, "POST", `publish-agent/${existingAgentId}`);
-        console.log(`[sync-voice-setter] Auto-published agent ${existingAgentId}`);
+        const publishResp = await retellFetch(apiKey, "POST", `publish-agent/${existingAgentId}`) as { version?: number };
+        console.log(`[sync-voice-setter] Auto-published agent ${existingAgentId} (v${publishResp?.version ?? "?"})`);
+        await repointPhoneVersionsAfterPublish(supabase, apiKey, clientId, slotNumber, existingAgentId, publishResp?.version);
       } catch (pubErr) {
         console.warn(`[sync-voice-setter] Auto-publish failed (non-blocking):`, pubErr);
       }
@@ -437,8 +513,9 @@ You have access to the following dynamic variables about the lead you are callin
     console.log(`[sync-voice-setter] Created agent ${newAgent.agent_id} and stored in ${agentColumn}`);
     // Auto-publish newly created agent
     try {
-      await retellFetch(apiKey, "POST", `publish-agent/${newAgent.agent_id}`);
-      console.log(`[sync-voice-setter] Auto-published new agent ${newAgent.agent_id}`);
+      const publishResp = await retellFetch(apiKey, "POST", `publish-agent/${newAgent.agent_id}`) as { version?: number };
+      console.log(`[sync-voice-setter] Auto-published new agent ${newAgent.agent_id} (v${publishResp?.version ?? "?"})`);
+      await repointPhoneVersionsAfterPublish(supabase, apiKey, clientId, slotNumber, newAgent.agent_id, publishResp?.version);
     } catch (pubErr) {
       console.warn(`[sync-voice-setter] Auto-publish of new agent failed (non-blocking):`, pubErr);
     }
