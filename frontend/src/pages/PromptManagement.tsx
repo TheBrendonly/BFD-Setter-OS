@@ -21,6 +21,7 @@ import { WebhookSetupDialog } from '@/components/WebhookSetupDialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ClientWebhookSettings } from '@/components/ClientWebhookSettings';
 import { useClientWebhooks } from '@/hooks/useClientWebhooks';
@@ -118,6 +119,7 @@ interface Prompt {
   webhook_url?: string | null;
   is_system?: boolean;
   slot_id?: string | null;
+  directions?: string[] | null;
 }
 
 // Default prompt content for Bot Persona
@@ -4701,6 +4703,14 @@ const PromptManagement = () => {
   // Retell voice settings state (loaded after hooks below)
   const [retellVoiceSettings, setRetellVoiceSettings] = useState<RetellVoiceSettings>({ ...DEFAULT_RETELL_VOICE_SETTINGS });
 
+  // EE1: per-slot direction multi-select (which clients.retell_*_agent_id columns
+  // this slot's agent gets fanned out to on push). Stored in prompts.directions.
+  // Allowed values: 'inbound', 'outbound_initial', 'outbound_followup'.
+  const [voiceSetterDirections, setVoiceSetterDirections] = useState<string[]>([]);
+  // Map of slot_id -> directions for other voice slots, used for cross-slot
+  // conflict detection in the toggle UI.
+  const [otherSlotDirections, setOtherSlotDirections] = useState<Record<string, string[]>>({});
+
    // Unsaved changes tracking
   const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
   const pendingNavigationRef = useRef<(() => void) | null>(null);
@@ -4803,6 +4813,34 @@ const PromptManagement = () => {
       setRetellVoiceSettings({ ...DEFAULT_RETELL_VOICE_SETTINGS });
     }
   }, [editingSlotId, clientId, savedPromptConfigs]);
+
+  // EE1: load voice-setter direction multi-select from the prompts row on slot change.
+  // Defaults to [] if the row has no `directions` field yet (legacy / pre-migration).
+  useEffect(() => {
+    if (!editingSlotId?.startsWith('Voice-Setter-')) {
+      setVoiceSetterDirections([]);
+      setOtherSlotDirections({});
+      return;
+    }
+    const current = prompts.find(
+      p => p.slot_id === editingSlotId && p.category === 'voice_setter',
+    );
+    setVoiceSetterDirections(Array.isArray(current?.directions) ? current!.directions! : []);
+    // Map of OTHER voice slots' directions for cross-slot conflict UI
+    const others: Record<string, string[]> = {};
+    for (const p of prompts) {
+      if (p.category !== 'voice_setter') continue;
+      if (!p.slot_id || p.slot_id === editingSlotId) continue;
+      if (!p.slot_id.startsWith('Voice-Setter-')) continue;
+      others[p.slot_id] = Array.isArray(p.directions) ? p.directions : [];
+    }
+    setOtherSlotDirections(others);
+  }, [editingSlotId, prompts]);
+
+  const handleVoiceSetterDirectionsChange = useCallback((next: string[]) => {
+    setVoiceSetterDirections(next);
+    if (editingSlotId) markNeedsSync(editingSlotId, true);
+  }, [editingSlotId, markNeedsSync]);
 
   const handleRetellVoiceSettingsChange = useCallback((updates: Partial<RetellVoiceSettings>) => {
     setRetellVoiceSettings(prev => {
@@ -5787,6 +5825,7 @@ const PromptManagement = () => {
       if (editingPrompt && editingPrompt.id && !editingPrompt.id.startsWith('temp-')) {
         // Update existing prompt
         console.log('✏️ Updating existing prompt:', editingPrompt.id);
+        const isVoiceSetterSlot = editingSlotId?.startsWith('Voice-Setter-');
         const {
           error,
           data: updatedData
@@ -5797,7 +5836,9 @@ const PromptManagement = () => {
           persona: personaForSave || null,
           is_active: true, // Deploying always activates the setter
           category,
-          slot_id: editingSlotId
+          slot_id: editingSlotId,
+          // EE1: persist direction multi-select on voice-setter rows only.
+          ...(isVoiceSetterSlot ? { directions: voiceSetterDirections } : {}),
         }).eq('id', editingPrompt.id).select();
         if (error) {
           console.error('⚠️ Internal prompt update error (non-blocking):', error);
@@ -5807,6 +5848,7 @@ const PromptManagement = () => {
       } else {
         // Create new prompt for this slot
         console.log('➕ Creating new prompt for slot:', editingSlotId);
+        const isVoiceSetterSlot = editingSlotId?.startsWith('Voice-Setter-');
         const {
           error
         } = await (supabase as any).from('prompts').insert({
@@ -5817,7 +5859,9 @@ const PromptManagement = () => {
           persona: personaForSave || null,
           is_active: true, // First deploy activates the setter
           category,
-          slot_id: editingSlotId
+          slot_id: editingSlotId,
+          // EE1: persist direction multi-select on voice-setter rows only.
+          ...(isVoiceSetterSlot ? { directions: voiceSetterDirections } : {}),
         });
         if (error) {
           console.error('⚠️ Internal prompt insert error (non-blocking):', error);
@@ -5997,12 +6041,14 @@ const PromptManagement = () => {
               DEFAULT_RETELL_USER_DTMF_OPTIONS,
               'DTMF options'
             );
-            console.log('🔊 Syncing voice setter to Retell AI, slot:', slotNumber);
+            console.log('🔊 Syncing voice setter to Retell AI, slot:', slotNumber, 'directions:', voiceSetterDirections);
             const { data: retellResult, error: retellError } = await supabase.functions.invoke('retell-proxy', {
               body: {
                 action: 'sync-voice-setter',
                 clientId,
                 slotNumber,
+                // EE1: which clients.retell_*_agent_id columns to fan out to.
+                directions: voiceSetterDirections,
                 generalPrompt: fullPromptForRetell,
                 beginMessage: retellVoiceSettings.begin_message || '',
                 model: currentAgentSettings?.model || 'gpt-4.1-nano',
@@ -6741,6 +6787,66 @@ const PromptManagement = () => {
 
               {/* Guided Agent Configuration */}
               <div className="space-y-6">
+                {/* EE1: Voice AI Setter direction multi-select.
+                    Determines which clients.retell_*_agent_id columns get
+                    pointed at this slot's agent on next "Push to Retell".
+                    Only shown for Voice-Setter-N slots. */}
+                {editingSlotId?.startsWith('Voice-Setter-') && (
+                  <div
+                    className="space-y-3 p-4"
+                    style={{ border: '3px groove hsl(var(--border-groove))' }}
+                  >
+                    <div>
+                      <Label style={{ fontFamily: "'VT323', monospace", fontSize: '16px', letterSpacing: '1px', textTransform: 'uppercase' }}>
+                        DIRECTIONS — WHICH CALLS USE THIS SETTER?
+                      </Label>
+                      <p className="text-muted-foreground mt-1" style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '12px' }}>
+                        Pick any combination. Inbound = calls landing on your number. Outbound (initial) = first-touch outbound dial. Outbound (follow-up) = subsequent callbacks. Saving one direction does NOT touch the others.
+                      </p>
+                    </div>
+                    <ToggleGroup
+                      type="multiple"
+                      value={voiceSetterDirections}
+                      onValueChange={handleVoiceSetterDirectionsChange}
+                      className="!justify-start gap-2"
+                    >
+                      <ToggleGroupItem value="inbound" aria-label="Inbound" style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '13px' }}>
+                        Inbound
+                      </ToggleGroupItem>
+                      <ToggleGroupItem value="outbound_initial" aria-label="Outbound initial" style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '13px' }}>
+                        Outbound (initial)
+                      </ToggleGroupItem>
+                      <ToggleGroupItem value="outbound_followup" aria-label="Outbound follow-up" style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '13px' }}>
+                        Outbound (follow-up)
+                      </ToggleGroupItem>
+                    </ToggleGroup>
+                    {/* Cross-slot conflict warnings */}
+                    {(() => {
+                      const conflicts = voiceSetterDirections
+                        .map(dir => {
+                          const owner = Object.entries(otherSlotDirections).find(([, dirs]) => dirs.includes(dir));
+                          return owner ? { dir, slot: owner[0] } : null;
+                        })
+                        .filter(Boolean) as Array<{ dir: string; slot: string }>;
+                      if (conflicts.length === 0) {
+                        return voiceSetterDirections.length === 0 ? (
+                          <div className="text-amber-500" style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '12px' }}>
+                            No direction selected — this setter is not routed to any phone. Pick at least one direction before pushing.
+                          </div>
+                        ) : null;
+                      }
+                      return (
+                        <div className="text-amber-500" style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '12px' }}>
+                          {conflicts.map(c => (
+                            <div key={c.dir}>
+                              Heads up — {c.dir.replace('_', ' ')} is currently owned by {c.slot}. Pushing will move it to this slot.
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    })()}
+                  </div>
+                )}
                 {/* Agent Config Builder - includes Settings + all config layers */}
                 <AgentConfigBuilder
                   configs={agentConfigBuilderConfigs}

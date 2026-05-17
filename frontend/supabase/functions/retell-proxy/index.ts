@@ -206,6 +206,96 @@ async function repointPhoneVersionsAfterPublish(
   }
 }
 
+// EE1: column name for each direction key on the clients table.
+const DIRECTION_TO_AGENT_COLUMN: Record<string, string> = {
+  inbound: "retell_inbound_agent_id",
+  outbound_initial: "retell_outbound_agent_id",
+  outbound_followup: "retell_outbound_followup_agent_id",
+};
+
+// EE1: fan out a slot's published Retell agent_id to the selected direction
+// columns on `clients`. Also:
+//  - clears any direction column that USED to point at this agent but is no
+//    longer selected (releasing that direction so another slot can claim it).
+//  - rewrites OTHER voice_setter prompts.directions rows to drop any direction
+//    we just claimed, keeping the data model consistent.
+async function fanOutDirections(
+  supabase: ReturnType<typeof getSupabaseAdmin>,
+  clientId: string,
+  slotId: string,
+  agentId: string,
+  selected: string[],
+): Promise<void> {
+  const valid = selected.filter((d) => d in DIRECTION_TO_AGENT_COLUMN);
+
+  // Read current direction columns to know what's pointing at this agent
+  const { data: clientRow, error: clientErr } = await supabase
+    .from("clients")
+    .select("retell_inbound_agent_id, retell_outbound_agent_id, retell_outbound_followup_agent_id")
+    .eq("id", clientId)
+    .maybeSingle();
+  if (clientErr || !clientRow) {
+    console.warn(`[fan-out-directions] Failed to read client ${clientId} columns:`, clientErr?.message);
+    return;
+  }
+  const current = clientRow as Record<string, string | null>;
+
+  // Build the UPDATE payload
+  const update: Record<string, string | null> = {};
+  for (const [direction, column] of Object.entries(DIRECTION_TO_AGENT_COLUMN)) {
+    if (valid.includes(direction)) {
+      // Claim: point this direction column at this slot's agent
+      if (current[column] !== agentId) update[column] = agentId;
+    } else if (current[column] === agentId) {
+      // Release: this direction was previously owned by this slot but is no
+      // longer selected. Clear so another slot can claim, or so the direction
+      // becomes inactive.
+      update[column] = null;
+    }
+  }
+  if (Object.keys(update).length > 0) {
+    const { error: updErr } = await supabase
+      .from("clients")
+      .update(update)
+      .eq("id", clientId);
+    if (updErr) {
+      console.warn(`[fan-out-directions] clients update failed:`, updErr.message);
+    } else {
+      console.log(`[fan-out-directions] clients updated for slot ${slotId}:`, JSON.stringify(update));
+    }
+  }
+
+  // Rewrite OTHER voice_setter rows' directions to remove anything we just claimed.
+  // Without this, the UI would still show stale ownership on those other slots.
+  if (valid.length > 0) {
+    const { data: otherRows, error: othersErr } = await supabase
+      .from("prompts")
+      .select("id, slot_id, directions")
+      .eq("client_id", clientId)
+      .eq("category", "voice_setter")
+      .neq("slot_id", slotId);
+    if (othersErr) {
+      console.warn(`[fan-out-directions] read other prompts rows failed:`, othersErr.message);
+      return;
+    }
+    for (const row of (otherRows ?? []) as Array<{ id: string; slot_id: string; directions: string[] | null }>) {
+      const dirs = Array.isArray(row.directions) ? row.directions : [];
+      const next = dirs.filter((d) => !valid.includes(d));
+      if (next.length !== dirs.length) {
+        const { error: writeErr } = await supabase
+          .from("prompts")
+          .update({ directions: next })
+          .eq("id", row.id);
+        if (writeErr) {
+          console.warn(`[fan-out-directions] rewrite slot ${row.slot_id} failed:`, writeErr.message);
+        } else {
+          console.log(`[fan-out-directions] dropped claimed directions from ${row.slot_id}: ${JSON.stringify(dirs)} -> ${JSON.stringify(next)}`);
+        }
+      }
+    }
+  }
+}
+
 async function syncVoiceSetter(
   apiKey: string,
   clientId: string,
@@ -216,6 +306,7 @@ async function syncVoiceSetter(
   agentName: string,
   voiceSettings?: Record<string, unknown>,
   llmSettings?: Record<string, unknown>,
+  directions: string[] = [],
 ): Promise<unknown> {
   const retellModel = mapToRetellModel(model);
   const supabase = getSupabaseAdmin();
@@ -450,6 +541,8 @@ You have access to the following dynamic variables about the lead you are callin
       } catch (pubErr) {
         console.warn(`[sync-voice-setter] Auto-publish failed (non-blocking):`, pubErr);
       }
+      // EE1: fan out direction selection across clients columns + sibling slots.
+      await fanOutDirections(supabase, clientId, `Voice-Setter-${slotNumber}`, existingAgentId, directions);
       return { success: true, action: "updated_and_published", agent_id: existingAgentId, llm_id: llmId, llm: updatedLlm };
     } else {
       const newLlm = await retellFetch(apiKey, "POST", "create-retell-llm", llmPayload) as any;
@@ -472,6 +565,8 @@ You have access to the following dynamic variables about the lead you are callin
       } catch (pubErr) {
         console.warn(`[sync-voice-setter] Auto-publish failed (non-blocking):`, pubErr);
       }
+      // EE1: fan out direction selection across clients columns + sibling slots.
+      await fanOutDirections(supabase, clientId, `Voice-Setter-${slotNumber}`, existingAgentId, directions);
       return { success: true, action: "updated_with_new_llm_and_published", agent_id: existingAgentId, llm_id: newLlm.llm_id };
     }
   } else {
@@ -519,6 +614,8 @@ You have access to the following dynamic variables about the lead you are callin
     } catch (pubErr) {
       console.warn(`[sync-voice-setter] Auto-publish of new agent failed (non-blocking):`, pubErr);
     }
+    // EE1: fan out direction selection across clients columns + sibling slots.
+    await fanOutDirections(supabase, clientId, `Voice-Setter-${slotNumber}`, newAgent.agent_id, directions);
     return { success: true, action: "created_and_published", agent_id: newAgent.agent_id, llm_id: newLlm.llm_id };
   }
 }
@@ -789,8 +886,15 @@ Deno.serve(async (req) => {
         const agentName = (params.agentName as string) || "";
         const voiceSettings = params.voiceSettings as Record<string, unknown> | undefined;
         const llmSettings = params.llmSettings as Record<string, unknown> | undefined;
+        // EE1: directions multi-select. Whitelist + dedupe before passing in.
+        const ALLOWED_DIRECTIONS = ["inbound", "outbound_initial", "outbound_followup"];
+        const rawDirections = Array.isArray(params.directions) ? params.directions : [];
+        const directions = Array.from(new Set(
+          rawDirections.filter((d: unknown): d is string => typeof d === "string" && ALLOWED_DIRECTIONS.includes(d))
+        ));
         console.log(`[sync-voice-setter] Starting sync for slot ${slotNumber}, model: ${model}, agentName: ${agentName}`);
         console.log(`[sync-voice-setter] beginMessage: "${beginMessage}"`);
+        console.log(`[sync-voice-setter] directions:`, JSON.stringify(directions));
         console.log(`[sync-voice-setter] Voice settings keys:`, voiceSettings ? Object.keys(voiceSettings) : 'none');
         console.log(`[sync-voice-setter] LLM settings:`, JSON.stringify({
           model_high_priority: llmSettings?.model_high_priority,
@@ -798,7 +902,7 @@ Deno.serve(async (req) => {
           kb_ids: llmSettings?.knowledge_base_ids,
           start_speaker: llmSettings?.start_speaker,
         }));
-        result = await syncVoiceSetter(apiKey, clientId, slotNumber, generalPrompt, beginMessage, model, agentName, voiceSettings, llmSettings);
+        result = await syncVoiceSetter(apiKey, clientId, slotNumber, generalPrompt, beginMessage, model, agentName, voiceSettings, llmSettings, directions);
         console.log(`[sync-voice-setter] Result:`, JSON.stringify(result));
         break;
       }

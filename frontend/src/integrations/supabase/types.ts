@@ -3258,6 +3258,7 @@ export type Database = {
           content: string | null
           created_at: string
           description: string | null
+          directions: string[] | null
           id: string
           is_active: boolean | null
           name: string | null
@@ -3272,6 +3273,7 @@ export type Database = {
           content?: string | null
           created_at?: string
           description?: string | null
+          directions?: string[] | null
           id?: string
           is_active?: boolean | null
           name?: string | null
@@ -3286,6 +3288,7 @@ export type Database = {
           content?: string | null
           created_at?: string
           description?: string | null
+          directions?: string[] | null
           id?: string
           is_active?: boolean | null
           name?: string | null
