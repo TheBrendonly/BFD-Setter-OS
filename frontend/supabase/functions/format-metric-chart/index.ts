@@ -1,4 +1,3 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { loggedFetch } from "../_shared/request-logger.ts";
 
 const corsHeaders = {
@@ -281,7 +280,7 @@ const WIDGET_SCHEMAS: Record<string, { name: string; description: string; parame
   },
 };
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }

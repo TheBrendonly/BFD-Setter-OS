@@ -1,4 +1,3 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -425,7 +424,7 @@ async function processCampaign(campaign: Campaign) {
   console.log(`📊 Batch completed: ${successCount} succeeded, ${failureCount} failed`);
 }
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   console.log('\n🔥 CAMPAIGN EXECUTOR STARTED');
   console.log(`Request method: ${req.method}`);
   console.log(`Request URL: ${req.url}`);

@@ -3,7 +3,6 @@
 // Accepts JSON body: { url: string, payload: Record<string, unknown>, headers?: Record<string,string> }
 // Responds: { ok: boolean, status: number, statusText: string }
 
-import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 
 // Basic URL validation - accepts both HTTP and HTTPS, including localhost
 function isAllowedUrl(url: string) {
@@ -25,7 +24,7 @@ const corsHeaders = {
   "Content-Type": "application/json"
 };
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }

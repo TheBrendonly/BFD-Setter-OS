@@ -1,4 +1,3 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { loggedFetch } from "../_shared/request-logger.ts";
 
 const corsHeaders = {
@@ -9,7 +8,7 @@ const corsHeaders = {
 
 const SMART_MODEL = "anthropic/claude-sonnet-4";
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }

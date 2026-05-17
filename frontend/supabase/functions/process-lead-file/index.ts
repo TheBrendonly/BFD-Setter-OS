@@ -1,5 +1,4 @@
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
-import { encode as encodeBase64 } from 'https://deno.land/std@0.168.0/encoding/base64.ts';
+import { encodeBase64 } from 'jsr:@std/encoding/base64';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { z } from 'https://esm.sh/zod@3.25.76';
 import { parsePhoneNumberFromString } from 'https://esm.sh/libphonenumber-js@1.12.41/min';
@@ -88,7 +87,7 @@ const jsonResponse = (payload: unknown, status = 200) =>
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   });
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }

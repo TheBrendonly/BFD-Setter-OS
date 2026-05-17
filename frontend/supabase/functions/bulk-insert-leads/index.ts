@@ -1,4 +1,3 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { isWithinBusinessHours, getNextValidTime } from "../_shared/business-hours.ts";
 
@@ -30,7 +29,7 @@ interface BulkInsertRequest {
 // Business-hours helpers extracted to ../_shared/business-hours.ts
 // (so other edge functions can reuse the same convention).
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   console.log('Bulk insert leads function called');
   
   if (req.method === 'OPTIONS') {
