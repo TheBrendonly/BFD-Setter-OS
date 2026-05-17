@@ -42,8 +42,11 @@ serve(async (req) => {
   }
 
   try {
-    const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
-    if (!stripeKey) throw new Error("STRIPE_SECRET_KEY not configured");
+    // Stripe is optional. When STRIPE_SECRET_KEY is not configured, the
+    // function trusts the DB's subscription_status column and skips the live
+    // Stripe verification. This unblocks tenants (like BFD today) whose
+    // billing isn't wired yet; the gate still works once Stripe is added.
+    const stripeKey = Deno.env.get("STRIPE_SECRET_KEY") || null;
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -118,6 +121,18 @@ serve(async (req) => {
       logStep("Authorization failed", { client_id, user_id: user.id, role: roleData?.role ?? null });
       return new Response(JSON.stringify({ error: "Forbidden" }), {
         status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Stripe-optional path: when STRIPE_SECRET_KEY is not configured, trust
+    // the DB's subscription_status without calling Stripe. Returns the same
+    // shape the Stripe-verified path returns at the "No subscription found"
+    // exit (line ~272), so frontend gate logic is unchanged.
+    if (!stripeKey) {
+      const status = client.subscription_status || "free";
+      logStep("Stripe not configured, returning DB status", { client_id, status });
+      return new Response(JSON.stringify({ subscribed: status === "active" || status === "trialing" || status === "lifetime", status }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
