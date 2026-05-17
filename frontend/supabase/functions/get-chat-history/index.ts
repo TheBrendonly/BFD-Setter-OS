@@ -23,7 +23,7 @@
 //   { ok: true, rows: [{id, session_id, timestamp, message}], usedAltId: bool }
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "npm:@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
