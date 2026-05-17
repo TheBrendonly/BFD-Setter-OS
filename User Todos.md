@@ -8,7 +8,7 @@ Effort: S = under 30 min, M = 30 min - 2 hr, L = half day+.
 
 **State of play (2026-05-17, post Phase E3 + EE1-EE5 follow-up cleanup):**
 
-- HEAD: `565e775` on both Forgejo origin AND GitHub
+- HEAD: `3222cda` on both Forgejo origin AND GitHub
 - Production: `https://app.buildingflowdigital.com/` (Railway-hosted, custom domain)
 - Repo path: `/srv/bfd/Projects/bfd-setter/` (back-compat symlink at `.../1prompt-os/`)
 - Brand hierarchy locked: **BFD** agency / **Building Flow** product / **Gary** persona (he/him) / **BFD-setter** codebase / `genokadzin/1prompt-os` upstream attribution only
