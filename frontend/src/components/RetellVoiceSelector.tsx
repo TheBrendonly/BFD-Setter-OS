@@ -54,8 +54,23 @@ export function RetellVoiceSelector({ value, onChange, disabled }: RetellVoiceSe
   const searchRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (open) setTimeout(() => searchRef.current?.focus(), 100);
-    else setSearch('');
+    if (open) {
+      setTimeout(() => searchRef.current?.focus(), 100);
+      return;
+    }
+    // EE5: when the popover closes, commit a non-empty pending paste so
+    // we don't silently drop it. Previously the user had to press Enter
+    // or click "Use as custom voice ID" or the value was lost on close.
+    const trimmed = search.trim();
+    if (
+      trimmed
+      && trimmed !== value
+      && !HARDCODED_VOICES.some(v => v.voice_name.toLowerCase() === trimmed.toLowerCase())
+    ) {
+      onChange(trimmed);
+    }
+    setSearch('');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   const filtered = useMemo(() => {
@@ -122,6 +137,20 @@ export function RetellVoiceSelector({ value, onChange, disabled }: RetellVoiceSe
               placeholder="Search or paste custom_voice_xxx / 11labs-Name..."
               value={search}
               onChange={e => setSearch(e.target.value)}
+              onBlur={() => {
+                // EE5: commit pending paste on focus loss, before the popover
+                // close-effect fires. Belt-and-suspenders alongside the
+                // popover-close useEffect, in case the user clicks straight
+                // to "Push to Retell" without an explicit confirm.
+                const val = search.trim();
+                if (
+                  val
+                  && val !== value
+                  && !HARDCODED_VOICES.some(v => v.voice_name.toLowerCase() === val.toLowerCase())
+                ) {
+                  onChange(val);
+                }
+              }}
               onKeyDown={e => {
                 if (e.key === 'Enter') {
                   const val = (e.target as HTMLInputElement).value.trim();
