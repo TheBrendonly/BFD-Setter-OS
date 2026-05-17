@@ -342,12 +342,12 @@ You have access to the following dynamic variables about the lead you are callin
   }
 
   // Fetch the current agent ID for this slot
-  const { data: clientData, error: clientErr } = await supabase
+  const { data: clientData, error: agentLookupErr } = await supabase
     .from("clients")
     .select(agentColumn)
     .eq("id", clientId)
     .single();
-  if (clientErr) throw new Error(`Failed to fetch client: ${clientErr.message}`);
+  if (agentLookupErr) throw new Error(`Failed to fetch client: ${agentLookupErr.message}`);
 
   const existingAgentId = (clientData as Record<string, string | null>)?.[agentColumn];
 
