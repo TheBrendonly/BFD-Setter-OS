@@ -6,6 +6,14 @@ Items are sequenced. Order matters — do them top-to-bottom. Each item links to
 
 Effort: S = under 30 min, M = 30 min - 2 hr, L = half day+.
 
+**State of play (2026-05-18, post EE1-fanout incident + safety guard):**
+
+- HEAD: `995773f` on both Forgejo origin AND GitHub
+- 2026-05-18 session shipped 3 tags after Stage 0 smoke test exposed an EE1 wipe regression: `phase-e3-followup-ee1-incident-recovery` (`6416b01`), `phase-e3-followup-ee1-safety-guard` (`efeb73f`), `phase-e3-followup-test-call-error-ux` (`995773f`)
+- Edge fns deployed today: retell-proxy v14 (EE1 safety guard + structured 409 errors), make-retell-outbound-call v11 (structured `{error, code, hint}` validation bodies)
+- BFD voice agent restored: `agent_5ec5eb…` v37 published as Voice-Setter-1, Gary v3 prompt (11,386 chars), gemini-3.0-flash, phone +61481614530 pinned to v37
+- Latest handoff: `Operations/handoffs/2026-05-18-ee1-fanout-incident-handoff.md`
+
 **State of play (2026-05-17, post Phase E3 + EE1-EE5 follow-up cleanup):**
 
 - HEAD: `2c833bb` on both Forgejo origin AND GitHub
@@ -17,6 +25,18 @@ Effort: S = under 30 min, M = 30 min - 2 hr, L = half day+.
 - Phase E3 punch list (EE1-EE5) ✅ ALL CLOSED 2026-05-17 in 5 commits: `3173670` (EE2), `b381d78` (EE5), `ff08a8f` (EE3), `f1fcd65` (EE1), `9f8e2f5` (EE4). EE6 (Aria scrub) and EE7 (~15 secondary hardcoded URLs) remain deferred at Brendan's direction.
 - Cadence v2 draft at `engagement_workflows.c206da3e-...`, `is_active=false`; awaiting Brendan's eyeball + activation
 - Latest handoff: `Operations/handoffs/2026-05-17b-phase-e3-punch-list-cleared-handoff.md`
+
+## New punch list — Phase E3 follow-ups (2026-05-18 EE1-fanout incident)
+
+Smoke test of EE1 (2026-05-17) exposed a shared-agent wipe bug. Recovery + root-cause guard shipped same session. New items below are deferred to a follow-up session.
+
+- **EE1-SG. ~~Fan-out safety guard for shared-agent pushes~~ ✅ DONE 2026-05-18** in `phase-e3-followup-ee1-safety-guard` (`efeb73f`). retell-proxy v14: `syncVoiceSetter` aborts with HTTP 409 `agent_shared_across_slots` if the resolved `existingAgentId` is bound to multiple slot anchor columns AND the push's `directions` don't claim every shared column. Outer catch handler honors structured `.status`/`.code`/`.sharedColumns`/`.conflictingAgentId` fields (was flattening to 400). PromptManagement.tsx push-to-retell toast handler now detects `code === 'agent_shared_across_slots'` and shows a 12s actionable destructive toast.
+- **EE1-UI. ~~Direction toggle active-state green styling~~ ✅ DONE 2026-05-18** in same commit. 3 `ToggleGroupItem` components in `frontend/src/pages/PromptManagement.tsx` get `data-[state=on]:!bg-green-500 !text-white !border-green-600` + `border-2 border-border` for inactive visibility. Fixes Brendan's "I can't tell which are on" problem (which contributed to the wipe scenario).
+- **EE1-TC. ~~TEST CALL clearer error~~ ✅ DONE 2026-05-18** in `phase-e3-followup-test-call-error-ux` (`995773f`). make-retell-outbound-call v11: 4 validation paths emit `{error, code, hint, slot_id, slot_number}` structured JSON (`no_retell_api_key` 409, `no_agent_for_slot` 409, `invalid_voice_setter_id` 400, `no_contact_phone` 400). TestCallDialog.tsx extracts `error.context.json()` body to surface backend message + hint as toast description (10s) instead of "Edge Function returned a non-2xx status code".
+- **EE1-RECOVER. ~~Restore live Retell + DB after wipe~~ ✅ DONE 2026-05-18** in `phase-e3-followup-ee1-incident-recovery` (`6416b01`). Recovery via `scripts/recover_bfd_voice_2026_05_18.mjs`: PATCHed LLM with Gary v3 prompt + gemini-3.0-flash → PATCHed agent name → publish → repoint phone v37 → DELETE orphan agent + LLM. SQL: refilled 3 `clients.retell_*_agent_id` columns + restored prompts.directions for slot 1 + DELETE orphan Voice-Setter-2 prompts row stub.
+- **EE-FOLLOWUP-1. Remove retell-proxy:177 voice paste-in diagnostic console.log** — kept this session in case we needed it for the wipe investigation. Safe to remove next session. Scope: S (1-line delete + retell-proxy v15 redeploy via bundle endpoint).
+- **EE-FOLLOWUP-2. Phone-based inbound contact lookup (Phase 4.1)** — backend already supports it (`voice-booking-tools/index.ts:133-243` phone-first + `call.from_number` auto-injected). Only `bfdVoiceSetterPrompt.ts` lines 137-192 need updating to teach Gary to use phone-first on inbound. Blocked on Brendan's decision: when phone match returns a contact with different email than caller states, (a) trust phone, (b) ask to confirm email, or (c) ask for original email. Default recommendation (b). Scope: M (prompt edit + re-publish via `scripts/deploy_voice_prompt.mjs`).
+- **EE-FOLLOWUP-3. Setter renaming with Retell agent_name push (Phase 4.2)** — new `prompts.display_name text NULL` column + editable UI input near slot title + retell-proxy uses `display_name || slot_id` as `agent_name` on publish. Multi-tenant: prefix with client slug to avoid Retell name collisions. Scope: M.
 
 ## New punch list — Phase E3 follow-ups (2026-05-17)
 
