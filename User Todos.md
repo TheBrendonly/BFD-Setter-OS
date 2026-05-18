@@ -6,6 +6,14 @@ Items are sequenced. Order matters — do them top-to-bottom. Each item links to
 
 Effort: S = under 30 min, M = 30 min - 2 hr, L = half day+.
 
+**State of play (2026-05-18 late-evening, post-audit follow-up):**
+
+- HEAD: `61bb544` on Forgejo + GitHub
+- 2 additional tags shipped after the initial audit cleanup:
+  - `phase-e3-followup-sidebar-fallback-fix-and-hide` (`235a74e`) — Fixed hardcoded "Text Analytics + Voice Analytics" fallback in ClientLayout.tsx (now single "Analytics"). Hid Engagement + TEMPLATES section in defaults + BFD's saved config. Pages still reachable via direct URL.
+  - `phase-e3-followup-retell-agents-dedupe-versions` (`61bb544`) — RetellAgentsTab now dedupes Retell's per-version listing by agent_id. One Card per agent showing latest version + timestamp; expandable "N versions" dropdown shows full history with timestamps + is_published badges.
+- **Deferred items list (D1-D37) documented in plan file** — Brendan to triage which to action next.
+
 **State of play (2026-05-18 end-of-day, post frontend audit cleanup):**
 
 - HEAD: `907aba5` on Forgejo + GitHub
