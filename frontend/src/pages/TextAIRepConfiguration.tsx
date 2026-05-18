@@ -9,6 +9,7 @@ import { cn } from '@/lib/utils';
 import TextAIRepSetupGuide, { TEXT_AI_REP_PHASES, isPhaseComplete } from '@/components/setup-guide/TextAIRepSetupGuide';
 import { usePageHeader } from '@/contexts/PageHeaderContext';
 import { SetterDisplayNamesCard } from '@/components/setters/SetterDisplayNamesCard';
+import { ClientTimezoneCard } from '@/components/setters/ClientTimezoneCard';
 
 // Phase definitions for the cards grid (core setup phases only)
 const TEXT_PHASES = [
@@ -221,6 +222,13 @@ const TextAIRepConfiguration = () => {
 
         {/* Setup Phases Grid - Scrollable */}
         <div className="flex-1 min-h-0 overflow-auto pb-6 space-y-6">
+          {clientId && (
+            <ClientTimezoneCard
+              clientId={clientId}
+              title="Client Timezone"
+              description="Sets the timezone used by cadence quiet-hours scheduling, voice-booking-tools time formatting (if voice is enabled), and the auto-injected Current Date & Time label in any voice agent prompt."
+            />
+          )}
           {clientId && (
             <SetterDisplayNamesCard
               clientId={clientId}

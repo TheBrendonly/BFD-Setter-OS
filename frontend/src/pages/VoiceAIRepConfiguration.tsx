@@ -17,6 +17,7 @@ import RetellAgentsTab from '@/components/retell/RetellAgentsTab';
 import RetellPhoneNumbersTab from '@/components/retell/RetellPhoneNumbersTab';
 import RetellCallLogsTab from '@/components/retell/RetellCallLogsTab';
 import { SetterDisplayNamesCard } from '@/components/setters/SetterDisplayNamesCard';
+import { ClientTimezoneCard } from '@/components/setters/ClientTimezoneCard';
 
 // Phase definitions for the cards grid
 const VOICE_PHASES = [
@@ -259,11 +260,18 @@ const VoiceAIRepConfiguration = () => {
               <>
                 <TabsContent value="agents" className="space-y-4">
                   {clientId && (
+                    <ClientTimezoneCard
+                      clientId={clientId}
+                      title="Client Timezone"
+                      description="Sets the timezone used by the voice agent prompt's Current Date & Time label, cadence quiet-hours scheduling, voice-booking-tools time formatting, and what the agent says (e.g. 'Sydney time')."
+                    />
+                  )}
+                  {clientId && (
                     <SetterDisplayNamesCard
                       clientId={clientId}
                       kind="voice"
                       title="Voice Setter Names"
-                      description="Custom labels shown in Simulator, Logs, Outbound runs, and Conversations. Empty falls back to 'Setter N'."
+                      description="Custom labels shown in Simulator, Logs, Outbound runs, Conversations, AND pushed to the Retell agent as agent_name (visible in the Retell dashboard). Empty falls back to 'Setter N'."
                       slots={[
                         { slot: 1, hint: 'Inbound' },
                         { slot: 2, hint: 'Outbound' },

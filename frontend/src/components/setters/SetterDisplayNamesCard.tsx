@@ -3,6 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
+import { supabase } from '@/integrations/supabase/client';
 import { useClientCredentials } from '@/hooks/useClientCredentials';
 import { setterKey, type SetterKind } from '@/lib/setterLabels';
 
@@ -36,7 +37,7 @@ export const SetterDisplayNamesCard: React.FC<Props> = ({
     setDraft(next);
   }, [credentials, kind, slots]);
 
-  const handleBlur = async (key: string) => {
+  const handleBlur = async (key: string, slot: number) => {
     const newVal = (draft[key] ?? '').trim();
     const prevVal = (stored[key] ?? '').trim();
     if (newVal === prevVal) return;
@@ -51,7 +52,44 @@ export const SetterDisplayNamesCard: React.FC<Props> = ({
     setSaving(key);
     try {
       await updateCredential({ field: 'setter_display_names', value: next });
-      toast.success('Setter name saved');
+
+      // Push voice setter names to Retell agent_name on save.
+      // Text setters have no Retell agent so we skip the push for them.
+      // The retell-proxy set-agent-name action is lightweight: PATCH agent_name
+      // + publish-agent + repoint phone version. NEVER touches LLM prompt / voice.
+      // If the slot has no Retell agent yet, the action returns "skipped_no_agent"
+      // and we just save the local display name (next full Push to Retell will
+      // create the agent with this name).
+      let retellWarning: string | null = null;
+      if (kind === 'voice' && newVal) {
+        try {
+          const { data: retellResult, error: retellError } = await supabase.functions.invoke('retell-proxy', {
+            body: {
+              action: 'set-agent-name',
+              clientId,
+              slotNumber: slot,
+              agentName: newVal,
+            },
+          });
+          if (retellError) {
+            retellWarning = retellError.message || 'Retell push failed';
+          } else if (retellResult?.action === 'skipped_no_agent') {
+            retellWarning = retellResult.reason || 'No Retell agent exists for this slot yet';
+          } else if (retellResult?.action === 'patched_but_publish_failed') {
+            retellWarning = `Name saved + agent updated but publish-agent failed: ${retellResult.publish_error || 'unknown error'}. Try the full Push to Retell from the Voice Setter editor.`;
+          }
+        } catch (retellErr) {
+          retellWarning = retellErr instanceof Error ? retellErr.message : 'Retell push failed';
+        }
+      }
+
+      if (retellWarning) {
+        toast.warning('Setter name saved (Retell push warning)', { description: retellWarning, duration: 9000 });
+      } else if (kind === 'voice') {
+        toast.success('Setter name saved + pushed to Retell agent');
+      } else {
+        toast.success('Setter name saved');
+      }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to save name');
     } finally {
@@ -82,7 +120,7 @@ export const SetterDisplayNamesCard: React.FC<Props> = ({
                 <Input
                   value={draft[key] ?? ''}
                   onChange={(e) => setDraft({ ...draft, [key]: e.target.value })}
-                  onBlur={() => handleBlur(key)}
+                  onBlur={() => handleBlur(key, slot)}
                   placeholder={`Setter ${slot}`}
                   disabled={saving === key}
                   className="h-8 text-sm"
@@ -94,7 +132,7 @@ export const SetterDisplayNamesCard: React.FC<Props> = ({
         </div>
         <p className="text-[11px] text-muted-foreground">
           Empty falls back to "Setter {slots[0]?.slot ?? 1}". Saved on blur. Used in Simulator,
-          Logs, Outbound runs, and conversation history.
+          Logs, Outbound runs, conversation history{kind === 'voice' ? ', AND pushed to the Retell agent as agent_name (visible in the Retell dashboard)' : ''}.
         </p>
       </CardContent>
     </Card>

@@ -580,6 +580,12 @@ On inbound calls to a BYO Twilio number, Retell does NOT inject dynamic variable
     }
   }
 
+  // Capture any non-blocking publish failure (was silently swallowed before
+  // the 2026-05-18 incident — Brendan's UI Save Setter looked like a hard error
+  // because the toast said "edge fn returned non-2xx" with no detail. Now we
+  // surface this in the response so the toast can warn explicitly.)
+  let publishWarning: string | null = null;
+
   if (existingAgentId) {
     console.log(`[sync-voice-setter] Updating existing agent ${existingAgentId} for slot ${slotNumber}`);
     const agent = await retellFetch(apiKey, "GET", `get-agent/${existingAgentId}`) as any;
@@ -603,11 +609,13 @@ On inbound calls to a BYO Twilio number, Retell does NOT inject dynamic variable
         console.log(`[sync-voice-setter] Auto-published agent ${existingAgentId} (v${publishResp?.version ?? "?"})`);
         await repointPhoneVersionsAfterPublish(supabase, apiKey, clientId, slotNumber, existingAgentId, publishResp?.version);
       } catch (pubErr) {
-        console.warn(`[sync-voice-setter] Auto-publish failed (non-blocking):`, pubErr);
+        const message = pubErr instanceof Error ? pubErr.message : String(pubErr);
+        console.warn(`[sync-voice-setter] Auto-publish failed (non-blocking):`, message);
+        publishWarning = message;
       }
       // EE1: fan out direction selection across clients columns + sibling slots.
       await fanOutDirections(supabase, clientId, `Voice-Setter-${slotNumber}`, existingAgentId, directions);
-      return { success: true, action: "updated_and_published", agent_id: existingAgentId, llm_id: llmId, llm: updatedLlm };
+      return { success: true, action: "updated_and_published", agent_id: existingAgentId, llm_id: llmId, llm: updatedLlm, publish_warning: publishWarning };
     } else {
       const newLlm = await retellFetch(apiKey, "POST", "create-retell-llm", llmPayload) as any;
       await retellFetch(apiKey, "PATCH", `update-agent/${existingAgentId}`, {
@@ -627,11 +635,13 @@ On inbound calls to a BYO Twilio number, Retell does NOT inject dynamic variable
         console.log(`[sync-voice-setter] Auto-published agent ${existingAgentId} (v${publishResp?.version ?? "?"})`);
         await repointPhoneVersionsAfterPublish(supabase, apiKey, clientId, slotNumber, existingAgentId, publishResp?.version);
       } catch (pubErr) {
-        console.warn(`[sync-voice-setter] Auto-publish failed (non-blocking):`, pubErr);
+        const message = pubErr instanceof Error ? pubErr.message : String(pubErr);
+        console.warn(`[sync-voice-setter] Auto-publish failed (non-blocking):`, message);
+        publishWarning = message;
       }
       // EE1: fan out direction selection across clients columns + sibling slots.
       await fanOutDirections(supabase, clientId, `Voice-Setter-${slotNumber}`, existingAgentId, directions);
-      return { success: true, action: "updated_with_new_llm_and_published", agent_id: existingAgentId, llm_id: newLlm.llm_id };
+      return { success: true, action: "updated_with_new_llm_and_published", agent_id: existingAgentId, llm_id: newLlm.llm_id, publish_warning: publishWarning };
     }
   } else {
     console.log(`[sync-voice-setter] Creating new agent for slot ${slotNumber}`);
@@ -680,7 +690,7 @@ On inbound calls to a BYO Twilio number, Retell does NOT inject dynamic variable
     }
     // EE1: fan out direction selection across clients columns + sibling slots.
     await fanOutDirections(supabase, clientId, `Voice-Setter-${slotNumber}`, newAgent.agent_id, directions);
-    return { success: true, action: "created_and_published", agent_id: newAgent.agent_id, llm_id: newLlm.llm_id };
+    return { success: true, action: "created_and_published", agent_id: newAgent.agent_id, llm_id: newLlm.llm_id, publish_warning: publishWarning };
   }
 }
 
@@ -891,6 +901,52 @@ Deno.serve(async (req) => {
       case "list-voices":
         result = await retellFetch(apiKey, "GET", "list-voices");
         break;
+
+      // ===== SET AGENT NAME =====
+      // Lightweight rename: PATCH agent_name on the slot's Retell agent + publish
+      // + repoint phone version. Used by SetterDisplayNamesCard so changing a
+      // setter's display name in the UI propagates to Retell without a full
+      // sync-voice-setter roundtrip. NEVER touches the LLM prompt or voice settings.
+      case "set-agent-name": {
+        const slotNumber = params.slotNumber as number;
+        const agentName = (params.agentName as string)?.trim() ?? "";
+        if (!slotNumber) throw new Error("slotNumber is required");
+        if (!agentName) throw new Error("agentName is required");
+        const agentColumn = SLOT_TO_AGENT_COLUMN[slotNumber];
+        if (!agentColumn) throw new Error(`Invalid voice setter slot number: ${slotNumber}`);
+
+        const supabaseAdmin = getSupabaseAdmin();
+        const { data: clientRow, error: clientFetchErr } = await supabaseAdmin
+          .from("clients")
+          .select(agentColumn)
+          .eq("id", clientId)
+          .single();
+        if (clientFetchErr) throw new Error(`Failed to fetch client: ${clientFetchErr.message}`);
+        const existingAgentId = (clientRow as Record<string, string | null>)?.[agentColumn];
+        if (!existingAgentId) {
+          // Slot hasn't been pushed to Retell yet — no-op; UI saves the display
+          // name to clients.setter_display_names regardless. Next full sync-voice-setter
+          // will create the agent with this name.
+          result = { success: true, action: "skipped_no_agent", reason: "Slot has no Retell agent yet — name saved locally; will apply on first Push to Retell." };
+          break;
+        }
+
+        await retellFetch(apiKey, "PATCH", `update-agent/${existingAgentId}`, { agent_name: agentName });
+        let publishedVersion: number | undefined;
+        try {
+          const publishResp = await retellFetch(apiKey, "POST", `publish-agent/${existingAgentId}`) as { version?: number };
+          publishedVersion = publishResp?.version;
+          await repointPhoneVersionsAfterPublish(supabaseAdmin, apiKey, clientId, slotNumber, existingAgentId, publishedVersion);
+        } catch (pubErr) {
+          // Don't swallow silently — surface to caller so toast can warn.
+          const message = pubErr instanceof Error ? pubErr.message : String(pubErr);
+          console.warn(`[set-agent-name] publish failed for ${existingAgentId}:`, message);
+          result = { success: true, action: "patched_but_publish_failed", agent_id: existingAgentId, publish_error: message };
+          break;
+        }
+        result = { success: true, action: "renamed_and_published", agent_id: existingAgentId, version: publishedVersion ?? null };
+        break;
+      }
 
       // ===== DELETE VOICE SETTER =====
       case "delete-voice-setter": {
