@@ -4779,7 +4779,7 @@ const PromptManagement = () => {
   const { configs: savedPromptConfigs, getConfig, saveConfig, saveAllConfigs: savePromptConfigs, saveAllConfigsSilent, buildPromptFromConfigs, refetch: refetchPromptConfigs } = usePromptConfigurations(clientId, editingSlotId);
   // Setter display names from clients.setter_display_names — single source of truth
   // for human-friendly setter labels (also used by Logs, Simulator, OutboundCallProcessing).
-  // The SetterDisplayNamesCard in VoiceAIRepConfiguration / TextAIRepConfiguration is
+  // The SetterDisplayNamesCard in VoiceAIRepSetup / TextAIRepSetup is
   // where users edit these. We surface them here so the list-view cards show them.
   const { credentials: clientCredentials } = useClientCredentials(clientId);
   const setterDisplayNames = (clientCredentials?.setter_display_names ?? {}) as Record<string, string>;
@@ -6480,8 +6480,8 @@ const PromptManagement = () => {
           label: activeTab === 'voice' ? 'AI REP CONFIG' : 'AI REP CONFIG',
           icon: <Settings className="w-4 h-4" />,
           onClick: () => navigate(activeTab === 'voice'
-            ? `/client/${clientId}/voice-ai-rep/configuration`
-            : `/client/${clientId}/text-ai-rep/configuration`),
+            ? `/client/${clientId}/voice-ai-rep/setup`
+            : `/client/${clientId}/text-ai-rep/setup`),
           variant: 'outline' as const,
           disabled: !clientId,
         },

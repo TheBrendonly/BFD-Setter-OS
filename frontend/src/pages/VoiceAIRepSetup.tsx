@@ -63,7 +63,7 @@ const VOICE_PHASES = [
   }
 ];
 
-const VoiceAIRepConfiguration = () => {
+const VoiceAIRepSetup = () => {
   const { clientId } = useParams();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
@@ -412,4 +412,4 @@ const VoiceAIRepConfiguration = () => {
   );
 };
 
-export default VoiceAIRepConfiguration;
+export default VoiceAIRepSetup;

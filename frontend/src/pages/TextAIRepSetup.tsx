@@ -79,7 +79,7 @@ const TEXT_PHASES = [
   }
 ];
 
-const TextAIRepConfiguration = () => {
+const TextAIRepSetup = () => {
   const { clientId } = useParams();
   const [loading, setLoading] = useState(true);
   const [setupGuideOpen, setSetupGuideOpen] = useState(false);
@@ -364,4 +364,4 @@ const TextAIRepConfiguration = () => {
   );
 };
 
-export default TextAIRepConfiguration;
+export default TextAIRepSetup;
