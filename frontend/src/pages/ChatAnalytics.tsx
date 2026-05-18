@@ -2680,6 +2680,23 @@ const ChatAnalytics = () => {
     return <div>Client not found</div>;
   }
   return <div className="relative space-y-6 pb-6" style={{ position: 'relative' }}>
+      {/* Channel toggle — merged Text + Voice analytics into a single sidebar item;
+          this toggle navigates between the two URL variants so the page can render
+          the appropriate analyticsType ('text' or 'voice'). chat-with-ai sub-route
+          is preserved when toggling. */}
+      <Tabs
+        value={isVoice ? 'voice' : 'text'}
+        onValueChange={(next) => {
+          const suffix = isChatTab ? '/chat-with-ai' : '/dashboard';
+          const channel = next === 'voice' ? 'voice-ai' : 'chatbot';
+          navigate(`/client/${clientId}/analytics/${channel}${suffix}`);
+        }}
+      >
+        <TabsList className="grid grid-cols-2 w-full max-w-md">
+          <TabsTrigger value="text">Text Analytics</TabsTrigger>
+          <TabsTrigger value="voice">Voice Analytics</TabsTrigger>
+        </TabsList>
+      </Tabs>
       {/* Refresh overlay - scoped to dashboard content area only */}
       {(analyzing || webhookSending) && (
         <div className="absolute inset-0 z-40 bg-background/80 backdrop-blur-sm flex items-center justify-center">

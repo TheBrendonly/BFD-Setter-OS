@@ -15,9 +15,12 @@ export interface MenuItemConfig {
 // All possible menu items in the sidebar, in default order
 export const DEFAULT_MENU_ITEMS: MenuItemConfig[] = [
   { key: 'section-main', label: 'MAIN', visible: true, position: 0, locked: true, type: 'section-label' },
-  { key: 'analytics', label: 'Text Analytics', visible: true, position: 1, type: 'item', icon: '▤' },
-  { key: 'analytics-voice', label: 'Voice Analytics', visible: true, position: 2, type: 'item', icon: '▥' },
-  { key: 'analytics-v2', label: 'Analytics v2', visible: true, position: 3, type: 'item', icon: '▦' },
+  { key: 'analytics', label: 'Analytics', visible: true, position: 1, type: 'item', icon: '▤' },
+  // analytics-voice merged into analytics (single sidebar item with internal Text/Voice tabs in ChatAnalytics.tsx).
+  // Kept in MENU_ROUTE_MAP for backward-compat with saved configs that still reference it.
+  { key: 'analytics-voice', label: 'Voice Analytics (legacy)', visible: false, position: 2, type: 'item', icon: '▥' },
+  // analytics-v2 hidden from default sidebar — experimental metric builder, kept for saved configs that explicitly enabled it.
+  { key: 'analytics-v2', label: 'Analytics v2', visible: false, position: 3, type: 'item', icon: '▦' },
   { key: 'contacts', label: 'Leads', visible: true, position: 4, type: 'item', icon: '◇' },
   { key: 'chats', label: 'Conversations', visible: true, position: 5, type: 'item', icon: '✉' },
   { key: 'section-config', label: 'CONFIG', visible: true, position: 6, locked: true, type: 'section-label' },
