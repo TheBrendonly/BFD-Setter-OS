@@ -6098,7 +6098,27 @@ const PromptManagement = () => {
                 },
               },
             });
-            if (retellError) {
+            // EE1 safety-guard surfacing: when retell-proxy aborts the push because
+            // this slot's agent is shared across slot anchor columns (would wipe
+            // another slot's LLM), the body returns {code: 'agent_shared_across_slots',
+            // shared_columns, conflicting_agent_id}. Show a longer, action-oriented toast
+            // so the user knows exactly how to recover instead of seeing a generic warning.
+            const safetyCode = (retellResult as { code?: string } | null)?.code
+              ?? ((retellError as { context?: { body?: { code?: string } } } | null)?.context?.body?.code);
+            if (safetyCode === 'agent_shared_across_slots') {
+              const safetyMessage =
+                (retellResult as { error?: string } | null)?.error
+                ?? (retellError as { context?: { body?: { error?: string } } } | null)?.context?.body?.error
+                ?? retellError?.message
+                ?? 'Push blocked: this slot shares an agent with another slot.';
+              console.warn('🛡️ EE1 safety guard blocked push:', safetyMessage);
+              toast({
+                title: '🛡️ Push blocked — agent shared across slots',
+                description: safetyMessage,
+                variant: 'destructive',
+                duration: 12000,
+              });
+            } else if (retellError) {
               console.warn('⚠️ Retell sync failed (non-blocking):', retellError.message);
               toast({
                 title: 'Retell sync warning',
@@ -6810,13 +6830,28 @@ const PromptManagement = () => {
                       onValueChange={handleVoiceSetterDirectionsChange}
                       className="!justify-start gap-2"
                     >
-                      <ToggleGroupItem value="inbound" aria-label="Inbound" style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '13px' }}>
+                      <ToggleGroupItem
+                        value="inbound"
+                        aria-label="Inbound"
+                        className="data-[state=on]:!bg-green-500 data-[state=on]:!text-white data-[state=on]:!border-green-600 data-[state=on]:hover:!bg-green-600 border-2 border-border"
+                        style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '13px' }}
+                      >
                         Inbound
                       </ToggleGroupItem>
-                      <ToggleGroupItem value="outbound_initial" aria-label="Outbound initial" style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '13px' }}>
+                      <ToggleGroupItem
+                        value="outbound_initial"
+                        aria-label="Outbound initial"
+                        className="data-[state=on]:!bg-green-500 data-[state=on]:!text-white data-[state=on]:!border-green-600 data-[state=on]:hover:!bg-green-600 border-2 border-border"
+                        style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '13px' }}
+                      >
                         Outbound (initial)
                       </ToggleGroupItem>
-                      <ToggleGroupItem value="outbound_followup" aria-label="Outbound follow-up" style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '13px' }}>
+                      <ToggleGroupItem
+                        value="outbound_followup"
+                        aria-label="Outbound follow-up"
+                        className="data-[state=on]:!bg-green-500 data-[state=on]:!text-white data-[state=on]:!border-green-600 data-[state=on]:hover:!bg-green-600 border-2 border-border"
+                        style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '13px' }}
+                      >
                         Outbound (follow-up)
                       </ToggleGroupItem>
                     </ToggleGroup>

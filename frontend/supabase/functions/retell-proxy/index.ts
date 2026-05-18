@@ -506,15 +506,58 @@ You have access to the following dynamic variables about the lead you are callin
     }
   }
 
-  // Fetch the current agent ID for this slot
+  // Fetch the current agent ID for this slot (plus all sibling slot anchor columns
+  // for the EE1 safety guard immediately below).
+  const allAgentColumns = Object.values(SLOT_TO_AGENT_COLUMN);
   const { data: clientData, error: agentLookupErr } = await supabase
     .from("clients")
-    .select(agentColumn)
+    .select(allAgentColumns.join(", "))
     .eq("id", clientId)
     .single();
   if (agentLookupErr) throw new Error(`Failed to fetch client: ${agentLookupErr.message}`);
 
-  const existingAgentId = (clientData as Record<string, string | null>)?.[agentColumn];
+  const clientRowAgents = clientData as Record<string, string | null>;
+  const existingAgentId = clientRowAgents[agentColumn];
+
+  // EE1 safety guard (added after the 2026-05-18 fan-out incident).
+  // If `existingAgentId` is referenced by MULTIPLE slot anchor columns and this
+  // push's `directions` do NOT claim every one of those columns, then `fanOut`
+  // would CLEAR the unclaimed columns from a shared agent — silently overwriting
+  // the LLM that another slot is actively serving (the wipe scenario from the
+  // 2026-05-18 incident). Abort with a structured 409-style error and direct the
+  // user to detach to a new agent for this slot before pushing.
+  if (existingAgentId) {
+    const columnsPointingAtThisAgent = allAgentColumns.filter(
+      (col) => clientRowAgents[col] === existingAgentId,
+    );
+    if (columnsPointingAtThisAgent.length > 1) {
+      const claimedColumns = new Set(
+        directions.map((d) => DIRECTION_TO_AGENT_COLUMN[d]).filter(Boolean),
+      );
+      const unclaimedSharedColumns = columnsPointingAtThisAgent.filter(
+        (col) => !claimedColumns.has(col),
+      );
+      if (unclaimedSharedColumns.length > 0) {
+        const err = new Error(
+          `agent_shared_across_slots: Agent ${existingAgentId} is currently bound to ` +
+          `column(s) ${columnsPointingAtThisAgent.join(", ")} but this push from ` +
+          `Voice-Setter-${slotNumber} only claims direction(s) ${directions.length > 0 ? directions.join(", ") : "(none selected)"}. ` +
+          `Continuing would clear the unclaimed shared column(s) [${unclaimedSharedColumns.join(", ")}] ` +
+          `and likely overwrite the LLM another slot is serving (this is the 2026-05-18 wipe scenario). ` +
+          `Fix: either select directions that cover every shared column, OR delete this voice-setter slot ` +
+          `(Delete Voice Setter button) and recreate it so a fresh agent is provisioned for it.`,
+        );
+        (err as Error & { status?: number; code?: string; sharedColumns?: string[]; conflictingAgentId?: string }).status = 409;
+        (err as Error & { code?: string }).code = "agent_shared_across_slots";
+        (err as Error & { sharedColumns?: string[] }).sharedColumns = columnsPointingAtThisAgent;
+        (err as Error & { conflictingAgentId?: string }).conflictingAgentId = existingAgentId;
+        console.warn(
+          `[sync-voice-setter] SAFETY GUARD: ${err.message}`,
+        );
+        throw err;
+      }
+    }
+  }
 
   if (existingAgentId) {
     console.log(`[sync-voice-setter] Updating existing agent ${existingAgentId} for slot ${slotNumber}`);
@@ -1001,9 +1044,18 @@ Deno.serve(async (req) => {
     }
     console.error("retell-proxy error:", error);
     const message = error instanceof Error ? error.message : "Unknown error";
-    return new Response(JSON.stringify({ error: message }), {
+    // Honor structured-error fields (status, code, etc.) so the EE1 safety guard
+    // and any future guarded throws surface a meaningful HTTP code + JSON body
+    // to the frontend instead of being flattened to a generic 400.
+    const errAny = error as { status?: number; code?: string; sharedColumns?: string[]; conflictingAgentId?: string };
+    const status = typeof errAny?.status === "number" ? errAny.status : 400;
+    const body: Record<string, unknown> = { error: message };
+    if (errAny?.code) body.code = errAny.code;
+    if (errAny?.sharedColumns) body.shared_columns = errAny.sharedColumns;
+    if (errAny?.conflictingAgentId) body.conflicting_agent_id = errAny.conflictingAgentId;
+    return new Response(JSON.stringify(body), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
-      status: 400,
+      status,
     });
   }
 });
