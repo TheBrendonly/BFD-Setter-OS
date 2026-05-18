@@ -6,13 +6,17 @@ Items are sequenced. Order matters — do them top-to-bottom. Each item links to
 
 Effort: S = under 30 min, M = 30 min - 2 hr, L = half day+.
 
-**State of play (2026-05-18, post EE1-fanout incident + safety guard):**
+**State of play (2026-05-18, post afternoon course-correction):**
 
-- HEAD: `995773f` on both Forgejo origin AND GitHub
-- 2026-05-18 session shipped 3 tags after Stage 0 smoke test exposed an EE1 wipe regression: `phase-e3-followup-ee1-incident-recovery` (`6416b01`), `phase-e3-followup-ee1-safety-guard` (`efeb73f`), `phase-e3-followup-test-call-error-ux` (`995773f`)
-- Edge fns deployed today: retell-proxy v14 (EE1 safety guard + structured 409 errors), make-retell-outbound-call v11 (structured `{error, code, hint}` validation bodies)
-- BFD voice agent restored: `agent_5ec5eb…` v37 published as Voice-Setter-1, Gary v3 prompt (11,386 chars), gemini-3.0-flash, phone +61481614530 pinned to v37
-- Latest handoff: `Operations/handoffs/2026-05-18-ee1-fanout-incident-handoff.md`
+- HEAD: `8e05ca6` on both Forgejo origin AND GitHub
+- 2026-05-18 shipped 6 tags total (3 morning incident-response + 3 afternoon course-correction):
+  - Morning: `phase-e3-followup-ee1-incident-recovery` (`6416b01`), `phase-e3-followup-ee1-safety-guard` (`efeb73f`), `phase-e3-followup-test-call-error-ux` (`995773f`)
+  - Afternoon: `phase-e3-followup-tz-propagation` (`82235aa`), `phase-e3-followup-setter-name-editor` (`9a9e556`), `phase-e3-followup-phone-first-contact-lookup` (`8e05ca6`)
+- Edge fns deployed today: retell-proxy v13 → v15 (EE1 safety guard + structured 409 errors + TZ-aware DYNAMIC_VARS_BLOCK), make-retell-outbound-call v10 → v11 (structured errors)
+- Frontend (auto-deployed via Railway): green direction toggle, SETTER NAME input, Timezone Select in ClientSettings, phone-first master template (bfdVoiceSetterPrompt.ts)
+- BFD live Retell still at agent_5ec5eb v37 (Voice-Setter-1, Gary v3 prompt, gemini-3.0-flash). **Awaiting Brendan's UI Save Setter** to push composed prompt + new DYNAMIC_VARS_BLOCK to Retell as v39+.
+- Carry-over: BFD prompts.content (44,888 chars) says "dynamic vars pre-loaded" which is false on inbound. Brendan to decide between (a) UI AgentConfigBuilder edit, (b) MODIFY SETTER WITH AI button, (c) authorize SQL patch next session.
+- Latest handoff: `Operations/handoffs/2026-05-18b-testing-fixes-shipped-handoff.md` (afternoon) + `Operations/handoffs/2026-05-18-ee1-fanout-incident-handoff.md` (morning)
 
 **State of play (2026-05-17, post Phase E3 + EE1-EE5 follow-up cleanup):**
 
@@ -36,7 +40,9 @@ Smoke test of EE1 (2026-05-17) exposed a shared-agent wipe bug. Recovery + root-
 - **EE1-RECOVER. ~~Restore live Retell + DB after wipe~~ ✅ DONE 2026-05-18** in `phase-e3-followup-ee1-incident-recovery` (`6416b01`). Recovery via `scripts/recover_bfd_voice_2026_05_18.mjs`: PATCHed LLM with Gary v3 prompt + gemini-3.0-flash → PATCHed agent name → publish → repoint phone v37 → DELETE orphan agent + LLM. SQL: refilled 3 `clients.retell_*_agent_id` columns + restored prompts.directions for slot 1 + DELETE orphan Voice-Setter-2 prompts row stub.
 - **EE-FOLLOWUP-1. Remove retell-proxy:177 voice paste-in diagnostic console.log** — kept this session in case we needed it for the wipe investigation. Safe to remove next session. Scope: S (1-line delete + retell-proxy v15 redeploy via bundle endpoint).
 - **EE-FOLLOWUP-2. Phone-based inbound contact lookup (Phase 4.1)** — backend already supports it (`voice-booking-tools/index.ts:133-243` phone-first + `call.from_number` auto-injected). Only `bfdVoiceSetterPrompt.ts` lines 137-192 need updating to teach Gary to use phone-first on inbound. Blocked on Brendan's decision: when phone match returns a contact with different email than caller states, (a) trust phone, (b) ask to confirm email, or (c) ask for original email. Default recommendation (b). Scope: M (prompt edit + re-publish via `scripts/deploy_voice_prompt.mjs`).
-- **EE-FOLLOWUP-3. Setter renaming with Retell agent_name push (Phase 4.2)** — new `prompts.display_name text NULL` column + editable UI input near slot title + retell-proxy uses `display_name || slot_id` as `agent_name` on publish. Multi-tenant: prefix with client slug to avoid Retell name collisions. Scope: M.
+- **EE-FOLLOWUP-3. ~~Setter renaming with Retell agent_name push~~ ✅ DONE 2026-05-18** in `phase-e3-followup-setter-name-editor` (`9a9e556`). Added a "SETTER NAME" Input at the top of the editor body (above the direction toggle), shown on every editor view (voice + text). Backend plumbing was already wired (promptContent.title → prompts.name → agentName → retell PATCH agent_name); just needed a visible Input bound to promptContent.title. NO schema change needed (prompts.name already exists, no display_name column required). NO edge fn change (retell-proxy already routes agentName). Multi-tenant safe (Retell names scoped per-API-key). Frontend auto-deploys via Railway.
+- **EE-FOLLOWUP-4. ~~Phone-first contact lookup on inbound~~ ✅ DONE 2026-05-18 (master template + DYNAMIC_VARS_BLOCK; BFD prompts.content pending)** in `phase-e3-followup-phone-first-contact-lookup` (`8e05ca6`). Backend already supported phone-first (voice-booking-tools/index.ts: resolveContactId, toolLookupContact, auto-injection of call.from_number). Master template (bfdVoiceSetterPrompt.ts) rewritten: BOOKING FLOW Steps 6 + 6.5 + 7, DYNAMIC VARIABLES section, AVAILABLE TOOLS section. New clients get phone-first on provisioning. **For BFD specifically:** the auto-appended DYNAMIC_VARS_BLOCK (Phase 4) includes phone-first guidance on next push, so partial coverage automatic. Full integration into BFD's per-client prompts.content (44,888 chars currently claims "dynamic vars pre-loaded" — false on inbound) is deferred — Brendan to decide: (a) UI AgentConfigBuilder edit, (b) MODIFY SETTER WITH AI button, (c) authorize Claude SQL patch next session.
+- **EE-FOLLOWUP-5. ~~TZ propagation (TZ Select + DYNAMIC_VARS_BLOCK templating)~~ ✅ DONE 2026-05-18** in `phase-e3-followup-tz-propagation` (`82235aa`). Root cause for the "Monday May 18" confusion in the booking test was the hardcoded `(ET)` in retell-proxy's DYNAMIC_VARS_BLOCK + empty inbound dynamic vars. retell-proxy v15: syncVoiceSetter SELECTs clients.timezone, templates `(${clientTimezone})` into the block, adds "when dynamic variables are EMPTY (common on inbound calls)" instructions teaching the agent to use get-available-slots to discover today's date instead of guessing. ClientSettings.tsx adds a Timezone Select with 17 IANA options. Brendan can self-serve TZ per sub-account without SQL. Existing live agents pick this up on next UI Push to Retell.
 
 ## New punch list — Phase E3 follow-ups (2026-05-17)
 
