@@ -805,19 +805,15 @@ function ClientSidebar() {
                 // No config saved yet: show hardcoded default menu
                 <>
               <div className="sidebar-section-label">MAIN</div>
+              {/* Single Analytics entry (merged Text + Voice 2026-05-18). The page
+                  has internal Text/Voice tabs via TabsList at the top of ChatAnalytics.tsx
+                  and reads the channel from the URL path (/analytics/chatbot/... vs
+                  /analytics/voice-ai/...). Default landing is the chatbot view. */}
               <SidebarMenuItem>
                 <SidebarMenuButton asChild>
                   <NavLink to={`/client/${clientId}/analytics/chatbot/dashboard`} className="flex items-center gap-3 px-3 py-2 transition-colors hover:bg-muted/50 sidebar-nav-item" activeClassName="bg-primary/10 text-primary border-l-2 border-primary">
                     <span className="w-4 text-center text-foreground" style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '14px' }}>▤</span>
-                    <span>Text Analytics</span>
-                  </NavLink>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild>
-                  <NavLink to={`/client/${clientId}/analytics/voice-ai/dashboard`} className="flex items-center gap-3 px-3 py-2 transition-colors hover:bg-muted/50 sidebar-nav-item" activeClassName="bg-primary/10 text-primary border-l-2 border-primary">
-                    <span className="w-4 text-center text-foreground" style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '14px' }}>▥</span>
-                    <span>Voice Analytics</span>
+                    <span>Analytics</span>
                   </NavLink>
                 </SidebarMenuButton>
               </SidebarMenuItem>

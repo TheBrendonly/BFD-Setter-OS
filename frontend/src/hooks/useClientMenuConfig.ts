@@ -31,12 +31,20 @@ export const DEFAULT_MENU_ITEMS: MenuItemConfig[] = [
   { key: 'section-ops', label: 'OPS', visible: true, position: 11, locked: true, type: 'section-label' },
   { key: 'simulator', label: 'Simulator', visible: true, position: 12, type: 'item', icon: '⚔' },
   { key: 'workflows', label: 'Campaigns', visible: true, position: 13, type: 'item', icon: '⛓' },
-  { key: 'engagement', label: 'Engagement', visible: true, position: 14, type: 'item', icon: '◈' },
+  // Engagement page is a full workflow editor at /workflows/engagement but it's
+  // also reachable from the Workflows (Campaigns) list. Hiding from sidebar to
+  // reduce nav clutter; direct URL + Workflows entry still surface it.
+  { key: 'engagement', label: 'Engagement', visible: false, position: 14, type: 'item', icon: '◈' },
   { key: 'leads-files', label: 'Lead Files', visible: true, position: 15, type: 'item', icon: '▣' },
   { key: 'logs', label: 'Logs', visible: true, position: 16, type: 'item', icon: '⚡' },
-  { key: 'section-templates', label: 'TEMPLATES', visible: true, position: 17, locked: true, type: 'section-label' },
-  { key: 'voice-rep-templates', label: 'Voice AI Rep Templates', visible: true, position: 18, type: 'item', icon: '♫' },
-  { key: 'text-rep-templates', label: 'Text AI Rep Templates', visible: true, position: 19, type: 'item', icon: '░' },
+  // TEMPLATES section + 2 items hidden — Source Files (P26 "Source Files" in
+  // BACKEND section) already covers Retell + n8n + Supabase template downloads
+  // as a unified reference library. Voice/Text AI Rep Templates pages remain
+  // accessible via direct URL (/voice-ai-rep/templates, /text-ai-rep/templates)
+  // for now; consider merging their content into Source Files later (D-future).
+  { key: 'section-templates', label: 'TEMPLATES', visible: false, position: 17, locked: true, type: 'section-label' },
+  { key: 'voice-rep-templates', label: 'Voice AI Rep Templates', visible: false, position: 18, type: 'item', icon: '♫' },
+  { key: 'text-rep-templates', label: 'Text AI Rep Templates', visible: false, position: 19, type: 'item', icon: '░' },
   { key: 'section-debug', label: 'BACKEND', visible: true, position: 20, locked: true, type: 'section-label' },
   { key: 'openrouter-usage', label: 'OpenRouter Usage', visible: true, position: 21, type: 'item', icon: '□' },
   { key: 'supabase-usage', label: 'Supabase Usage', visible: true, position: 22, type: 'item', icon: '⛁' },
