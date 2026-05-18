@@ -56,15 +56,11 @@ const DebugAIReps = lazyRetry(() => import("./pages/DebugAIReps"));
 const DebugTextAIRep = lazyRetry(() => import("./pages/DebugTextAIRep"));
 const DebugVoiceAIRep = lazyRetry(() => import("./pages/DebugVoiceAIRep"));
 const VoiceAIRepConfiguration = lazyRetry(() => import("./pages/VoiceAIRepConfiguration"));
-const VoiceAISetter = lazyRetry(() => import("./pages/VoiceAISetter"));
 const VoiceAIRepTemplates = lazyRetry(() => import("./pages/VoiceAIRepTemplates"));
-const WebinarSetup = lazyRetry(() => import("./pages/WebinarSetup"));
-const WebinarAnalytics = lazyRetry(() => import("./pages/WebinarAnalyticsEnhanced"));
 const WhatToDo = lazyRetry(() => import("./pages/WhatToDo"));
-const WebinarChecklist = lazyRetry(() => import("./pages/WebinarChecklist"));
-const WebinarSetupLinks = lazyRetry(() => import("./pages/WebinarSetupLinks"));
-const PresentationAgent = lazyRetry(() => import("./pages/PresentationAgent"));
-const WebinarPresentationAgent = lazyRetry(() => import("./pages/WebinarPresentationAgent"));
+// Webinar pages + legacy VoiceAISetter archived to frontend/src/pages/_archived/
+// on 2026-05-18 (Brendan confirmed Webinar product dormant; VoiceAISetter explicitly
+// labeled "/voice-ai-setter-legacy" route name). Files preserved for revival.
 const ChatAnalytics = lazyRetry(() => import("./pages/ChatAnalytics"));
 const DemoPages = lazyRetry(() => import("./pages/DemoPages"));
 const DemoPageEditor = lazyRetry(() => import("./pages/DemoPageEditor"));
@@ -258,13 +254,9 @@ const App = () => {
               <Route path="api/configuration" element={<TextAIRepConfiguration />} />
               <Route path="api/workflow-imports" element={<TextAIRepTemplates />} />
               <Route path="api/credentials" element={<ApiCredentials />} />
-              <Route path="webinar-setup" element={<Navigate to="configuration" replace />} />
-              <Route path="webinar-setup/configuration" element={<WebinarSetup />} />
-              <Route path="webinar-setup/checklist" element={<WebinarChecklist />} />
-              <Route path="webinar-setup/credentials" element={<WebinarSetupLinks />} />
-              <Route path="webinar-setup/analytics" element={<WebinarAnalytics />} />
-              <Route path="webinar-setup/presentation-agent" element={<PresentationAgent />} />
-              <Route path="webinar-presentation-agent" element={<WebinarPresentationAgent />} />
+              {/* Webinar routes archived 2026-05-18 (product dormant per Brendan).
+                  Pages moved to frontend/src/pages/_archived/. To revive: restore
+                  the 6 lazy imports + 7 routes + move pages back. */}
               <Route path="prompts" element={<Navigate to="prompts/text" replace />} />
               <Route path="prompts/text" element={<PromptManagement />} />
               <Route path="prompts/voice" element={<PromptManagement />} />
@@ -307,7 +299,8 @@ const App = () => {
               <Route path="templates" element={<Templates />} />
               <Route path="lead-reactivation" element={<LeadReactivation />} />
               <Route path="voice-ai-setter" element={<Navigate to="../prompts/voice" replace />} />
-              <Route path="voice-ai-setter-legacy" element={<VoiceAISetter />} />
+              {/* /voice-ai-setter-legacy route archived 2026-05-18; page moved to
+                  frontend/src/pages/_archived/VoiceAISetter.tsx. Use /prompts/voice instead. */}
               <Route path="simulator" element={<Simulator />} />
               <Route path="tier-list" element={<TierList />} />
               <Route path="workflows" element={<Workflows />} />
