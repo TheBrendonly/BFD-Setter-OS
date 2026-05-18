@@ -54,8 +54,8 @@ import {
 import { usePromptConfigurations } from '@/hooks/usePromptConfigurations';
 import { useClientCredentials } from '@/hooks/useClientCredentials';
 import { setterKey } from '@/lib/setterLabels';
-import { SetterDisplayNamesCard } from '@/components/setters/SetterDisplayNamesCard';
 import { ClientTimezoneCard } from '@/components/setters/ClientTimezoneCard';
+import { InlineSetterNameEditor } from '@/components/setters/InlineSetterNameEditor';
 
 // Default hardcoded webhook URL for prompts
 const DEFAULT_PROMPT_WEBHOOK_URL = 'https://n8n-1prompt.99players.com/webhook/prompt-management-ai-setter';
@@ -6388,12 +6388,31 @@ const PromptManagement = () => {
   };
 
 
+  // Compute editor breadcrumb label from setter_display_names so renaming on the
+  // card / in the editor body propagates to the breadcrumb too. Falls back to
+  // the static slot label when no custom name is set.
+  const editorBreadcrumbLabel = (() => {
+    if (!editingSlotId) return 'Editor';
+    const voiceMatch = editingSlotId.match(/^Voice-Setter-(\d+)$/);
+    const textMatch = editingSlotId.match(/^Setter-(\d+|followup)$/);
+    if (voiceMatch) {
+      const slotNum = parseInt(voiceMatch[1], 10);
+      const custom = (setterDisplayNames[setterKey('voice', slotNum)] || '').trim();
+      if (custom) return custom;
+    } else if (textMatch) {
+      const slotNum = textMatch[1] === 'followup' ? 11 : parseInt(textMatch[1], 10);
+      const custom = (setterDisplayNames[setterKey('text', slotNum)] || '').trim();
+      if (custom) return custom;
+    }
+    return headerBadgeInfo?.label || editingSlotId;
+  })();
+
   usePageHeader(
     currentView === 'editor' ? {
       title: activeTab === 'voice' ? 'Voice Setter' : 'Text Setter',
       breadcrumbs: [
         { label: activeTab === 'voice' ? 'Voice Setter' : 'Text Setter', onClick: resetEditor },
-        { label: headerBadgeInfo?.label || editingSlotId || 'Editor' },
+        { label: editorBreadcrumbLabel },
       ],
       actions: [
         ...(editingSlotId?.startsWith('Voice-Setter-') ? [{
@@ -6453,6 +6472,19 @@ const PromptManagement = () => {
           variant: 'outline' as const,
           disabled: refreshingToolMessages,
         }] : []),
+        {
+          // Nav button to the AI Rep Configuration page (per-kind). The page has
+          // the full Retell config + setter display names cards; users land here
+          // from the VOICE SETTER / TEXT SETTER sidebar item but the AI Rep config
+          // route is otherwise unlinked.
+          label: activeTab === 'voice' ? 'AI REP CONFIG' : 'AI REP CONFIG',
+          icon: <Settings className="w-4 h-4" />,
+          onClick: () => navigate(activeTab === 'voice'
+            ? `/client/${clientId}/voice-ai-rep/configuration`
+            : `/client/${clientId}/text-ai-rep/configuration`),
+          variant: 'outline' as const,
+          disabled: !clientId,
+        },
         {
           label: creatingNewSetter ? 'CREATING...' : 'CREATE NEW SETTER',
           icon: <Plus className="w-4 h-4" />,
@@ -6817,11 +6849,11 @@ const PromptManagement = () => {
 
               {/* Guided Agent Configuration */}
               <div className="space-y-6">
-                {/* Setter rename + (voice only) Retell agent_name push.
-                    Reuses the canonical SetterDisplayNamesCard component so the
-                    same write path is used here and on the Voice/Text AI Rep
-                    Configuration pages. Saves on blur to clients.setter_display_names
-                    AND (voice only) PATCHes the Retell agent_name via set-agent-name. */}
+                {/* Inline-edit setter name. Click the heading to rename in place.
+                    Same write path as the front list card heading + the
+                    SetterDisplayNamesCard on the Voice/Text AI Rep Configuration
+                    pages — single source of truth at clients.setter_display_names.
+                    For voice setters, save also PATCHes the Retell agent_name. */}
                 {clientId && editingSlotId && (() => {
                   const isVoice = editingSlotId.startsWith('Voice-Setter-');
                   const slotMatch = editingSlotId.match(/Setter-(\d+|followup)$/);
@@ -6830,17 +6862,31 @@ const PromptManagement = () => {
                     : (slotMatch && slotMatch[1] === 'followup' ? 11 : null);
                   if (slotNum === null) return null;
                   return (
-                    <SetterDisplayNamesCard
-                      clientId={clientId}
-                      kind={isVoice ? 'voice' : 'text'}
-                      title="Setter Name"
-                      description={
-                        isVoice
-                          ? `Rename this setter — saved on blur. For voice setters this also pushes to Retell as the agent_name (visible in the Retell dashboard) and shows as the white title on the setter card. Empty falls back to "${editingSlotId}".`
-                          : `Rename this setter — saved on blur. Shows as the white title on the setter card. Empty falls back to "${editingSlotId}".`
-                      }
-                      slots={[{ slot: slotNum }]}
-                    />
+                    <div
+                      className="space-y-2 p-4"
+                      style={{ border: '3px groove hsl(var(--border-groove))' }}
+                    >
+                      <Label
+                        style={{ fontFamily: "'VT323', monospace", fontSize: '16px', letterSpacing: '1px', textTransform: 'uppercase' }}
+                      >
+                        SETTER NAME
+                      </Label>
+                      <div className="flex items-center gap-2">
+                        <InlineSetterNameEditor
+                          clientId={clientId}
+                          kind={isVoice ? 'voice' : 'text'}
+                          slot={slotNum}
+                          fallback={editingSlotId}
+                          className="text-foreground font-medium"
+                          style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '16px' }}
+                        />
+                      </div>
+                      <p className="text-muted-foreground mt-1" style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '12px' }}>
+                        Click the name above to rename. Saves on enter or blur.
+                        {isVoice ? ' For voice setters, the new name is also pushed to Retell as the agent_name (visible in the Retell dashboard).' : ''}
+                        {' '}Same field as the white title on the setter card and the SetterDisplayNamesCard on the AI Rep Configuration page.
+                      </p>
+                    </div>
                   );
                 })()}
                 {/* EE1: Voice AI Setter direction multi-select.
@@ -7237,13 +7283,24 @@ const PromptManagement = () => {
                           <div className="flex items-center justify-between gap-4">
                             <div className="flex flex-col gap-1">
                               {(() => {
-                                // Derive slot number from slot.id like "Setter-1" / "Setter-followup"
                                 const slotMatch = slot.id.match(/Setter-(\d+|followup)$/);
-                                const slotNum = slotMatch && slotMatch[1] !== 'followup' ? parseInt(slotMatch[1], 10) : null;
-                                const displayName = slotNum !== null ? (setterDisplayNames[setterKey('text', slotNum)] || '').trim() : '';
+                                const slotNum = slotMatch && slotMatch[1] !== 'followup'
+                                  ? parseInt(slotMatch[1], 10)
+                                  : (slotMatch && slotMatch[1] === 'followup' ? 11 : null);
+                                if (slotNum === null || !clientId) {
+                                  return <CardTitle className="text-lg font-normal leading-none">{slot.staticName}</CardTitle>;
+                                }
+                                const displayName = (setterDisplayNames[setterKey('text', slotNum)] || '').trim();
                                 return (
                                   <>
-                                    <CardTitle className="text-lg font-normal leading-none">{displayName || slot.staticName}</CardTitle>
+                                    <CardTitle className="text-lg font-normal leading-none">
+                                      <InlineSetterNameEditor
+                                        clientId={clientId}
+                                        kind="text"
+                                        slot={slotNum}
+                                        fallback={slot.staticName}
+                                      />
+                                    </CardTitle>
                                     {displayName && (
                                       <p className="text-xs text-muted-foreground" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>{slot.staticName}</p>
                                     )}
@@ -7338,13 +7395,22 @@ const PromptManagement = () => {
                           <div className="flex items-center justify-between gap-4">
                             <div className="flex flex-col gap-1">
                               {(() => {
-                                // Derive slot number from slot.id like "Voice-Setter-1"
                                 const slotMatch = slot.id.match(/Voice-Setter-(\d+)$/);
                                 const slotNum = slotMatch ? parseInt(slotMatch[1], 10) : null;
-                                const displayName = slotNum !== null ? (setterDisplayNames[setterKey('voice', slotNum)] || '').trim() : '';
+                                if (slotNum === null || !clientId) {
+                                  return <CardTitle className="text-lg font-normal leading-none">{slot.staticName}</CardTitle>;
+                                }
+                                const displayName = (setterDisplayNames[setterKey('voice', slotNum)] || '').trim();
                                 return (
                                   <>
-                                    <CardTitle className="text-lg font-normal leading-none">{displayName || slot.staticName}</CardTitle>
+                                    <CardTitle className="text-lg font-normal leading-none">
+                                      <InlineSetterNameEditor
+                                        clientId={clientId}
+                                        kind="voice"
+                                        slot={slotNum}
+                                        fallback={slot.staticName}
+                                      />
+                                    </CardTitle>
                                     {displayName && (
                                       <p className="text-xs text-muted-foreground" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>{slot.staticName}</p>
                                     )}
