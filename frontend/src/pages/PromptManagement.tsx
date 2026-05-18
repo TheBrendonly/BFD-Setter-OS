@@ -54,6 +54,8 @@ import {
 import { usePromptConfigurations } from '@/hooks/usePromptConfigurations';
 import { useClientCredentials } from '@/hooks/useClientCredentials';
 import { setterKey } from '@/lib/setterLabels';
+import { SetterDisplayNamesCard } from '@/components/setters/SetterDisplayNamesCard';
+import { ClientTimezoneCard } from '@/components/setters/ClientTimezoneCard';
 
 // Default hardcoded webhook URL for prompts
 const DEFAULT_PROMPT_WEBHOOK_URL = 'https://n8n-1prompt.99players.com/webhook/prompt-management-ai-setter';
@@ -6815,6 +6817,32 @@ const PromptManagement = () => {
 
               {/* Guided Agent Configuration */}
               <div className="space-y-6">
+                {/* Setter rename + (voice only) Retell agent_name push.
+                    Reuses the canonical SetterDisplayNamesCard component so the
+                    same write path is used here and on the Voice/Text AI Rep
+                    Configuration pages. Saves on blur to clients.setter_display_names
+                    AND (voice only) PATCHes the Retell agent_name via set-agent-name. */}
+                {clientId && editingSlotId && (() => {
+                  const isVoice = editingSlotId.startsWith('Voice-Setter-');
+                  const slotMatch = editingSlotId.match(/Setter-(\d+|followup)$/);
+                  const slotNum = slotMatch && slotMatch[1] !== 'followup'
+                    ? parseInt(slotMatch[1], 10)
+                    : (slotMatch && slotMatch[1] === 'followup' ? 11 : null);
+                  if (slotNum === null) return null;
+                  return (
+                    <SetterDisplayNamesCard
+                      clientId={clientId}
+                      kind={isVoice ? 'voice' : 'text'}
+                      title="Setter Name"
+                      description={
+                        isVoice
+                          ? `Rename this setter — saved on blur. For voice setters this also pushes to Retell as the agent_name (visible in the Retell dashboard) and shows as the white title on the setter card. Empty falls back to "${editingSlotId}".`
+                          : `Rename this setter — saved on blur. Shows as the white title on the setter card. Empty falls back to "${editingSlotId}".`
+                      }
+                      slots={[{ slot: slotNum }]}
+                    />
+                  );
+                })()}
                 {/* EE1: Voice AI Setter direction multi-select.
                     Determines which clients.retell_*_agent_id columns get
                     pointed at this slot's agent on next "Push to Retell".
@@ -7174,6 +7202,19 @@ const PromptManagement = () => {
       <SavingOverlay isVisible={creatingNewSetter} message="Creating Setter" variant="fixed" />
       <div className="container mx-auto max-w-7xl">
         <div className="space-y-6">
+          {/* Client-level timezone — shown on both Voice + Text Setter list views.
+              Same single source of truth (clients.timezone) used by voice-booking-tools,
+              make-retell-outbound-call, retell-proxy DYNAMIC_VARS_BLOCK, cadence
+              quiet-hours. Same Select component as on the Voice/Text AI Rep Configuration
+              pages — putting it here too because Brendan's primary nav is the
+              VOICE SETTER sidebar item, not /voice-ai-rep/configuration. */}
+          {clientId && (
+            <ClientTimezoneCard
+              clientId={clientId}
+              title="Client Timezone"
+              description="Sets the timezone used by booking time formatting, cadence quiet-hours, the voice agent's auto-injected Current Date & Time label, and what the agent says (e.g. 'Sydney time'). Saved on change."
+            />
+          )}
           {/* Text Agent Content */}
           {activeTab === 'text' && <div className="space-y-6">
               <div className="space-y-4">
