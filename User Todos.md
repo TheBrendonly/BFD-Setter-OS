@@ -6,17 +6,19 @@ Items are sequenced. Order matters — do them top-to-bottom. Each item links to
 
 Effort: S = under 30 min, M = 30 min - 2 hr, L = half day+.
 
-**State of play (2026-05-18, post afternoon course-correction):**
+**State of play (2026-05-18 end-of-day, post frontend audit cleanup):**
 
-- HEAD: `8e05ca6` on both Forgejo origin AND GitHub
-- 2026-05-18 shipped 6 tags total (3 morning incident-response + 3 afternoon course-correction):
+- HEAD: `907aba5` on Forgejo + GitHub
+- **12 tags shipped today total** (3 morning incident-response + 3 afternoon testing fixes + 5 evening audit cleanup + 1 hotfix):
   - Morning: `phase-e3-followup-ee1-incident-recovery` (`6416b01`), `phase-e3-followup-ee1-safety-guard` (`efeb73f`), `phase-e3-followup-test-call-error-ux` (`995773f`)
   - Afternoon: `phase-e3-followup-tz-propagation` (`82235aa`), `phase-e3-followup-setter-name-editor` (`9a9e556`), `phase-e3-followup-phone-first-contact-lookup` (`8e05ca6`)
-- Edge fns deployed today: retell-proxy v13 → v15 (EE1 safety guard + structured 409 errors + TZ-aware DYNAMIC_VARS_BLOCK), make-retell-outbound-call v10 → v11 (structured errors)
-- Frontend (auto-deployed via Railway): green direction toggle, SETTER NAME input, Timezone Select in ClientSettings, phone-first master template (bfdVoiceSetterPrompt.ts)
-- BFD live Retell still at agent_5ec5eb v37 (Voice-Setter-1, Gary v3 prompt, gemini-3.0-flash). **Awaiting Brendan's UI Save Setter** to push composed prompt + new DYNAMIC_VARS_BLOCK to Retell as v39+.
-- Carry-over: BFD prompts.content (44,888 chars) says "dynamic vars pre-loaded" which is false on inbound. Brendan to decide between (a) UI AgentConfigBuilder edit, (b) MODIFY SETTER WITH AI button, (c) authorize SQL patch next session.
-- Latest handoff: `Operations/handoffs/2026-05-18b-testing-fixes-shipped-handoff.md` (afternoon) + `Operations/handoffs/2026-05-18-ee1-fanout-incident-handoff.md` (morning)
+  - Evening (audit cleanup): `phase-e3-followup-inline-rename-and-rep-nav` (`1480b9e`), `phase-e3-followup-sidebar-analytics-cleanup` (`c4745b2`), `phase-e3-followup-archive-webinar-legacy` (`52bc895`), `phase-e3-followup-rename-airep-setup` (`fcc9b71`), `phase-e3-followup-templates-sidebar-and-engagement` (`e8665d6`), `phase-e3-followup-merge-logs-tabs` (`57666b0` + hotfix `907aba5`)
+- Edge fns deployed today: retell-proxy v13 → v16, make-retell-outbound-call v10 → v11
+- Sidebar state: Analytics (single item, Text/Voice tabs internal), Engagement under OPS, new TEMPLATES section with Voice + Text AI Rep Templates, Logs with 3-tab nav. Analytics v2 hidden.
+- 8 pages archived to `frontend/src/pages/_archived/` (7 Webinar + VoiceAISetter legacy). Files preserved.
+- 2 page renames (Voice/Text AI Rep Configuration → Setup). Old URLs redirect.
+- Carry-overs: BFD prompts.content "dynamic vars pre-loaded" contradiction (Brendan to choose path); EE-FOLLOWUP-1 paste-in diagnostic still in retell-proxy:177; A8 soak day 10/14.
+- Latest handoff: `Operations/handoffs/2026-05-18c-frontend-audit-cleanup-handoff.md` (evening) + `2026-05-18b-...` (afternoon) + `2026-05-18-ee1-fanout-incident-handoff.md` (morning).
 
 **State of play (2026-05-17, post Phase E3 + EE1-EE5 follow-up cleanup):**
 
