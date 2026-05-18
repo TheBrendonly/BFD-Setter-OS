@@ -6807,6 +6807,35 @@ const PromptManagement = () => {
 
               {/* Guided Agent Configuration */}
               <div className="space-y-6">
+                {/* Setter Name — editable display name pushed to Retell as agent_name.
+                    Saves to prompts.name and is sent as agentName in sync-voice-setter.
+                    Shown on every editor view (voice + text). */}
+                {editingSlotId && (
+                  <div
+                    className="space-y-3 p-4"
+                    style={{ border: '3px groove hsl(var(--border-groove))' }}
+                  >
+                    <div>
+                      <Label
+                        htmlFor="setter-display-name"
+                        style={{ fontFamily: "'VT323', monospace", fontSize: '16px', letterSpacing: '1px', textTransform: 'uppercase' }}
+                      >
+                        SETTER NAME
+                      </Label>
+                      <p className="text-muted-foreground mt-1" style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '12px' }}>
+                        Display name for this setter. For voice setters this is pushed to Retell as the agent name (visible in the Retell dashboard) on next "Save Setter". Leave blank to use the slot ID ({editingSlotId}).
+                      </p>
+                    </div>
+                    <Input
+                      id="setter-display-name"
+                      placeholder={editingSlotId}
+                      value={promptContent.title || ''}
+                      onChange={(e) => setPromptContent(prev => ({ ...prev, title: e.target.value }))}
+                      className="field-text"
+                      style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '13px' }}
+                    />
+                  </div>
+                )}
                 {/* EE1: Voice AI Setter direction multi-select.
                     Determines which clients.retell_*_agent_id columns get
                     pointed at this slot's agent on next "Push to Retell".
