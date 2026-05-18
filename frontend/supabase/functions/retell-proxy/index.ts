@@ -313,17 +313,19 @@ async function syncVoiceSetter(
   const agentColumn = SLOT_TO_AGENT_COLUMN[slotNumber];
   if (!agentColumn) throw new Error(`Invalid voice setter slot number: ${slotNumber}`);
 
-  // Multi-tenant: fetch this client's intake_lead_secret so booking-tool URLs can
-  // be rewritten to point at our own voice-booking-tools edge fn with per-tenant
-  // auth. Auto-mint the secret if missing (one-time backfill per tenant).
+  // Multi-tenant: fetch this client's intake_lead_secret + timezone. Secret feeds
+  // booking-tool URL rewrites with per-tenant auth; timezone feeds the DYNAMIC_VARS
+  // block so the agent gets the correct TZ label (instead of the legacy hardcoded
+  // "(ET)" that confused Gary in the 2026-05-18 inbound booking call).
   const { data: clientRow, error: clientErr } = await supabase
     .from("clients")
-    .select("id, intake_lead_secret")
+    .select("id, intake_lead_secret, timezone")
     .eq("id", clientId)
     .single();
   if (clientErr || !clientRow) {
     throw new Error(`[sync-voice-setter] Failed to fetch client ${clientId}: ${clientErr?.message ?? "not found"}`);
   }
+  const clientTimezone = (clientRow as { timezone: string | null }).timezone || "Australia/Sydney";
   let intakeSecret = (clientRow as { intake_lead_secret: string | null }).intake_lead_secret;
   if (!intakeSecret) {
     const bytes = new Uint8Array(24);
@@ -404,7 +406,16 @@ async function syncVoiceSetter(
       (value): value is string => typeof value === "string" && value.trim().length > 0,
     )
     : [];
-  // Auto-append dynamic variables reference block so Retell can substitute them
+  // Auto-append dynamic variables reference block so Retell can substitute them.
+  // Per-client timezone label drives the "Current Date & Time" line so the agent
+  // anchors to the caller's local TZ instead of the legacy hardcoded (ET) which
+  // confused Gary in the 2026-05-18 inbound booking ("Monday May 18" when it was
+  // tomorrow Tuesday in Sydney).
+  //
+  // CRITICAL on inbound BYO Twilio calls: dynamic variables arrive EMPTY (Retell
+  // limitation). The instructional note below tells the agent how to behave when
+  // {{current_time}} or other vars are blank — defer to the get-available-slots
+  // tool to discover today's date, never guess the day-of-week.
   const DYNAMIC_VARS_BLOCK = `
 
 ── ── ── ── ── ── ── ── ── ── ── ── ── ──
@@ -418,10 +429,20 @@ You have access to the following dynamic variables about the lead you are callin
 - **Lead Email**: {{email}}
 - **Lead Phone**: {{phone}}
 - **Lead Business Name**: {{business_name}}
-- **Current Date & Time (ET)**: {{current_time}}
+- **Current Date & Time (${clientTimezone})**: {{current_time}}
+- **Caller Timezone (IANA)**: ${clientTimezone}
 - **Available Calendar Slots**: {{available_time_slots}}
 - **Full Contact Details**: {{user_contact_details}}
-- **Custom Instructions**: {{custom_instructions}}`;
+- **Custom Instructions**: {{custom_instructions}}
+
+### When dynamic variables are EMPTY (common on inbound calls)
+
+On inbound calls to a BYO Twilio number, Retell does NOT inject dynamic variables — every {{...}} will substitute as empty/literal. If that happens:
+
+1. **Never guess the day-of-week or date.** Do NOT say "tomorrow is Monday" unless you have verified the actual date via a tool call.
+2. **To discover today's date**, call \`get-available-slots\` with no \`startDateTime\` — the response is anchored to today in ${clientTimezone}. The first returned slot's date IS today (or the next business hour).
+3. **For caller identity** ({{first_name}}, {{email}}), use \`call.from_number\` (auto-injected into tool bodies as \`phone\`) to look up the contact via the contact-lookup tool BEFORE asking the caller their details.
+4. **For timezone**, default to ${clientTimezone}. Say "${clientTimezone.split('/').pop()?.replace('_', ' ') || 'local'} time" when confirming bookings.`;
 
   const enrichedPrompt = generalPrompt + DYNAMIC_VARS_BLOCK;
 

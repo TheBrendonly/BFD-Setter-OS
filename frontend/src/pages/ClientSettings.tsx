@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { Upload, X, LogOut, CreditCard } from "@/components/icons";
 import { usePageHeader } from '@/contexts/PageHeaderContext';
@@ -41,6 +42,7 @@ export default function ClientSettings() {
     email: "",
     description: "",
     image_url: "",
+    timezone: "Australia/Sydney",
   });
   const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
   const savedSnapshotRef = useRef<string>('');
@@ -68,14 +70,16 @@ export default function ClientSettings() {
     try {
       const { data, error } = await supabase
         .from("clients")
-        .select("name, email, description, image_url")
+        .select("name, email, description, image_url, timezone")
         .eq("id", clientId)
         .single();
 
       if (error) throw error;
       if (data) {
-        setClientData(data);
-        savedSnapshotRef.current = JSON.stringify(data);
+        // Default timezone fallback for clients provisioned before the column was added.
+        const merged = { ...data, timezone: data.timezone || "Australia/Sydney" };
+        setClientData(merged);
+        savedSnapshotRef.current = JSON.stringify(merged);
       }
     } catch (error) {
       console.error("Error fetching client data:", error);
@@ -130,6 +134,7 @@ export default function ClientSettings() {
           email: clientData.email || null,
           description: clientData.description || null,
           image_url: imageUrl || null,
+          timezone: clientData.timezone || "Australia/Sydney",
         })
         .eq("id", clientId);
 
@@ -227,6 +232,41 @@ export default function ClientSettings() {
                 rows={3}
                 className={`resize-none field-text ${cb}`}
               />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="timezone" className="field-text">Timezone</Label>
+              <Select
+                value={clientData.timezone || "Australia/Sydney"}
+                onValueChange={(value) => setClientData({ ...clientData, timezone: value })}
+              >
+                <SelectTrigger id="timezone" className="field-text">
+                  <SelectValue placeholder="Select timezone" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Australia/Sydney">Australia/Sydney (AEDT/AEST)</SelectItem>
+                  <SelectItem value="Australia/Melbourne">Australia/Melbourne (AEDT/AEST)</SelectItem>
+                  <SelectItem value="Australia/Brisbane">Australia/Brisbane (AEST)</SelectItem>
+                  <SelectItem value="Australia/Adelaide">Australia/Adelaide (ACDT/ACST)</SelectItem>
+                  <SelectItem value="Australia/Perth">Australia/Perth (AWST)</SelectItem>
+                  <SelectItem value="Australia/Darwin">Australia/Darwin (ACST)</SelectItem>
+                  <SelectItem value="Australia/Hobart">Australia/Hobart (AEDT/AEST)</SelectItem>
+                  <SelectItem value="Pacific/Auckland">Pacific/Auckland (NZDT/NZST)</SelectItem>
+                  <SelectItem value="America/New_York">America/New_York (EDT/EST)</SelectItem>
+                  <SelectItem value="America/Chicago">America/Chicago (CDT/CST)</SelectItem>
+                  <SelectItem value="America/Denver">America/Denver (MDT/MST)</SelectItem>
+                  <SelectItem value="America/Los_Angeles">America/Los_Angeles (PDT/PST)</SelectItem>
+                  <SelectItem value="Europe/London">Europe/London (BST/GMT)</SelectItem>
+                  <SelectItem value="Europe/Paris">Europe/Paris (CEST/CET)</SelectItem>
+                  <SelectItem value="Asia/Singapore">Asia/Singapore (SGT)</SelectItem>
+                  <SelectItem value="Asia/Tokyo">Asia/Tokyo (JST)</SelectItem>
+                  <SelectItem value="Asia/Dubai">Asia/Dubai (GST)</SelectItem>
+                  <SelectItem value="UTC">UTC</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-muted-foreground text-xs" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
+                Drives booking time formatting, cadence quiet-hours scheduling, and what the voice agent says ("Sydney time", etc.). Used by voice-booking-tools, make-retell-outbound-call, and retell-proxy.
+              </p>
             </div>
 
             <div className="space-y-2">
