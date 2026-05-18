@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { formatDistanceToNow } from 'date-fns';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -39,6 +40,51 @@ const RetellAgentsTab: React.FC<RetellAgentsTabProps> = ({ clientId }) => {
   const [expandedAgent, setExpandedAgent] = useState<string | null>(null);
   const [editingAgent, setEditingAgent] = useState<Record<string, unknown> | null>(null);
   const [savingAgent, setSavingAgent] = useState(false);
+  // Tracks which agent's "View all N versions" history table is open. Separate
+  // from `expandedAgent` (the edit form).
+  const [expandedHistory, setExpandedHistory] = useState<string | null>(null);
+
+  // Retell's /list-agents returns ONE ROW PER VERSION (publishing creates a new
+  // version each time). For BFD that's 8+ rows for a single agent_id — cluttered
+  // and confusing. Dedupe to one entry per agent_id, keeping the latest version
+  // as canonical and all versions in `versions` for the history dropdown.
+  const groupedAgents = useMemo(() => {
+    const groups = new Map<string, { latest: RetellAgent; versions: RetellAgent[] }>();
+    for (const a of agents) {
+      if (!a?.agent_id) continue;
+      const existing = groups.get(a.agent_id);
+      if (!existing) {
+        groups.set(a.agent_id, { latest: a, versions: [a] });
+      } else {
+        existing.versions.push(a);
+        // Keep the row with the highest version number as the canonical "latest".
+        const currentVer = typeof a.version === 'number' ? a.version : -1;
+        const latestVer = typeof existing.latest.version === 'number' ? existing.latest.version : -1;
+        if (currentVer > latestVer) existing.latest = a;
+      }
+    }
+    // Sort versions per group descending by version number.
+    const result = Array.from(groups.values());
+    for (const g of result) {
+      g.versions.sort((a, b) => {
+        const av = typeof a.version === 'number' ? a.version : -1;
+        const bv = typeof b.version === 'number' ? b.version : -1;
+        return bv - av;
+      });
+    }
+    return result;
+  }, [agents]);
+
+  // Format a Retell `last_modification_timestamp` (ms epoch number) as a
+  // human-readable relative string. Falls back to '—' for missing/invalid values.
+  const formatRelative = (ts: unknown): string => {
+    if (typeof ts !== 'number' || !Number.isFinite(ts)) return '—';
+    try {
+      return formatDistanceToNow(new Date(ts), { addSuffix: true });
+    } catch {
+      return '—';
+    }
+  };
 
   // Create agent form
   const [creating, setCreating] = useState(false);
@@ -374,9 +420,12 @@ const RetellAgentsTab: React.FC<RetellAgentsTabProps> = ({ clientId }) => {
         </Card>
       ) : (
         <div className="space-y-2">
-          {agents.map(agent => {
+          {groupedAgents.map(group => {
+            const agent = group.latest;
             const slots = getSlotLabel(agent.agent_id);
             const isExpanded = expandedAgent === agent.agent_id;
+            const historyOpen = expandedHistory === agent.agent_id;
+            const versionCount = group.versions.length;
 
             return (
               <Card key={agent.agent_id} className="overflow-hidden">
@@ -386,7 +435,7 @@ const RetellAgentsTab: React.FC<RetellAgentsTabProps> = ({ clientId }) => {
                 >
                   <Bot className="h-5 w-5 text-primary flex-shrink-0" />
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-sm font-medium truncate">
                         {agent.agent_name || 'Unnamed Agent'}
                       </span>
@@ -395,6 +444,9 @@ const RetellAgentsTab: React.FC<RetellAgentsTabProps> = ({ clientId }) => {
                           {s}
                         </Badge>
                       ))}
+                      <span className="text-[10px] text-muted-foreground font-mono">
+                        v{agent.version ?? '?'} · {formatRelative((agent as any).last_modification_timestamp)}
+                      </span>
                     </div>
                     <p className="text-[11px] text-muted-foreground font-mono truncate">
                       {agent.agent_id}
@@ -404,11 +456,54 @@ const RetellAgentsTab: React.FC<RetellAgentsTabProps> = ({ clientId }) => {
                     <Badge variant={agent.is_published ? 'default' : 'outline'} className="text-[10px]">
                       {agent.is_published ? 'Published' : 'Draft'}
                     </Badge>
+                    {versionCount > 1 && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setExpandedHistory(historyOpen ? null : agent.agent_id);
+                        }}
+                        className="text-[10px] text-muted-foreground hover:text-foreground underline-offset-2 hover:underline"
+                        title="Toggle version history"
+                      >
+                        {versionCount} versions {historyOpen ? '▲' : '▼'}
+                      </button>
+                    )}
                     {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                   </div>
                 </div>
 
-                {/* Expanded Details */}
+                {/* Version history dropdown — visible only when expandedHistory matches.
+                    Shows ALL versions of this agent_id sorted descending. */}
+                {historyOpen && (
+                  <div className="border-t bg-muted/5 px-4 py-2">
+                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-semibold mb-2">
+                      Version history ({versionCount} {versionCount === 1 ? 'version' : 'versions'})
+                    </p>
+                    <div className="space-y-1">
+                      {group.versions.map(v => (
+                        <div
+                          key={`${v.agent_id}-${v.version}`}
+                          className="flex items-center gap-3 text-[11px] py-1 px-2 rounded hover:bg-muted/30"
+                        >
+                          <span className="font-mono text-muted-foreground w-10">v{v.version ?? '?'}</span>
+                          <span className="flex-1 truncate font-mono">{v.agent_name || '(no name)'}</span>
+                          <span className="text-muted-foreground truncate" style={{ maxWidth: 200 }}>
+                            {(v.voice_id as string)?.slice(0, 32) || '—'}
+                          </span>
+                          <Badge variant={v.is_published ? 'default' : 'outline'} className="text-[9px] py-0 px-1.5">
+                            {v.is_published ? 'Published' : 'Draft'}
+                          </Badge>
+                          <span className="text-muted-foreground" style={{ minWidth: 100 }}>
+                            {formatRelative((v as any).last_modification_timestamp)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Expanded Edit Form (separate from version history above) */}
                 {isExpanded && editingAgent && (
                   <div className="border-t px-4 py-4 space-y-4 bg-muted/10">
                     {/* Agent Settings */}
