@@ -31,13 +31,17 @@ export const DEFAULT_MENU_ITEMS: MenuItemConfig[] = [
   { key: 'section-ops', label: 'OPS', visible: true, position: 11, locked: true, type: 'section-label' },
   { key: 'simulator', label: 'Simulator', visible: true, position: 12, type: 'item', icon: '⚔' },
   { key: 'workflows', label: 'Campaigns', visible: true, position: 13, type: 'item', icon: '⛓' },
-  { key: 'leads-files', label: 'Lead Files', visible: true, position: 14, type: 'item', icon: '▣' },
-  { key: 'logs', label: 'Logs', visible: true, position: 15, type: 'item', icon: '⚡' },
-  { key: 'section-debug', label: 'BACKEND', visible: true, position: 16, locked: true, type: 'section-label' },
-  { key: 'openrouter-usage', label: 'OpenRouter Usage', visible: true, position: 17, type: 'item', icon: '□' },
-  { key: 'supabase-usage', label: 'Supabase Usage', visible: true, position: 18, type: 'item', icon: '⛁' },
-  { key: 'templates', label: 'Source Files', visible: true, position: 19, type: 'item', icon: '⌐' },
-  { key: 'demo-pages', label: 'Work Pages', visible: false, position: 20, type: 'item', icon: '⊞' },
+  { key: 'engagement', label: 'Engagement', visible: true, position: 14, type: 'item', icon: '◈' },
+  { key: 'leads-files', label: 'Lead Files', visible: true, position: 15, type: 'item', icon: '▣' },
+  { key: 'logs', label: 'Logs', visible: true, position: 16, type: 'item', icon: '⚡' },
+  { key: 'section-templates', label: 'TEMPLATES', visible: true, position: 17, locked: true, type: 'section-label' },
+  { key: 'voice-rep-templates', label: 'Voice AI Rep Templates', visible: true, position: 18, type: 'item', icon: '♫' },
+  { key: 'text-rep-templates', label: 'Text AI Rep Templates', visible: true, position: 19, type: 'item', icon: '░' },
+  { key: 'section-debug', label: 'BACKEND', visible: true, position: 20, locked: true, type: 'section-label' },
+  { key: 'openrouter-usage', label: 'OpenRouter Usage', visible: true, position: 21, type: 'item', icon: '□' },
+  { key: 'supabase-usage', label: 'Supabase Usage', visible: true, position: 22, type: 'item', icon: '⛁' },
+  { key: 'templates', label: 'Source Files', visible: true, position: 23, type: 'item', icon: '⌐' },
+  { key: 'demo-pages', label: 'Work Pages', visible: false, position: 24, type: 'item', icon: '⊞' },
 ];
 
 // Map menu keys to their routes (relative to /client/:clientId)
@@ -63,6 +67,8 @@ export const MENU_ROUTE_MAP: Record<string, string> = {
   'email': '/email',
   'engagement': '/workflows/engagement',
   'demo-pages': '/demo-pages',
+  'voice-rep-templates': '/voice-ai-rep/templates',
+  'text-rep-templates': '/text-ai-rep/templates',
 };
 
 export function useClientMenuConfig(clientId: string | undefined) {
