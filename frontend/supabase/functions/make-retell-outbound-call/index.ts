@@ -420,28 +420,52 @@ Deno.serve(async (req) => {
     }
 
     if (!client.retell_api_key) {
-      return ok({ error: "Retell API key not configured for this client" }, 400);
+      return ok({
+        error: "Retell API key not configured for this client.",
+        code: "no_retell_api_key",
+        hint: "Open API Credentials in the sidebar and add your Retell API key, then try again.",
+      }, 409);
     }
 
     // 2. Resolve agent_id
     const slotNumber = parseVoiceSetterSlot(voice_setter_id);
     if (!slotNumber) {
-      return ok({ error: `Invalid voice_setter_id format: ${voice_setter_id}` }, 400);
+      return ok({
+        error: `Invalid voice_setter_id format: ${voice_setter_id}`,
+        code: "invalid_voice_setter_id",
+      }, 400);
     }
     const agentColumn = SLOT_TO_AGENT_COLUMN[slotNumber];
     if (!agentColumn) {
-      return ok({ error: `Invalid voice setter slot: ${slotNumber}` }, 400);
+      return ok({
+        error: `Invalid voice setter slot: ${slotNumber}`,
+        code: "invalid_voice_setter_slot",
+      }, 400);
     }
 
     const agentId = (client as Record<string, unknown>)[agentColumn] as string | null;
     if (!agentId) {
-      return ok({ error: `No Retell agent configured for ${voice_setter_id}. Please sync your voice setter first.` }, 400);
+      // Phase 3.1 UX fix: structured error so the TestCallDialog can surface a
+      // clear "push first" prompt instead of "Edge Function returned a non-2xx
+      // status code". HTTP 409 distinguishes "config incomplete" from "bad
+      // request" which carries different UX intent.
+      return ok({
+        error: `No Retell agent configured for ${voice_setter_id} yet.`,
+        code: "no_agent_for_slot",
+        slot_id: voice_setter_id,
+        slot_number: slotNumber,
+        hint: `Open the ${voice_setter_id} editor, fill in the config, and click "Push to Retell" to provision the agent. Then try the test call again.`,
+      }, 409);
     }
 
     // 3. Get phone number
     const phone = contact_fields?.phone || body.phone;
     if (!phone) {
-      return ok({ error: "No phone number provided for the contact" }, 400);
+      return ok({
+        error: "No phone number provided for the contact.",
+        code: "no_contact_phone",
+        hint: "Enter a phone number including country code (e.g. +61 4xx xxx xxx).",
+      }, 400);
     }
 
     // 4. Determine from_number

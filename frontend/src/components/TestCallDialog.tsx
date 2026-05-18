@@ -49,8 +49,31 @@ export default function TestCallDialog({ open, onOpenChange, clientId, voiceSett
         },
       });
 
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
+      // Phase 3.1 UX fix: when supabase.functions.invoke gets a non-2xx, error.context
+      // holds the Response object — parse its JSON body to surface the backend's
+      // structured {error, code, hint} instead of the generic "Edge Function returned
+      // a non-2xx status code" toast Brendan saw during the 2026-05-18 smoke test.
+      if (error) {
+        let backendError = error.message || 'Failed to initiate call';
+        let hint: string | undefined;
+        try {
+          const ctx: any = (error as any)?.context;
+          let body: any = null;
+          if (ctx?.json) body = await ctx.json();
+          else if (ctx?.text) {
+            const txt = await ctx.text();
+            try { body = JSON.parse(txt); } catch { /* not JSON */ }
+          }
+          if (body?.error) backendError = body.error;
+          if (body?.hint) hint = body.hint;
+        } catch { /* ignore parse failures, fall back to error.message */ }
+        toast.error(backendError, hint ? { description: hint, duration: 10000 } : undefined);
+        return;
+      }
+      if (data?.error) {
+        toast.error(data.error, data.hint ? { description: data.hint, duration: 10000 } : undefined);
+        return;
+      }
 
       toast.success(`Call initiated! Call ID: ${data?.call_id?.slice(0, 8) || 'unknown'}`);
       onOpenChange(false);
