@@ -13,6 +13,7 @@ import { usePageHeader } from '@/contexts/PageHeaderContext';
 import { format } from 'date-fns';
 import { StatusTag } from '@/components/StatusTag';
 import { toast } from 'sonner';
+import { LogsTabsNav } from '@/components/logs/LogsTabsNav';
 
 interface RequestLog {
   id: string;
@@ -709,6 +710,7 @@ const RequestLogs = () => {
   return (
     <div className="container mx-auto max-w-7xl">
       <div className="space-y-6">
+        <LogsTabsNav />
         {/* Filters */}
         <div className="flex items-center gap-3">
           <div className="relative flex-1 min-w-[200px] max-w-sm">

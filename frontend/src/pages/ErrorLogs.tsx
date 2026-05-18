@@ -12,6 +12,7 @@ import { format } from 'date-fns';
 import { StatusTag } from '@/components/StatusTag';
 import { toast } from 'sonner';
 import { SchemaNode } from '@/components/error-logs/SchemaNode';
+import { LogsTabsNav } from '@/components/logs/LogsTabsNav';
 
 interface ErrorLog {
   id: string;
@@ -382,6 +383,9 @@ const ErrorLogs = () => {
 
   return (
     <div className="container mx-auto max-w-7xl flex h-full min-h-0 flex-col overflow-hidden pb-0" style={{ paddingTop: '24px' }}>
+      <div className="mb-4">
+        <LogsTabsNav />
+      </div>
       {/* Empty states */}
       {!ghlAccountId ? (
         <div className="flex-1 flex min-h-0 flex-col overflow-hidden relative" style={{ border: '3px groove hsl(var(--border-groove))', overscrollBehavior: 'none' }}>

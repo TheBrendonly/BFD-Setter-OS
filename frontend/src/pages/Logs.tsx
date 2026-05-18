@@ -18,6 +18,7 @@ import { cn } from '@/lib/utils';
 import { StatusTag } from '@/components/StatusTag';
 import { toast } from 'sonner';
 import { SchemaNode } from '@/components/error-logs/SchemaNode';
+import { LogsTabsNav } from '@/components/logs/LogsTabsNav';
 import { useClientCredentials } from '@/hooks/useClientCredentials';
 import { setterLabel } from '@/lib/setterLabels';
 
@@ -1622,6 +1623,12 @@ const Logs = () => {
 
   return (
     <div className="container mx-auto max-w-7xl flex h-full min-h-0 flex-col overflow-hidden pb-0" style={{ paddingTop: '12px' }}>
+      {/* Outer Logs surface tabs (Activity / Errors / Requests) — shared across
+          the three logs pages. The inner activity-tabs (AI Jobs / Errors / etc.)
+          below are SEPARATE concept (sub-categories within Activity). */}
+      <div className="mb-3 shrink-0">
+        <LogsTabsNav />
+      </div>
       {/* Tabs — horizontally scrollable */}
       <div className="flex overflow-x-auto border-b border-dashed border-border shrink-0" style={{ marginBottom: '12px', scrollbarWidth: 'none', msOverflowStyle: 'none' } as any}>
         {TAB_ITEMS.map(t => (
