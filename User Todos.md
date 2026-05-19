@@ -25,7 +25,7 @@ Per the 2026-05-18d handoff, focused on getting to Client #2 deploy level:
 
 **Setup-guide rebrand (if Client #2 uses in-app setup guide):**
 - **N3** — D27 setup-guide text rebrand (NEEDS Brendan re-shoot PNGs)
-- **N4** — D28 pun-quiz rewrite
+- ~~**N4** — D28 pun-quiz rewrite~~ ✅ DONE 2026-05-19 in `phase-night-n4-pun-quiz-rewrite`. Q1 in `MultiAgentLogicStep.tsx` rewritten away from "one prompt = one AI Rep" pun to BFD-setter setter-slot concept ("One configurable AI Rep with its own prompt, voice, and direction routing"). VoiceInboundLogicStep.tsx:427 lesson copy rephrased to remove the upstream "one prompt" framing AND the em-dash (per CLAUDE.md style rule). Q2-Q4 unchanged — Agent Number routing model applies to BFD-setter as-is.
 
 **Recommended:**
 - **N5** — D26 EE7 hardcoded URLs sweep

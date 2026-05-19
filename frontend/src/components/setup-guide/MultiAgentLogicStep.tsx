@@ -68,11 +68,11 @@ const GuideImage = React.memo(({ src, alt }: { src: string; alt: string }) => {
 const QUIZ_QUESTIONS = [
   {
     id: 'q1',
-    question: 'What does one prompt equal in our system?',
+    question: "What does a 'setter slot' represent in BFD-setter?",
     options: [
-      { label: 'One prompt = One website', correct: false },
-      { label: 'One prompt = One AI Rep (Agent)', correct: true },
-      { label: 'One prompt = One customer', correct: false },
+      { label: 'One phone number, one setter slot', correct: false },
+      { label: 'One configurable AI Rep with its own prompt, voice, and direction routing (inbound / outbound / followup)', correct: true },
+      { label: 'One customer account', correct: false },
     ]
   },
   {

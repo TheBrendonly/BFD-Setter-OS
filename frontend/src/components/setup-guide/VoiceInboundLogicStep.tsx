@@ -424,7 +424,7 @@ export default function VoiceInboundLogicStep({ clientId, onNavigationChange }: 
       </CardHeader>
 
       <p className="text-sm">
-        Your Retell inbound agent doesn't use just one prompt — it uses <strong>three sections</strong> that combine to form the complete prompt. This makes it easier to manage!
+        Your Retell inbound agent doesn't run from a single prompt: it uses <strong>three sections</strong> that combine into the complete prompt, which makes each part easier to manage.
       </p>
 
       <div className="space-y-3">
