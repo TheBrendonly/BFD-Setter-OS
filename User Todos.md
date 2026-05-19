@@ -6,7 +6,33 @@ Items are sequenced. Order matters — do them top-to-bottom. Each item links to
 
 Effort: S = under 30 min, M = 30 min - 2 hr, L = half day+.
 
-**State of play (2026-05-19 EOD — Phase E3 follow-up session closed):**
+**State of play (2026-05-20 EOD — sidebar bug fixed + D-sweep + 100% server verification):**
+
+- HEAD: `191eca6` on Forgejo + GitHub (User Todos refresh below + the Phase J docs commit will land on top).
+- **4 functional tags shipped 2026-05-20** + 1 docs commit:
+  1. `phase-night-sidebar-agency-respects-visible-flag` (`1b6708c`) — root-cause fix for Brendan's "sidebar still has extra Analytics" complaint. Agency role no longer bypasses the visibility filter; `locked` no longer force-overrides `visible`. Latent bug from the 2026-05-18 sidebar cleanup work.
+  2. `docs(campaign-playbook)` (`b6e37a5`) — 137-line §H carry-over from 2026-05-17 finally committed.
+  3. `phase-night-n8-voicemail-detection` (`d1ce0a2`) — extended N8 with `enable_voicemail_detection` + `voicemail_detection_timeout_ms`. retell-proxy v18 → v19 ACTIVE. ClientVoicemailCard now has a Detection subsection.
+  4. `phase-night-n3-setup-guide-text-rebrand` (`191eca6`) — D27 text-only swap "1Prompt" → "Building Flow" across ~13 SetupGuideDialog.tsx strings. PNG re-shoots still pending Brendan's screenshot session.
+- **Server-side 100% verification PASS** (14/14): `Operations/verifications/2026-05-20-full-test-pass.md`. Brendan-side UI smoke walkthrough documented in same doc — pending Brendan's walkthrough.
+- **3 audits delivered:**
+  - `Operations/audits/2026-05-20-bfd-test-data-cleanup-d37.md` — 8 BFD bookings rows triaged for Brendan to pick which to DELETE (no unilateral deletes).
+  - `Operations/audits/2026-05-20-cadence-v2-activation-status-d8.md` — **surprise: BFD's cadence v2 is ALREADY ACTIVE** (`auto_engagement_workflow_id = c206da3e-…`). User Todos / memory CV2-4 entry was stale. Optional cleanup of v1 dormant workflow documented.
+  - `Operations/audits/2026-05-20-page-usage-audit.md` — covers D10-D17 + D18-D24. 22 questioned pages all route-mounted (4 are demo pages with static data → ARCHIVE candidates), 6 of 7 D18-D24 confirmed dead-import (RedirectToFirstClient is alive at App.tsx:162 — false-positive). No deletes this session — Brendan picks per the prior "don't delete yet" rule.
+- **New rule established this session:** [[feedback_no_internal_prompt_edits]] — Claude does NOT alter internal LLM prompts unilaterally (prompts.content, voice_prompts.system_prompt, live Retell general_prompt, etc.). D25 EE6 Aria scrub + BFD prompts.content "dynamic vars pre-loaded" contradiction are flagged for Brendan-manual.
+- **Edge fn versions on prod:** retell-proxy v19 (was v18), push-contact-to-ghl v6, sync-ghl-contact v14, make-retell-outbound-call v11, ghl-tag-webhook v2.
+- **Phase A8 soak:** day 12/14 (ends 2026-05-23). Do NOT touch `clients.use_native_text_engine`.
+
+**Brendan-side actions still pending:**
+
+1. **Walk the Phase B section of `Operations/verifications/2026-05-20-full-test-pass.md`** — 8 UI smoke tests including the sidebar fix verification, voicemail detection toggle, quiet hours card, setup guide rebrand, N5 env-var-gated features, ClientMenuConfigEditor recovery test.
+2. **Set 6 Railway env vars** per `Docs/RAILWAY_ENV.md` § Optional feature-flag vars if not already done.
+3. **D37 — pick which bookings rows to DELETE** from `Operations/audits/2026-05-20-bfd-test-data-cleanup-d37.md` (or run the recommended 6-row DELETE inline).
+4. **D8 — decide if v1 cadence workflow should be deactivated** (optional cleanup; functional impact = none).
+5. **D25 + dynamic-vars contradiction** — both Brendan-manual prompt edits, paths documented in CHANGES_LOG row for `phase-night-n5-url-sweep` + memory `[[feedback_no_internal_prompt_edits]]`.
+6. **N3 PNG re-shoots** — when ready, re-capture the Retell folder screenshots with "Building Flow" folder name and `git mv` the PNG file.
+
+**Prior state-of-play (2026-05-19 EOD — Phase E3 follow-up session closed):**
 
 - HEAD: `16e9897` on Forgejo + GitHub (User Todos verification updates pending — will land in 2026-05-19 wrap commit)
 - **8 functional tags shipped 2026-05-19** (full list in `Docs/CHANGES_LOG.md` rows 1-8):
