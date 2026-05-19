@@ -15,22 +15,26 @@ BFD-setter runs on four independent services. No one host owns the whole stack.
 
 ## Deploys
 
-### Edge function (single)
+### Edge function (single, canonical)
+
+Use the bundle endpoint via `scripts/deploy_retell_proxy_bundle.mjs` — it always attaches every `_shared/*.ts` file, so functions importing from `../_shared/` work the first time. (The legacy `supabase functions deploy` CLI silently drops `_shared/` references on Supabase's `--no-remote` runtime, which is what broke 27 functions during the EE3 regression. Bundle endpoint is the now-canonical method.)
+
 ```bash
-cd frontend
-SUPABASE_ACCESS_TOKEN=$(grep '^SUPABASE_PAT=' ../.env | cut -d= -f2) \
-  ./node_modules/.bin/supabase functions deploy <slug> \
-  --project-ref bjgrgbgykvjrsuwwruoh --no-verify-jwt
+cd /srv/bfd/Projects/bfd-setter
+set -a && source .env && set +a
+node scripts/deploy_retell_proxy_bundle.mjs <slug>
+# omit <slug> to default to retell-proxy
 ```
 
-### Edge function (all changed in current branch)
+The script reads the current `verify_jwt` so it's preserved across deploys, prints the new version, and runs a boot probe (HTTP 401 for jwt-required fns, 400 for `verify_jwt=false`).
+
+### Edge function (batch / multiple slugs)
+
+`scripts/deploy_with_shared.mjs` loops over a `SLUGS` array. Today the array is the EE3-sweep list (kept as the "last batch used" example). For a new batch, edit the array in-place or copy the file under a phase-specific name.
+
 ```bash
-cd frontend
-git diff --name-only main..HEAD | grep '^frontend/supabase/functions/' | cut -d/ -f4 | sort -u | \
-  while read slug; do
-    SUPABASE_ACCESS_TOKEN=$(...) ./node_modules/.bin/supabase functions deploy "$slug" \
-      --project-ref bjgrgbgykvjrsuwwruoh --no-verify-jwt
-  done
+set -a && source .env && set +a
+node scripts/deploy_with_shared.mjs
 ```
 
 ### Trigger.dev tasks
