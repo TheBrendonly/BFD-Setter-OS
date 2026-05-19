@@ -4,7 +4,7 @@ description: How to compose the existing BFD-setter engagement engine (Workflows
 
 # Campaign Playbook — using what's shipped today
 
-**Last updated:** 2026-05-01
+**Last updated:** 2026-05-17 (cadence-v2 + per-client editing section appended at §H)
 
 The engagement engine has been quietly building up over Phases 4, 7, 11. This doc is a practitioner's reference: which existing UI does which job, the node-array recipe for each playbook, and what's still missing.
 
@@ -260,3 +260,139 @@ Items in this section are NOT shipped today. Each maps to a `User Todos.md` line
 - `Docs/CADENCE_DESIGN.md` — the design philosophy and Phase 4a-4d details
 - `Docs/TRACKING.md` — funnel SQL + how to query `cadence_funnel`
 - `Docs/RUNBOOK.md` — incident playbooks for `runEngagement` failures and quiet-hours misconfigurations
+- §H below — cadence-v2 (2026-05-13 onward) + the operator-level "how to change a cadence per client" reference
+
+---
+
+## H. cadence-v2 update + per-client editing (2026-05-13 onward)
+
+This section is the plain-English answer to "how is the call/SMS cadence built, and can I change it per client without a developer?"
+
+### H.1 Headline
+
+The sequence is NOT hardcoded. It lives in `engagement_workflows.nodes` (JSONB) and each client owns their own row(s). The **Workflows** page in the app is the editor. You can change a client's cadence yourself, three ways (see §H.5).
+
+### H.2 Two systems that sound similar but are different
+
+The app has two pages that both look "cadence-y." They do different jobs.
+
+| Page | Table | What it does |
+|---|---|---|
+| **Campaigns** (`/campaigns`) | `campaigns` | Database reactivation jobs. Upload a list, drip it out at a schedule (days, times, batch size). Throttles WHEN leads enter the engine. Does NOT define the SMS/call content. |
+| **Workflows** (`/workflows`) | `engagement_workflows` | The actual SMS/call/email sequence each lead walks through. THIS is the cadence. Each row is one cadence; rows are scoped by `client_id`. |
+
+When you said "we recently updated how people are called and SMS'd", you meant the **Workflows** system. Specifically the BFD 28-node v2 draft (see §H.4).
+
+### H.3 How a cadence is stored and executed
+
+Each `engagement_workflows.nodes` element is one step. Types in use today:
+
+| Type | What it does |
+|---|---|
+| `engage` | Multi-channel touch. Sub-channels for `sms`, `phone_call`, `email`, `whatsapp`. Each has its own message, delay, and enabled flag. |
+| `wait_for_reply` | Pause until the lead replies OR the timeout fires. Reply stops the cadence; timeout advances. |
+| `delay` | Plain sleep. Less used in v2. |
+| `drip` | Batched delivery on a schedule (legacy). |
+
+Runtime: `trigger/runEngagement.ts` loads `engagement_workflows.nodes` for the workflow_id on the `engagement_executions` row and walks the array sequentially. SMS goes to Twilio directly, calls fire `make-retell-outbound-call` (Retell), email goes via GHL Conversations API. The engine has no hardcoded knowledge of "what comes next"; it just reads the next array element.
+
+### H.4 What cadence-v2 changed (the recent commits)
+
+The four commits behind this update:
+
+| Commit | Date | Change |
+|---|---|---|
+| `35d1925` | 2026-05-13 | Direction-aware lead timestamps + `engagement_workflows.schedule` JSONB so a cadence only fires inside `{timezone, days, start_time, end_time}`. |
+| `0125af7` | 2026-05-13 | Email added as a channel type inside `engage` nodes (via GHL Conversations API). |
+| `571e18f` | 2026-05-13 | Bug-1 fix: phone_call steps wait for the Retell `call_ended` webhook (via `engagement_executions.last_call_outcome`) before advancing. Stops the "just tried calling" SMS firing mid-conversation. |
+| `524ac08` | 2026-05-13 | Inserted the BFD 28-node v2 draft cadence as a seed row. Currently `is_active=false`. |
+
+None of these moved logic into TypeScript. They extended the schema and runtime of the already data-driven system.
+
+The 28-node BFD draft (workflow id `c206da3e-b8b7-41f8-9de0-997679abefcb`) is structured as 14 pairs of `engage` then `wait_for_reply` across 21 days, mixing 6 SMS, 3 phone calls, 5 emails. Migration seed: `frontend/supabase/migrations/20260513170000_cadence_v2_day7_bfd_28_node_workflow.sql`.
+
+### H.5 How to change a cadence for one client (three ways)
+
+**Way 1 — Workflows UI (safe, recommended).**
+
+1. Log into the app as the client (or impersonate them).
+2. Open `/workflows`, click into the cadence row.
+3. Use the canvas editor to tweak SMS copy, toggle channels on/off, change delays, edit quiet hours, swap the voice setter.
+4. Save. Next lead picks up the new shape immediately. No deploy.
+
+The editor on `Engagement.tsx` validates node shape; the cadence-v2 alternating `engage` then `wait_for_reply` pattern renders correctly. Bare `delay` nodes between engages will crash the canvas (known issue at `Engagement.tsx:3131`).
+
+**Way 2 — Supabase Studio direct SQL (surgical, no guardrails).**
+
+For one-line edits (e.g. fix a typo in one client's day-2 SMS):
+
+```sql
+-- find the workflow
+SELECT id, name, is_active FROM engagement_workflows WHERE client_id = '<client-uuid>';
+
+-- inspect a node
+SELECT jsonb_pretty(nodes->4) FROM engagement_workflows WHERE id = '<workflow-id>';
+
+-- edit one specific node's SMS message
+UPDATE engagement_workflows
+SET nodes = jsonb_set(nodes, '{4,channels,0,message}', '"new copy here"', false)
+WHERE id = '<workflow-id>';
+```
+
+Risk: no schema validation. Break the JSONB shape and the engine throws on the next execution.
+
+**Way 3 — Clone BFD's draft for a new client.**
+
+When onboarding a client who needs a cadence, start from BFD's v2 draft as a template:
+
+```sql
+INSERT INTO engagement_workflows (
+  client_id, name, nodes, schedule, is_active,
+  is_new_leads_campaign, new_leads_tag, voicemail_config, quiet_hours_override
+)
+SELECT '<new-client-uuid>',
+       'Default New-Lead Cadence v2 (cloned from BFD)',
+       nodes, schedule,
+       false,                    -- start as DRAFT
+       false,                    -- not the active new-lead campaign yet
+       'new-lead',
+       voicemail_config, quiet_hours_override
+FROM engagement_workflows
+WHERE id = 'c206da3e-b8b7-41f8-9de0-997679abefcb';
+```
+
+Then edit it in the UI to match their voice, timing, offer. Then flip `is_active=true` and `is_new_leads_campaign=true`.
+
+### H.6 Verification queries
+
+Read-only. Run in Supabase Studio to confirm picture before changing anything.
+
+```sql
+-- 1. Cadences per client + which is the new-lead default
+SELECT c.business_name,
+       w.name,
+       w.is_active,
+       w.is_new_leads_campaign,
+       jsonb_array_length(w.nodes) AS node_count
+FROM engagement_workflows w
+JOIN clients c ON c.id = w.client_id
+ORDER BY c.business_name, w.sort_order;
+
+-- 2. Inspect BFD's v2 draft shape
+SELECT id, name, is_active, jsonb_array_length(nodes) AS step_count
+FROM engagement_workflows
+WHERE id = 'c206da3e-b8b7-41f8-9de0-997679abefcb';
+
+-- 3. Confirm runtime is reading from this table (recent execution rows)
+SELECT current_node_index, last_call_outcome, stop_reason, updated_at
+FROM engagement_executions
+ORDER BY updated_at DESC
+LIMIT 10;
+```
+
+### H.7 What's still missing for full operator self-service
+
+- **"Clone cadence to new client" button** so step 1 of Way 3 is one click in the UI, not a SQL snippet. Candidate for next session.
+- **Activate BFD's v2 draft.** It still sits at `is_active=false`. Decide whether to flip it after a final content review, or keep iterating first.
+- **A/B testing on cadence copy** (Gap E6 above). Deferred to Phase D-tier when there is enough data.
+- **Pause / resume on a running cadence** (Gap E5 above). Useful when an agency owner wants a holiday pause without losing place.
