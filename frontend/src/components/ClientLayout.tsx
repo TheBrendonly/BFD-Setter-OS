@@ -734,11 +734,14 @@ function ClientSidebar() {
         <SidebarGroup className="pb-0">
           <SidebarGroupContent>
             <SidebarMenu>
-              {/* Both roles use menuConfig when available; agency sees all items, client only visible */}
+              {/* Both roles respect the saved visible flag. Agency toggles items
+                  on/off per-client via ClientMenuConfigEditor; hiding the agency
+                  bypass prevents the daily sidebar from rendering every item ever
+                  defined (fixed 2026-05-20 phase-night-sidebar-agency-respects-visible-flag). */}
               {menuConfig ? (
                 <>
                   {menuConfig
-                    .filter(i => isAgency ? true : i.visible)
+                    .filter(i => i.visible)
                     .map((item) => {
                       if (item.type === 'section-label') {
                         return <div key={item.key} className="sidebar-section-label">{item.label}</div>;

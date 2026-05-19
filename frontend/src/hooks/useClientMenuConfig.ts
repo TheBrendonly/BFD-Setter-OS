@@ -112,12 +112,16 @@ export function useClientMenuConfig(clientId: string | undefined) {
             merged.push({ ...def, position: merged.length });
           }
         }
-        // Re-apply locked status and type from defaults, but preserve custom label/icon
+        // Re-apply locked status and type from defaults, but preserve custom
+        // label/icon/visibility. `locked` means "cannot be reordered/renamed";
+        // it does NOT mean "must be visible" — section-templates is locked AND
+        // intentionally hidden by default, so forcing visible:true here would
+        // override the saved visible:false. Bug-fixed 2026-05-20 in
+        // phase-night-sidebar-agency-respects-visible-flag.
         for (const item of merged) {
           const def = DEFAULT_MENU_ITEMS.find(d => d.key === item.key);
           if (def?.locked) {
             item.locked = true;
-            item.visible = true;
           }
           if (def) {
             item.type = def.type;
