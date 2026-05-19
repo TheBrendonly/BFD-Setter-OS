@@ -21,7 +21,7 @@ Per the 2026-05-18d handoff, focused on getting to Client #2 deploy level:
 
 **Critical (Client #2 blockers):**
 - ~~**N1** — D36 per-client `last_synced_from` GHL field~~ ✅ DONE 2026-05-19 in `phase-night-n1-per-client-last-synced-from`. Added `clients.ghl_last_synced_from_field_value text DEFAULT '1prompt-os'`. Patched both write side (push-contact-to-ghl/index.ts) AND read side (sync-ghl-contact/index.ts echo-loop guard). Header comments refreshed. SOP §4.1 + §4.4 + RUNBOOK § Add a per-client custom field id updated. push-contact-to-ghl v5→v6, sync-ghl-contact v13→v14. BFD's existing behaviour preserved by DEFAULT (row verified post-migration).
-- **N2** — D33 types.ts drift fix (add 15 missing `clients` columns to `frontend/src/integrations/supabase/types.ts`)
+- ~~**N2** — D33 types.ts drift fix~~ ✅ DONE 2026-05-19 in `phase-night-n2-types-ts-clients-drift-fix`. Added 16 missing columns to `clients` Row/Insert/Update in `frontend/src/integrations/supabase/types.ts` (15 from the original audit + `ghl_last_synced_from_field_value` from N1). Two NOT-NULL columns (`timezone` text, `use_native_text_engine` boolean) typed without `| null`. `npx tsc --noEmit` clean. Other heavily-edited tables (prompts, engagement_*, bookings, leads) still clean per the prior audit; broader drift sweep deferred.
 
 **Setup-guide rebrand (if Client #2 uses in-app setup guide):**
 - **N3** — D27 setup-guide text rebrand (NEEDS Brendan re-shoot PNGs)

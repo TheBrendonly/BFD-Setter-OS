@@ -1161,6 +1161,8 @@ export type Database = {
           ai_chat_webhook_url: string | null
           analytics_webhook_url: string | null
           api_webhook_url: string | null
+          auto_engagement_workflow_id: string | null
+          cadence_quiet_hours: Json | null
           campaign_webhook_url: string | null
           chat_analytics_webhook_url: string | null
           created_at: string
@@ -1168,6 +1170,7 @@ export type Database = {
           crm_filter_config: Json | null
           crm_page_size: number
           database_reactivation_inbound_webhook_url: string | null
+          debounce_seconds: number | null
           description: string | null
           dm_debounce_seconds: number | null
           dm_enabled: boolean | null
@@ -1180,11 +1183,18 @@ export type Database = {
           ghl_api_key: string | null
           ghl_assignee_id: string | null
           ghl_calendar_id: string | null
+          ghl_call_appt_booked_field_id: string | null
+          ghl_call_sentiment_field_id: string | null
+          ghl_conversation_provider_id: string | null
+          ghl_last_synced_from_field_id: string | null
+          ghl_last_synced_from_field_value: string | null
           ghl_location_id: string | null
           ghl_send_setter_reply_webhook_url: string | null
+          ghl_webhook_secret: string | null
           gohighlevel_booking_title: string | null
           id: string
           image_url: string | null
+          intake_lead_secret: string | null
           knowledge_base_add_webhook_url: string | null
           knowledge_base_delete_webhook_url: string | null
           last_retry_date: string | null
@@ -1219,6 +1229,7 @@ export type Database = {
           retell_phone_2_country_code: string | null
           retell_phone_3: string | null
           retell_phone_3_country_code: string | null
+          retell_webhook_secret: string | null
           retry_count: number | null
           save_reply_webhook_url: string | null
           send_engagement_webhook_url: string | null
@@ -1226,6 +1237,7 @@ export type Database = {
           send_message_webhook_url: string | null
           send_whatsapp_webhook_url: string | null
           setter_config_last_generated_at: string | null
+          setter_display_names: Json | null
           setup_guide_completed_steps: Json | null
           simulation_webhook: string | null
           sort_order: number | null
@@ -1243,13 +1255,17 @@ export type Database = {
           sync_ghl_enabled: boolean | null
           system_prompt: string | null
           text_engine_webhook: string | null
+          timezone: string
           transfer_to_human_webhook_url: string | null
           twilio_account_sid: string | null
           twilio_auth_token: string | null
           twilio_default_phone: string | null
+          unipile_webhook_secret: string | null
           update_pipeline_webhook_url: string | null
           updated_at: string
+          use_native_text_engine: boolean
           user_details_webhook_url: string | null
+          voicemail_audio_url: Json | null
           what_to_do_acknowledged: boolean | null
         }
         Insert: {
@@ -1257,6 +1273,8 @@ export type Database = {
           ai_chat_webhook_url?: string | null
           analytics_webhook_url?: string | null
           api_webhook_url?: string | null
+          auto_engagement_workflow_id?: string | null
+          cadence_quiet_hours?: Json | null
           campaign_webhook_url?: string | null
           chat_analytics_webhook_url?: string | null
           created_at?: string
@@ -1264,6 +1282,7 @@ export type Database = {
           crm_filter_config?: Json | null
           crm_page_size?: number
           database_reactivation_inbound_webhook_url?: string | null
+          debounce_seconds?: number | null
           description?: string | null
           dm_debounce_seconds?: number | null
           dm_enabled?: boolean | null
@@ -1276,11 +1295,18 @@ export type Database = {
           ghl_api_key?: string | null
           ghl_assignee_id?: string | null
           ghl_calendar_id?: string | null
+          ghl_call_appt_booked_field_id?: string | null
+          ghl_call_sentiment_field_id?: string | null
+          ghl_conversation_provider_id?: string | null
+          ghl_last_synced_from_field_id?: string | null
+          ghl_last_synced_from_field_value?: string | null
           ghl_location_id?: string | null
           ghl_send_setter_reply_webhook_url?: string | null
+          ghl_webhook_secret?: string | null
           gohighlevel_booking_title?: string | null
           id?: string
           image_url?: string | null
+          intake_lead_secret?: string | null
           knowledge_base_add_webhook_url?: string | null
           knowledge_base_delete_webhook_url?: string | null
           last_retry_date?: string | null
@@ -1315,6 +1341,7 @@ export type Database = {
           retell_phone_2_country_code?: string | null
           retell_phone_3?: string | null
           retell_phone_3_country_code?: string | null
+          retell_webhook_secret?: string | null
           retry_count?: number | null
           save_reply_webhook_url?: string | null
           send_engagement_webhook_url?: string | null
@@ -1322,6 +1349,7 @@ export type Database = {
           send_message_webhook_url?: string | null
           send_whatsapp_webhook_url?: string | null
           setter_config_last_generated_at?: string | null
+          setter_display_names?: Json | null
           setup_guide_completed_steps?: Json | null
           simulation_webhook?: string | null
           sort_order?: number | null
@@ -1339,13 +1367,17 @@ export type Database = {
           sync_ghl_enabled?: boolean | null
           system_prompt?: string | null
           text_engine_webhook?: string | null
+          timezone?: string
           transfer_to_human_webhook_url?: string | null
           twilio_account_sid?: string | null
           twilio_auth_token?: string | null
           twilio_default_phone?: string | null
+          unipile_webhook_secret?: string | null
           update_pipeline_webhook_url?: string | null
           updated_at?: string
+          use_native_text_engine?: boolean
           user_details_webhook_url?: string | null
+          voicemail_audio_url?: Json | null
           what_to_do_acknowledged?: boolean | null
         }
         Update: {
@@ -1353,6 +1385,8 @@ export type Database = {
           ai_chat_webhook_url?: string | null
           analytics_webhook_url?: string | null
           api_webhook_url?: string | null
+          auto_engagement_workflow_id?: string | null
+          cadence_quiet_hours?: Json | null
           campaign_webhook_url?: string | null
           chat_analytics_webhook_url?: string | null
           created_at?: string
@@ -1360,6 +1394,7 @@ export type Database = {
           crm_filter_config?: Json | null
           crm_page_size?: number
           database_reactivation_inbound_webhook_url?: string | null
+          debounce_seconds?: number | null
           description?: string | null
           dm_debounce_seconds?: number | null
           dm_enabled?: boolean | null
@@ -1372,11 +1407,18 @@ export type Database = {
           ghl_api_key?: string | null
           ghl_assignee_id?: string | null
           ghl_calendar_id?: string | null
+          ghl_call_appt_booked_field_id?: string | null
+          ghl_call_sentiment_field_id?: string | null
+          ghl_conversation_provider_id?: string | null
+          ghl_last_synced_from_field_id?: string | null
+          ghl_last_synced_from_field_value?: string | null
           ghl_location_id?: string | null
           ghl_send_setter_reply_webhook_url?: string | null
+          ghl_webhook_secret?: string | null
           gohighlevel_booking_title?: string | null
           id?: string
           image_url?: string | null
+          intake_lead_secret?: string | null
           knowledge_base_add_webhook_url?: string | null
           knowledge_base_delete_webhook_url?: string | null
           last_retry_date?: string | null
@@ -1411,6 +1453,7 @@ export type Database = {
           retell_phone_2_country_code?: string | null
           retell_phone_3?: string | null
           retell_phone_3_country_code?: string | null
+          retell_webhook_secret?: string | null
           retry_count?: number | null
           save_reply_webhook_url?: string | null
           send_engagement_webhook_url?: string | null
@@ -1418,6 +1461,7 @@ export type Database = {
           send_message_webhook_url?: string | null
           send_whatsapp_webhook_url?: string | null
           setter_config_last_generated_at?: string | null
+          setter_display_names?: Json | null
           setup_guide_completed_steps?: Json | null
           simulation_webhook?: string | null
           sort_order?: number | null
@@ -1435,13 +1479,17 @@ export type Database = {
           sync_ghl_enabled?: boolean | null
           system_prompt?: string | null
           text_engine_webhook?: string | null
+          timezone?: string
           transfer_to_human_webhook_url?: string | null
           twilio_account_sid?: string | null
           twilio_auth_token?: string | null
           twilio_default_phone?: string | null
+          unipile_webhook_secret?: string | null
           update_pipeline_webhook_url?: string | null
           updated_at?: string
+          use_native_text_engine?: boolean
           user_details_webhook_url?: string | null
+          voicemail_audio_url?: Json | null
           what_to_do_acknowledged?: boolean | null
         }
         Relationships: []
