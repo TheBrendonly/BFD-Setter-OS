@@ -946,10 +946,16 @@ Deno.serve(async (req) => {
 
       // ===== SET VOICEMAIL =====
       // Client-wide voicemail config. Reads clients.voicemail_config (jsonb shape:
-      // {mode: "hangup" | "static" | "prompt", text: string | null}) and PATCHes
+      // {mode: "hangup" | "static" | "prompt", text: string | null,
+      //  detect_enabled?: boolean, detect_timeout_ms?: number}) and PATCHes
       // every unique Retell agent_id across the 10 slot columns. No publish/repoint —
       // voicemail_option is a draft-level setting that takes effect on the next
       // call without requiring a new published version.
+      //
+      // Detection: enable_voicemail_detection + voicemail_detection_timeout_ms
+      // control whether the agent attempts to detect voicemail in the first
+      // place. Defaults to enabled with a 30s timeout. Added 2026-05-20 in
+      // phase-night-n8-voicemail-detection.
       case "set-voicemail": {
         const supabaseAdmin = getSupabaseAdmin();
         const allAgentCols = Object.values(SLOT_TO_AGENT_COLUMN);
@@ -960,7 +966,12 @@ Deno.serve(async (req) => {
           .single();
         if (clientFetchErr) throw new Error(`Failed to fetch client: ${clientFetchErr.message}`);
 
-        const cfg = (clientRow as Record<string, unknown>)?.voicemail_config as { mode?: string; text?: string | null } | null;
+        const cfg = (clientRow as Record<string, unknown>)?.voicemail_config as {
+          mode?: string;
+          text?: string | null;
+          detect_enabled?: boolean;
+          detect_timeout_ms?: number;
+        } | null;
         if (!cfg || !cfg.mode) {
           result = { success: false, action: "skipped_no_config", reason: "clients.voicemail_config is null — set it first." };
           break;
@@ -986,6 +997,12 @@ Deno.serve(async (req) => {
           break;
         }
 
+        const detectEnabled = cfg.detect_enabled !== false;
+        const detectTimeoutMs =
+          typeof cfg.detect_timeout_ms === "number" && cfg.detect_timeout_ms > 0
+            ? cfg.detect_timeout_ms
+            : 30000;
+
         const agentIds = new Set<string>();
         for (const col of allAgentCols) {
           const v = (clientRow as Record<string, string | null>)?.[col];
@@ -996,17 +1013,32 @@ Deno.serve(async (req) => {
           break;
         }
 
+        const patchBody = {
+          enable_voicemail_detection: detectEnabled,
+          voicemail_detection_timeout_ms: detectTimeoutMs,
+          voicemail_option: voicemailOption,
+        };
+
         const patches: Array<{ agent_id: string; ok: boolean; error?: string }> = [];
         for (const agentId of agentIds) {
           try {
-            await retellFetch(apiKey, "PATCH", `update-agent/${agentId}`, { voicemail_option: voicemailOption });
+            await retellFetch(apiKey, "PATCH", `update-agent/${agentId}`, patchBody);
             patches.push({ agent_id: agentId, ok: true });
           } catch (e) {
             patches.push({ agent_id: agentId, ok: false, error: e instanceof Error ? e.message : String(e) });
           }
         }
         const okCount = patches.filter((p) => p.ok).length;
-        result = { success: okCount === patches.length, action: "voicemail_set", mode: cfg.mode, patched: okCount, total: patches.length, results: patches };
+        result = {
+          success: okCount === patches.length,
+          action: "voicemail_set",
+          mode: cfg.mode,
+          detect_enabled: detectEnabled,
+          detect_timeout_ms: detectTimeoutMs,
+          patched: okCount,
+          total: patches.length,
+          results: patches,
+        };
         break;
       }
 
