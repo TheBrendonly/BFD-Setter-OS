@@ -15,6 +15,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { ClientMenuConfigEditor } from "@/components/ClientMenuConfigEditor";
 import { useSubscription } from "@/hooks/useSubscription";
 import { UnsavedChangesDialog } from '@/components/UnsavedChangesDialog';
+import { ClientVoicemailCard } from '@/components/setters/ClientVoicemailCard';
 
 
 export default function ClientSettings() {
@@ -268,6 +269,12 @@ export default function ClientSettings() {
                 Drives booking time formatting, cadence quiet-hours scheduling, and what the voice agent says ("Sydney time", etc.). Used by voice-booking-tools, make-retell-outbound-call, and retell-proxy.
               </p>
             </div>
+
+            {clientId && (
+              <div>
+                <ClientVoicemailCard clientId={clientId} />
+              </div>
+            )}
 
             <div className="space-y-2">
               <Label className="field-text">Logo</Label>

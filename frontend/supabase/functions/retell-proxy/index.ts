@@ -944,6 +944,72 @@ Deno.serve(async (req) => {
         break;
       }
 
+      // ===== SET VOICEMAIL =====
+      // Client-wide voicemail config. Reads clients.voicemail_config (jsonb shape:
+      // {mode: "hangup" | "static" | "prompt", text: string | null}) and PATCHes
+      // every unique Retell agent_id across the 10 slot columns. No publish/repoint —
+      // voicemail_option is a draft-level setting that takes effect on the next
+      // call without requiring a new published version.
+      case "set-voicemail": {
+        const supabaseAdmin = getSupabaseAdmin();
+        const allAgentCols = Object.values(SLOT_TO_AGENT_COLUMN);
+        const { data: clientRow, error: clientFetchErr } = await supabaseAdmin
+          .from("clients")
+          .select(`voicemail_config, ${allAgentCols.join(", ")}`)
+          .eq("id", clientId)
+          .single();
+        if (clientFetchErr) throw new Error(`Failed to fetch client: ${clientFetchErr.message}`);
+
+        const cfg = (clientRow as Record<string, unknown>)?.voicemail_config as { mode?: string; text?: string | null } | null;
+        if (!cfg || !cfg.mode) {
+          result = { success: false, action: "skipped_no_config", reason: "clients.voicemail_config is null — set it first." };
+          break;
+        }
+
+        let voicemailOption: Record<string, unknown>;
+        if (cfg.mode === "hangup") {
+          voicemailOption = { action: { type: "hangup" } };
+        } else if (cfg.mode === "static") {
+          if (!cfg.text || !cfg.text.trim()) {
+            result = { success: false, action: "skipped_missing_text", reason: "Static voicemail requires `text` to be non-empty." };
+            break;
+          }
+          voicemailOption = { action: { type: "static", text: cfg.text } };
+        } else if (cfg.mode === "prompt") {
+          if (!cfg.text || !cfg.text.trim()) {
+            result = { success: false, action: "skipped_missing_text", reason: "Prompt voicemail requires `text` to be non-empty." };
+            break;
+          }
+          voicemailOption = { action: { type: "prompt", text: cfg.text } };
+        } else {
+          result = { success: false, action: "invalid_mode", reason: `Unknown voicemail mode: ${cfg.mode}. Use hangup, static, or prompt.` };
+          break;
+        }
+
+        const agentIds = new Set<string>();
+        for (const col of allAgentCols) {
+          const v = (clientRow as Record<string, string | null>)?.[col];
+          if (v) agentIds.add(v);
+        }
+        if (agentIds.size === 0) {
+          result = { success: true, action: "skipped_no_agents", reason: "No Retell agents are provisioned for this client yet." };
+          break;
+        }
+
+        const patches: Array<{ agent_id: string; ok: boolean; error?: string }> = [];
+        for (const agentId of agentIds) {
+          try {
+            await retellFetch(apiKey, "PATCH", `update-agent/${agentId}`, { voicemail_option: voicemailOption });
+            patches.push({ agent_id: agentId, ok: true });
+          } catch (e) {
+            patches.push({ agent_id: agentId, ok: false, error: e instanceof Error ? e.message : String(e) });
+          }
+        }
+        const okCount = patches.filter((p) => p.ok).length;
+        result = { success: okCount === patches.length, action: "voicemail_set", mode: cfg.mode, patched: okCount, total: patches.length, results: patches };
+        break;
+      }
+
       // ===== DELETE VOICE SETTER =====
       case "delete-voice-setter": {
         const slotNumber = params.slotNumber as number;

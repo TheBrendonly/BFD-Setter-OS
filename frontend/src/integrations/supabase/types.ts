@@ -1266,6 +1266,7 @@ export type Database = {
           use_native_text_engine: boolean
           user_details_webhook_url: string | null
           voicemail_audio_url: Json | null
+          voicemail_config: Json | null
           what_to_do_acknowledged: boolean | null
         }
         Insert: {
@@ -1378,6 +1379,7 @@ export type Database = {
           use_native_text_engine?: boolean
           user_details_webhook_url?: string | null
           voicemail_audio_url?: Json | null
+          voicemail_config?: Json | null
           what_to_do_acknowledged?: boolean | null
         }
         Update: {
@@ -1490,6 +1492,7 @@ export type Database = {
           use_native_text_engine?: boolean
           user_details_webhook_url?: string | null
           voicemail_audio_url?: Json | null
+          voicemail_config?: Json | null
           what_to_do_acknowledged?: boolean | null
         }
         Relationships: []

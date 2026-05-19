@@ -36,7 +36,7 @@ Per the 2026-05-18d handoff, focused on getting to Client #2 deploy level:
 
 **Cadence settings (after Decision 1):**
 - **N7** — D6 Quiet hours editor
-- **N8** — D7 Retell-native voicemail
+- ~~**N8** — D7 Retell-native voicemail~~ ✅ DONE 2026-05-19 in `phase-night-n8-client-voicemail`. SQL: `clients.voicemail_config jsonb DEFAULT '{"mode":"hangup","text":null}'::jsonb`. retell-proxy v17→v18 adds `set-voicemail` action that fetches all 10 retell_agent_id_* columns, dedupes, and PATCHes `voicemail_option` on each unique agent (hangup / static / prompt → Retell shape `{action: {type, text?}}`). New `frontend/src/components/setters/ClientVoicemailCard.tsx` (radio Hangup/Static/Dynamic + textarea + Save & Push button) auto-saves on hangup, requires text + explicit save for static/prompt, fires the set-voicemail action on save, surfaces patched/total Retell agent count in toast. Wired into ClientSettings.tsx below the Timezone block per D1=B (client-wide, not per-workflow). types.ts: added `voicemail_config: Json | null` to Row + Insert + Update.
 
 **Conditional (after Decision 3):**
 - **N10** — D4 `ghl-tag-webhook` edge function
