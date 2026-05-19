@@ -16,6 +16,7 @@ import { ClientMenuConfigEditor } from "@/components/ClientMenuConfigEditor";
 import { useSubscription } from "@/hooks/useSubscription";
 import { UnsavedChangesDialog } from '@/components/UnsavedChangesDialog';
 import { ClientVoicemailCard } from '@/components/setters/ClientVoicemailCard';
+import { ClientQuietHoursCard } from '@/components/setters/ClientQuietHoursCard';
 
 
 export default function ClientSettings() {
@@ -271,7 +272,8 @@ export default function ClientSettings() {
             </div>
 
             {clientId && (
-              <div>
+              <div className="space-y-4">
+                <ClientQuietHoursCard clientId={clientId} />
                 <ClientVoicemailCard clientId={clientId} />
               </div>
             )}
