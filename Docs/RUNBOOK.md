@@ -137,15 +137,18 @@ UPDATE leads SET setter_stopped = true
 WHERE client_id = '<client-uuid>' AND phone = '+61400000000';
 ```
 
-### Add a per-client custom field id for last_synced_from (Phase 6)
-1. Brendan: in GHL location settings → Custom Fields → New, name `last_synced_from`, type Single Line Text, applies to Contacts. Note the field id.
-2. Edit `frontend/supabase/functions/push-contact-to-ghl/index.ts:33`:
-   ```ts
-   const BFD_LAST_SYNCED_FROM_FIELD_ID = "<the-field-id>";
+### Add a per-client custom field id for last_synced_from
+1. In the client's GHL location → Settings → Custom Fields → New, name `last_synced_from`, type Single Line Text, applies to Contacts. Note the field id.
+2. Persist per-client:
+   ```sql
+   UPDATE clients
+   SET ghl_last_synced_from_field_id    = '<the-field-id>',
+       ghl_last_synced_from_field_value = '<distinctive-slug>'   -- e.g. 'acme-co'; defaults to '1prompt-os'
+   WHERE id = '<client-uuid>';
    ```
-3. Redeploy `push-contact-to-ghl`.
+3. No redeploy needed since N1 (2026-05-19) — `push-contact-to-ghl` and `sync-ghl-contact` both read these columns at request time.
 
-For multi-client: add `clients.ghl_last_synced_from_field_id text` and read per-client.
+The `_value` column is the echo-stamp string written into the GHL custom field and matched on inbound webhooks to skip self-originated updates. Distinct per client so multi-tenant deployments don't cross-stamp.
 
 ## Incident playbooks
 

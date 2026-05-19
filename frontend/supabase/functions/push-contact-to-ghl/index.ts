@@ -6,12 +6,13 @@
 // (PUT /contacts/{id}). sync-ghl-contact handles the reverse direction.
 //
 // Echo-loop prevention: every push tags the GHL contact with
-// `customField.last_synced_from = "1prompt-os"` and bumps
-// `leads.updated_at`. sync-ghl-contact can use the timestamp to debounce
-// incoming GHL updates that originated from us. (Tag-based skip is also
-// possible if BFD wires the custom field — the field id is the
-// LAST_SYNCED_FROM_FIELD_ID constant below; if absent on a location, the
-// tag is silently dropped by GHL.)
+// `customField.last_synced_from = <client-specific value>` (default
+// "1prompt-os" for BFD; per-client via clients.ghl_last_synced_from_field_value)
+// and bumps `leads.updated_at`. sync-ghl-contact reads the same column and
+// uses the timestamp to debounce incoming GHL updates that originated from
+// us. (Tag-based skip is also possible if BFD wires the custom field — the
+// field id is on clients.ghl_last_synced_from_field_id; if absent on a
+// location, the tag is silently dropped by GHL.)
 //
 // Auth: same JWT-vs-clientId ownership check pattern as retell-proxy
 // (see check-client-subscription:60-123 for the canonical version).
@@ -107,7 +108,7 @@ Deno.serve(async (req) => {
     const supabase = getSupabaseAdmin();
     const { data: clientRow, error: clientErr } = await supabase
       .from("clients")
-      .select("ghl_api_key, ghl_location_id, ghl_last_synced_from_field_id")
+      .select("ghl_api_key, ghl_location_id, ghl_last_synced_from_field_id, ghl_last_synced_from_field_value")
       .eq("id", clientId)
       .single();
     if (clientErr || !clientRow?.ghl_api_key) {
@@ -119,6 +120,8 @@ Deno.serve(async (req) => {
     const lastSyncedFromFieldId =
       (clientRow.ghl_last_synced_from_field_id as string | null)
       ?? BFD_LEGACY_FALLBACK_FIELD_ID;
+    const lastSyncedFromValue =
+      (clientRow.ghl_last_synced_from_field_value as string | null) ?? "1prompt-os";
 
     // Build GHL Contacts API PUT body
     const body: Record<string, unknown> = {};
@@ -131,7 +134,7 @@ Deno.serve(async (req) => {
 
     const customFields = Array.isArray(contact.custom_fields) ? [...contact.custom_fields] : [];
     if (lastSyncedFromFieldId) {
-      customFields.push({ id: lastSyncedFromFieldId, field_value: "1prompt-os" });
+      customFields.push({ id: lastSyncedFromFieldId, field_value: lastSyncedFromValue });
     }
     if (customFields.length > 0) body.customFields = customFields;
 

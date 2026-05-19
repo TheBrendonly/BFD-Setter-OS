@@ -218,6 +218,7 @@ INSERT INTO public.clients (
   voicemail_audio_url,
   ghl_webhook_secret, retell_webhook_secret, unipile_webhook_secret,
   ghl_last_synced_from_field_id,
+  ghl_last_synced_from_field_value,
   auto_engagement_workflow_id,
   created_at
 ) VALUES (
@@ -242,6 +243,7 @@ INSERT INTO public.clients (
   NULL,                                     -- retell_webhook_secret (paste in §5.5)
   NULL,                                     -- unipile_webhook_secret
   NULL,                                     -- ghl_last_synced_from_field_id (set in §4.2)
+  '<client-slug>',                          -- ghl_last_synced_from_field_value (echo-stamp value; pick a short distinctive slug per client, e.g. "acme-co" — defaults to "1prompt-os" if NULL)
   NULL,                                     -- auto_engagement_workflow_id (set in §8 after copy review)
   now()
 )
@@ -290,7 +292,7 @@ DO NOT yet `UPDATE clients SET auto_engagement_workflow_id = ...` — copy revie
 
 ### 4.4 Echo-loop guard sanity check
 
-`sync-ghl-contact` skips inbound webhooks where `customField.last_synced_from = "1prompt-os"` AND `leads.updated_at < 60s old`. The check uses `clients.ghl_last_synced_from_field_id` (per-client; D-M5). Confirm by editing a contact via the platform UI and checking that no extra `sync_ghl_executions` row fires.
+`sync-ghl-contact` skips inbound webhooks where `customField.last_synced_from = <clients.ghl_last_synced_from_field_value>` (default `"1prompt-os"`, per-client since N1 2026-05-19) AND `leads.updated_at < 60s old`. The check uses `clients.ghl_last_synced_from_field_id` for the field id (per-client; D-M5) AND `clients.ghl_last_synced_from_field_value` for the stamp value. Both `push-contact-to-ghl` (write) and `sync-ghl-contact` (read) read the same column, so they move together. Confirm by editing a contact via the platform UI and checking that no extra `sync_ghl_executions` row fires.
 
 ---
 

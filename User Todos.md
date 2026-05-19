@@ -20,7 +20,7 @@ Effort: S = under 30 min, M = 30 min - 2 hr, L = half day+.
 Per the 2026-05-18d handoff, focused on getting to Client #2 deploy level:
 
 **Critical (Client #2 blockers):**
-- **N1** — D36 per-client `last_synced_from` GHL field (add `clients.ghl_last_synced_from_field_value` column; fix `push-contact-to-ghl/index.ts:134` + `sync-ghl-contact/index.ts:301`)
+- ~~**N1** — D36 per-client `last_synced_from` GHL field~~ ✅ DONE 2026-05-19 in `phase-night-n1-per-client-last-synced-from`. Added `clients.ghl_last_synced_from_field_value text DEFAULT '1prompt-os'`. Patched both write side (push-contact-to-ghl/index.ts) AND read side (sync-ghl-contact/index.ts echo-loop guard). Header comments refreshed. SOP §4.1 + §4.4 + RUNBOOK § Add a per-client custom field id updated. push-contact-to-ghl v5→v6, sync-ghl-contact v13→v14. BFD's existing behaviour preserved by DEFAULT (row verified post-migration).
 - **N2** — D33 types.ts drift fix (add 15 missing `clients` columns to `frontend/src/integrations/supabase/types.ts`)
 
 **Setup-guide rebrand (if Client #2 uses in-app setup guide):**

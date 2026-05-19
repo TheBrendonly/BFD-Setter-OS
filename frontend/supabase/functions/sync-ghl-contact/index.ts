@@ -244,7 +244,7 @@ Deno.serve(async (req) => {
 
     const { data: clientRow, error: clientErr } = await supabase
       .from("clients")
-      .select("id, sync_ghl_enabled, auto_engagement_workflow_id, ghl_last_synced_from_field_id")
+      .select("id, sync_ghl_enabled, auto_engagement_workflow_id, ghl_last_synced_from_field_id, ghl_last_synced_from_field_value")
       .eq("ghl_location_id", ghlAccountId)
       .single();
 
@@ -278,16 +278,21 @@ Deno.serve(async (req) => {
       .maybeSingle();
 
     // Echo-loop guard: when push-contact-to-ghl writes a contact upstream it
-    // tags customField `last_synced_from = "1prompt-os"`. GHL then fires
-    // contact.update back here; if our leads.updated_at is fresh (< 60s) we
-    // KNOW this update originated from us and skip. Without this guard every
-    // outbound edit causes a redundant inbound sync round-trip.
+    // tags customField `last_synced_from = <clients.ghl_last_synced_from_field_value>`
+    // (default "1prompt-os" for BFD; per-client for others). GHL then fires
+    // contact.update back here; if our leads.updated_at is fresh (< 60s) AND
+    // the stamp value matches this client's expected value we KNOW the update
+    // originated from us and skip. Without this guard every outbound edit
+    // causes a redundant inbound sync round-trip.
     if (existingContact?.updated_at) {
       const candidates: unknown[] = [];
       if (Array.isArray(contact.customFields)) candidates.push(...(contact.customFields as unknown[]));
       if (Array.isArray(contact.customField)) candidates.push(...(contact.customField as unknown[]));
       if (Array.isArray(contact.custom_field)) candidates.push(...(contact.custom_field as unknown[]));
       const perClientFieldId = clientRow.ghl_last_synced_from_field_id as string | null;
+      const expectedStampValue = (
+        (clientRow.ghl_last_synced_from_field_value as string | null) ?? "1prompt-os"
+      ).trim().toLowerCase();
       const isOurStamp = candidates.some((cf) => {
         if (!isRecord(cf)) return false;
         const fieldKey = typeof cf.key === "string" ? cf.key : (typeof cf.fieldKey === "string" ? cf.fieldKey : "");
@@ -298,7 +303,7 @@ Deno.serve(async (req) => {
           || fieldId === "PQNTqtTnIw9Uu0XLLE5M"; // legacy fallback for BFD-only setups
         if (!isLastSynced) return false;
         const value = cf.value ?? cf.field_value ?? cf.fieldValue;
-        return typeof value === "string" && value.trim().toLowerCase() === "1prompt-os";
+        return typeof value === "string" && value.trim().toLowerCase() === expectedStampValue;
       });
       if (isOurStamp) {
         const ageMs = Date.now() - new Date(existingContact.updated_at).getTime();
