@@ -11,7 +11,11 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Coins, Loader2 } from '@/components/icons';
 
-const COST_ESTIMATE_URL = 'https://n8n-1prompt.99players.com/webhook/cost-estimate';
+// Set VITE_COST_ESTIMATE_URL in the deployment env to enable cost estimation.
+// Hardcoded upstream URL removed in N5 2026-05-19 — was sending per-client
+// supabase_service_key + openrouter_api_key + openai_api_key to the upstream
+// n8n endpoint as a fallback for any caller without a per-tenant override.
+const COST_ESTIMATE_URL = import.meta.env.VITE_COST_ESTIMATE_URL as string | undefined;
 
 interface RefreshCostDialogProps {
   open: boolean;
@@ -68,6 +72,10 @@ export function RefreshCostDialog({
           body.endDate = customEndDate.toISOString().split('T')[0];
         }
 
+        if (!COST_ESTIMATE_URL) {
+          setError('Cost estimation is not configured for this deployment (VITE_COST_ESTIMATE_URL is unset).');
+          return;
+        }
         const response = await fetch(COST_ESTIMATE_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

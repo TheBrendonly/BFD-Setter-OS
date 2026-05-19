@@ -24,9 +24,14 @@ import anthropicLogo from '@/assets/anthropic-logo.svg';
 import metaLogo from '@/assets/meta-logo.svg';
 import googleLogo from '@/assets/google-logo.svg';
 
-// Default webhook URLs for chat analytics (fetched from database)
-const DEFAULT_TEXT_CHAT_ANALYTICS_WEBHOOK_URL = 'https://n8n-1prompt.99players.com/webhook/b7c36233-4-405e-aca4-aa202a542f';
-const DEFAULT_VOICE_CHAT_ANALYTICS_WEBHOOK_URL = 'https://n8n-1prompt.99players.com/webhook/voice-chat-analytcis';
+// Default webhook URLs for chat analytics — overridable per-client via
+// clients.chat_analytics_webhook_url. Defaults are env-driven (set
+// VITE_TEXT_CHAT_ANALYTICS_WEBHOOK_URL / VITE_VOICE_CHAT_ANALYTICS_WEBHOOK_URL
+// in the deployment env). Hardcoded upstream URLs removed in N5 2026-05-19 —
+// were leaking per-client chat content + apikeys to a shared upstream n8n
+// for any tenant without their own column value.
+const DEFAULT_TEXT_CHAT_ANALYTICS_WEBHOOK_URL = (import.meta.env.VITE_TEXT_CHAT_ANALYTICS_WEBHOOK_URL as string | undefined) ?? '';
+const DEFAULT_VOICE_CHAT_ANALYTICS_WEBHOOK_URL = (import.meta.env.VITE_VOICE_CHAT_ANALYTICS_WEBHOOK_URL as string | undefined) ?? '';
 interface AnalyticsChatThread {
   id: string;
   title: string;

@@ -53,6 +53,21 @@ Deployment topology reminder (memory `reference_deployment_topology`):
 - `NODE_ENV` — defaults to `production` on Railway.
 - `RAILWAY_*` — internal, auto-injected.
 
+**Optional feature-flag vars added by N5 2026-05-19 (no hardcoded upstream URLs):**
+
+These features are *off* by default; set the env var to point at a webhook you own, and the corresponding UI feature lights up. Hardcoded `n8n-1prompt.99players.com` fallbacks were removed in `phase-night-n5-url-sweep` because they silently leaked per-client credentials / chat content to upstream.
+
+| Variable | Feature gated by it | Behaviour when unset |
+|---|---|---|
+| `VITE_AI_PROMPT_WEBHOOK_URL` | "Modify Setter with AI" chat dialog (`PromptChatInterface`, `AIPromptDialog`, `EmbeddedPromptChat`) | Dialog throws "AI prompt generation is not configured" on submit. |
+| `VITE_PROMPT_WEBHOOK_URL` | `PromptManagement` push-to-deploy fallback when `clients.prompt_webhook_url` is null | Push fails silently against an empty URL — set or fill the per-client column. |
+| `VITE_SETUP_GUIDE_PROMPT_WEBHOOK_URL` | `SetupGuideDialog` prompt-deploy fallback when `clients.prompt_webhook_url` is null | Same as above for the setup-guide path. |
+| `VITE_TEXT_CHAT_ANALYTICS_WEBHOOK_URL` | Default Text Analytics chat in `AnalyticsChatInterface` when `clients.chat_analytics_webhook_url` is null | Chat UI shows blank URL; fetch fails with a clear error. |
+| `VITE_VOICE_CHAT_ANALYTICS_WEBHOOK_URL` | Same, voice variant | Same. |
+| `VITE_COST_ESTIMATE_URL` | `RefreshCostDialog` cost-estimate fetch | Dialog shows "Cost estimation is not configured for this deployment." |
+
+For BFD specifically, Brendan can restore the prior behaviour by pasting the historical upstream URLs into these vars on Railway (see Forgejo commit `2e4119c..f2e0a3b` for the exact previous values). Or migrate each one to a BFD-owned webhook over time and update the env var. Either way, the URLs are no longer baked into the source code.
+
 ---
 
 ## Service 2: n8n (legacy, being decommissioned)

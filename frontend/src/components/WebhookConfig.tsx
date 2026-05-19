@@ -109,7 +109,7 @@ const WebhookConfig: React.FC<WebhookConfigProps> = ({ webhookUrl, onWebhookChan
               <Input
                 id="webhook-url"
                 type="url"
-                placeholder="https://n8n-1prompt.99players.com/webhook-test/..."
+                placeholder="https://your-n8n-host/webhook-test/..."
                 value={webhookUrl}
                 onChange={(e) => onWebhookChange(e.target.value)}
                 className="material-input"

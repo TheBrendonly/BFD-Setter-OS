@@ -485,8 +485,12 @@ const scrollToBottom = () => {
         content: msg.content
       }));
 
-      // Always send to system-managed AI prompt generation webhook
-      const WEBHOOK_URL = 'https://n8n-1prompt.99players.com/webhook/bcd89376-0b70-44cd-9948-0378acc19ec8';
+      // System-managed AI prompt generation webhook. Set VITE_AI_PROMPT_WEBHOOK_URL
+      // in the deployment env. Hardcoded upstream URL removed in N5 2026-05-19.
+      const WEBHOOK_URL = import.meta.env.VITE_AI_PROMPT_WEBHOOK_URL as string | undefined;
+      if (!WEBHOOK_URL) {
+        throw new Error('AI prompt generation is not configured for this deployment (VITE_AI_PROMPT_WEBHOOK_URL is unset).');
+      }
 
       // Find readable model name
       const selected = llmOptions.find(m => m.id === selectedModel);

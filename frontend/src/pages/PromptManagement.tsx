@@ -57,8 +57,11 @@ import { setterKey } from '@/lib/setterLabels';
 import { ClientTimezoneCard } from '@/components/setters/ClientTimezoneCard';
 import { InlineSetterNameEditor } from '@/components/setters/InlineSetterNameEditor';
 
-// Default hardcoded webhook URL for prompts
-const DEFAULT_PROMPT_WEBHOOK_URL = 'https://n8n-1prompt.99players.com/webhook/prompt-management-ai-setter';
+// Default prompt-management webhook URL. Per-client overrides come from
+// clients.prompt_webhook_url. Defaults to VITE_PROMPT_WEBHOOK_URL env var
+// (empty if unset). Hardcoded upstream URL removed in N5 2026-05-19 — was
+// silently leaking new clients' prompt content to a shared upstream n8n.
+const DEFAULT_PROMPT_WEBHOOK_URL = (import.meta.env.VITE_PROMPT_WEBHOOK_URL as string | undefined) ?? '';
 
 const DEPLOY_SEPARATOR = '\n\n── ── ── ── ── ── ── ── ── ── ── ── ── ──\n\n';
 
@@ -771,7 +774,7 @@ https://www.notion.so/quimple/Brendan-s-Resource-Hub-1aa7a2bd61324bf1ad72f9ef08f
 ### Booking Links
 
 **Direct Booking Link**:
-https://us.1prompt.com/widget/bookings/1promptv9c66k
+<YOUR BOOKING LINK>
 - Use as Option 1 in all booking scenarios
 - Let users choose their preferred time slot
 - Fallback option if booking functions fail
@@ -934,7 +937,7 @@ You have access to 6 powerful booking functions to manage appointments seamlessl
 
 > "Great! Here are your booking options:
 >
-> **Option 1**: Book directly using this link and choose any time that works for you: https://us.1prompt.com/widget/bookings/1promptv9c66k
+> **Option 1**: Book directly using this link and choose any time that works for you: <YOUR BOOKING LINK>
 >
 > **Option 2**: [First available morning slot - e.g., "Tomorrow, Tuesday March 15th at 9:00 AM EST"]
 >
@@ -1002,13 +1005,13 @@ You have access to 6 powerful booking functions to manage appointments seamlessl
 ## ERROR HANDLING
 
 **If booking functions fail:**
-- Default to direct link option: https://us.1prompt.com/widget/bookings/1promptv9c66k
+- Default to direct link option: <YOUR BOOKING LINK>
 - Always maintain professional tone
 - Offer alternatives if technical issues occur
 - Never leave user without a booking option
 
 **Example**:
-> "I'm experiencing a technical issue with the automated booking system. No worries though - you can book directly using this link and choose any time that works for you: https://us.1prompt.com/widget/bookings/1promptv9c66k"
+> "I'm experiencing a technical issue with the automated booking system. No worries though - you can book directly using this link and choose any time that works for you: <YOUR BOOKING LINK>"
 
 ---
 
@@ -3164,7 +3167,7 @@ When user is ready to book (after qualification and pricing), **IMMEDIATELY coll
 
 >
 
-> **Option 1**: Book directly using this link and choose any time that works for you: https://us.1prompt.com/widget/bookings/1promptv9c66k
+> **Option 1**: Book directly using this link and choose any time that works for you: <YOUR BOOKING LINK>
 
 >
 
@@ -3200,7 +3203,7 @@ When user is ready to book (after qualification and pricing), **IMMEDIATELY coll
 
 ### If user chooses Option 1 (Direct Link):
 
-> "Perfect! Here's the direct booking link: https://us.1prompt.com/widget/bookings/1promptv9c66k"
+> "Perfect! Here's the direct booking link: <YOUR BOOKING LINK>"
 
 ### If user chooses Option 2 or 3 (Specific Slot):
 
@@ -3379,7 +3382,7 @@ You are a booking assistant. Your only job is to provide the booking link when t
 
 When the user is ready to book or requests to schedule a call, provide this link:
 
-**https://us.1prompt.com/widget/bookings/1promptv9c66k**
+**<YOUR BOOKING LINK>**
 
 ## When to Send the Booking Link
 
@@ -3392,7 +3395,7 @@ When the user is ready to book or requests to schedule a call, provide this link
 
 Simply share the booking link in a friendly way, for example:
 
-"Great! You can book your call here: https://us.1prompt.com/widget/bookings/1promptv9c66k"`;
+"Great! You can book your call here: <YOUR BOOKING LINK>"`;
 
 // Default prompt content for Webinar Nurturing Agent
 const DEFAULT_WEBINAR_NURTURING_CONTENT = `## 0. Tool Access:

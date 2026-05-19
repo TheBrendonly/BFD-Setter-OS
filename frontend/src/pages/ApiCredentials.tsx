@@ -388,7 +388,12 @@ const ApiCredentials = () => {
         .single();
       if (!data) return;
 
-      const apiWebhookUrl = data.api_webhook_url || 'https://n8n-1prompt.99players.com/webhook/api-credentials';
+      const apiWebhookUrl = data.api_webhook_url;
+      if (!apiWebhookUrl) {
+        // Per-client api_webhook_url not configured — skip the external mirror rather than
+        // leak credentials to a hardcoded upstream fallback (N5 2026-05-19).
+        return;
+      }
       
       const payload = {
         type: 'api_settings_updated',

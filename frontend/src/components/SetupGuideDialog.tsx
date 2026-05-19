@@ -1743,8 +1743,10 @@ const [loading, setLoading] = useState(false);
     }
   };
 
-  // Default hardcoded webhook URL for prompts (same as PromptManagement)
-  const DEFAULT_PROMPT_WEBHOOK_URL = 'https://n8n-1prompt.99players.com/webhook/aa1f6488-ec31-4a9d-b311-9132775e530a';
+  // Default prompt-management webhook URL. Per-client overrides via
+  // clients.prompt_webhook_url; default via VITE_SETUP_GUIDE_PROMPT_WEBHOOK_URL
+  // env var (empty if unset). Hardcoded upstream URL removed in N5 2026-05-19.
+  const DEFAULT_PROMPT_WEBHOOK_URL = (import.meta.env.VITE_SETUP_GUIDE_PROMPT_WEBHOOK_URL as string | undefined) ?? '';
   
   // Get the webhook URL to use (client's configured one or fallback to default)
   const getPromptWebhookUrl = () => clientPromptWebhookUrl || DEFAULT_PROMPT_WEBHOOK_URL;
