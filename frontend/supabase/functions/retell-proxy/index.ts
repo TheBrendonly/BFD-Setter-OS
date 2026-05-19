@@ -339,10 +339,6 @@ async function syncVoiceSetter(
     if (mintErr) console.warn(`[sync-voice-setter] intake_lead_secret persist failed: ${mintErr.message}`);
   }
 
-  // Diagnostic for voice paste-in bug: log raw voice_id received from the UI
-  // payload so we can confirm whether the paste survives the round-trip.
-  console.log(`[sync-voice-setter] voiceSettings.voice_id received:`, JSON.stringify((voiceSettings as Record<string, unknown> | undefined)?.voice_id ?? null));
-
   const DEPRECATED_TOOLS = ['create-contact', 'get_contact', 'get-contact'];
   const isValidUrl = (u: unknown): boolean => {
     if (typeof u !== 'string' || !u.trim()) return false;
