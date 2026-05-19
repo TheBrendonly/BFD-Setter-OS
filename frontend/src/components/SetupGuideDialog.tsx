@@ -145,7 +145,12 @@ import ghlSendFollowupsWorkflow from '@/assets/setup-guide/ghl-send-followups-wo
 import ghlSendFollowupsTimes from '@/assets/setup-guide/ghl-send-followups-times.png';
 // Retell Setup phase images
 import retellInboundAgentList from '@/assets/setup-guide/retell-inbound-agent-list.png';
-import retell1PromptFolder from '@/assets/setup-guide/retell-1prompt-folder.png';
+// TODO 2026-05-20 (D27 follow-up): PNG file rename pending Brendan's Retell
+// screenshot session. Once the new "Building Flow" folder PNGs are captured,
+// rename retell-1prompt-folder.png → retell-building-flow-folder.png and update
+// this import + path. Text references throughout this file already say
+// "Building Flow" per phase-night-n3-setup-guide-text-rebrand.
+import retellBuildingFlowFolder from '@/assets/setup-guide/retell-1prompt-folder.png';
 import retellInboundAgentClick from '@/assets/setup-guide/retell-inbound-agent-click.png';
 import retellInboundAgentIdCopy from '@/assets/setup-guide/retell-inbound-agent-id-copy.png';
 import retellOutboundAgentClick from '@/assets/setup-guide/retell-outbound-agent-click.png';
@@ -2164,7 +2169,7 @@ const [loading, setLoading] = useState(false);
                       Resources page on Skool
                       <ExternalLink className="h-3 w-3" />
                     </a></li>
-                    <li>Find the recent <strong>1Prompt Version</strong> snapshot</li>
+                    <li>Find the recent <strong>Building Flow Version</strong> snapshot</li>
                     <li>Copy the snapshot link</li>
                     <li>Open the link in the browser where you're logged into HighLevel</li>
                     <li>The snapshot will load all workflows, pipelines, and dashboards to your account</li>
@@ -6089,13 +6094,13 @@ const [loading, setLoading] = useState(false);
               
               {/* Visual folder structure - matching n8n workflow download style */}
               <div className="bg-card border border-border rounded-lg overflow-hidden">
-                {/* 1Prompt Folder */}
+                {/* Building Flow Folder */}
                 <div>
                   <div className="flex items-center gap-3 px-4 py-3 bg-muted/30">
                     <svg className="h-5 w-5 text-amber-500" fill="currentColor" viewBox="0 0 20 20">
                       <path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" />
                     </svg>
-                    <span className="font-medium">1Prompt</span>
+                    <span className="font-medium">Building Flow</span>
                     <span className="text-xs text-muted-foreground ml-auto">2 Agents</span>
                   </div>
                   <div className="divide-y divide-border/50">
@@ -6150,7 +6155,7 @@ const [loading, setLoading] = useState(false);
                 <ol className="list-decimal list-inside space-y-2 ml-2">
                   <li>In your Retell AI account, click on <strong>"Agents"</strong> in the left sidebar</li>
                   <li>Click the <strong>"+"</strong> button next to "FOLDERS"</li>
-                  <li>Create a folder named: <strong>1Prompt</strong></li>
+                  <li>Create a folder named: <strong>Building Flow</strong></li>
                   <li>Click on the folder to open it</li>
                 </ol>
               </div>
@@ -6158,7 +6163,7 @@ const [loading, setLoading] = useState(false);
               <div className="bg-muted/50 rounded-lg p-4 space-y-3">
                 <p className="font-medium">Step 2: Import Agents</p>
                 <ol className="list-decimal list-inside space-y-2 ml-2">
-                  <li>While inside the <strong>1Prompt</strong> folder, click <strong>"Import"</strong> in the top right</li>
+                  <li>While inside the <strong>Building Flow</strong> folder, click <strong>"Import"</strong> in the top right</li>
                   <li>Select <strong>Inbound_Voice_AI_Rep.json</strong> and click <strong>"Save"</strong></li>
                   <li>Click <strong>"Import"</strong> again and select <strong>Outbound_Voice_AI_Rep.json</strong></li>
                   <li>Both agents should now appear in your folder</li>
@@ -6185,13 +6190,13 @@ const [loading, setLoading] = useState(false);
 
               {/* Expected folder structure visual - matching download section styling */}
               <div className="bg-card border border-border rounded-lg overflow-hidden">
-                {/* 1Prompt Folder */}
+                {/* Building Flow Folder */}
                 <div>
                   <div className="flex items-center gap-3 px-4 py-3 bg-muted/30">
                     <svg className="h-5 w-5 text-amber-500" fill="currentColor" viewBox="0 0 20 20">
                       <path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" />
                     </svg>
-                    <span className="font-medium">1Prompt</span>
+                    <span className="font-medium">Building Flow</span>
                     <span className="text-xs text-muted-foreground ml-auto">2 Agents</span>
                   </div>
                   <div className="divide-y divide-border/50">
@@ -6206,7 +6211,7 @@ const [loading, setLoading] = useState(false);
               </div>
 
               <p className="text-sm text-muted-foreground">Your Retell AI folders should look like this:</p>
-              <SmoothImage src={retell1PromptFolder} alt="Retell AI 1Prompt folder structure" />
+              <SmoothImage src={retellBuildingFlowFolder} alt="Retell AI Building Flow folder structure" />
 
               <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-4">
                 <p>
@@ -6520,13 +6525,13 @@ const [loading, setLoading] = useState(false);
                 <p className="font-medium">How to find your Inbound Agent ID:</p>
                 <ol className="list-decimal list-inside space-y-2 ml-2">
                   <li>Go to <strong>Agents</strong> in your Retell AI dashboard</li>
-                  <li>Open the <strong>1Prompt</strong> folder</li>
+                  <li>Open the <strong>Building Flow</strong> folder</li>
                   <li>Click on your <strong>Inbound Voice AI Rep</strong> agent</li>
                   <li>Copy the <strong>Agent ID</strong> from the top left (shown under the agent name)</li>
                 </ol>
               </div>
 
-              <SmoothImage src={retellInboundAgentClick} alt="Click on Inbound Voice AI Rep in 1Prompt folder" />
+              <SmoothImage src={retellInboundAgentClick} alt="Click on Inbound Voice AI Rep in Building Flow folder" />
 
               <SmoothImage src={retellInboundAgentIdCopy} alt="Copy Inbound Agent ID from top left" />
 
@@ -6793,7 +6798,7 @@ const [loading, setLoading] = useState(false);
                 <p className="font-medium">Step 1: Open a Retell Agent</p>
                 <ol className="list-decimal list-inside space-y-2 ml-2">
                   <li>Go to your <strong>Retell AI dashboard</strong></li>
-                  <li>Navigate to <strong>Agents</strong> and open the <strong>1Prompt</strong> folder</li>
+                  <li>Navigate to <strong>Agents</strong> and open the <strong>Building Flow</strong> folder</li>
                   <li>Click on either <strong>Outbound Voice AI Rep</strong> or <strong>Inbound Voice AI Rep</strong></li>
                 </ol>
               </div>
@@ -7103,13 +7108,13 @@ const [loading, setLoading] = useState(false);
                 <p className="font-medium">How to find your Outbound Agent ID:</p>
                 <ol className="list-decimal list-inside space-y-2 ml-2">
                   <li>Go to <strong>Agents</strong> in your Retell AI dashboard</li>
-                  <li>Open the <strong>1Prompt</strong> folder</li>
+                  <li>Open the <strong>Building Flow</strong> folder</li>
                   <li>Click on your <strong>Outbound Voice AI Rep</strong> agent</li>
                   <li>Copy the <strong>Agent ID</strong> from the top left (shown under the agent name)</li>
                 </ol>
               </div>
 
-              <SmoothImage src={retellOutboundAgentClick} alt="Click on Outbound Voice AI Rep in 1Prompt folder" />
+              <SmoothImage src={retellOutboundAgentClick} alt="Click on Outbound Voice AI Rep in Building Flow folder" />
 
               <SmoothImage src={retellOutboundAgentIdCopy} alt="Copy Outbound Agent ID from top left" />
 
