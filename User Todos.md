@@ -6,12 +6,32 @@ Items are sequenced. Order matters — do them top-to-bottom. Each item links to
 
 Effort: S = under 30 min, M = 30 min - 2 hr, L = half day+.
 
-**State of play (2026-05-18 EOD — handoff for next session):**
+**State of play (2026-05-19 EOD — Phase E3 follow-up session closed):**
+
+- HEAD: `16e9897` on Forgejo + GitHub (User Todos verification updates pending — will land in 2026-05-19 wrap commit)
+- **8 functional tags shipped 2026-05-19** (full list in `Docs/CHANGES_LOG.md` rows 1-8):
+  1. `phase-night-n6-remove-paste-in-diagnostic` — retell-proxy:342 diag deleted (v17)
+  2. `phase-night-n9-deploy-scripts-canonical-location` — `/tmp/deploy_*` → `scripts/`
+  3. `phase-night-n1-per-client-last-synced-from` — `clients.ghl_last_synced_from_field_value` (write + read sides)
+  4. `phase-night-n2-types-ts-clients-drift-fix` — 16 missing clients columns added to types.ts
+  5. `phase-night-n4-pun-quiz-rewrite` — Q1 + lesson sentence rewritten around BFD-setter concepts
+  6. `phase-night-n5-url-sweep` — 11 hardcoded upstream URLs removed (credential-leak vector at ApiCredentials closed)
+  7. `phase-night-n8-client-voicemail` — `clients.voicemail_config` + retell-proxy v18 `set-voicemail` + ClientVoicemailCard
+  8. `phase-night-n7-client-quiet-hours` — ClientQuietHoursCard (runtime side already wired in runEngagement.ts)
+- **2 items found already shipped in earlier phases:** N10 in `phase-11e` (`5ac5f12`), N11 in `phase-11c` (`159637a`). The 2026-05-18d handoff was authored from a stale assessment of these.
+- **N3 deferred** per D2=B — pun + screenshots wait for Brendan's 30-min Retell screenshot session.
+- **Edge fn versions on prod after this session:** retell-proxy v18, make-retell-outbound-call v11, push-contact-to-ghl v6, sync-ghl-contact v14, ghl-tag-webhook v2 (pre-existing).
+- **3 open decisions answered at top of session:** D1=B (ClientSettings, not per-workflow), D2=B (defer N3 entirely), D3=A (build N10/N11 — found already-shipped).
+- **NEW BFD-side Railway env vars required** to restore prior behaviour after N5 (see `Docs/RAILWAY_ENV.md` § Optional feature-flag vars): VITE_AI_PROMPT_WEBHOOK_URL, VITE_PROMPT_WEBHOOK_URL, VITE_SETUP_GUIDE_PROMPT_WEBHOOK_URL, VITE_TEXT_CHAT_ANALYTICS_WEBHOOK_URL, VITE_VOICE_CHAT_ANALYTICS_WEBHOOK_URL, VITE_COST_ESTIMATE_URL.
+- **Latest handoff:** `Operations/handoffs/2026-05-19-phase-e3-followup-n1-n11-complete.md` (read FIRST next session).
+- Phase A8 soak: day 11/14 (ends 2026-05-23). Passive watch continues.
+
+**Prior state-of-play (2026-05-18 EOD):**
 
 - HEAD: `5ff98af` on Forgejo + GitHub (or later if any further commits)
-- **14 functional tags + 4 docs commits shipped 2026-05-18.** Full list in `Docs/CHANGES_LOG.md` rows 1-14.
+- **14 functional tags + 4 docs commits shipped 2026-05-18.** Full list in `Docs/CHANGES_LOG.md` rows 9-22.
 - Brendan triaged the 37-item deferred list → authorized N1-N11 (action) + N12-N13 (research done) for next session.
-- **Latest handoff:** `Operations/handoffs/2026-05-18d-audit-followup-and-next-session-prep.md` (read FIRST next session)
+- **Handoff:** `Operations/handoffs/2026-05-18d-audit-followup-and-next-session-prep.md`
 - **3 open decisions** need Brendan's answer before next session executes: (1) D6+D7 UI location, (2) D27 screenshot strategy, (3) D4+D5 timing. Defaults documented in handoff §"Open decisions".
 - Phase A8 soak: day 10/14 (ends 2026-05-23). Passive watch continues.
 
@@ -39,8 +59,8 @@ Per the 2026-05-18d handoff, focused on getting to Client #2 deploy level:
 - ~~**N8** — D7 Retell-native voicemail~~ ✅ DONE 2026-05-19 in `phase-night-n8-client-voicemail`. SQL: `clients.voicemail_config jsonb DEFAULT '{"mode":"hangup","text":null}'::jsonb`. retell-proxy v17→v18 adds `set-voicemail` action that fetches all 10 retell_agent_id_* columns, dedupes, and PATCHes `voicemail_option` on each unique agent (hangup / static / prompt → Retell shape `{action: {type, text?}}`). New `frontend/src/components/setters/ClientVoicemailCard.tsx` (radio Hangup/Static/Dynamic + textarea + Save & Push button) auto-saves on hangup, requires text + explicit save for static/prompt, fires the set-voicemail action on save, surfaces patched/total Retell agent count in toast. Wired into ClientSettings.tsx below the Timezone block per D1=B (client-wide, not per-workflow). types.ts: added `voicemail_config: Json | null` to Row + Insert + Update.
 
 **Conditional (after Decision 3):**
-- **N10** — D4 `ghl-tag-webhook` edge function
-- **N11** — D5 NEW LEADS toggle on campaign cards
+- ~~**N10** — D4 `ghl-tag-webhook` edge function~~ ✅ ALREADY DONE in `phase-11e` (`5ac5f12`). Verified 2026-05-19: ghl-tag-webhook edge fn deployed at v2 ACTIVE on bjgrgbgykvjrsuwwruoh. Handles ContactTagUpdate webhooks with HMAC-SHA256 sig verification (when `clients.ghl_webhook_secret` set), resolves client by `locationId`, looks up `is_active=true AND is_new_leads_campaign=true AND new_leads_tag IN <addedTags>`, idempotent on (client_id, ghl_contact_id, workflow_id) for non-terminal executions, fetches contact details from GHL, upserts `leads` row, fires Trigger.dev `run-engagement`. Tag-removal on terminal stop_reason is wired in `runEngagement.ts:653-666` (phase-11d). Source confirmed matches deployed version (only commit on file). The 2026-05-18d handoff's N10 entry was authored from a stale assessment.
+- ~~**N11** — D5 NEW LEADS toggle on campaign cards~~ ✅ ALREADY DONE in `phase-11c` (`159637a`). Verified 2026-05-19: `frontend/src/pages/Workflows.tsx` has Switch + Tag input on each `SortableCampaignRow` (line 117-134). `handleNewLeadsToggle` (line 376-417) enforces at-most-one per client by UPDATEing all other workflows of the same `client_id` with `is_new_leads_campaign=false, new_leads_tag=null` before flipping the target ON. The 2026-05-18d handoff's N11 entry was also stale.
 
 **Research delivered (skim plan file):**
 - **N12** — D1 dynamic-vars injection flow explained (4 mechanisms, 1 is real)
