@@ -6,13 +6,49 @@ Items are sequenced. Order matters — do them top-to-bottom. Each item links to
 
 Effort: S = under 30 min, M = 30 min - 2 hr, L = half day+.
 
-**State of play (2026-05-18 late-evening, post-audit follow-up):**
+**State of play (2026-05-18 EOD — handoff for next session):**
 
-- HEAD: `61bb544` on Forgejo + GitHub
-- 2 additional tags shipped after the initial audit cleanup:
-  - `phase-e3-followup-sidebar-fallback-fix-and-hide` (`235a74e`) — Fixed hardcoded "Text Analytics + Voice Analytics" fallback in ClientLayout.tsx (now single "Analytics"). Hid Engagement + TEMPLATES section in defaults + BFD's saved config. Pages still reachable via direct URL.
-  - `phase-e3-followup-retell-agents-dedupe-versions` (`61bb544`) — RetellAgentsTab now dedupes Retell's per-version listing by agent_id. One Card per agent showing latest version + timestamp; expandable "N versions" dropdown shows full history with timestamps + is_published badges.
-- **Deferred items list (D1-D37) documented in plan file** — Brendan to triage which to action next.
+- HEAD: `5ff98af` on Forgejo + GitHub (or later if any further commits)
+- **14 functional tags + 4 docs commits shipped 2026-05-18.** Full list in `Docs/CHANGES_LOG.md` rows 1-14.
+- Brendan triaged the 37-item deferred list → authorized N1-N11 (action) + N12-N13 (research done) for next session.
+- **Latest handoff:** `Operations/handoffs/2026-05-18d-audit-followup-and-next-session-prep.md` (read FIRST next session)
+- **3 open decisions** need Brendan's answer before next session executes: (1) D6+D7 UI location, (2) D27 screenshot strategy, (3) D4+D5 timing. Defaults documented in handoff §"Open decisions".
+- Phase A8 soak: day 10/14 (ends 2026-05-23). Passive watch continues.
+
+## Next session — Brendan's authorized work (N1-N11)
+
+Per the 2026-05-18d handoff, focused on getting to Client #2 deploy level:
+
+**Critical (Client #2 blockers):**
+- **N1** — D36 per-client `last_synced_from` GHL field (add `clients.ghl_last_synced_from_field_value` column; fix `push-contact-to-ghl/index.ts:134` + `sync-ghl-contact/index.ts:301`)
+- **N2** — D33 types.ts drift fix (add 15 missing `clients` columns to `frontend/src/integrations/supabase/types.ts`)
+
+**Setup-guide rebrand (if Client #2 uses in-app setup guide):**
+- **N3** — D27 setup-guide text rebrand (NEEDS Brendan re-shoot PNGs)
+- **N4** — D28 pun-quiz rewrite
+
+**Recommended:**
+- **N5** — D26 EE7 hardcoded URLs sweep
+
+**Cleanup wins:**
+- **N6** — D2 delete `retell-proxy:177` diagnostic console.log + redeploy v17
+- **N9** — D34 move `/tmp/deploy_with_shared.mjs` to `/scripts/`
+
+**Cadence settings (after Decision 1):**
+- **N7** — D6 Quiet hours editor
+- **N8** — D7 Retell-native voicemail
+
+**Conditional (after Decision 3):**
+- **N10** — D4 `ghl-tag-webhook` edge function
+- **N11** — D5 NEW LEADS toggle on campaign cards
+
+**Research delivered (skim plan file):**
+- **N12** — D1 dynamic-vars injection flow explained (4 mechanisms, 1 is real)
+- **N13** — D29-D32 strategic items assessed (all "wait for data" — defer)
+
+## Skipped per Brendan
+
+D3 (passive watch), D8 (BFD-only), D9 (Phase C — after N1-N11), D10-D17 (audit investigations), D18-D24 (dead-code deletes), D25 (EE6 Aria), D29-D32 (not actionable yet), D35 (irrelevant), D37 (test-data cleanup, anytime).
 
 **State of play (2026-05-18 end-of-day, post frontend audit cleanup):**
 
