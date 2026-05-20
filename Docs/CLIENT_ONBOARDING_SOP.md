@@ -953,3 +953,57 @@ In the platform UI:
 
 This list maps 1:1 to the heavier sections — if anything is unclear during the mock, jump to the linked anchor.
 
+---
+
+## §D Pre-sales prep punch list (for Brendan, before pre-sales call #1)
+
+Surfaced from re-reading the polished SOP. Items Brendan should resolve in his own time BEFORE the first real Client #2 conversation, so he isn't caught flat-footed on the call.
+
+### Pricing + commercial
+
+- [ ] **Decide a temporary number** for the engagement letter (§11 says defer formal pricing until 30 days of cost-per-booking data exists, but you need SOMETHING to put in the letter). Options: flat monthly retainer, per-booking fee, hybrid. **My read:** the FUTURE.md "Cost-per-Booking Analytics" item needs to ship first to give you a real number, but for Client #2 pick a defensible interim — e.g. "$X/mo + $Y per booked appointment for the first 30 days; we'll true up to a usage-based pricing model once data exists". Land this BEFORE the discovery call.
+- [ ] **Cancel + refund policy** — minimum term, notice period, what's pro-rated. Write a one-paragraph clause for the engagement letter.
+- [ ] **Onboarding fee** — covers the half-day of operator work in §1-§8 plus the per-provider account creation. Suggested floor: $X non-refundable, applied against month 1 if they continue.
+
+### Provider account decisions Brendan must make
+
+- [ ] **Twilio: BYO or share BFD account?** Default in §3.3 is share when <500 SMS/day. Confirm Client #2's expected volume in §1.1 makes share viable; if not, the BYO path means they handle A2P 10DLC registration before you can launch.
+- [ ] **OpenRouter: mint on client's behalf or BYO?** Default §3.2 says mint on behalf + invoice through. Reconfirm — if Client #2 wants their own billing, you need to walk them through key minting.
+- [ ] **Retell: client BYO or BFD-shared?** §3.2 says per-client BYO. Confirm — and if they BYO, they need to provision their own Retell account before §3.5.
+- [ ] **External Supabase: BFD provisions or client provisions?** Default §3.1 says BFD provisions in client's agency-org Supabase account. If client has their own Supabase org, they could provision themselves — but you lose the unified backup posture. Recommend BFD provisions.
+
+### Compliance + legal (§1.3)
+
+- [ ] **TCPA / Spam Act consent verbiage** — exactly what the website lead-form checkbox must say + a copy of the privacy policy update they need to make. Prepare a 1-pager Brendan can hand the client.
+- [ ] **A2P 10DLC brand-registration status (US clients only)** — if Client #2 is US-based AND BYO Twilio, they need brand + campaign registration. ~$50 brand + $10/mo campaign. Add to engagement letter as an explicit pre-launch step they own.
+
+### Operational scope decisions
+
+- [ ] **Lead-source coverage** — only website form? Also LinkedIn DMs? CSV uploads? Manual GHL Add Contact? Each source needs a workflow per §5.13.2.
+- [ ] **Channels** — SMS only, SMS + voice, SMS + voice + voicemail-drop, SMS + DM? Determines the cadence node mix in §6.
+- [ ] **STOP keyword handling** — confirm with client that they accept the automatic STOP handling baked into `receive-twilio-sms` (Phase 4a). Add to engagement letter.
+- [ ] **Working hours response policy** — what happens to leads who reply at 11pm? Cadence runs at 09:00 next morning per §1.5 quiet hours, but the engagement letter should state this so client isn't surprised.
+
+### Soft-launch slot booking
+
+- [ ] **Schedule the 5-lead soft-launch session** (§8.2) with the client BEFORE you start §1-§4. They sit with you on screenshare; you push 5 real leads through; cadence sends SMS + voice in real time. ~2hr window. If they can't commit to this, defer the onboarding — pushing live without their eyeballs has caused issues in BFD's own dogfood.
+
+### SOP self-tests Brendan should do BEFORE the call
+
+- [ ] **Walk the mock onboarding (§C) end-to-end against a fake "Client TestCo"** — provision a real Supabase + GHL location + Retell agents + cadence clone. Discover what feels rough so you can polish the operator playbook (this SOP) one more time. ~half day investment.
+- [ ] **Time-box the dry-run** — if it takes >6hr you've underestimated the half-day claim at the top of this SOP; revise the SOP estimate before quoting Client #2.
+
+### Documentation Brendan owes the client
+
+- [ ] **"What the client owns vs what BFD operates"** — single page covering: who holds the Twilio account, who can see what in GHL, who controls the cadence copy, who can disable the cadence in an emergency (both — explicit kill switches in §10).
+- [ ] **"What to do when something breaks"** — Brendan's pager + SLA tiers + the 24/7 emergency escalation path. Even if it's "ping Brendan on WhatsApp," document it.
+
+### Internal hygiene (BFD ops)
+
+- [ ] **Confirm `Operations/handoffs/<date>-clientTestCo-onboarding-collected.md` template exists** — referenced throughout §2. If the file doesn't exist as a fillable template yet, create it. (Spot-check: looks like the SOP just describes the shape; Brendan creates the file per-client.)
+- [ ] **`scripts/onboard-client.mjs --dry-run` works end-to-end** — last verified 2026-05-09 in `phase-night-a-end-to-end-verified` per memory `project_phase_a_closed`. Spot-check one more time before the mock so any provisioning regressions surface NOW not on the live call.
+
+---
+
+End of SOP. Total length ~1100 lines; the §C checklist + this §D punch list make this the source-of-truth for Client #2 onboarding.
+
