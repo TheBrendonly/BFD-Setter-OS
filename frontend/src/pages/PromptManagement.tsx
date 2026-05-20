@@ -14,6 +14,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { UnsavedChangesDialog } from '@/components/UnsavedChangesDialog';
 import { useToast } from '@/hooks/use-toast';
+import { ToastAction } from '@/components/ui/toast';
 import { ArrowLeft, Plus, Edit, Trash2, MessageSquare, Save, X, FileText, Sparkles, Link, Settings, Key, Wand2, Bot, Webhook, ExternalLink, CheckCircle, AlertCircle, Calendar, RotateCcw, Copy, Phone, RefreshCw } from '@/components/icons';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 import { ConfigStatusBar } from '@/components/ConfigStatusBar';
@@ -4718,6 +4719,18 @@ const PromptManagement = () => {
   // conflict detection in the toggle UI.
   const [otherSlotDirections, setOtherSlotDirections] = useState<Record<string, string[]>>({});
 
+  // Fork-to-dedicated-agent modal (added 2026-05-20 in phase-night-per-direction-agent-fork).
+  // Shown when the EE1 safety guard fires AND the user has selected exactly one
+  // direction — i.e. the legitimate "I want to update just this direction" flow
+  // that was blocked by the shared-agent guard. Modal confirms the fork before
+  // calling retell-proxy `fork-slot-direction`.
+  const [forkModalState, setForkModalState] = useState<{
+    open: boolean;
+    direction: string | null;
+    sourceAgentId: string | null;
+  }>({ open: false, direction: null, sourceAgentId: null });
+  const [forkInFlight, setForkInFlight] = useState(false);
+
    // Unsaved changes tracking
   const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
   const pendingNavigationRef = useRef<(() => void) | null>(null);
@@ -6143,11 +6156,34 @@ const PromptManagement = () => {
                 ?? retellError?.message
                 ?? 'Push blocked: this slot shares an agent with another slot.';
               console.warn('🛡️ EE1 safety guard blocked push:', safetyMessage);
+              // Fork-button (phase-night-per-direction-agent-fork, 2026-05-20):
+              // when the user has selected exactly ONE direction, offer a Fork
+              // button. This is the legitimate "carve off this direction's agent
+              // so I can edit it independently" flow that the safety guard
+              // otherwise blocks. The button opens a confirmation modal which
+              // calls retell-proxy `fork-slot-direction`.
+              const conflictingAgentId = parsedErrorBody?.conflicting_agent_id ?? null;
+              const onlyOneDirection = voiceSetterDirections.length === 1
+                ? voiceSetterDirections[0]
+                : null;
+              const showForkButton = !!(onlyOneDirection && conflictingAgentId);
               toast({
                 title: '🛡️ Push blocked — agent shared across slots',
                 description: safetyMessage,
                 variant: 'destructive',
-                duration: 15000,
+                duration: 20000,
+                action: showForkButton ? (
+                  <ToastAction
+                    altText="Fork to dedicated agent for this direction"
+                    onClick={() => setForkModalState({
+                      open: true,
+                      direction: onlyOneDirection,
+                      sourceAgentId: conflictingAgentId,
+                    })}
+                  >
+                    Fork
+                  </ToastAction>
+                ) : undefined,
               });
             } else if (retellError) {
               // Surface the parsed backend error if available (better than the generic
@@ -6231,6 +6267,60 @@ const PromptManagement = () => {
     }
   };
 
+  // Fork-to-dedicated-agent (phase-night-per-direction-agent-fork, 2026-05-20).
+  // Called from the Fork modal. Invokes retell-proxy `fork-slot-direction`,
+  // refreshes client config + prompt configs so the editor sees the new agent,
+  // and re-runs the original Save Setter now that the safety guard won't fire.
+  const handleForkConfirm = async () => {
+    if (!forkModalState.direction || !clientId || !editingSlotId) {
+      setForkModalState({ open: false, direction: null, sourceAgentId: null });
+      return;
+    }
+    const targetDirection = forkModalState.direction;
+    setForkInFlight(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('retell-proxy', {
+        body: {
+          action: 'fork-slot-direction',
+          clientId,
+          direction: targetDirection,
+        },
+      });
+      if (error) {
+        // Try to surface backend message from FunctionsHttpError context.
+        let backendMsg = error.message;
+        try {
+          const ctx: any = (error as any)?.context;
+          if (ctx?.json) {
+            const body = await ctx.json();
+            backendMsg = body?.error ?? backendMsg;
+          }
+        } catch { /* keep default */ }
+        throw new Error(backendMsg);
+      }
+      console.log('✅ Forked agent:', data);
+      toast({
+        title: 'Forked to dedicated agent',
+        description: `New agent ${(data as { new_agent_name?: string })?.new_agent_name ?? (data as { new_agent_id?: string })?.new_agent_id} provisioned for ${targetDirection}. Refreshing config + retrying save…`,
+        duration: 8000,
+      });
+      setForkModalState({ open: false, direction: null, sourceAgentId: null });
+      // Refresh client + prompt config so the editor picks up the new agent.
+      await Promise.all([refetchPromptConfigs(), refetchAgentSettings()]);
+      // Re-run the original Save Setter now that the direction has its own agent.
+      await handleSavePrompt();
+    } catch (err) {
+      console.error('Fork failed:', err);
+      toast({
+        variant: 'destructive',
+        title: 'Fork failed',
+        description: err instanceof Error ? err.message : String(err),
+        duration: 15000,
+      });
+    } finally {
+      setForkInFlight(false);
+    }
+  };
 
   // Helper to map slotId to staticName and numericId
   const getSlotInfo = (slotId?: string | null) => {
@@ -7149,6 +7239,64 @@ const PromptManagement = () => {
                   setterName={promptContent.title || editingSlotId}
                 />
               )}
+
+              {/* Fork-to-dedicated-agent (phase-night-per-direction-agent-fork, 2026-05-20).
+                  Shown when the user clicks Fork on the EE1 safety-guard toast. Confirms
+                  what's about to happen + which columns change, then calls retell-proxy
+                  `fork-slot-direction` and re-runs Save Setter. */}
+              <Dialog
+                open={forkModalState.open}
+                onOpenChange={(o) => { if (!o && !forkInFlight) setForkModalState({ open: false, direction: null, sourceAgentId: null }); }}
+              >
+                <DialogContent className="max-w-md !p-0">
+                  <DialogHeader className="px-6 pt-6" style={{ borderBottom: '3px groove hsl(var(--border-groove))', paddingBottom: '16px' }}>
+                    <DialogTitle style={{ fontFamily: "'VT323', monospace", fontSize: '18px', letterSpacing: '1px', textTransform: 'uppercase' }}>
+                      FORK TO DEDICATED AGENT
+                    </DialogTitle>
+                  </DialogHeader>
+                  <div className="px-6 py-5 space-y-3" style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '13px' }}>
+                    <p className="text-muted-foreground leading-relaxed">
+                      This will create a NEW Retell agent dedicated to{' '}
+                      <strong>{forkModalState.direction}</strong> and repoint{' '}
+                      <code className="bg-sidebar px-1">
+                        clients.{forkModalState.direction ? `retell_${forkModalState.direction === 'outbound_initial' ? 'outbound' : forkModalState.direction === 'outbound_followup' ? 'outbound_followup' : 'inbound'}_agent_id` : ''}
+                      </code>{' '}
+                      to the new agent.
+                    </p>
+                    <p className="text-muted-foreground leading-relaxed">
+                      The other 2 direction columns will continue pointing at the current shared agent
+                      {forkModalState.sourceAgentId && (
+                        <> (<code className="bg-sidebar px-1">{forkModalState.sourceAgentId}</code>)</>
+                      )}
+                      . They are unaffected.
+                    </p>
+                    <p className="text-xs text-muted-foreground leading-relaxed">
+                      After fork: this slot's edits will only affect the {forkModalState.direction} agent.
+                      If you later want to keep the directions in sync, you'll need to push the same content to each agent individually.
+                    </p>
+                  </div>
+                  <div className="flex gap-3 px-6 pb-6" style={{ borderTop: '3px groove hsl(var(--border-groove))', paddingTop: '16px' }}>
+                    <Button
+                      variant="default"
+                      className="flex-1"
+                      disabled={forkInFlight}
+                      onClick={() => setForkModalState({ open: false, direction: null, sourceAgentId: null })}
+                      style={{ fontFamily: "'VT323', monospace", fontSize: '18px', letterSpacing: '0.5px' }}
+                    >
+                      CANCEL
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      className="flex-1"
+                      disabled={forkInFlight}
+                      onClick={handleForkConfirm}
+                      style={{ fontFamily: "'VT323', monospace", fontSize: '18px', letterSpacing: '0.5px' }}
+                    >
+                      {forkInFlight ? 'FORKING…' : 'FORK + RETRY SAVE'}
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
 
               {/* Unsaved Changes Dialog */}
               <UnsavedChangesDialog

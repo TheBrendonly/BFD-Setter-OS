@@ -1198,6 +1198,283 @@ Deno.serve(async (req) => {
         break;
       }
 
+      // ===== FORK SLOT DIRECTION =====
+      // Per-direction agent fork. When a client's `retell_<direction>_agent_id`
+      // points at an agent that is ALSO referenced by other slot columns
+      // (the EE1 "shared agent" scenario), this action clones the shared agent
+      // into a NEW Retell agent + LLM dedicated to a single direction, and
+      // repoints `clients.retell_<direction>_agent_id` to the new agent. The
+      // other 2 direction columns are left untouched — they keep pointing at
+      // the original shared agent.
+      //
+      // Brendan reaches this action via the Fork button on the EE1 safety-guard
+      // toast in PromptManagement.tsx (added 2026-05-20 in the same tag).
+      //
+      // Note re: [[feedback_no_internal_prompt_edits]] — this action CLONES the
+      // existing prompts row + Retell LLM/Agent without mutating their content.
+      // The client owns both the source and the new copies; we are not editing
+      // any LLM-facing prompt content. The new agent's general_prompt is byte-
+      // identical to the source's at fork time.
+      case "fork-slot-direction": {
+        const direction = (params.direction as string) || "";
+        if (!DIRECTION_TO_AGENT_COLUMN[direction]) {
+          throw new Error(
+            `Invalid direction: ${direction}. Expected one of inbound, outbound_initial, outbound_followup.`,
+          );
+        }
+        const directionColumn = DIRECTION_TO_AGENT_COLUMN[direction];
+        // Direction → canonical slot number for phone-version repoint.
+        const DIRECTION_TO_SLOT: Record<string, number> = {
+          inbound: 1,
+          outbound_initial: 2,
+          outbound_followup: 3,
+        };
+        const targetSlotNumber = DIRECTION_TO_SLOT[direction];
+        const targetSlotId = `Voice-Setter-${targetSlotNumber}`;
+        const DIRECTION_LABEL: Record<string, string> = {
+          inbound: "inbound",
+          outbound_initial: "outbound initial",
+          outbound_followup: "outbound follow-up",
+        };
+
+        const supabaseAdmin = getSupabaseAdmin();
+        const allAgentCols = Object.values(SLOT_TO_AGENT_COLUMN);
+
+        // 1. Read the source agent_id + sibling columns (to verify sharing).
+        const { data: clientRow, error: clientFetchErr } = await supabaseAdmin
+          .from("clients")
+          .select(allAgentCols.join(", "))
+          .eq("id", clientId)
+          .single();
+        if (clientFetchErr) throw new Error(`Failed to fetch client: ${clientFetchErr.message}`);
+        const agentMap = clientRow as Record<string, string | null>;
+        const sourceAgentId = agentMap[directionColumn];
+        if (!sourceAgentId) {
+          const err = new Error(
+            `Cannot fork ${direction}: clients.${directionColumn} is null. Provision the slot first via Save Setter.`,
+          );
+          (err as Error & { status?: number; code?: string }).status = 409;
+          (err as Error & { code?: string }).code = "no_agent_for_direction";
+          throw err;
+        }
+        const columnsPointingAtSource = allAgentCols.filter(
+          (col) => agentMap[col] === sourceAgentId,
+        );
+        if (columnsPointingAtSource.length < 2) {
+          const err = new Error(
+            `Cannot fork ${direction}: agent ${sourceAgentId} is only referenced by clients.${directionColumn}. ` +
+            `It is already dedicated to this direction — no fork needed.`,
+          );
+          (err as Error & { status?: number; code?: string }).status = 400;
+          (err as Error & { code?: string }).code = "not_shared";
+          throw err;
+        }
+
+        // 2. GET source agent + source LLM from Retell.
+        const sourceAgent = await retellFetch(apiKey, "GET", `get-agent/${sourceAgentId}`) as any;
+        const sourceLlmId = sourceAgent?.response_engine?.llm_id;
+        if (!sourceLlmId) {
+          throw new Error(
+            `Source agent ${sourceAgentId} has no response_engine.llm_id; cannot clone without source LLM.`,
+          );
+        }
+        const sourceLlm = await retellFetch(apiKey, "GET", `get-retell-llm/${sourceLlmId}`) as any;
+
+        // 3. Create a new Retell LLM cloning the source's settings byte-for-byte.
+        //    No prompt editing — pure clone (per the no-internal-prompt-edits rule).
+        const newLlmPayload: Record<string, unknown> = {
+          model: sourceLlm.model,
+          general_prompt: sourceLlm.general_prompt,
+          begin_message: sourceLlm.begin_message ?? null,
+          general_tools: sourceLlm.general_tools ?? [],
+          model_high_priority: sourceLlm.model_high_priority ?? true,
+          start_speaker: sourceLlm.start_speaker ?? "agent",
+          knowledge_base_ids: sourceLlm.knowledge_base_ids ?? [],
+        };
+        const newLlm = await retellFetch(apiKey, "POST", "create-retell-llm", newLlmPayload) as any;
+        console.log(`[fork-slot-direction] Created new LLM ${newLlm.llm_id} (cloned from ${sourceLlmId})`);
+
+        // 4. Create a new Retell agent cloning the source's voice/STT/PII settings,
+        //    pointing at the new LLM. Override agent_name so Brendan can tell the
+        //    forked agent apart from the source in the Retell dashboard.
+        const sourceName = (sourceAgent.agent_name as string | undefined) ?? `Voice-Setter-${targetSlotNumber}`;
+        const newAgentName = `${sourceName} (${DIRECTION_LABEL[direction]})`;
+
+        // Whitelist the agent-level fields that are safe to clone. Avoid
+        // copying read-only fields like agent_id, version, last_modification_timestamp.
+        const AGENT_CLONE_FIELDS = [
+          "voice_id", "voice_model", "voice_temperature", "voice_speed", "volume",
+          "language", "ambient_sound", "ambient_sound_volume",
+          "responsiveness", "interruption_sensitivity",
+          "end_call_after_silence_ms", "max_call_duration_ms",
+          "boosted_keywords",
+          "enable_backchannel", "backchannel_frequency",
+          "begin_message_delay_ms", "webhook_timeout_ms",
+          "data_storage_setting", "normalize_for_speech",
+          "reminder_trigger_ms", "reminder_max_count",
+          "opt_out_sensitive_data_storage",
+          "post_call_analysis_model", "post_call_analysis_data",
+          "analysis_successful_prompt", "analysis_summary_prompt", "analysis_user_sentiment_prompt",
+          "voicemail_option", "enable_voicemail_detection", "voicemail_detection_timeout_ms",
+          "vocab_specialization", "user_dtmf_options",
+          "stt_mode", "custom_stt_config", "pii_config",
+        ];
+        const clonedAgentSettings: Record<string, unknown> = {};
+        for (const f of AGENT_CLONE_FIELDS) {
+          if (sourceAgent[f] !== undefined && sourceAgent[f] !== null) {
+            clonedAgentSettings[f] = sourceAgent[f];
+          }
+        }
+
+        const createAgentPayload: Record<string, unknown> = {
+          agent_name: newAgentName,
+          channel: "voice",
+          response_engine: {
+            type: "retell-llm",
+            llm_id: newLlm.llm_id,
+            ...(newLlm?.version ? { version: newLlm.version } : {}),
+          },
+          ...clonedAgentSettings,
+          webhook_url: getAutoWebhookUrl(),
+          webhook_events: DEFAULT_RETELL_WEBHOOK_EVENTS,
+        };
+        const newAgent = await retellFetch(apiKey, "POST", "create-agent", createAgentPayload) as any;
+        const newAgentId = newAgent.agent_id as string;
+        console.log(`[fork-slot-direction] Created new agent ${newAgentId} cloned from ${sourceAgentId}`);
+
+        // 5. Auto-publish the new agent. Non-blocking — surface as publish_warning.
+        let publishWarning: string | null = null;
+        let publishedVersion: number | undefined;
+        try {
+          const publishResp = await retellFetch(apiKey, "POST", `publish-agent/${newAgentId}`) as { version?: number };
+          publishedVersion = publishResp?.version;
+          console.log(`[fork-slot-direction] Auto-published new agent ${newAgentId} (v${publishedVersion ?? "?"})`);
+        } catch (pubErr) {
+          publishWarning = pubErr instanceof Error ? pubErr.message : String(pubErr);
+          console.warn(`[fork-slot-direction] Auto-publish failed (non-blocking):`, publishWarning);
+        }
+
+        // 6. Repoint the appropriate phone version pin so live calls route to the new agent.
+        try {
+          await repointPhoneVersionsAfterPublish(
+            supabaseAdmin,
+            apiKey,
+            clientId,
+            targetSlotNumber,
+            newAgentId,
+            publishedVersion,
+          );
+        } catch (repointErr) {
+          console.warn(`[fork-slot-direction] Phone repoint failed (non-blocking):`, repointErr);
+        }
+
+        // 7. Repoint the clients column to the new agent. The other 2 direction
+        //    columns stay pointing at the original shared agent.
+        const { error: clientsUpdateErr } = await supabaseAdmin
+          .from("clients")
+          .update({ [directionColumn]: newAgentId })
+          .eq("id", clientId);
+        if (clientsUpdateErr) {
+          throw new Error(`Forked agent ${newAgentId} successfully but failed to repoint clients.${directionColumn}: ${clientsUpdateErr.message}`);
+        }
+        console.log(`[fork-slot-direction] Repointed clients.${directionColumn} from ${sourceAgentId} to ${newAgentId}`);
+
+        // 8. Prompts table maintenance.
+        //    Find the prompts row that currently claims this direction.
+        //    Two cases:
+        //    (a) Source row's slot_id matches the target slot → narrow its
+        //        directions array to just [direction] (it's the canonical
+        //        editor for the forked agent now).
+        //    (b) Source row lives on a different slot → clone its content into
+        //        a new row at the target slot with directions=[direction], and
+        //        remove `direction` from the source row's directions array.
+        const { data: sourcePromptsRows, error: sourcePromptsErr } = await supabaseAdmin
+          .from("prompts")
+          .select("id, slot_id, directions, content, name, model, temperature")
+          .eq("client_id", clientId)
+          .eq("category", "voice_setter")
+          .contains("directions", [direction]);
+        if (sourcePromptsErr) {
+          console.warn(`[fork-slot-direction] Prompts row lookup failed (non-fatal):`, sourcePromptsErr.message);
+        }
+        const sourceRow = (sourcePromptsRows ?? [])[0] as
+          | { id: string; slot_id: string; directions: string[] | null; content: string | null; name: string | null; model: string | null; temperature: number | null }
+          | undefined;
+
+        if (sourceRow) {
+          if (sourceRow.slot_id === targetSlotId) {
+            // Case (a) — narrow directions on the existing row at the target slot.
+            const { error: narrowErr } = await supabaseAdmin
+              .from("prompts")
+              .update({ directions: [direction] })
+              .eq("id", sourceRow.id);
+            if (narrowErr) {
+              console.warn(`[fork-slot-direction] Narrow source row failed:`, narrowErr.message);
+            } else {
+              console.log(`[fork-slot-direction] Narrowed prompts row ${sourceRow.id} directions to [${direction}]`);
+            }
+          } else {
+            // Case (b) — clone source row to target slot, remove direction from source.
+            // Check if target slot already has a row (shouldn't, but be safe).
+            const { data: targetRows } = await supabaseAdmin
+              .from("prompts")
+              .select("id")
+              .eq("client_id", clientId)
+              .eq("category", "voice_setter")
+              .eq("slot_id", targetSlotId);
+            if (!targetRows || targetRows.length === 0) {
+              const { error: cloneErr } = await supabaseAdmin
+                .from("prompts")
+                .insert({
+                  client_id: clientId,
+                  category: "voice_setter",
+                  slot_id: targetSlotId,
+                  directions: [direction],
+                  content: sourceRow.content,
+                  name: sourceRow.name ?? newAgentName,
+                  model: sourceRow.model,
+                  temperature: sourceRow.temperature,
+                });
+              if (cloneErr) {
+                console.warn(`[fork-slot-direction] Clone prompts row failed:`, cloneErr.message);
+              } else {
+                console.log(`[fork-slot-direction] Cloned prompts row to ${targetSlotId} directions=[${direction}]`);
+              }
+            } else {
+              console.log(`[fork-slot-direction] Target slot ${targetSlotId} already has prompts row; skipping clone`);
+            }
+            // Remove direction from source row.
+            const newSourceDirs = (sourceRow.directions ?? []).filter((d) => d !== direction);
+            const { error: stripErr } = await supabaseAdmin
+              .from("prompts")
+              .update({ directions: newSourceDirs })
+              .eq("id", sourceRow.id);
+            if (stripErr) {
+              console.warn(`[fork-slot-direction] Strip direction from source row failed:`, stripErr.message);
+            } else {
+              console.log(`[fork-slot-direction] Stripped ${direction} from source prompts row ${sourceRow.id}; new directions=${JSON.stringify(newSourceDirs)}`);
+            }
+          }
+        } else {
+          console.log(`[fork-slot-direction] No prompts row currently claims ${direction}; UI will show empty editor for the new agent until Save Setter is run.`);
+        }
+
+        result = {
+          success: true,
+          action: "forked",
+          source_agent_id: sourceAgentId,
+          source_llm_id: sourceLlmId,
+          new_agent_id: newAgentId,
+          new_llm_id: newLlm.llm_id,
+          new_agent_name: newAgentName,
+          direction,
+          column_updated: directionColumn,
+          published_version: publishedVersion ?? null,
+          publish_warning: publishWarning,
+        };
+        break;
+      }
+
       default:
         throw new Error(`Unknown action: ${action}`);
     }
