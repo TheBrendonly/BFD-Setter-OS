@@ -6,7 +6,17 @@ Items are sequenced. Order matters — do them top-to-bottom. Each item links to
 
 Effort: S = under 30 min, M = 30 min - 2 hr, L = half day+.
 
-**State of play (2026-05-20 LATE-LATE — real Save Setter root cause found: broken Matt voice preset):**
+**State of play (2026-05-20 FINAL — Save Setter working, all cleanup done):**
+
+- HEAD: `d13b1c3` on Forgejo + GitHub (FINAL wrap docs commit lands on top).
+- **Save Setter VERIFIED WORKING:** Retell agent v43-v46 all published with `voice_id: 11labs-Brian` in the last 2 min (Brendan's retry batch). v47 is latest draft (probably his most recent click). 6 unpublished drafts from earlier cleared. **Live calls now route to v46 (or current published) with Brian voice.**
+- **🛡️ Safety guard CONFIRMED WORKING:** Brendan un-checked Outbound (follow-up) to test → guard fired with the FULL detailed error message (post-toast-parse-fix). Same behaviour as designed in `phase-e3-followup-ee1-safety-guard` (2026-05-18). NOT a bug — it's the EE1 wipe protection. Brendan wants per-direction agents (legitimate use case → feature request below).
+- **Per-direction agent feature request scoped + DEFERRED to next session.** Option A (Fork to new agent button) is the recommended path. ~3 hr implementation. Details in handoff `2026-05-20-pm-verify-defects-and-railway-outage.md` + investigation doc `2026-05-20-save-setter-409-investigation.md`.
+- **All BFD bookings cleanup complete.** DB table empty (0 rows). Both lingering GHL appointments cancelled via PUT (DELETE returned 401 IAM scope issue — `appointmentStatus: cancelled` worked via PUT). Cancellation-echo bookings row also deleted.
+- **Edge fn versions on prod:** unchanged from AM (retell-proxy v19, push-contact-to-ghl v6, sync-ghl-contact v14, make-retell-outbound-call v11, ghl-tag-webhook v2).
+- **Today's tag count (full day):** 8 functional tags + 4 docs commits.
+
+**Prior state of play (2026-05-20 LATE-LATE — real Save Setter root cause found: broken Matt voice preset):**
 
 - HEAD: `d931c25` on Forgejo + GitHub (Wrap-3 docs commit will land on top).
 - **Railway deploy queue cleared.** All previously stuck commits deployed (`28636e7` + `85a88aa` + `3a7002f`). Status page back to operational.
