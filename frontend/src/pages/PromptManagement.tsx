@@ -6116,12 +6116,30 @@ const PromptManagement = () => {
             // another slot's LLM), the body returns {code: 'agent_shared_across_slots',
             // shared_columns, conflicting_agent_id}. Show a longer, action-oriented toast
             // so the user knows exactly how to recover instead of seeing a generic warning.
+            //
+            // Brendan-2026-05-20 fix: previously this read `retellError.context.body.code`
+            // but supabase-js FunctionsHttpError wraps the non-2xx response with `.context`
+            // as a raw Response object — body parsing required `await ctx.json()`. This
+            // mirrors the TestCallDialog fix from phase-e3-followup-test-call-error-ux.
+            // Without this, the safety guard would fire on the backend but the user would
+            // see the generic "Make sure your Retell API key is configured" toast.
+            let parsedErrorBody: { error?: string; code?: string; shared_columns?: string[]; conflicting_agent_id?: string } | null = null;
+            if (retellError) {
+              try {
+                const ctx: any = (retellError as any)?.context;
+                if (ctx?.json) parsedErrorBody = await ctx.json();
+                else if (ctx?.text) {
+                  const txt = await ctx.text();
+                  try { parsedErrorBody = JSON.parse(txt); } catch { /* not JSON */ }
+                }
+              } catch { /* fall back to retellError.message */ }
+            }
             const safetyCode = (retellResult as { code?: string } | null)?.code
-              ?? ((retellError as { context?: { body?: { code?: string } } } | null)?.context?.body?.code);
+              ?? parsedErrorBody?.code;
             if (safetyCode === 'agent_shared_across_slots') {
               const safetyMessage =
                 (retellResult as { error?: string } | null)?.error
-                ?? (retellError as { context?: { body?: { error?: string } } } | null)?.context?.body?.error
+                ?? parsedErrorBody?.error
                 ?? retellError?.message
                 ?? 'Push blocked: this slot shares an agent with another slot.';
               console.warn('🛡️ EE1 safety guard blocked push:', safetyMessage);
@@ -6129,14 +6147,18 @@ const PromptManagement = () => {
                 title: '🛡️ Push blocked — agent shared across slots',
                 description: safetyMessage,
                 variant: 'destructive',
-                duration: 12000,
+                duration: 15000,
               });
             } else if (retellError) {
-              console.warn('⚠️ Retell sync failed (non-blocking):', retellError.message);
+              // Surface the parsed backend error if available (better than the generic
+              // "Edge Function returned a non-2xx status code" message).
+              const backendMsg = parsedErrorBody?.error ?? retellError.message;
+              console.warn('⚠️ Retell sync failed (non-blocking):', backendMsg);
               toast({
                 title: 'Retell sync warning',
-                description: `Prompt saved but Retell agent sync failed: ${retellError.message}. Make sure your Retell API key is configured.`,
+                description: `Prompt saved but Retell agent sync failed: ${backendMsg}`,
                 variant: 'destructive',
+                duration: 12000,
               });
             } else if (retellResult?.error) {
               console.warn('⚠️ Retell sync error:', retellResult.error);
