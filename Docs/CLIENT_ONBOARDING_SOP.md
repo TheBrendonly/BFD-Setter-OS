@@ -216,10 +216,12 @@ INSERT INTO public.clients (
   cadence_quiet_hours,
   intake_lead_secret,
   voicemail_audio_url,
+  voicemail_config,
   ghl_webhook_secret, retell_webhook_secret, unipile_webhook_secret,
   ghl_last_synced_from_field_id,
   ghl_last_synced_from_field_value,
   auto_engagement_workflow_id,
+  timezone,
   created_at
 ) VALUES (
   gen_random_uuid(),
@@ -238,13 +240,15 @@ INSERT INTO public.clients (
   true,                                     -- use_native_text_engine ON from day 1
   '{"start":"09:00","end":"21:00","tz":"<IANA>","days":[1,2,3,4,5]}'::jsonb,
   encode(gen_random_bytes(24), 'base64'),   -- intake_lead_secret
-  '{}'::jsonb,                              -- voicemail_audio_url, fill later if Twilio path
+  '{}'::jsonb,                              -- voicemail_audio_url, fill later if Twilio AMD path used (rare under Retell-native voicemail)
+  '{"mode":"hangup","text":null}'::jsonb,    -- voicemail_config (Retell-native; mode = hangup|static|prompt; set later via Sub-Account Settings → Voicemail card, §5.14)
   NULL,                                     -- ghl_webhook_secret (paste in §5.3)
   NULL,                                     -- retell_webhook_secret (paste in §5.5)
   NULL,                                     -- unipile_webhook_secret
   NULL,                                     -- ghl_last_synced_from_field_id (set in §4.2)
   '<client-slug>',                          -- ghl_last_synced_from_field_value (echo-stamp value; pick a short distinctive slug per client, e.g. "acme-co" — defaults to "1prompt-os" if NULL)
   NULL,                                     -- auto_engagement_workflow_id (set in §8 after copy review)
+  '<IANA>',                                 -- timezone (e.g. 'Australia/Brisbane'); also lives in cadence_quiet_hours.tz — keep both in sync
   now()
 )
 RETURNING id, intake_lead_secret;
@@ -561,6 +565,71 @@ Once §5.13.1-3 are done and the cadence is published (§6), run a real form sub
 
 **If SMS lands but with `Twilio SMS failed: ? unknown` in Trigger.dev logs**: known bug — `runEngagement.ts:171` reads `error_code`/`error_message` from Twilio's response but Twilio uses `code`/`message`. Track down the actual error by querying `https://api.twilio.com/2010-04-01/Accounts/<sid>/Messages.json` directly.
 
+### 5.14 Sub-Account Settings sidebar (per-client cadence config)
+
+Shipped 2026-05-20 in `phase-night-sub-account-settings-sidebar-fix`. The SYSTEM section of the agency sidebar now has TWO items:
+
+- **Sub-Account Settings** → `/client/<client-uuid>/settings` (per-client config: Timezone, Contact hours, Voicemail, Logo, Description). This is the page hosting the cards added in N7/N8/voicemail-detection.
+- **Account Settings** → `/client/<client-uuid>/account-settings` (user-level: email, password, theme).
+
+Click-path for first-time Client #2 setup:
+
+1. Log in as agency.
+2. Switch sub-account to Client #2 (top-left sub-account switcher).
+3. Sidebar SYSTEM → **Sub-Account Settings**.
+4. Configure each card in order:
+   - **Client logo + description** — top of page; cosmetic, optional.
+   - **Timezone** — IANA select (e.g. `Australia/Brisbane`, `America/New_York`). Must match the `clients.timezone` you set in §4.1 AND the `tz` field in `cadence_quiet_hours`.
+   - **Contact hours (cadence quiet-hours window)** — start + end times (24h `<input type="time">`), 7-day toggle row M/T/W/T/F/S/S, IANA tz (defaults to the timezone above). The runtime treats this as the WINDOW WHEN CONTACT IS ALLOWED (not when it's silenced — read the card's preview line "within window: Yes/No" to sanity-check). Falls back to runEngagement default 09:00-21:00 Australia/Brisbane all 7 days if NULL.
+   - **Voicemail config** — radio: Hangup (default) / Static text / Dynamic prompt. Detection subsection: enable_voicemail_detection checkbox (default ON), timeout preset buttons (5s/10s/15s/30s/60s/custom). For Static + Prompt modes, the textarea is required. Save & Push: PATCHes `voicemail_option` + `enable_voicemail_detection` + `voicemail_detection_timeout_ms` on every unique Retell agent_id across all 10 slot columns for the client (no publish step needed — these are draft-level settings).
+
+Sourced from [`ClientLayout.tsx:954-977`](frontend/src/components/ClientLayout.tsx#L954-L977) + [`ClientSettings.tsx`](frontend/src/pages/ClientSettings.tsx).
+
+### 5.15 Save Setter (voice picker + safety guard + Fork button)
+
+The Voice-Setter editor at `/client/<client-uuid>/prompts/voice` is where per-slot voice + prompt config lives.
+
+#### 5.15.1 Voice picker (post-2026-05-20)
+
+Hardcoded presets at [`RetellVoiceSelector.tsx:11-48`](frontend/src/components/RetellVoiceSelector.tsx#L11-L48) — verified against Retell's live catalog 2026-05-20:
+
+| Voice ID | Name | Gender | Description |
+|---|---|---|---|
+| `11labs-Myra` | Myra | female | Warm, conversational |
+| `11labs-Marissa` | Marissa | female | Natural pacing, realistic vocal texture |
+| `11labs-Brian` | Brian | male | Casual, grounded — like a real sales rep on a phone call |
+| `11labs-Cimo` | Cimo | female | Deep, calm tone — natural and trustworthy |
+
+**Pasting a custom voice ID:** the search box accepts any Retell-known voice (e.g. `custom_voice_xxxxxxxx` from the Retell dashboard, `openai-alloy`, `cartesia-*`, raw ElevenLabs IDs that you've registered as Retell custom voices first). Once the popover closes, an EE5-era guard commits non-empty pastes that didn't match a preset.
+
+**Pre-2026-05-20 broken preset:** `11labs-Matt` was removed in `phase-night-remove-broken-matt-preset` — Retell's catalog returned 404 for it. Any prompts.content row that still hardcodes `voice_id: "11labs-Matt"` would fail Save Setter with `Retell API error [404]: Item 11labs-Matt not found from voice`. If you see this on Client #2's first Save Setter, edit the voice picker to any current preset and re-save.
+
+#### 5.15.2 EE1 safety guard + Fork button
+
+Save Setter pushes the slot's prompt to its Retell agent. If `clients.retell_<slot>_agent_id` is shared with sibling slot columns (the shared-agent scenario, common when only 1 inbound DID is provisioned and all 3 directions route to the same agent), the EE1 safety guard fires when the push's `directions` array does NOT cover every column the agent is bound to. Without the guard, the push would silently overwrite the LLM serving the other directions (the 2026-05-18 wipe scenario).
+
+**You'll hit this if:** during onboarding, you set only `retell_inbound_agent_id` (left 2 + 3 NULL), then Save Setter, then notice the dynamic-vars block is generic and edit only the "inbound" direction's prompt. The guard fires because the user is now claiming only 1 column of a 3-column shared agent.
+
+**Toast UI:** "🛡️ Push blocked — agent shared across slots" with a detailed backend message naming the agent + which columns are shared. Shipped 2026-05-20 in `phase-night-per-direction-agent-fork`: when the user has selected EXACTLY ONE direction, the toast also surfaces a **Fork** action button.
+
+Click Fork → modal → confirm → calls retell-proxy `fork-slot-direction`:
+
+1. Reads source agent (the shared one) from `clients.retell_<direction>_agent_id`.
+2. Clones the source LLM byte-identical via `create-retell-llm`.
+3. Clones the source agent (with whitelisted voice/STT/PII/voicemail fields) via `create-agent`, pointed at the new LLM, agent_name = `"{source name} ({direction label})"`.
+4. Publishes the new agent.
+5. Repoints the canonical phone-version pin (inbound→slot 1 phone, outbound_initial→slot 2 phone, outbound_followup→slot 3 phone).
+6. UPDATEs `clients[directionColumn]` to the new agent_id. **The other 2 direction columns stay pointing at the original shared agent.**
+7. Re-runs the original Save Setter (now the safety guard won't fire because the slot has its own agent).
+
+Per the no-internal-prompt-edits rule, the action is a CLONE — no prompt content is mutated. The same client owns the source and the fork.
+
+#### 5.15.3 Publish silently failing — the 6-drafts symptom
+
+If Save Setter PATCH succeeds but the auto-publish step fails (Retell rate-limit, malformed payload, transient 5xx), the new draft accumulates without going live. Shipped 2026-05-20 in `phase-night-surface-publish-warning`: a destructive toast titled "⚠️ Saved + patched, but NOT published to live agent" fires when `data.publish_warning` is set in the 2xx response.
+
+If you see this during onboarding: open Retell dashboard → agent → check version count → if there are unpublished drafts ahead of the live version, click Publish on the latest version. Or re-Save Setter (the publish step runs again).
+
 ---
 
 ## 6. Cadence + content review (with the client)
@@ -749,3 +818,138 @@ Required env vars (in `.env`):
 Use `--dry-run` first to preview the SQL + GHL POST without executing. The script writes the `intake_lead_secret` to stdout exactly once — capture it; it can't be retrieved later without admin DB access.
 
 The script does NOT cover §1 (pre-sales discovery), §2 (info collection), §3.1 (per-client external Supabase project), §5 (GHL/Retell/Twilio click-paths), §6 (cadence copy review), §7 (dry-run), §8 (soft launch), §9 (debug), §10 (rollback). Those still require human judgement or external dashboard clicks.
+
+---
+
+## §C Mock onboarding checklist (single page)
+
+A one-page tickable reference Brendan can keep open in a second tab while walking the mock onboarding of Client #2. Cross-references the heavier sections by anchor.
+
+### Before the discovery call
+
+- [ ] Brand hierarchy locked: BFD = agency, "Building Flow" = product, Gary (he/him) = persona, BFD-setter = codebase. Confirm with client they accept "Building Flow / Gary" branding (we don't white-label per client yet).
+- [ ] Pricing question scoped per §11 — no quote during the mock; defer to the dated engagement letter pattern.
+
+### Discovery call (§1)
+
+- [ ] Volume sizing (§1.1): leads/month, peak hour, peak day, inbound vs outbound mix, voice on/off.
+- [ ] Stack inventory (§1.2): GHL location confirmed; Twilio/Retell/OpenRouter/ElevenLabs ownership.
+- [ ] Compliance scope (§1.3): region (10DLC for US, Spam Act for AU); consent provenance in writing.
+- [ ] Target conversion flow (§1.4): SMS-only? SMS + voice? Voicemail-drop?
+- [ ] Working hours + TZ (§1.5): IANA timezone, days-of-week.
+- [ ] Tone + banned words (§1.6).
+- [ ] Decision-makers + 5-lead soft-launch slot booked (§1.7).
+- [ ] Filled `Operations/handoffs/<date>-<client>-discovery.md`.
+
+### Day-1 info collection (§2)
+
+Collect all 22 fields per the table at §2. Save to `Operations/handoffs/<date>-<client>-onboarding-collected.md`.
+
+- [ ] GHL: location_id + PIT with scopes (Contacts/Conversations/Calendars/Workflows/CustomFields).
+- [ ] Twilio: BYO or shared BFD (decision tree §3.3).
+- [ ] Retell: API key + agent IDs (or you'll create on Day 1).
+- [ ] OpenRouter: minted on client's behalf at https://openrouter.ai/keys.
+- [ ] External Supabase project provisioned per §3.1 — `<client-slug>-setter-live`.
+- [ ] Quiet hours JSON drafted (start, end, IANA tz, days array).
+- [ ] Voicemail script (or "hangup" if Pattern A) drafted per §5.14.
+- [ ] Brand tone + banned words paste-ready for the client's `text_prompts` row.
+
+### Pre-provisioning (§3)
+
+- [ ] External Supabase project created (§3.1). Captured: project ref, `sb_secret_*`, `sb_publishable_*`, project URL.
+- [ ] 5 tables created via SQL editor (chat_history, text_prompts, voice_prompts, documents, leads).
+- [ ] Twilio decision made (BYO vs shared).
+- [ ] GHL location ID + PIT verified via `GET /locations/<id>` → 200.
+- [ ] Retell 5 slot IDs decided (you'll provision new agents or reuse existing).
+
+### DB provisioning (§4)
+
+- [ ] Run `scripts/onboard-client.mjs --dry-run` first.
+- [ ] Confirm output SQL + GHL POST look right.
+- [ ] Run without --dry-run. **Capture the `intake_lead_secret` and `client_id` immediately** — secret can't be retrieved later.
+- [ ] Confirm INSERT included **all 22 fields** including the new `voicemail_config` jsonb and `timezone` text column added 2026-05-20.
+- [ ] §4.2 — `last_synced_from` custom field created in GHL; field ID stored in `clients.ghl_last_synced_from_field_id`.
+- [ ] §4.2.5 — confirm `clients.ghl_last_synced_from_field_value` is per-client (NOT the default `"1prompt-os"`) — pick a distinctive slug per client like `"acme-co"`.
+- [ ] §4.3 — workflow cloned from BFD canonical (DO NOT yet set `auto_engagement_workflow_id`).
+- [ ] §4.4 — echo-loop guard sanity check (edit a contact via the platform UI, confirm no extra `sync_ghl_executions` row fires).
+
+### External wiring (§5)
+
+Click-paths (do in order):
+
+- [ ] §5.1 — "Send Setter Reply" workflow (skip under native engine; document the dormant state per §5.13.4).
+- [ ] §5.2 — GHL Calendar webhook → `bookings-webhook`.
+- [ ] §5.3 — GHL Webhook V2 secret → `clients.ghl_webhook_secret`.
+- [ ] §5.4 — Retell custom-tool URLs on each provisioned agent.
+- [ ] §5.5 — Retell webhook secret → `clients.retell_webhook_secret`.
+- [ ] §5.6 — Retell voicemail config via Sub-Account Settings UI (§5.14) — NOT direct SQL.
+- [ ] §5.7 — ElevenLabs (optional; BFD doesn't use it).
+- [ ] §5.8 — `intake-lead` website embed handed to the client (or their dev).
+- [ ] §5.9 — Twilio inbound SMS webhook configured for every `retell_phone_*`.
+- [ ] §5.10 OR §5.13 — pick Pattern A (greenfield ghl-tag-webhook) or Pattern B (snapshot-imported with `Add Lead to 1Prompt OS`). Most agency clients = Pattern B.
+- [ ] §5.11 — GHL Custom Conversation Provider (optional polished SMS-thread mirror).
+- [ ] §5.12 — Voice call summary push to GHL (optional but recommended; create 2 custom fields + store the IDs).
+
+### Per-client sub-account config (§5.14, post-2026-05-20)
+
+In the platform UI:
+
+- [ ] Switch sub-account to Client #2.
+- [ ] Sidebar SYSTEM → **Sub-Account Settings** → confirm renders without redirect.
+- [ ] Timezone card → set IANA, save.
+- [ ] Contact hours card → set start/end times + 7-day toggles + tz (defaults from above) → preview line shows "within window: Yes/No" → save.
+- [ ] Voicemail card → pick Hangup / Static / Dynamic → if not Hangup, fill the textarea → Save & Push. Toast should say "Pushed voicemail to N/N Retell agent(s)".
+
+### Voice setter prompt + Save Setter (§5.15)
+
+- [ ] Sidebar AI → Voice Setters → Voice-Setter-1.
+- [ ] Voice picker → choose one of Myra/Marissa/Brian/Cimo (or paste custom voice ID).
+- [ ] Setter name → set agent_name (will propagate to Retell).
+- [ ] Direction toggle: confirm all 3 ON for the first save (slot 1 inherits all 3 columns).
+- [ ] Click Save Setter → expect "Retell AI Synced" toast OR Fork-button flow if guard fires.
+- [ ] Open Retell dashboard → confirm agent_name + voice landed; latest version is published.
+
+### Cadence + content review (§6)
+
+- [ ] Open Engagement editor for the cloned workflow.
+- [ ] Replace every `[BRENDAN: ...]` placeholder with client-approved copy.
+- [ ] First-touch SMS < 160 chars (1 segment).
+- [ ] `{{first_name}}` not `{{full_name}}`.
+- [ ] Sign-off = first name only.
+- [ ] Set `delay_seconds` per channel (defaults: SMS T+0, voice T+2m, follow-up SMS T+30m, voicemail-drop T+24h).
+- [ ] Cadence Settings → quiet hours + voicemail config either inherits client default or has workflow-level override.
+- [ ] NEW LEADS toggle ON + GHL tag name entered (e.g. `new-lead` or `1prompt - new lead` for Pattern B).
+
+### Synthetic dry-run (§7)
+
+- [ ] §7.1 — test lead via `intake-lead`.
+- [ ] §7.2 — cadence fires + Twilio outbound visible.
+- [ ] §7.3 — real Retell call (book + confirm `bookings` row).
+- [ ] §7.4 — STOP keyword test.
+- [ ] §7.5 — quiet hours test.
+
+### Soft launch (§8)
+
+- [ ] §8.1 — flip `auto_engagement_workflow_id` + `dm_enabled = true` via SQL.
+- [ ] §8.2 — 5 real leads through with the client on screenshare.
+- [ ] §8.3 — daily 5-min SQL watch for week 1 (cadence_funnel + sms_delivery_events + error_logs).
+- [ ] §8.4 — Trigger.dev console filtered on `payload.client_id`.
+- [ ] §8.5 — Slack channel set up with the client; 4-hr SLA Mon-Fri week 1.
+
+### Brendan-side gotchas (from prior sessions)
+
+- **GHL Snapshot Pattern B clients** ([[reference_ghl_snapshot_pattern_b]]) — the `Add Lead to 1Prompt OS` workflow is the new-lead ingress, NOT `ghl-tag-webhook`. Confirm trigger tag matches what the form-to-tag workflows set.
+- **Twilio carrier opt-outs** ([[reference_twilio_carrier_optout]]) — if the test phone has previously texted STOP, error 21610 is sticky at the carrier gateway. Text START from the test phone to clear before the first cadence test.
+- **Subscription gate** ([[project_subscription_gate]]) — onboarding inserts `subscription_status='free'`; UPDATE to `'active'` until Stripe billing is wired or new clients get gated.
+- **types.ts drift** ([[feedback_types_ts_drift]]) — if you add new columns post-N1/N2, also add them to `frontend/src/integrations/supabase/types.ts` so frontend code compiles cleanly.
+
+### Done-criteria
+
+- [ ] Client receives a real test SMS (n1) within 30s of submitting a real form on their website.
+- [ ] Reply lands in their GHL Conversations tab AND/OR Notes within 5s.
+- [ ] Voice booking flow completes; appointment lands in GHL Calendar AND `bookings` table.
+- [ ] STOP keyword opts out cleanly; `lead_optouts` row written; no further outbound.
+- [ ] Daily KPI watch via SQL feeds the cadence_funnel view; no error_logs entries.
+
+This list maps 1:1 to the heavier sections — if anything is unclear during the mock, jump to the linked anchor.
+
