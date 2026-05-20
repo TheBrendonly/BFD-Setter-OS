@@ -32,6 +32,22 @@ Effort: S = under 30 min, M = 30 min - 2 hr, L = half day+.
 5. **D25 + dynamic-vars contradiction** — both Brendan-manual prompt edits, paths documented in CHANGES_LOG row for `phase-night-n5-url-sweep` + memory `[[feedback_no_internal_prompt_edits]]`.
 6. **N3 PNG re-shoots** — when ready, re-capture the Retell folder screenshots with "Building Flow" folder name and `git mv` the PNG file.
 
+**Queued for next session (surfaced during 2026-05-20 verification walkthrough):**
+
+- **Sub-Account Settings sidebar fix** — [`ClientLayout.tsx:967`](frontend/src/components/ClientLayout.tsx#L967) currently routes agency role to `/account-settings` (user-level) instead of `/client/<id>/settings` (per-client config: Timezone, Contact hours, Voicemail). Today there's no recurring UI path to ClientSettings for agency role; only the post-CreateClient redirect or direct URL. **Brendan picked Option A** during smoke test B.2: change the conditional so agency also routes to `/client/<id>/settings`. Single-line fix + label adjustment + tag `phase-night-sub-account-settings-sidebar-fix`. ~5 min.
+
+**Defects + queued fixes from 2026-05-20 afternoon smoke walkthrough:**
+
+- ✅ **Save Setter toast-parse bug FIXED** in `phase-night-save-setter-toast-parse-fix` (`28636e7`). PromptManagement.tsx read `retellError.context.body.code` but supabase-js wraps non-2xx in FunctionsHttpError where `.context` is a Response object. Now uses `await ctx.json()`. Same pattern as TEST CALL fix from 2026-05-18. **STUCK in Railway deploy queue** — Railway major outage as of 2026-05-19 22:29 UTC (Google Cloud blocked their account; non-enterprise builds throttled).
+- 🚩 **Save Setter Retell sync failure** — Brendan getting HTTP 409 from retell-proxy on Save Setter. Either the EE1 safety guard is firing (with directions less than all 3 claimed despite UI showing all green), OR a different 409 source we haven't identified. The toast-parse fix above will surface the real error once Railway deploys it. **Investigation in progress** — pulled Supabase edge fn logs but the API has a delay; need to wait for Railway deploy + Brendan to retry.
+- 🚩 **6 unpublished Retell agent drafts on BFD's agent_5ec5eb** — Agent is at v43 draft but `is_published: false`. Live calls still use the last published version (likely v37 from EE1 recovery 2026-05-18). LLM prompt has grown from 11,386 → 53,794 chars. Brendan's recent edits aren't going live. Related to the Save Setter failure above (every failed save creates an unpublished draft).
+- **Queued: Save Setter publish_warning UI surface** — retell-proxy returns `data.publish_warning` when publish silently fails; frontend currently swallows it. Add a toast that fires when this field is set. Tag `phase-night-surface-publish-warning`. ~20 min.
+- **Queued: per-direction agent "fork" button (feature request)** — Brendan wants to push 1 direction's prompt without re-pushing all 3. Today's EE1 safety guard correctly blocks this (would wipe shared agent). Three options to scope: (A) fork to new agent button (recommended, ~3 hr), (B) single-direction-update mode that skips fan-out (~1 hr, less safe), (C) per-direction agent always (~half day, schema/migration). Defer to next session for scoping.
+
+**Railway outage 2026-05-19 22:29 UTC onwards:**
+
+Cause: Google Cloud blocked Railway's account. Affects build pipeline + deployments. Non-enterprise builds throttled. Status page: [status.railway.com](https://status.railway.com/). Commit `28636e7` (toast-parse fix) is on GitHub `main` but stuck in Railway's queue. Commits before 2026-05-19 22:29 UTC (`1b6708c`, `b6e37a5`, `d1ce0a2`, `191eca6`, `9985214`) deployed cleanly before outage. **No action needed BFD-side — wait for Railway recovery, queued deploy will auto-fire.** Or manually trigger redeploy from Railway dashboard when throttle lifts.
+
 **Prior state-of-play (2026-05-19 EOD — Phase E3 follow-up session closed):**
 
 - HEAD: `16e9897` on Forgejo + GitHub (User Todos verification updates pending — will land in 2026-05-19 wrap commit)
