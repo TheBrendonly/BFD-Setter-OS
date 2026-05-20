@@ -6,7 +6,22 @@ Items are sequenced. Order matters — do them top-to-bottom. Each item links to
 
 Effort: S = under 30 min, M = 30 min - 2 hr, L = half day+.
 
-**State of play (2026-05-20 EOD — sidebar bug fixed + D-sweep + 100% server verification):**
+**State of play (2026-05-20 LATE EOD — verification walkthrough + 3 deploy-queued fixes):**
+
+- HEAD: `3a7002f` on Forgejo + GitHub (Wrap-2 docs commit will land on top).
+- **PM session ran the smoke walkthrough + surfaced 2 defects + 1 product feature request + 1 infra outage.** All defects fixed and committed; deploy queued due to Railway outage.
+- **B.1-B.7 smoke walkthrough PASS** (every section confirmed by Brendan or me).
+- **D37 cleanup partial:** 6 of 8 BFD bookings rows deleted via Management API DELETE (cancelled test rows). 2 confirmed rows remain pending Brendan's GHL Calendar check.
+- **3 functional tags shipped today + queued for Railway deploy:**
+  - `phase-night-save-setter-toast-parse-fix` (`28636e7`) — fixes the misleading "Make sure your Retell API key is configured" toast; surfaces real backend errors.
+  - `phase-night-sub-account-settings-sidebar-fix` (`85a88aa`) — two SYSTEM-section sidebar items so agency can reach ClientSettings via UI.
+  - `phase-night-surface-publish-warning` (`3a7002f`) — toast when Retell PATCH succeeds but auto-publish silently fails.
+- **Defect to debug post-deploy:** Save Setter HTTP 409 on BFD's Voice-Setter-1. Either EE1 safety guard firing (with directions less than all 3 claimed) OR different 409 source. Real error surfaces once toast-parse fix deploys + Brendan retries. Investigation doc at `Operations/audits/2026-05-20-save-setter-409-investigation.md`.
+- **Discovery:** BFD's `agent_5ec5eb` has 6 unpublished drafts (v43 draft, v37 last published). Live calls still use v37. Surface fix (`3a7002f`) catches future cases.
+- **Railway outage 2026-05-19 22:29 UTC ongoing** — Google Cloud blocked Railway's account. Non-enterprise builds throttled. 3 commits stuck in queue. Status: [status.railway.com](https://status.railway.com/).
+- **Feature request queued:** per-direction agent fork button (3 options scoped in `audits/2026-05-20-save-setter-409-investigation.md` — Option A recommended ~3 hr).
+
+**Prior state of play (2026-05-20 EOD — sidebar bug fixed + D-sweep + 100% server verification):**
 
 - HEAD: `191eca6` on Forgejo + GitHub (User Todos refresh below + the Phase J docs commit will land on top).
 - **4 functional tags shipped 2026-05-20** + 1 docs commit:
