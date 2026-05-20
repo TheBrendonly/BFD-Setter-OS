@@ -962,11 +962,26 @@ function ClientSidebar() {
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               )}
+              {/* Sub-Account Settings → /client/<id>/settings (ClientSettings.tsx)
+                  Per-client config: Timezone, Contact hours, Voicemail, Logo, Description.
+                  Both roles route here so agency can edit the per-client config from the
+                  sidebar (was previously direct-URL-only for agency — fixed 2026-05-20
+                  in phase-night-sub-account-settings-sidebar-fix). */}
               <SidebarMenuItem>
                 <SidebarMenuButton asChild>
-                  <NavLink to={`/client/${clientId}/${isAgency ? 'account-settings' : 'settings'}`} className="flex items-center gap-3 px-3 py-2 transition-colors hover:bg-muted/50 sidebar-nav-item" activeClassName="bg-primary/10 text-primary border-l-2 border-primary">
+                  <NavLink to={`/client/${clientId}/settings`} className="flex items-center gap-3 px-3 py-2 transition-colors hover:bg-muted/50 sidebar-nav-item" activeClassName="bg-primary/10 text-primary border-l-2 border-primary">
                     <span className="w-4 text-center text-foreground" style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '14px' }}>⚑</span>
-                    <span>{isAgency ? 'Agency Settings' : 'Sub-Account Settings'}</span>
+                    <span>Sub-Account Settings</span>
+                  </NavLink>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              {/* Account Settings → /client/<id>/account-settings (AccountSettings.tsx)
+                  User-level config: email, password, theme. Visible to both roles. */}
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild>
+                  <NavLink to={`/client/${clientId}/account-settings`} className="flex items-center gap-3 px-3 py-2 transition-colors hover:bg-muted/50 sidebar-nav-item" activeClassName="bg-primary/10 text-primary border-l-2 border-primary">
+                    <span className="w-4 text-center text-foreground" style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '14px' }}>◉</span>
+                    <span>Account Settings</span>
                   </NavLink>
                 </SidebarMenuButton>
               </SidebarMenuItem>
