@@ -23,18 +23,26 @@ const HARDCODED_VOICES = [
     gender: 'female' as const,
     description: 'Natural pacing with realistic vocal texture',
   },
+  // 11labs-Matt removed 2026-05-20 in phase-night-remove-broken-matt-preset.
+  // Retell catalog (311 voices, queried 2026-05-20) returns 404 for "11labs-Matt"
+  // — Retell either renamed or removed it. Any client who'd picked Matt would hit
+  // Retell API error [404] on Save Setter. Replacement male preset: "11labs-Brian"
+  // (American, male, similar profile) — verified live in catalog.
   {
-    voice_id: '11labs-Matt',
-    voice_name: 'Matt',
+    voice_id: '11labs-Brian',
+    voice_name: 'Brian',
     provider: 'elevenlabs',
     gender: 'male' as const,
     description: 'Casual, grounded — like a real sales rep on a phone call',
   },
+  // Cimo's gender labelled corrected: Retell catalog reports female, not male as
+  // BFD's hardcoded list previously said. Kept the voice (it's a valid preset);
+  // just fixed the metadata.
   {
     voice_id: '11labs-Cimo',
     voice_name: 'Cimo',
     provider: 'elevenlabs',
-    gender: 'male' as const,
+    gender: 'female' as const,
     description: 'Deep, calm tone — natural and trustworthy',
   },
 ];
