@@ -6,7 +6,15 @@ Items are sequenced. Order matters — do them top-to-bottom. Each item links to
 
 Effort: S = under 30 min, M = 30 min - 2 hr, L = half day+.
 
-**State of play (2026-05-20 LATE EOD — verification walkthrough + 3 deploy-queued fixes):**
+**State of play (2026-05-20 LATE-LATE — real Save Setter root cause found: broken Matt voice preset):**
+
+- HEAD: `d931c25` on Forgejo + GitHub (Wrap-3 docs commit will land on top).
+- **Railway deploy queue cleared.** All previously stuck commits deployed (`28636e7` + `85a88aa` + `3a7002f`). Status page back to operational.
+- **Real Save Setter 409 root cause IDENTIFIED + FIXED:** It wasn't (only) the EE1 safety guard. The toast-parse fix (`28636e7`) deployed and revealed the actual error: `Retell API error [404]: Item 11labs-Matt not found from voice`. Brendan's saved voice was `11labs-Matt`, which doesn't exist in Retell's catalog (queried live: 311 voices, 0 match for Matt). Retell removed/renamed it at some point post the EE5 voice work (2026-05-16 to 2026-05-18). **Fix shipped:** `phase-night-remove-broken-matt-preset` (`d931c25`) removes Matt from the hardcoded preset list, replaces with `11labs-Brian` (verified live), corrects `11labs-Cimo` gender metadata (Retell reports female, BFD labelled male). Brendan must also pick a non-Matt voice in his picker + re-Save.
+- **D37 cleanup complete:** Brendan confirmed GHL Calendar row 1 (`OfwxxJT9L5jO3IMGUTnn`) was a test ("Brendan Test-GHL-Form" contact). DB row deleted. Brendan to cancel the GHL appointment via the Calendar UI separately. **1 row remains** (`e69574ba-…` / `FZ2HiZvVBGbZ8VXBILIP` from 2026-05-13 11:30 AEST, past). Brendan's call whether to delete.
+- **6 unpublished Retell drafts on BFD's `agent_5ec5eb`** still pending — once Brendan picks a valid voice + saves successfully, publish should complete and bring v43+ live. Surface fix (`3a7002f`) catches future cases.
+
+**Prior state of play (2026-05-20 LATE EOD — verification walkthrough + 3 deploy-queued fixes):**
 
 - HEAD: `3a7002f` on Forgejo + GitHub (Wrap-2 docs commit will land on top).
 - **PM session ran the smoke walkthrough + surfaced 2 defects + 1 product feature request + 1 infra outage.** All defects fixed and committed; deploy queued due to Railway outage.
