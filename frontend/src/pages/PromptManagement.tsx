@@ -6169,12 +6169,29 @@ const PromptManagement = () => {
               });
             } else {
               console.log('✅ Retell AI agent synced:', retellResult);
-              toast({
-                title: 'Retell AI Synced',
-                description: retellResult?.action === 'created'
-                  ? `New Retell agent created (ID: ${retellResult.agent_id})`
-                  : 'Retell agent prompt updated successfully',
-              });
+              // Surface publish_warning if retell-proxy completed the PATCH but the
+              // auto-publish step failed. Without this toast, drafts accumulate
+              // unpublished and live calls keep using the OLD published version —
+              // exactly the situation BFD's agent_5ec5eb was in on 2026-05-20
+              // (v43 draft, v37 last published — 6 unpublished drafts).
+              // Added 2026-05-20 in phase-night-surface-publish-warning.
+              const publishWarning = (retellResult as { publish_warning?: string } | null)?.publish_warning;
+              if (publishWarning) {
+                console.warn('⚠️ Retell auto-publish failed (PATCH succeeded):', publishWarning);
+                toast({
+                  title: '⚠️ Saved + patched, but NOT published to live agent',
+                  description: `Your changes are saved as a draft, but Retell auto-publish failed: ${publishWarning}. Live calls will keep using the previously published version until publish succeeds. Try Save again; if it persists, check the Retell dashboard for the agent's publish state.`,
+                  variant: 'destructive',
+                  duration: 15000,
+                });
+              } else {
+                toast({
+                  title: 'Retell AI Synced',
+                  description: retellResult?.action === 'created'
+                    ? `New Retell agent created (ID: ${retellResult.agent_id})`
+                    : 'Retell agent prompt updated and published',
+                });
+              }
               // Fetch cost after successful sync
               if (retellResult?.agent_id) {
                 fetchRetellCost(retellResult.agent_id);
