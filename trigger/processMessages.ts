@@ -179,7 +179,7 @@ export const processMessages = task({
           stage_description: "No messages to process.",
           completed_at: new Date().toISOString(),
         });
-        await cleanup(supabase, lead_id, ghl_account_id);
+        await cleanup(supabase, lead_id, ghl_account_id, triggerRunId);
         return { status: "no_messages" };
       }
 
@@ -555,7 +555,7 @@ export const processMessages = task({
         has_error: false, // clear any error flag set during earlier retry attempts
       });
 
-      await cleanup(supabase, lead_id, ghl_account_id);
+      await cleanup(supabase, lead_id, ghl_account_id, triggerRunId);
 
       return {
         status: "completed",
@@ -590,7 +590,7 @@ export const processMessages = task({
       // Only cleanup after the final attempt so GHL webhook retries
       // don't spawn a duplicate run while Trigger.dev is still retrying
       if (isLastAttempt) {
-        await cleanup(supabase, lead_id, ghl_account_id);
+        await cleanup(supabase, lead_id, ghl_account_id, triggerRunId);
       }
 
       throw error;
@@ -598,14 +598,28 @@ export const processMessages = task({
   },
 });
 
+// Bug 32 — filter on trigger_run_id so a finishing run doesn't sweep away the
+// active_trigger_runs entry of a concurrently-spawned run for the same lead.
+// Pre-fix this orphaned a second dm_execution if a prospect replied twice
+// within the debounce window (15-25% of slow-replier prospects per defect
+// doc). Post-fix each run cleans only its own active_trigger_runs entry.
 async function cleanup(
   supabase: ReturnType<typeof createClient<any>>,
   lead_id: string,
-  ghl_account_id: string
+  ghl_account_id: string,
+  trigger_run_id: string | undefined
 ) {
+  if (!trigger_run_id) {
+    console.warn(
+      `cleanup() skipped — trigger_run_id missing for lead_id=${lead_id} ghl_account_id=${ghl_account_id}. ` +
+      `This shouldn't happen inside a Trigger.dev task; the run.id is normally always set.`
+    );
+    return;
+  }
   await supabase
     .from("active_trigger_runs")
     .delete()
     .eq("lead_id", lead_id)
-    .eq("ghl_account_id", ghl_account_id);
+    .eq("ghl_account_id", ghl_account_id)
+    .eq("trigger_run_id", trigger_run_id);
 }
