@@ -1006,6 +1006,7 @@ export const runEngagement = task({
                   executionId: execution_id,
                   callId,
                   isCancelled,
+                  pollIntervalSeconds: 5,
                 });
                 if (waitResult === "cancelled") {
                   console.log(`Engagement ${execution_id} cancelled during phone_call wait`);
@@ -1374,6 +1375,7 @@ export const runEngagement = task({
               executionId: execution_id,
               callId: legacyCallId,
               isCancelled,
+              pollIntervalSeconds: 5,
             });
             if (legacyWaitResult === "cancelled") {
               console.log(`Engagement ${execution_id} cancelled during legacy phone_call wait`);

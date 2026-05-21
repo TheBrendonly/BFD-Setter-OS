@@ -28,6 +28,23 @@ export type PushSmsToGhlResult = {
 
 const GHL_API_BASE = "https://services.leadconnectorhq.com";
 
+// Bug 30 — Twilio Advanced Opt-Out auto-reply patterns. Mirror of the
+// frontend/supabase/functions/_shared/ghl-conversations.ts list. Keep in sync.
+const TWILIO_AUTO_REPLY_PATTERNS: ReadonlyArray<RegExp> = [
+  /you have successfully been unsubscribed/i,
+  /you have successfully been re-?subscribed/i,
+  /you will not receive any more messages/i,
+  /reply\s+start\s+to\s+resubscribe/i,
+  /msg\s*&\s*data rates may apply/i,
+];
+
+function isTwilioAutoReply(body: string): boolean {
+  for (const re of TWILIO_AUTO_REPLY_PATTERNS) {
+    if (re.test(body)) return true;
+  }
+  return false;
+}
+
 export async function pushSmsToGhl(args: PushSmsToGhlArgs): Promise<PushSmsToGhlResult> {
   const {
     ghlApiKey,
@@ -41,6 +58,14 @@ export async function pushSmsToGhl(args: PushSmsToGhlArgs): Promise<PushSmsToGhl
 
   if (!ghlApiKey || !contactId || !message?.trim()) {
     return { ok: false, via: "skipped", error: "missing ghlApiKey/contactId/message" };
+  }
+
+  // Bug 30 — drop Twilio carrier auto-reply boilerplate so GHL conversations
+  // stay clean. BFD sends its own STOP_REPLY / START_REPLY which lands as a
+  // separate outbound mirror; the Twilio overlay would duplicate that.
+  if (direction === "outbound" && isTwilioAutoReply(message)) {
+    console.info("pushSmsToGhl skip: Twilio auto-reply pattern matched");
+    return { ok: false, via: "skipped", error: "twilio_autoreply" };
   }
 
   const headers = {

@@ -48,6 +48,7 @@ Deno.serve(async (req) => {
         status: "cancelled",
         completed_at: new Date().toISOString(),
         stop_reason: "manual_stop",
+        stage_description: "Cancelled — manually stopped from UI.",
       })
       .eq("id", execution_id);
 

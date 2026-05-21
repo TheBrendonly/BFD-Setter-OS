@@ -122,6 +122,9 @@ async function endActiveCadences(args: {
         status: stopReason === "opt_out" ? "cancelled" : "completed",
         stop_reason: stopReason,
         completed_at: new Date().toISOString(),
+        stage_description: stopReason === "opt_out"
+          ? "Cancelled — lead opted out."
+          : "Lead replied — engagement complete.",
       })
       .eq("id", exec.id);
     if (exec.trigger_run_id && triggerKey) {

@@ -144,6 +144,7 @@ Deno.serve(async (req) => {
             status: "cancelled",
             stop_reason: "superseded",
             completed_at: new Date().toISOString(),
+            stage_description: "Cancelled — superseded by new engagement.",
           })
           .eq("id", prev.id);
       }

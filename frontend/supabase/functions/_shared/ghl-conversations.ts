@@ -195,6 +195,28 @@ export async function pushCallEventToGhl(
   }
 }
 
+// Bug 30 — Twilio Advanced Opt-Out auto-reply patterns. When a lead texts
+// keywords like "yes", "stop", "start", "help" etc., Twilio's carrier-level
+// Advanced Opt-Out injects a boilerplate auto-reply on top of any reply BFD
+// itself sends. Mirroring those into GHL doubles the noise in the
+// conversation thread. Match conservatively on the canonical Twilio body
+// substrings; per Twilio docs (twilio.com/docs/messaging/services/advanced-opt-out)
+// these strings are fixed unless the customer overrides them in the Service.
+const TWILIO_AUTO_REPLY_PATTERNS: ReadonlyArray<RegExp> = [
+  /you have successfully been unsubscribed/i,
+  /you have successfully been re-?subscribed/i,
+  /you will not receive any more messages/i,
+  /reply\s+start\s+to\s+resubscribe/i,
+  /msg\s*&\s*data rates may apply/i,
+];
+
+function isTwilioAutoReply(body: string): boolean {
+  for (const re of TWILIO_AUTO_REPLY_PATTERNS) {
+    if (re.test(body)) return true;
+  }
+  return false;
+}
+
 export async function pushSmsToGhl(args: PushSmsToGhlArgs): Promise<PushSmsToGhlResult> {
   const {
     ghlApiKey,
@@ -208,6 +230,14 @@ export async function pushSmsToGhl(args: PushSmsToGhlArgs): Promise<PushSmsToGhl
 
   if (!ghlApiKey || !contactId || !message?.trim()) {
     return { ok: false, via: "skipped", error: "missing ghlApiKey/contactId/message" };
+  }
+
+  // Bug 30 — drop Twilio carrier auto-reply boilerplate so GHL conversations
+  // stay clean. BFD sends its own STOP_REPLY / START_REPLY which lands as a
+  // separate outbound mirror; the Twilio overlay would duplicate that.
+  if (direction === "outbound" && isTwilioAutoReply(message)) {
+    console.info("pushSmsToGhl skip: Twilio auto-reply pattern matched");
+    return { ok: false, via: "skipped", error: "twilio_autoreply" };
   }
 
   const headers = {

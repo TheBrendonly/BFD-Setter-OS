@@ -612,17 +612,24 @@ Deno.serve(async (req) => {
     const cancellationLink = firstNonEmptyString(calLinks.cancellationLink) || null;
     const rescheduleLink = firstNonEmptyString(calLinks.rescheduleLink) || null;
 
-    // Campaign attribution: find the most recent engagement execution for this lead
+    // Campaign attribution: find the most recent engagement execution for this lead.
+    // Bug 24 — also capture exec.id into cadence_execution_id so bookings link back
+    // to the cadence run that produced them. 14-day window prevents stale attribution.
     let campaignId: string | null = null;
+    let cadenceExecutionId: string | null = null;
     const leadIdForAttribution = contactId || null;
     if (leadIdForAttribution) {
+      const fourteenDaysAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString();
       const { data: recentExec } = await supabase
         .from("engagement_executions")
-        .select("campaign_id")
+        .select("id, campaign_id")
         .eq("lead_id", leadIdForAttribution)
+        .gte("started_at", fourteenDaysAgo)
         .order("started_at", { ascending: false })
         .limit(1)
         .maybeSingle();
+
+      cadenceExecutionId = recentExec?.id ?? null;
 
       if (recentExec?.campaign_id) {
         const { data: campaignCheck } = await supabase
@@ -651,6 +658,7 @@ Deno.serve(async (req) => {
         ghl_contact_id: contactId || null,
         ghl_booking_id: bookingId,
         campaign_id: campaignId,
+        cadence_execution_id: cadenceExecutionId,
         setter_name: null,
         setter_type: null,
         title,
