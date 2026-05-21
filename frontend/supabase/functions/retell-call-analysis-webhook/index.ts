@@ -1,4 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { resolveContactId } from "./contactId.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -134,7 +135,7 @@ Deno.serve(async (req) => {
 
     const dynamicVars = call.retell_llm_dynamic_variables || call.dynamic_variables || {};
     const ghlAccountId: string | null = dynamicVars.ghl_account_id || dynamicVars.GHL_Account_ID || null;
-    const contactId: string | null = dynamicVars.contact_id || dynamicVars.Contact_ID || dynamicVars.Lead_ID || null;
+    const contactId: string | null = resolveContactId(dynamicVars);
     const setterId: string | null = dynamicVars.voice_setter_id || null;
     const normalizedSetterSlotId = typeof setterId === "string"
       ? setterId.replace(/voice-setter-(\d+)/i, "Voice-Setter-$1")
