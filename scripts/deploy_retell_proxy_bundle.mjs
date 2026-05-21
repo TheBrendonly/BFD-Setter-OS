@@ -1,10 +1,12 @@
 import { readFileSync, readdirSync } from 'fs';
-import { join } from 'path';
+import { dirname, join, resolve } from 'path';
+import { fileURLToPath } from 'url';
 
 const PAT = process.env.SUPABASE_PAT;
 if (!PAT) { console.error('Missing SUPABASE_PAT'); process.exit(1); }
 const REF = 'bjgrgbgykvjrsuwwruoh';
-const FN_DIR = '/srv/bfd/Projects/bfd-setter/frontend/supabase/functions';
+// Worktree-aware: resolve relative to this script so dev-branch worktrees work.
+const FN_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '..', 'frontend', 'supabase', 'functions');
 const SLUG = process.argv[2] || 'retell-proxy';
 
 const sharedFiles = readdirSync(join(FN_DIR, '_shared')).filter(f => f.endsWith('.ts'));

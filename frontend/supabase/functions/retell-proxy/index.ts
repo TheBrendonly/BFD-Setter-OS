@@ -7,7 +7,12 @@ const corsHeaders = {
 };
 
 const RETELL_BASE = "https://api.retellai.com";
-const DEFAULT_RETELL_WEBHOOK_EVENTS = ["call_analyzed"];
+// Bug 20 — subscribe to both call_ended AND call_analyzed so
+// engagement_executions.last_call_outcome populates on call_ended (used by
+// runEngagement's poll loop) and the full analysis lands on call_analyzed
+// (used for call_history + GHL note + custom-field PATCH + Bug 16
+// Conversations push + Bug 28 booking confirm SMS).
+const DEFAULT_RETELL_WEBHOOK_EVENTS = ["call_ended", "call_analyzed"];
 
 // Map internal model names to Retell-supported model names
 function mapToRetellModel(model: string): string {
