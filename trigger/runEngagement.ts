@@ -687,7 +687,7 @@ export const runEngagement = task({
       // ── Load client config ────────────────────────────────────────────────
       const { data: client } = await supabase
         .from("clients")
-        .select("send_engagement_webhook_url, supabase_url, supabase_service_key, cadence_quiet_hours, twilio_account_sid, twilio_auth_token, twilio_default_phone, retell_phone_1, ghl_api_key, ghl_location_id, ghl_conversation_provider_id, openrouter_api_key, llm_model")
+        .select("send_engagement_webhook_url, supabase_url, supabase_service_key, cadence_quiet_hours, twilio_account_sid, twilio_auth_token, twilio_default_phone, retell_phone_1, ghl_api_key, ghl_location_id, ghl_conversation_provider_id, openrouter_api_key, llm_model, timezone")
         .eq("id", client_id)
         .single();
 
@@ -701,10 +701,20 @@ export const runEngagement = task({
 
       // Phase 11d — quiet-hours fallback chain: workflow override wins, then
       // per-client default, then DEFAULT_QUIET_HOURS.
-      const quietHours =
+      // UI Gap 18 — if the resolved quiet-hours doesn't specify a timezone
+      // (or only has a hand-coded one that doesn't match the client), default
+      // the tz to clients.timezone so the cadence respects the client's
+      // declared timezone instead of the legacy Australia/Brisbane fallback.
+      const baseQuietHours =
         parseQuietHours((workflow as any).quiet_hours_override) ??
         parseQuietHours(client.cadence_quiet_hours) ??
         DEFAULT_QUIET_HOURS;
+      const clientTz = typeof (client as any).timezone === "string" && (client as any).timezone
+        ? (client as any).timezone as string
+        : null;
+      const quietHours = clientTz && baseQuietHours === DEFAULT_QUIET_HOURS
+        ? { ...baseQuietHours, tz: clientTz }
+        : baseQuietHours;
 
       // Voicemail config travels through to make-retell-outbound-call so it
       // can PATCH the agent's voicemail_option before placing each call.

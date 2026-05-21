@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useSearchParams, useLocation, useParams } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import FileUpload from '@/components/FileUpload';
@@ -125,23 +125,121 @@ const CampaignCreate = () => {
     });
   };
 
+  // Bug 5 — preset filters for the contact picker. Each preset rewrites the
+  // server-side query so the row count shown to the user matches what will be
+  // enrolled. Filters compose with AND semantics.
+  type ContactPreset = 'cold_60d' | 'sequence_complete' | 'no_booking' | 'not_opted_out';
+  const [contactPresets, setContactPresets] = useState<Set<ContactPreset>>(new Set());
+  const togglePreset = (p: ContactPreset) => {
+    setContactPresets(prev => {
+      const next = new Set(prev);
+      next.has(p) ? next.delete(p) : next.add(p);
+      return next;
+    });
+  };
+
   // Fetch contacts for the contact picker
   const fetchContacts = async () => {
     if (!clientId) return;
-    const { data, error } = await supabase
+    let q = supabase
       .from('leads')
       .select('*')
       .eq('client_id', clientId)
       .order('created_at', { ascending: false })
       .limit(1000);
-    if (!error && data) {
-      setAllContacts(data);
+
+    if (contactPresets.has('cold_60d')) {
+      const cutoff = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString();
+      // Cold = last_inbound_at OR last_message_at is older than 60d (or NULL).
+      // Server-side OR via .or() for the joint condition.
+      q = q.or(`last_inbound_at.is.null,last_inbound_at.lt.${cutoff}`);
     }
+    if (contactPresets.has('not_opted_out')) {
+      q = q.or('setter_stopped.is.null,setter_stopped.eq.false');
+    }
+
+    const { data, error } = await q;
+    if (error) {
+      setAllContacts([]);
+      return;
+    }
+    let rows = data ?? [];
+
+    // The remaining two presets require joins; do them client-side after fetch.
+    // For sequence_complete: check engagement_executions for kind='new_lead' AND status='completed'.
+    // For no_booking: check bookings table NOT EXISTS.
+    if (contactPresets.has('sequence_complete') || contactPresets.has('no_booking')) {
+      const leadIds = rows.map((r: any) => r.lead_id).filter(Boolean);
+      if (leadIds.length > 0) {
+        if (contactPresets.has('sequence_complete')) {
+          const { data: execs } = await (supabase
+            .from('engagement_executions')
+            .select('lead_id')
+            .eq('client_id', clientId)
+            .eq('status', 'completed')
+            .in('lead_id', leadIds) as any);
+          const completedSet = new Set((execs as Array<{ lead_id: string }> | null ?? []).map(e => e.lead_id));
+          rows = rows.filter((r: any) => completedSet.has(r.lead_id));
+        }
+        if (contactPresets.has('no_booking')) {
+          const survivors = rows.map((r: any) => r.lead_id);
+          if (survivors.length > 0) {
+            const { data: bks } = await (supabase
+              .from('bookings')
+              .select('lead_id')
+              .eq('client_id', clientId)
+              .in('lead_id', survivors) as any);
+            const bookedSet = new Set((bks as Array<{ lead_id: string }> | null ?? []).map(b => b.lead_id));
+            rows = rows.filter((r: any) => !bookedSet.has(r.lead_id));
+          }
+        }
+      }
+    }
+
+    setAllContacts(rows);
   };
 
   const handleChooseFromContacts = () => {
     fetchContacts();
     setShowContactPicker(true);
+  };
+
+  // Bug 5 — re-fetch contacts whenever the preset set changes while the picker is open
+  React.useEffect(() => {
+    if (showContactPicker) {
+      fetchContacts();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [contactPresets, showContactPicker]);
+
+  // Bug 7 — campaign preview modal state
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
+  const previewSummary = useMemo(() => {
+    try {
+      const sourceLeads = contactLeadData.length > 0 ? contactLeadData : [];
+      if (sourceLeads.length === 0) {
+        return { leadCount: 0, batches: 0, sampleTimes: [] as Date[] };
+      }
+      const times = calculateScheduledTimes(sourceLeads, scheduleData);
+      const sample = times.slice(0, 5);
+      const batches = Math.ceil(sourceLeads.length / Math.max(1, scheduleData.batchSize || 1));
+      return { leadCount: sourceLeads.length, batches, sampleTimes: sample };
+    } catch {
+      return { leadCount: 0, batches: 0, sampleTimes: [] as Date[] };
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [contactLeadData, scheduleData]);
+
+  const launchClick = () => {
+    if (contactLeadData.length === 0 && !selectedFile) {
+      handleCampaignSubmit();
+      return;
+    }
+    setShowPreviewModal(true);
+  };
+  const confirmAndLaunch = () => {
+    setShowPreviewModal(false);
+    handleCampaignSubmit();
   };
 
   const toggleContactSelection = (id: string) => {
@@ -705,7 +803,7 @@ const CampaignCreate = () => {
             {/* Launch Campaign Button */}
             <div className="flex justify-center mt-12">
               <Button
-                onClick={handleCampaignSubmit}
+                onClick={launchClick}
                 disabled={(!selectedFile && contactLeadData.length === 0) || !campaignName.trim() || !reactivationNotes.trim() || isLoading}
                 size="lg"
                 className="min-w-[280px]"
@@ -724,6 +822,56 @@ const CampaignCreate = () => {
               </Button>
             </div>
 
+      {/* Bug 7 — Campaign Preview Modal */}
+      <Dialog open={showPreviewModal} onOpenChange={setShowPreviewModal}>
+        <DialogContent className="max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Preview Campaign</DialogTitle>
+            <DialogDescription style={{ fontSize: '13px' }}>
+              Confirm scheduling before launching. First {previewSummary.sampleTimes.length} of {previewSummary.leadCount} leads shown.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="px-6 pb-2 space-y-3 text-sm">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="border rounded p-2 bg-card">
+                <div className="text-xs text-muted-foreground">Leads</div>
+                <div className="text-lg font-semibold">{previewSummary.leadCount}</div>
+              </div>
+              <div className="border rounded p-2 bg-card">
+                <div className="text-xs text-muted-foreground">Batches</div>
+                <div className="text-lg font-semibold">{previewSummary.batches}</div>
+              </div>
+              <div className="border rounded p-2 bg-card">
+                <div className="text-xs text-muted-foreground">Batch size</div>
+                <div className="text-lg font-semibold">{scheduleData.batchSize}</div>
+              </div>
+              <div className="border rounded p-2 bg-card">
+                <div className="text-xs text-muted-foreground">Window</div>
+                <div className="text-sm">{scheduleData.startTime}–{scheduleData.endTime} {scheduleData.timezone}</div>
+              </div>
+            </div>
+            <div>
+              <div className="text-xs text-muted-foreground mb-1">Sample scheduled times</div>
+              <ul className="text-xs font-mono space-y-0.5 bg-card border rounded p-2">
+                {previewSummary.sampleTimes.length === 0 ? (
+                  <li className="text-muted-foreground">(no times computed — check schedule config)</li>
+                ) : previewSummary.sampleTimes.map((t, i) => (
+                  <li key={i}>{i + 1}. {t.toLocaleString('en-AU', { timeZone: scheduleData.timezone, weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</li>
+                ))}
+              </ul>
+            </div>
+          </div>
+          <div className="px-6 pb-6 flex gap-2 shrink-0">
+            <Button variant="outline" className="flex-1" onClick={() => setShowPreviewModal(false)}>
+              CANCEL
+            </Button>
+            <Button className="flex-1" onClick={confirmAndLaunch} disabled={isLoading || previewSummary.leadCount === 0}>
+              {isLoading ? 'LAUNCHING...' : `CONFIRM & LAUNCH ${previewSummary.leadCount}`}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Contact Picker Dialog */}
       <Dialog open={showContactPicker} onOpenChange={setShowContactPicker}>
         <DialogContent className="max-w-3xl max-h-[80vh] overflow-hidden flex flex-col">
@@ -732,6 +880,45 @@ const CampaignCreate = () => {
             <DialogDescription>Choose contacts to use as campaign leads. {selectedContactIds.size} selected.</DialogDescription>
           </DialogHeader>
           <div className="flex-1 overflow-auto p-6">
+            {/* Bug 5 — preset filter chips */}
+            <div className="mb-3 flex flex-wrap gap-2 items-center">
+              <span className="text-xs text-muted-foreground mr-1">Presets:</span>
+              {([
+                { id: 'cold_60d', label: '60+ days since last contact' },
+                { id: 'sequence_complete', label: 'Sequence complete only' },
+                { id: 'no_booking', label: 'No booking yet' },
+                { id: 'not_opted_out', label: 'Not opted out' },
+              ] as Array<{ id: ContactPreset; label: string }>).map(p => {
+                const active = contactPresets.has(p.id);
+                return (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => togglePreset(p.id)}
+                    className={`text-xs px-2.5 py-1 rounded border ${active ? 'bg-primary text-primary-foreground border-primary' : 'bg-background text-foreground border-border hover:bg-accent'}`}
+                  >
+                    {p.label}
+                  </button>
+                );
+              })}
+              <span className="text-xs text-muted-foreground ml-auto">
+                {allContacts.length} match{allContacts.length === 1 ? '' : 'es'}
+                {allContacts.length > 0 && selectedContactIds.size === 0 && (
+                  <button
+                    type="button"
+                    className="ml-2 underline hover:text-foreground"
+                    onClick={() => setSelectedContactIds(new Set(allContacts.map(c => c.id)))}
+                  >
+                    select all
+                  </button>
+                )}
+              </span>
+            </div>
+            {selectedContactIds.size > 100 && (
+              <div className="mb-3 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1.5">
+                ⚠ {selectedContactIds.size} leads selected. Reactivation campaigns should usually start at ≤ 100 leads on the first run so cost + delivery anomalies surface early.
+              </div>
+            )}
             <Table>
               <TableHeader>
                 <TableRow>

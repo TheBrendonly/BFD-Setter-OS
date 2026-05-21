@@ -1,4 +1,5 @@
 import React from 'react';
+import { useParams } from 'react-router-dom';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { RefreshCw, Phone, MessageSquare, Mail, Users, Target, CalendarCheck, Send, TrendingUp } from '@/components/icons';
@@ -6,7 +7,7 @@ import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
   PieChart, Pie, Cell, LineChart, Line, Legend
 } from 'recharts';
-import { totals, monthlyData, clientData } from '@/data/leadReactivationData';
+import { useReactivationData } from '@/hooks/useReactivationData';
 import { usePageHeader } from '@/contexts/PageHeaderContext';
 
 // Channel colors
@@ -21,14 +22,16 @@ const PIE_COLORS = [CHANNEL_COLORS.phone.main, CHANNEL_COLORS.sms.main, CHANNEL_
 const formatNum = (n: number) => n.toLocaleString();
 
 const LeadReactivation = () => {
-  const [loading, setLoading] = React.useState(false);
+  const { clientId } = useParams<{ clientId: string }>();
+  const { totals, monthlyData, clientData, loading, refresh } = useReactivationData(clientId);
 
   usePageHeader({ title: 'Lead Reactivation' });
 
   const handleRefresh = () => {
-    setLoading(true);
-    setTimeout(() => setLoading(false), 800);
+    refresh();
   };
+
+  const hasData = totals.totalLeads > 0;
 
   // Chart data
   const monthlyPositiveData = monthlyData.map(m => ({
@@ -99,6 +102,13 @@ const LeadReactivation = () => {
           REFRESH
         </Button>
       </div>
+
+      {/* Bug 4 — empty-state banner when no reactivation runs exist yet */}
+      {!hasData && !loading && (
+        <div className="border border-border bg-card rounded-md p-4 text-sm text-muted-foreground">
+          <strong className="text-foreground">No reactivation data yet.</strong> When this client runs reactivation campaigns (Bug 6 lead-row Reactivate button, Bug 11 /debug-inject-lead, or a CampaignCreate flow), the metrics here will populate from <code>engagement_executions(kind='reactivation')</code> joined with <code>cadence_metrics</code>. All charts render zeros below until a run lands.
+        </div>
+      )}
 
       {/* Top-level Stats */}
       <div className="stat-row">

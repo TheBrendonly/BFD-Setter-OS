@@ -19,7 +19,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
-import { Upload, Wand2, Send, Search, RefreshCw, Loader2, ChevronLeft, ChevronRight, Sparkles, Rocket, Pencil, Trash2, ArrowUp, ArrowDown, RefreshCcw, Plus, Filter, Settings, AlertTriangle, FileText, Download, Copy, Tags, Check, Zap } from '@/components/icons';
+import { Upload, Wand2, Send, Search, RefreshCw, Loader2, ChevronLeft, ChevronRight, Sparkles, Rocket, Pencil, Trash2, ArrowUp, ArrowDown, RefreshCcw, Plus, Filter, Settings, AlertTriangle, FileText, Download, Copy, Tags, Check, Zap, RotateCcw } from '@/components/icons';
 import RetroLoader from '@/components/RetroLoader';
 import { Switch } from '@/components/ui/switch';
 import { usePageHeader } from '@/contexts/PageHeaderContext';
@@ -333,6 +333,12 @@ const Contacts = () => {
   const [showBulkTagDialog, setShowBulkTagDialog] = useState(false);
   const [bulkTagIds, setBulkTagIds] = useState<string[]>([]);
   const [assigningBulkTags, setAssigningBulkTags] = useState(false);
+
+  // Bug 6 — bulk reactivate
+  const [showReactivateDialog, setShowReactivateDialog] = useState(false);
+  const [reactivateWorkflows, setReactivateWorkflows] = useState<Array<{ id: string; name: string; status: string | null }>>([]);
+  const [reactivateWorkflowId, setReactivateWorkflowId] = useState<string>('');
+  const [reactivating, setReactivating] = useState(false);
   const [showLaunchWorkflowDialog, setShowLaunchWorkflowDialog] = useState(false);
   const [workflowLeads, setWorkflowLeads] = useState<any[]>([]);
 
@@ -985,6 +991,66 @@ const Contacts = () => {
     }
   };
 
+  // Bug 6 — load workflows on demand when reactivate dialog opens
+  React.useEffect(() => {
+    if (!showReactivateDialog || !clientId) return;
+    (async () => {
+      const { data, error } = await (supabase
+        .from('engagement_workflows')
+        .select('id, name, status')
+        .eq('client_id', clientId)
+        .order('updated_at', { ascending: false }) as any);
+      if (error) {
+        toast.error('Failed to load workflows');
+        return;
+      }
+      setReactivateWorkflows((data as Array<{ id: string; name: string; status: string | null }>) ?? []);
+    })();
+  }, [showReactivateDialog, clientId]);
+
+  const handleBulkReactivate = async () => {
+    if (!reactivateWorkflowId || !clientId) return;
+    const targets = Array.from(selectedContacts);
+    if (targets.length === 0) {
+      toast.error('No leads selected');
+      return;
+    }
+    setReactivating(true);
+    let ok = 0;
+    let fail = 0;
+    for (const contactId of targets) {
+      const contact = contacts.find(c => c.id === contactId);
+      if (!contact) { fail++; continue; }
+      const leadIdGhl = (contact as any).lead_id || contact.id;
+      try {
+        const { error } = await (supabase.functions as any).invoke('reactivate-lead', {
+          body: {
+            client_id: clientId,
+            workflow_id: reactivateWorkflowId,
+            lead_id: leadIdGhl,
+            kind: 'reactivation',
+          },
+        });
+        if (error) {
+          fail++;
+        } else {
+          ok++;
+        }
+      } catch {
+        fail++;
+      }
+    }
+    setReactivating(false);
+    setShowReactivateDialog(false);
+    setReactivateWorkflowId('');
+    setSelectedContacts(new Set());
+    if (fail === 0) {
+      toast.success(`Reactivated ${ok} lead${ok === 1 ? '' : 's'}`);
+    } else {
+      toast.error(`Reactivated ${ok}, failed ${fail}`);
+    }
+  };
+
   const handleBulkAssignTags = async () => {
     if (!clientId || bulkTagIds.length === 0) return;
     setAssigningBulkTags(true);
@@ -1384,6 +1450,13 @@ const Contacts = () => {
             Assign Tags ({effectiveSelectedCountFinal.toLocaleString()})
           </Button>
           <Button
+            variant="outline"
+            onClick={() => { setReactivateWorkflowId(''); setShowReactivateDialog(true); }}
+          >
+            <RotateCcw className="w-4 h-4 mr-1.5" />
+            Reactivate ({effectiveSelectedCountFinal.toLocaleString()})
+          </Button>
+          <Button
             variant="destructive"
             onClick={() => setShowDeleteConfirm(true)}
           >
@@ -1715,6 +1788,48 @@ const Contacts = () => {
             </Button>
             <Button className="flex-1 groove-btn-positive" style={{ fontFamily: "'VT323', monospace", fontSize: '18px', letterSpacing: '0.5px' }} onClick={handleBulkAssignTags} disabled={assigningBulkTags || bulkTagIds.length === 0}>
               {assigningBulkTags ? <><Loader2 className="w-4 h-4 mr-1.5 animate-spin" />ASSIGNING...</> : <>ASSIGN {bulkTagIds.length} TAG{bulkTagIds.length !== 1 ? 'S' : ''}</>}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bug 6 — Reactivate Dialog */}
+      <Dialog open={showReactivateDialog} onOpenChange={setShowReactivateDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Reactivate Leads</DialogTitle>
+            <DialogDescription style={{ fontSize: '13px' }}>
+              Enrol {selectedContacts.size} selected lead{selectedContacts.size === 1 ? '' : 's'} into an engagement workflow. Each lead gets a fresh engagement_executions row with kind='reactivation'.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 px-6 pb-6">
+            <div className="space-y-1.5">
+              <Label style={{ fontSize: '13px' }}>Workflow</Label>
+              <Select value={reactivateWorkflowId} onValueChange={setReactivateWorkflowId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select workflow..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {reactivateWorkflows.map(w => (
+                    <SelectItem key={w.id} value={w.id}>
+                      {w.name}{w.status ? ` (${w.status})` : ''}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {selectedContacts.size > 100 && (
+              <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1.5">
+                ⚠ {selectedContacts.size} leads selected. Reactivating in bulk fires N HTTP calls + N Trigger.dev runs sequentially. Consider creating a campaign instead if &gt; 100 leads.
+              </div>
+            )}
+          </div>
+          <div className="px-6 pb-6 flex gap-2 shrink-0">
+            <Button className="flex-1 groove-btn" style={{ fontFamily: "'VT323', monospace", fontSize: '18px', letterSpacing: '0.5px' }} onClick={() => setShowReactivateDialog(false)} disabled={reactivating}>
+              CANCEL
+            </Button>
+            <Button className="flex-1 groove-btn-positive" style={{ fontFamily: "'VT323', monospace", fontSize: '18px', letterSpacing: '0.5px' }} onClick={handleBulkReactivate} disabled={reactivating || !reactivateWorkflowId}>
+              {reactivating ? <><Loader2 className="w-4 h-4 mr-1.5 animate-spin" />REACTIVATING...</> : <>REACTIVATE {selectedContacts.size}</>}
             </Button>
           </div>
         </DialogContent>
