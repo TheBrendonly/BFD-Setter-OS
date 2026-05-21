@@ -1016,30 +1016,41 @@ const Contacts = () => {
       return;
     }
     setReactivating(true);
+
+    // Bug 6 — batched parallel invokes. Sequential await would timeout the
+    // browser tab on 100+ leads; full Promise.all could hit edge-fn
+    // concurrency limits. Chunk of 5 strikes a balance: <30s for 100 leads
+    // assuming ~1.2s per call.
+    const CHUNK = 5;
+    const failedIds: string[] = [];
     let ok = 0;
     let fail = 0;
-    for (const contactId of targets) {
-      const contact = contacts.find(c => c.id === contactId);
-      if (!contact) { fail++; continue; }
-      const leadIdGhl = (contact as any).lead_id || contact.id;
-      try {
-        const { error } = await (supabase.functions as any).invoke('reactivate-lead', {
-          body: {
-            client_id: clientId,
-            workflow_id: reactivateWorkflowId,
-            lead_id: leadIdGhl,
-            kind: 'reactivation',
-          },
-        });
-        if (error) {
-          fail++;
-        } else {
-          ok++;
+    for (let i = 0; i < targets.length; i += CHUNK) {
+      const slice = targets.slice(i, i + CHUNK);
+      const results = await Promise.all(slice.map(async contactId => {
+        const contact = contacts.find(c => c.id === contactId);
+        if (!contact) return { id: contactId, ok: false };
+        const leadIdGhl = (contact as any).lead_id || contact.id;
+        try {
+          const { error } = await (supabase.functions as any).invoke('reactivate-lead', {
+            body: {
+              client_id: clientId,
+              workflow_id: reactivateWorkflowId,
+              lead_id: leadIdGhl,
+              kind: 'reactivation',
+            },
+          });
+          return { id: contactId, ok: !error };
+        } catch {
+          return { id: contactId, ok: false };
         }
-      } catch {
-        fail++;
+      }));
+      for (const r of results) {
+        if (r.ok) ok++;
+        else { fail++; failedIds.push(r.id); }
       }
     }
+
     setReactivating(false);
     setShowReactivateDialog(false);
     setReactivateWorkflowId('');
@@ -1047,7 +1058,10 @@ const Contacts = () => {
     if (fail === 0) {
       toast.success(`Reactivated ${ok} lead${ok === 1 ? '' : 's'}`);
     } else {
-      toast.error(`Reactivated ${ok}, failed ${fail}`);
+      // Surface failed IDs in the console + a hint in the toast so the
+      // operator can identify which leads to retry.
+      console.warn('[reactivate] failed lead ids:', failedIds);
+      toast.error(`Reactivated ${ok}, failed ${fail}. Check console for failed lead IDs.`);
     }
   };
 
