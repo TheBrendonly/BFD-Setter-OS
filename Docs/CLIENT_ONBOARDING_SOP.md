@@ -423,6 +423,15 @@ The mirror runs regardless of which path is used; if `clients.ghl_conversation_p
 
 The helper is at `frontend/supabase/functions/_shared/ghl-conversations.ts` (Deno) and `trigger/_shared/ghl-conversations.ts` (Node copy). Wired into `receive-twilio-sms`, `processMessages.ts` (gated on `client.use_native_text_engine === true`), and `runEngagement.ts` `sendTwilioSmsAndStamp` (engage + send_sms nodes).
 
+**Step 5.11.5 — GHL `channel` custom-field id → `clients.ghl_channel_field_id`** (added 2026-05-22, Bug 23)
+
+`receive-twilio-sms` stamps the GHL contact's `channel` custom field to `"SMS"` on every inbound so the GHL **Send Setter Reply** workflow's "Which Channel?" decision routes correctly (the decision reads `contact.channel`, NOT the inbound payload). The custom-field UUID was previously hardcoded for BFD; now per-client.
+
+1. In GHL: **Settings -> Custom Fields -> Custom Fields**. Create or locate the `channel` custom field on the Contact object. Type: `Multiple Options` (values: `SMS`, `Email`, `Voice`, etc.). If it already exists, use its id.
+2. Copy the field id from the URL or field-detail panel (looks like `p0vCIz497xZLk5fUSF0X` for BFD, or a UUID for newer locations).
+3. `UPDATE clients SET ghl_channel_field_id = '<id>' WHERE id = '<client-uuid>';`
+4. If left NULL: `setGhlContactChannel` no-ops with a `console.warn` line — inbound SMS still flows, but the GHL workflow's channel-routing decision will fall through to its default branch.
+
 ### 5.12 Voice call summary push to GHL (optional — populates contact timeline)
 
 Phase night (`phase-night-ghl-push-gap-1`, 2026-05-02) added automatic GHL Note creation + custom field updates after every completed Retell call analysis. This closes GHL push gap 1: previously the agency owner saw nothing on the GHL contact timeline about calls made through the platform.

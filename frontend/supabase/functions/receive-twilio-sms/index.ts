@@ -268,18 +268,22 @@ async function verifyTwilioSignature(
 // inbound payload) routes correctly.
 async function setGhlContactChannel(
   ghlApiKey: string,
+  channelFieldId: string | null | undefined,
   contactId: string,
   channelLabel: string,
 ): Promise<void> {
+  if (!channelFieldId) {
+    console.warn(
+      "setGhlContactChannel skipped: clients.ghl_channel_field_id not set — provision per CLIENT_ONBOARDING_SOP",
+    );
+    return;
+  }
   const headers = {
     Authorization: `Bearer ${ghlApiKey}`,
     "Content-Type": "application/json",
     Version: "2021-07-28",
     Accept: "application/json",
   };
-  // Custom field id for `contact.channel` (MULTIPLE_OPTIONS) on BFD location.
-  // If you reuse this function across locations, look this up dynamically.
-  const CHANNEL_FIELD_ID = "p0vCIz497xZLk5fUSF0X";
   try {
     const r = await fetch(
       `https://services.leadconnectorhq.com/contacts/${contactId}`,
@@ -288,7 +292,7 @@ async function setGhlContactChannel(
         headers,
         body: JSON.stringify({
           customFields: [
-            { id: CHANNEL_FIELD_ID, key: "channel", field_value: channelLabel },
+            { id: channelFieldId, key: "channel", field_value: channelLabel },
           ],
         }),
       },
@@ -415,7 +419,7 @@ Deno.serve(async (req) => {
     const { data: client, error: clientError } = await supabase
       .from("clients")
       .select(
-        "id, ghl_location_id, ghl_api_key, dm_enabled, debounce_seconds, twilio_account_sid, twilio_auth_token, supabase_url, supabase_service_key, ghl_conversation_provider_id",
+        "id, ghl_location_id, ghl_api_key, dm_enabled, debounce_seconds, twilio_account_sid, twilio_auth_token, supabase_url, supabase_service_key, ghl_conversation_provider_id, ghl_channel_field_id",
       )
       .eq("retell_phone_1", toPhone)
       .maybeSingle();
@@ -619,7 +623,7 @@ Deno.serve(async (req) => {
     // Stamp contact.channel = "SMS" so the Send Setter Reply workflow's
     // "Which Channel?" decision (sourced from contact.channel) routes here.
     // Fire-and-forget — don't block the inbound on a slow GHL response.
-    setGhlContactChannel(client.ghl_api_key, contactId, "SMS");
+    setGhlContactChannel(client.ghl_api_key, client.ghl_channel_field_id, contactId, "SMS");
 
     // Phase B (gap 2) — mirror the inbound SMS body to GHL so the agency
     // owner sees the conversation thread. Best-effort, runs after the TwiML
