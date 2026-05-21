@@ -4,3 +4,11 @@ credentials.env
 *.env.local
 dist/
 .trigger/
+
+# Worktrees + IDE / tooling temp dirs
+.worktrees/
+.letta/
+frontend/src/.letta/
+supabase/.temp/
+frontend/supabase/.temp/
+frontend/pnpm-lock.yaml

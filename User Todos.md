@@ -6,7 +6,34 @@ Items are sequenced. Order matters — do them top-to-bottom. Each item links to
 
 Effort: S = under 30 min, M = 30 min - 2 hr, L = half day+.
 
-**State of play (2026-05-20 FINAL — Save Setter working, all cleanup done):**
+**State of play (2026-05-20 EVENING — per-direction agent fork shipped, SOP polished for Client #2 mock, Phase 10 audit done):**
+
+- HEAD: `efa06f2` on Forgejo + GitHub. Session built on top of this morning's FINAL wrap (`c80de8a`); 4 commits + 1 tag.
+- **🎯 Per-direction agent fork SHIPPED** — `phase-night-per-direction-agent-fork` (`18ed332`). Option A from the FINAL handoff's per-direction agent feature scoping. Backend new `case "fork-slot-direction"` in retell-proxy (v19 → v20 ACTIVE). Frontend Fork button on the EE1 safety-guard toast (renders only when 1 direction selected) + confirmation modal in `PromptManagement.tsx`. Per the no-internal-prompt-edits rule: pure CLONE (no LLM content mutation; same client owns source + fork). Brendan-side smoke checklist at `Operations/verifications/2026-05-20-evening-fork-feature.md`. **NOT exercised against BFD's live agent this session** — that's Brendan's smoke test when he wants to per-direction the agent.
+- **📝 CLIENT_ONBOARDING_SOP.md polished** for tomorrow's Client #2 mock onboarding (`679a9ad` + `efa06f2`). 4 substantive additions: §4.1 INSERT template now includes `voicemail_config` + `timezone` columns; new §5.14 Sub-Account Settings sidebar click-path; new §5.15 Save Setter (voice picker presets + Fork button + publish-warning); new §C single-page mock onboarding checklist; new §D pre-sales prep punch list (pricing, provider decisions, compliance, soft-launch slot). +260 lines net.
+- **🔧 Phase 10 n8n decommission AUDIT PREP done** at `Operations/audits/2026-05-20-evening-phase-10-n8n-decom-prep.md`. Soak confirmed clean (20 days since 2026-04-30 phase-9 cutover, BFD `use_native_text_engine=true` continuously). Full grep inventory: 1 active site in `trigger/processMessages.ts` lines 256-335 (dead else-branch), 1 dead select in `receive-dm-webhook:366`, 1 copy site in `sync-external-credentials:87`, 56 frontend refs across 7 files. Proposed deletion order + verification queries + rollback documented. **No code/SQL/Railway changes executed this session.** Cutover is a separate authorized session.
+- **Task 1 verification:** BFD's `agent_5ec5eb…` Retell agent is at v47 draft (unpublished), v46 = latest published with `voice_id: 11labs-Brian`. The "publish silently failing" symptom flagged in the morning's FINAL handoff IS still present (1 unpublished draft from Brendan's last click). **Did NOT auto-republish** per the no-internal-prompt-edits rule. Brendan's call: publish v47 manually via Retell dashboard, or re-Save Setter (auto-publish runs again). Live calls fine on v46/Brian.
+- **Edge fn versions on prod:** retell-proxy **v20** (was v19), push-contact-to-ghl v6, sync-ghl-contact v14, make-retell-outbound-call v11, ghl-tag-webhook v2, voice-booking-tools v10, retell-call-analysis-webhook v13.
+- **Phase A8 soak:** day 12/14 (2 days remaining; ends 2026-05-23).
+- **Today's tag count (2026-05-20 full day):** 9 functional tags + 6 docs commits.
+
+**Brendan-side actions queued:**
+
+1. **Mock onboarding walkthrough** of polished `Docs/CLIENT_ONBOARDING_SOP.md` against a fake "Client TestCo" (per §C + §D-self-tests). Time-box ≤6hr; surfaces any rough edges before the real Client #2 call.
+2. **Fork feature live smoke test** when ready — see `Operations/verifications/2026-05-20-evening-fork-feature.md` Path A (~5min to walk).
+3. **v47 publish** — optional, Brendan's call (publish via Retell dashboard, or re-Save Setter; live calls fine on v46).
+4. **Pre-sales prep punch list (§D of SOP)** — pricing decision, provider account decisions, compliance verbiage, lead-source coverage scope, soft-launch slot booking with Client #2.
+5. **Phase 10 cutover authorization** — when A8 soak hits 14/14 on 2026-05-23, give explicit Phase 10 GO (full sweep) / Phase 10 partial (backend only) / Defer.
+
+**Open from prior sessions (still pending, unchanged this session):**
+
+- **🚩 D25 EE6 Aria/"drowning in DMs" scrub** in BFD's `prompts.content` — Brendan-manual per the no-internal-prompt-edits rule.
+- **🚩 BFD prompts.content "dynamic vars pre-loaded" line** — same Brendan-manual rule.
+- **N3 PNG re-shoots** for setup-guide once Brendan does the Retell screenshot session.
+- **Template JSONs URL sweep** (~42 hardcoded upstream URLs in `frontend/public/workflows/*.json` + `retell-agents/*.json`) — low urgency.
+- **`elevenlabs-manage-agent/index.ts:57`** hardcoded URL — BFD doesn't use ElevenLabs; skip.
+
+**Prior state of play (2026-05-20 FINAL — Save Setter working, all cleanup done):**
 
 - HEAD: `d13b1c3` on Forgejo + GitHub (FINAL wrap docs commit lands on top).
 - **Save Setter VERIFIED WORKING:** Retell agent v43-v46 all published with `voice_id: 11labs-Brian` in the last 2 min (Brendan's retry batch). v47 is latest draft (probably his most recent click). 6 unpublished drafts from earlier cleared. **Live calls now route to v46 (or current published) with Brian voice.**
