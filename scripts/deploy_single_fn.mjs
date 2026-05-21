@@ -28,8 +28,20 @@ const dir = join(FN_DIR, slug);
 const indexPath = join(dir, 'index.ts');
 const siblings = readdirSync(dir).filter(f => f.endsWith('.ts') && f !== 'index.ts' && !f.endsWith('.test.ts'));
 
+// Bundle _shared/ helpers so functions importing from ../_shared/ resolve at
+// deploy time. Mirrors the pattern in deploy_with_shared.mjs. Including extra
+// files is harmless — Supabase only counts ones the bundle actually imports.
+const sharedDir = join(FN_DIR, '_shared');
+let sharedFiles = [];
+try {
+  sharedFiles = readdirSync(sharedDir).filter(f => f.endsWith('.ts') && !f.endsWith('.test.ts'));
+} catch {
+  // _shared not present — fine.
+}
+
 console.log(`Deploying ${slug}`);
 console.log(`  index.ts + siblings: ${siblings.join(', ') || '(none)'}`);
+console.log(`  _shared bundled: ${sharedFiles.join(', ') || '(none)'}`);
 
 // Preserve verify_jwt by reading current.
 const getRes = await fetch(`https://api.supabase.com/v1/projects/${REF}/functions/${slug}`, {
@@ -52,6 +64,9 @@ fd.append('metadata', JSON.stringify({
 fd.append('file', new Blob([readFileSync(indexPath, 'utf8')], { type: 'application/typescript' }), 'index.ts');
 for (const sib of siblings) {
   fd.append('file', new Blob([readFileSync(join(dir, sib), 'utf8')], { type: 'application/typescript' }), sib);
+}
+for (const sf of sharedFiles) {
+  fd.append('file', new Blob([readFileSync(join(sharedDir, sf), 'utf8')], { type: 'application/typescript' }), `../_shared/${sf}`);
 }
 
 const res = await fetch(`https://api.supabase.com/v1/projects/${REF}/functions/deploy?slug=${slug}`, {

@@ -1,6 +1,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { resolveContactId } from "./contactId.ts";
 import { classifyCallOutcome } from "./classifyCallOutcome.ts";
+import { pushCallEventToGhl } from "../_shared/ghl-conversations.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -441,13 +442,22 @@ Deno.serve(async (req) => {
         try {
           const { data: ghlClientRow } = await supabase
             .from("clients")
-            .select("ghl_api_key, ghl_location_id, ghl_call_sentiment_field_id, ghl_call_appt_booked_field_id")
+            .select(
+              "ghl_api_key, ghl_location_id, ghl_call_sentiment_field_id, ghl_call_appt_booked_field_id, " +
+              "ghl_conversation_provider_id, " +
+              "twilio_account_sid, twilio_auth_token, twilio_default_phone, retell_phone_1, timezone",
+            )
             .eq("id", clientId)
             .maybeSingle();
 
           const ghlApiKey = ghlClientRow?.ghl_api_key as string | null;
           const sentimentFieldId = ghlClientRow?.ghl_call_sentiment_field_id as string | null;
           const apptBookedFieldId = ghlClientRow?.ghl_call_appt_booked_field_id as string | null;
+          const conversationProviderId = ghlClientRow?.ghl_conversation_provider_id as string | null;
+          const twilioAccountSid = ghlClientRow?.twilio_account_sid as string | null;
+          const twilioAuthToken = ghlClientRow?.twilio_auth_token as string | null;
+          const twilioFromNumber = (ghlClientRow?.twilio_default_phone as string | null) || (ghlClientRow?.retell_phone_1 as string | null);
+          const clientTimezone = (ghlClientRow?.timezone as string | null) || "Australia/Brisbane";
 
           if (ghlApiKey) {
             const ghlHeaders = {
@@ -506,8 +516,113 @@ Deno.serve(async (req) => {
                 console.log(`✅ GHL gap-1 custom fields patched for contact ${contactId}`);
               }
             }
+
+            // Bug 16 — push the call as a Call/Voicemail event on the GHL
+            // Conversations timeline (alongside the Note above). Idempotent
+            // via altId = Retell call_id. Falls back to a Note if the
+            // client hasn't provisioned a Custom Conversation Provider.
+            const callDirectionForConv: "inbound" | "outbound" = (typeof record.direction === "string" && record.direction.toLowerCase().includes("inbound"))
+              ? "inbound"
+              : "outbound";
+            const callTypeForConv: "Call" | "Voicemail" = callHistoryClass === "voicemail" ? "Voicemail" : "Call";
+            const occurredAt = (record.end_timestamp as string | null) || (record.start_timestamp as string | null) || new Date().toISOString();
+            const convPush = await pushCallEventToGhl({
+              ghlApiKey,
+              contactId,
+              conversationProviderId,
+              callType: callTypeForConv,
+              direction: callDirectionForConv,
+              durationSeconds: (record.duration_seconds as number | null) ?? null,
+              callId: (record.call_id as string | null) ?? callId,
+              recordingUrl: (record.recording_url as string | null) ?? null,
+              outcomeSummary: (record.call_summary as string | null) ?? null,
+              outcomeClass: callHistoryClass,
+              altId: (record.call_id as string | null) ?? callId,
+              occurredAt,
+            });
+            console.log(`📞 Bug-16 conversations push → ${convPush.ok ? "OK" : "FAIL"} via=${convPush.via} status=${convPush.status ?? "-"}`);
           } else {
             console.log(`ℹ️ GHL gap-1 skipped for client ${clientId}: no ghl_api_key`);
+          }
+
+          // Bug 28 — booking confirmation SMS via Twilio. Fires when
+          // record.appointment_booked === true regardless of direction
+          // (an inbound call that books an appointment also gets the SMS).
+          // Idempotency: Retell sends call_analyzed once per call; if it ever
+          // re-fires we'll send a second SMS — rare in practice, acceptable.
+          // Skipped if Twilio creds or from/to numbers are missing.
+          if (record.appointment_booked === true) {
+            try {
+              const leadPhone: string | null = (callDirectionForConv === "outbound")
+                ? ((record.to_number as string | null) ?? null)
+                : ((record.from_number as string | null) ?? null);
+
+              if (!twilioAccountSid || !twilioAuthToken || !twilioFromNumber) {
+                console.log(`ℹ️ Bug-28 booking confirm SMS skipped for client ${clientId}: missing twilio creds (sid=${!!twilioAccountSid}, token=${!!twilioAuthToken}, from=${!!twilioFromNumber})`);
+              } else if (!leadPhone) {
+                console.log(`ℹ️ Bug-28 booking confirm SMS skipped: no lead phone resolved (direction=${callDirectionForConv})`);
+              } else {
+                // Format appointment time. record.appointment_time may be ISO
+                // or a free-form string from the agent's analysis; render best-
+                // effort. Falls back to "your scheduled time" if absent.
+                const apptTimeRaw = (record.appointment_time as string | null) ?? null;
+                let apptHuman = "your scheduled time";
+                if (apptTimeRaw) {
+                  const parsed = new Date(apptTimeRaw);
+                  if (!Number.isNaN(parsed.getTime())) {
+                    try {
+                      apptHuman = parsed.toLocaleString("en-AU", {
+                        timeZone: clientTimezone,
+                        weekday: "short",
+                        day: "numeric",
+                        month: "short",
+                        hour: "numeric",
+                        minute: "2-digit",
+                        timeZoneName: "short",
+                      });
+                    } catch {
+                      apptHuman = apptTimeRaw;
+                    }
+                  } else {
+                    apptHuman = apptTimeRaw;
+                  }
+                }
+
+                const firstName = (dynamicVars.first_name as string | undefined) || null;
+                const greeting = firstName ? `Hi ${firstName}, ` : "Hi, ";
+                const ghlLocId = (ghlClientRow?.ghl_location_id as string | null) ?? null;
+                const ghlLink = ghlLocId
+                  ? `https://app.gohighlevel.com/v2/location/${ghlLocId}/contacts/detail/${contactId}`
+                  : null;
+                const smsBody = ghlLink
+                  ? `${greeting}your appointment is confirmed for ${apptHuman}. Details: ${ghlLink}`
+                  : `${greeting}your appointment is confirmed for ${apptHuman}.`;
+
+                const twilioUrl = `https://api.twilio.com/2010-04-01/Accounts/${twilioAccountSid}/Messages.json`;
+                const twilioAuth = btoa(`${twilioAccountSid}:${twilioAuthToken}`);
+                const twRes = await fetch(twilioUrl, {
+                  method: "POST",
+                  headers: {
+                    Authorization: `Basic ${twilioAuth}`,
+                    "Content-Type": "application/x-www-form-urlencoded",
+                  },
+                  body: new URLSearchParams({
+                    To: leadPhone,
+                    From: twilioFromNumber,
+                    Body: smsBody,
+                  }),
+                });
+                if (!twRes.ok) {
+                  const twErr = await twRes.text().catch(() => "");
+                  console.warn(`⚠️ Bug-28 confirm SMS Twilio non-OK ${twRes.status}: ${twErr.slice(0, 200)}`);
+                } else {
+                  const twJson = await twRes.json().catch(() => ({}));
+                  console.log(`✅ Bug-28 booking confirm SMS sent (sid=${twJson.sid ?? "?"}) to ${leadPhone}`);
+                }
+              }
+            } catch (twErr) {
+              console.warn("⚠️ Bug-28 booking confirm SMS exception:", twErr);
+            }
           }
         } catch (ghlErr) {
           console.warn("⚠️ GHL gap-1 push exception:", ghlErr);

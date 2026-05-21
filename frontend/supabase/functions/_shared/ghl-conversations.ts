@@ -51,6 +51,150 @@ export type PushSmsToGhlResult = {
 
 const GHL_API_BASE = "https://services.leadconnectorhq.com";
 
+// Bug 16 — push a call event to the GHL Conversations timeline.
+//
+// GHL Conversations API supports type: "Call" and type: "Voicemail" messages
+// alongside the SMS / Email types. Surfaces the call inline in the contact's
+// Conversations tab instead of just as a Note (which is the pre-Bug-16 state
+// after Bug 19's note write).
+//
+// Idempotency: uses Retell `call_id` as `altId` so GHL dedupes if the same
+// call_analyzed event re-fires (Retell may retry on transient failures).
+//
+// Falls back to a Note when `conversationProviderId` is null — same fallback
+// shape as pushSmsToGhl, identical Note-tab visibility, lossy on metadata
+// (no `type: Call` chip, no inline recording link).
+//
+// Never throws. Returns a result object; callers should log on non-ok but
+// not block business logic.
+
+export type GhlCallType = "Call" | "Voicemail";
+export type GhlCallDirection = "inbound" | "outbound";
+
+export type PushCallEventToGhlArgs = {
+  ghlApiKey: string;
+  contactId: string;
+  conversationProviderId: string | null;
+  callType: GhlCallType;
+  direction: GhlCallDirection;
+  durationSeconds: number | null;
+  callId: string | null;
+  recordingUrl: string | null;
+  outcomeSummary: string | null;
+  outcomeClass: string | null; // "human_pickup" | "voicemail" | "no_connect" | "error" | "unknown"
+  altId: string | null;
+  occurredAt?: string;
+};
+
+export type PushCallEventToGhlResult = {
+  ok: boolean;
+  via: "conversations" | "notes" | "skipped";
+  status?: number;
+  error?: string;
+};
+
+export async function pushCallEventToGhl(
+  args: PushCallEventToGhlArgs,
+): Promise<PushCallEventToGhlResult> {
+  const {
+    ghlApiKey,
+    contactId,
+    conversationProviderId,
+    callType,
+    direction,
+    durationSeconds,
+    callId,
+    recordingUrl,
+    outcomeSummary,
+    outcomeClass,
+    altId,
+    occurredAt,
+  } = args;
+
+  if (!ghlApiKey || !contactId) {
+    return { ok: false, via: "skipped", error: "missing ghlApiKey/contactId" };
+  }
+
+  // Render a human-readable body for the Conversations message + Notes fallback.
+  const durationStr = typeof durationSeconds === "number" && durationSeconds > 0
+    ? `${durationSeconds}s`
+    : "unknown";
+  const recordingLink = callId ? `https://app.retellai.com/calls/${callId}` : null;
+  const lines = [
+    `${callType === "Voicemail" ? "Voicemail" : "Call"} (${direction}) — outcome: ${outcomeClass ?? "unknown"}`,
+    `Duration: ${durationStr}`,
+  ];
+  if (recordingLink) lines.push(`Recording: ${recordingLink}`);
+  if (outcomeSummary) lines.push("", outcomeSummary);
+  const body = lines.join("\n");
+
+  const headers = {
+    Authorization: `Bearer ${ghlApiKey}`,
+    "Content-Type": "application/json",
+    Version: "2021-04-15",
+    Accept: "application/json",
+  };
+
+  if (conversationProviderId) {
+    try {
+      const path = direction === "inbound"
+        ? "/conversations/messages/inbound"
+        : "/conversations/messages/outbound";
+      const payload: Record<string, unknown> = {
+        type: callType,
+        contactId,
+        message: body,
+        conversationProviderId,
+        direction,
+      };
+      if (altId) payload.altId = altId;
+      if (occurredAt) payload.date = occurredAt;
+      const r = await fetch(`${GHL_API_BASE}${path}`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(payload),
+      });
+      if (r.ok) return { ok: true, via: "conversations", status: r.status };
+      const errText = await r.text().catch(() => "");
+      console.warn(
+        `pushCallEventToGhl conversations ${direction} ${callType} non-OK ${r.status}: ${errText.slice(0, 200)}`,
+      );
+      return { ok: false, via: "conversations", status: r.status, error: errText.slice(0, 200) };
+    } catch (e) {
+      console.warn("pushCallEventToGhl conversations threw", e);
+      return { ok: false, via: "conversations", error: (e as Error).message };
+    }
+  }
+
+  // Notes fallback — slightly different prefix so call events don't blur into
+  // SMS notes in the Notes tab when both fallbacks are in play.
+  try {
+    const noteBody = `[platform → ${callType} ${direction}] ${body}`;
+    const r = await fetch(
+      `${GHL_API_BASE}/contacts/${contactId}/notes`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${ghlApiKey}`,
+          "Content-Type": "application/json",
+          Version: "2021-07-28",
+          Accept: "application/json",
+        },
+        body: JSON.stringify({ body: noteBody }),
+      },
+    );
+    if (r.ok) return { ok: true, via: "notes", status: r.status };
+    const errText = await r.text().catch(() => "");
+    console.warn(
+      `pushCallEventToGhl notes ${direction} ${callType} non-OK ${r.status}: ${errText.slice(0, 200)}`,
+    );
+    return { ok: false, via: "notes", status: r.status, error: errText.slice(0, 200) };
+  } catch (e) {
+    console.warn("pushCallEventToGhl notes threw", e);
+    return { ok: false, via: "notes", error: (e as Error).message };
+  }
+}
+
 export async function pushSmsToGhl(args: PushSmsToGhlArgs): Promise<PushSmsToGhlResult> {
   const {
     ghlApiKey,
