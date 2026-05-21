@@ -1,5 +1,6 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { resolveContactId } from "./contactId.ts";
+import { classifyCallOutcome } from "./classifyCallOutcome.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -329,14 +330,18 @@ Deno.serve(async (req) => {
       const durationMs = call.duration_ms ?? call.call_duration_ms ?? null;
       const durationSeconds = typeof durationMs === "number" ? Math.round(durationMs / 1000) : null;
 
-      // Detect voicemail / human pickup from disconnection reason and analysis
+      // Detect voicemail / human pickup via Bug 33 shared classifier.
       const disconnectionReason = call.disconnection_reason || null;
-      const voicemailDetected = disconnectionReason === "voicemail_reached"
-        || call.call_analysis?.in_voicemail === true
-        || false;
-      const humanPickup = disconnectionReason !== "voicemail_reached"
-        && (call.call_status === "completed" || call.call_status === "ended")
-        && !voicemailDetected;
+      const callHistorySignals = {
+        disconnect_reason: disconnectionReason,
+        call_status: call.call_status || null,
+        duration_ms: typeof durationMs === "number" ? durationMs : null,
+        transcript_turns: Array.isArray(call.transcript_object) ? call.transcript_object.length : 0,
+        in_voicemail: call.call_analysis?.in_voicemail === true,
+      };
+      const callHistoryClass = classifyCallOutcome(callHistorySignals);
+      const voicemailDetected = callHistoryClass === "voicemail";
+      const humanPickup = callHistoryClass === "human_pickup";
 
       // Extract appointment data from custom_analysis_data if available
       const customAnalysis = call.call_analysis?.custom_analysis_data || {};
@@ -603,17 +608,26 @@ Deno.serve(async (req) => {
       const disconnectReason = call.disconnection_reason || "";
       const callStatus = call.call_status || call.status || "";
 
-      const voicemailSignals = ["voicemail_reached", "voicemail", "machine_detected"];
-      const noConnectSignals = ["no_answer", "busy", "failed", "invalid_number", "service_unavailable"];
+      // Bug 33 — comprehensive classifier guards against ghost-connect funnel
+      // poisoning (e.g. iOS call screening that briefly accepts then drops).
+      // Requires duration >= 5s AND >= 2 transcript turns to count as engagement.
+      const pickupSignals = {
+        disconnect_reason: disconnectReason || null,
+        call_status: callStatus || null,
+        duration_ms: typeof call.duration_ms === "number" ? call.duration_ms
+          : (typeof call.call_duration_ms === "number" ? call.call_duration_ms : null),
+        transcript_turns: Array.isArray(call.transcript_object) ? call.transcript_object.length : 0,
+        in_voicemail: call.call_analysis?.in_voicemail === true,
+      };
+      const pickupClass = classifyCallOutcome(pickupSignals);
+      const isHumanPickup = pickupClass === "human_pickup";
 
-      const isVoicemail = voicemailSignals.some(s =>
-        disconnectReason.toLowerCase().includes(s) || callStatus.toLowerCase().includes(s)
+      console.log(
+        `📞 Engagement ${executionId}: call class=${pickupClass} ` +
+        `(disconnect=${disconnectReason || "?"}, status=${callStatus || "?"}, ` +
+        `dur=${pickupSignals.duration_ms ?? "?"}, turns=${pickupSignals.transcript_turns}, ` +
+        `in_voicemail=${pickupSignals.in_voicemail})`,
       );
-      const isNoConnect = noConnectSignals.some(s =>
-        disconnectReason.toLowerCase().includes(s) || callStatus.toLowerCase().includes(s)
-      );
-
-      const isHumanPickup = !isVoicemail && !isNoConnect && callStatus !== "error";
 
       if (isHumanPickup) {
         console.log(`📞 Human pickup detected for execution ${executionId}. Treating as reply — ending engagement.`);

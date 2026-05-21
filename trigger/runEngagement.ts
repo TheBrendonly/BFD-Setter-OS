@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { placeOutboundCall } from "./placeOutboundCall";
 import { pushSmsToGhl, pushEmailToGhl } from "./_shared/ghl-conversations";
 import { aiGenerateEngagementCopy } from "./_shared/aiGenerateEngagementCopy";
+import { classifyCallOutcome } from "./_shared/classifyCallOutcome";
 
 const getMainSupabase = () =>
   createClient(
@@ -295,6 +296,12 @@ type CallOutcome = {
   disconnect_reason?: string | null;
   call_status?: string | null;
   ended_at?: string | null;
+  // Bug 33 — required to classify ghost-connects vs real human pickups.
+  // Will be null if Bug 20 (call_ended subscribe) hasn't been wired into the
+  // writer yet; classifier treats null as 0 and biases toward no_connect.
+  duration_ms?: number | null;
+  transcript_turns?: number | null;
+  in_voicemail?: boolean | null;
 };
 
 async function waitForCallOutcome(args: {
@@ -322,20 +329,9 @@ async function waitForCallOutcome(args: {
   return null;
 }
 
-// Classify a Retell disconnect_reason / call_status. Must stay in sync with
-// the inline classifier in retell-call-analysis-webhook/index.ts:740-750.
-function classifyCallOutcome(outcome: CallOutcome | null):
-  "human_pickup" | "voicemail" | "no_connect" | "error" | "unknown" {
-  if (!outcome) return "unknown";
-  const dr = (outcome.disconnect_reason || "").toLowerCase();
-  const cs = (outcome.call_status || "").toLowerCase();
-  const voicemailSignals = ["voicemail_reached", "voicemail", "machine_detected"];
-  const noConnectSignals = ["no_answer", "busy", "failed", "invalid_number", "service_unavailable"];
-  if (voicemailSignals.some(s => dr.includes(s) || cs.includes(s))) return "voicemail";
-  if (noConnectSignals.some(s => dr.includes(s) || cs.includes(s))) return "no_connect";
-  if (cs === "error") return "error";
-  return "human_pickup";
-}
+// Bug 33 — call outcome classifier moved to ./_shared/classifyCallOutcome.ts.
+// Byte-identical clone at frontend/supabase/functions/retell-call-analysis-webhook/classifyCallOutcome.ts.
+// If you change one, change the other.
 
 export const runEngagement = task({
   id: "run-engagement",
