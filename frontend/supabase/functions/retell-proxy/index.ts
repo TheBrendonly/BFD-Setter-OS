@@ -137,11 +137,44 @@ function getAutoWebhookUrl(): string {
   return `${supabaseUrl}/functions/v1/retell-call-analysis-webhook`;
 }
 
+// Bug 1 — Retell's publish-agent response sometimes returns the DRAFT version
+// number (or the just-pushed-draft) rather than the version that is actually
+// `is_published=true`. Calling get-agent-versions and filtering on the
+// published flag is the only authoritative source of the live version.
+// Returns null if no version has is_published=true (very rare; agent never
+// published) or if the API errors.
+async function fetchLatestPublishedAgentVersion(
+  apiKey: string,
+  agentId: string,
+): Promise<number | null> {
+  try {
+    const versions = await retellFetch(
+      apiKey,
+      "GET",
+      `get-agent-versions/${agentId}`,
+    ) as Array<{ version?: unknown; is_published?: unknown }>;
+    if (!Array.isArray(versions)) return null;
+    let max: number | null = null;
+    for (const v of versions) {
+      if (v?.is_published === true && typeof v.version === "number") {
+        if (max === null || v.version > max) max = v.version;
+      }
+    }
+    return max;
+  } catch (err) {
+    console.warn(`[repoint-phones] GET get-agent-versions failed for ${agentId}:`, err);
+    return null;
+  }
+}
+
 // EE2: After publishing an agent, Retell phone-number version pins do NOT auto-update.
 // Without this, every UI push silently fails to make tool changes live on real calls
 // because the phone keeps routing to the previously-pinned (stale) agent version.
 // Slot 1 → inbound_agent_version; slots 2 + 3 → outbound_agent_version.
 // Slots 4-10 currently have no canonical phone routing and are skipped with a log.
+// Bug 1 (2026-05-22) — precedence inverted: prefer authoritative
+// get-agent-versions filtered to is_published=true over publishResp.version,
+// which Retell sometimes returns as the draft number.
 async function repointPhoneVersionsAfterPublish(
   supabase: ReturnType<typeof getSupabaseAdmin>,
   apiKey: string,
@@ -151,7 +184,10 @@ async function repointPhoneVersionsAfterPublish(
   publishedVersionFromResp: unknown,
 ): Promise<void> {
   let publishedVersion: number | undefined;
-  if (typeof publishedVersionFromResp === "number") {
+  const latestPublished = await fetchLatestPublishedAgentVersion(apiKey, agentId);
+  if (latestPublished !== null) {
+    publishedVersion = latestPublished;
+  } else if (typeof publishedVersionFromResp === "number") {
     publishedVersion = publishedVersionFromResp;
   } else {
     try {

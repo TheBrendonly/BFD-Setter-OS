@@ -48,18 +48,39 @@ async function ensureVoicemailConfig(
   apiKey: string,
   agentId: string,
   cfg: { mode: "static" | "dynamic"; message: string } | null | undefined,
+  // Bug 2 — detection config lives on `clients.voicemail_config`
+  // ({detect_enabled, detect_timeout_ms}). Separate from the workflow-level
+  // `cfg` because workflow controls what the agent says, client controls
+  // whether the agent listens for voicemail at all.
+  detectionCfg?: { detect_enabled?: unknown; detect_timeout_ms?: unknown } | null,
 ): Promise<void> {
-  if (!cfg || !cfg.message || !cfg.message.trim()) return;
-  const hash = await sha256Hex(JSON.stringify(cfg));
+  const hasMessage = !!cfg && !!cfg.message && cfg.message.trim().length > 0;
+  const detectEnabled = detectionCfg?.detect_enabled === true;
+  if (!hasMessage && !detectEnabled) return;
+
+  const body: Record<string, unknown> = {};
+  if (hasMessage) {
+    const action =
+      cfg!.mode === "dynamic"
+        ? { type: "prompt", prompt: cfg!.message }
+        : { type: "static_text", text: cfg!.message };
+    body.voicemail_option = { action };
+  }
+  if (detectEnabled) {
+    body.enable_voicemail_detection = true;
+    const timeoutRaw = detectionCfg?.detect_timeout_ms;
+    const timeoutMs =
+      typeof timeoutRaw === "number" && timeoutRaw > 0 ? timeoutRaw : 15000;
+    body.voicemail_detection_timeout_ms = timeoutMs;
+  }
+
+  // Hash includes detection flags so a switch from detect_enabled=false to
+  // true (or a timeout change) invalidates the cached PATCH-up-to-date.
+  const hash = await sha256Hex(JSON.stringify({ cfg, detectionCfg }));
   if (voicemailHashCache.get(agentId) === hash) {
-    console.log(`📭 voicemail_option for ${agentId} is up-to-date (hash match) — skipping PATCH`);
+    console.log(`📭 voicemail config for ${agentId} is up-to-date (hash match) — skipping PATCH`);
     return;
   }
-  const action =
-    cfg.mode === "dynamic"
-      ? { type: "prompt", prompt: cfg.message }
-      : { type: "static_text", text: cfg.message };
-  const body = { voicemail_option: { action } };
   try {
     const r = await fetch(`${RETELL_BASE}/update-agent/${agentId}`, {
       method: "PATCH",
@@ -75,7 +96,11 @@ async function ensureVoicemailConfig(
       return;
     }
     voicemailHashCache.set(agentId, hash);
-    console.log(`📭 voicemail_option PATCHed for ${agentId} (mode=${cfg.mode})`);
+    console.log(
+      `📭 voicemail config PATCHed for ${agentId} (option_mode=${
+        hasMessage ? cfg!.mode : "—"
+      }, detect_enabled=${detectEnabled})`,
+    );
   } catch (e) {
     console.warn(`📭 ensureVoicemailConfig error: ${(e as Error).message}`);
   }
@@ -409,7 +434,7 @@ Deno.serve(async (req) => {
     const { data: client, error: clientErr } = await supabase
       .from("clients")
       .select(
-        "retell_api_key, retell_inbound_agent_id, retell_outbound_agent_id, retell_outbound_followup_agent_id, retell_agent_id_4, retell_agent_id_5, retell_agent_id_6, retell_agent_id_7, retell_agent_id_8, retell_agent_id_9, retell_agent_id_10, retell_phone_1, retell_phone_2, retell_phone_3, ghl_location_id, ghl_api_key, ghl_calendar_id, timezone",
+        "retell_api_key, retell_inbound_agent_id, retell_outbound_agent_id, retell_outbound_followup_agent_id, retell_agent_id_4, retell_agent_id_5, retell_agent_id_6, retell_agent_id_7, retell_agent_id_8, retell_agent_id_9, retell_agent_id_10, retell_phone_1, retell_phone_2, retell_phone_3, ghl_location_id, ghl_api_key, ghl_calendar_id, timezone, voicemail_config",
       )
       .eq("id", client_id)
       .single();
@@ -606,10 +631,24 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Phase 11d — push voicemail_option to the agent before placing the call
-    // (hash-cached so we don't PATCH on every call). Best-effort; non-fatal.
-    if (voicemail_config && typeof voicemail_config === "object") {
-      await ensureVoicemailConfig(client.retell_api_key, agentId, voicemail_config);
+    // Phase 11d + Bug 2 — push voicemail_option (workflow-level message) AND
+    // detection flags (client-level `clients.voicemail_config`) to the agent
+    // before placing the call. Hash-cached so we don't PATCH on every call.
+    // Best-effort; non-fatal.
+    const clientVoicemailCfg = (client as Record<string, unknown>).voicemail_config;
+    const detectionCfg = clientVoicemailCfg && typeof clientVoicemailCfg === "object"
+      ? clientVoicemailCfg as { detect_enabled?: unknown; detect_timeout_ms?: unknown }
+      : null;
+    if (
+      (voicemail_config && typeof voicemail_config === "object") ||
+      (detectionCfg && detectionCfg.detect_enabled === true)
+    ) {
+      await ensureVoicemailConfig(
+        client.retell_api_key,
+        agentId,
+        voicemail_config,
+        detectionCfg,
+      );
     }
 
     // 7. Make the Retell API call with full debug capture
