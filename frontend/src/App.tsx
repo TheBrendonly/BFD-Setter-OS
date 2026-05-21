@@ -53,6 +53,7 @@ const TextAIRepSetup = lazyRetry(() => import("./pages/TextAIRepSetup"));
 const TextAIRepTemplates = lazyRetry(() => import("./pages/TextAIRepTemplates"));
 const DeployAIReps = lazyRetry(() => import("./pages/DeployAIReps"));
 const DebugAIReps = lazyRetry(() => import("./pages/DebugAIReps"));
+const DebugInjectLead = lazyRetry(() => import("./pages/DebugInjectLead"));
 const DebugTextAIRep = lazyRetry(() => import("./pages/DebugTextAIRep"));
 const DebugVoiceAIRep = lazyRetry(() => import("./pages/DebugVoiceAIRep"));
 const VoiceAIRepSetup = lazyRetry(() => import("./pages/VoiceAIRepSetup"));
@@ -269,6 +270,7 @@ const App = () => {
               <Route path="debug-ai-reps" element={<DebugAIReps />} />
               <Route path="debug-ai-reps/text" element={<DebugTextAIRep />} />
               <Route path="debug-ai-reps/voice" element={<DebugVoiceAIRep />} />
+              <Route path="debug-inject-lead" element={<DebugInjectLead />} />
               <Route path="knowledge-base" element={<KnowledgeBase />} />
               <Route path="leads" element={<Contacts />} />
               <Route path="leads/files" element={<LeadFileProcessing />} />

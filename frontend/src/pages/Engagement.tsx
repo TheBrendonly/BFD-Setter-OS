@@ -46,9 +46,10 @@ const fieldStyle = { fontFamily: "'IBM Plex Mono', monospace", fontSize: '13px' 
 const tabStyle = { fontFamily: "'VT323', monospace", fontSize: '16px', letterSpacing: '0.06em' } as const;
 
 interface EngageChannel {
-  type: 'sms' | 'whatsapp' | 'phone_call';
+  type: 'sms' | 'whatsapp' | 'phone_call' | 'email';
   enabled: boolean;
   message?: string;
+  subject?: string; // for email
   instructions?: string; // for phone_call
   delay_seconds?: number; // delay before this step (0 for first)
   voice_setter_id?: string; // slot_id from agent_settings for phone_call
@@ -57,6 +58,8 @@ interface EngageChannel {
   wa_template_name?: string; // approved Meta template name
   whatsapp_type?: 'template' | 'text'; // backend-facing whatsapp type
   template_name?: string; // backend-facing template name
+  ai_generate?: boolean; // route through AI copy generator (runEngagement supports for sms + email)
+  ai_prompt?: string;
 }
 
 interface DripSchedule {
@@ -220,6 +223,10 @@ const DEFAULT_ENGAGE_CHANNELS: EngageChannel[] = [
   { type: 'sms', enabled: true, message: '', delay_seconds: 0 },
   { type: 'whatsapp', enabled: false, message: '', delay_seconds: 3600 },
   { type: 'phone_call', enabled: false, instructions: '', delay_seconds: 1800 },
+  // Bug 8 — email channel. runEngagement (trigger/runEngagement.ts:1186) already
+  // routes ch.type === 'email' through sendEmailAndStamp; the runtime handles
+  // it. This default lets workflow builders enable it from the canvas editor.
+  { type: 'email', enabled: false, subject: '', message: '', delay_seconds: 7200 },
 ];
 
 /**
@@ -544,11 +551,12 @@ function SendSmsConfig({ node, onChange, clientId }: { node: WorkflowNode; onCha
 }
 
 /* ─── Engage config with multi-channel support ─── */
-const CHANNEL_LABELS: Record<string, string> = { sms: 'SMS', whatsapp: 'WhatsApp', phone_call: 'Phone Call' };
+const CHANNEL_LABELS: Record<string, string> = { sms: 'SMS', whatsapp: 'WhatsApp', phone_call: 'Phone Call', email: 'Email' };
 const CHANNEL_ICONS: Record<string, React.ReactNode> = {
   sms: <MessageSquare className="w-3.5 h-3.5" />,
   whatsapp: <MessageSquare className="w-3.5 h-3.5" />,
   phone_call: <Phone className="w-3.5 h-3.5" />,
+  email: <MessageSquare className="w-3.5 h-3.5" />,
 };
 
 function ChannelConnectorLine() {
@@ -665,6 +673,24 @@ function SortableChannelItem({ channel, idx, channels, updateChannel, toggleChan
                 updateChannel={(updates) => updateChannel(idx, updates)}
                 clientId={clientId}
               />
+            )}
+            {channel.type === 'email' && (
+              <div className="space-y-2">
+                <Input
+                  value={channel.subject || ''}
+                  onChange={e => updateChannel(idx, { subject: e.target.value })}
+                  placeholder="Subject"
+                  className="field-text"
+                />
+                <ChannelMessageField
+                  label="Edit Email Body"
+                  expandTitle="Edit Email Body"
+                  value={channel.message || ''}
+                  onChange={msg => updateChannel(idx, { message: msg })}
+                  clientId={clientId}
+                  placeholder="Hi {{first_name}}, just following up..."
+                />
+              </div>
             )}
           </div>
         )}
@@ -2754,6 +2780,7 @@ export default function Engagement() {
                 { type: 'sms' as const, enabled: true, message: n.message || '', delay_seconds: 0 },
                 { type: 'whatsapp' as const, enabled: false, message: '', delay_seconds: 3600 },
                 { type: 'phone_call' as const, enabled: false, instructions: '', delay_seconds: 1800 },
+                { type: 'email' as const, enabled: false, subject: '', message: '', delay_seconds: 7200 },
               ],
             };
           }
