@@ -6,6 +6,50 @@ Items are sequenced. Order matters — do them top-to-bottom. Each item links to
 
 Effort: S = under 30 min, M = 30 min - 2 hr, L = half day+.
 
+---
+
+## 🔥 ACTIVE PUNCH LIST (refreshed 2026-05-23)
+
+Four autonomous batches shipped 2026-05-22 + 2026-05-23. Outcomes doc:
+**→ [Operations/handoffs/2026-05-22-outcomes-and-current-state.md](../../Operations/handoffs/2026-05-22-outcomes-and-current-state.md)**
+
+### Batches shipped (no action needed)
+
+- ✅ Batches 1+2 (2026-05-22): 14 numbered bugs + 2 UI gaps + Bug 6 hotfix. Tags from `phase-night-bug-27-twilio-default-phone` through `phase-night-bug-4-5-6-7-ui-17-18-batch2`.
+- ✅ Try Gary landing ingress (`phase-night-try-gary-landing-ingress`, `0107bdb`).
+- ✅ Batch 3 (2026-05-23): code-review fixes — reply_channel attribution + composite-filter IN-clause cap + retell-proxy empty-array log + dead-mock cleanup.
+- ✅ Batch 4 (2026-05-23): Try Gary persona-slot routing infrastructure.
+
+### Brendan-required tier 1 — activates the shipped fixes
+
+- [ ] **1. Bug 20** — Save Setter on BFD to activate `call_ended` webhook subscription (~3m). Without this, several shipped fixes (32, 34, 9) can't be observed.
+- [ ] **2. Bug 10** — Phone pin live-state correction. **Affects every live call right now** (BFD pinned to draft v49 inbound + stale v37 outbound). Three options in `Operations/verifications/2026-05-22-bug10-phone-pin-deferral.md`; recommended is one curl PATCH to v48.
+- [ ] **3. Bug 21** — Provision GHL Custom Conversation Provider + SQL update (~10m). Doc: `Operations/verifications/2026-05-22-bug21-ghl-conversation-provider.md`.
+- [ ] **4. Bug 22** — Create 2 GHL custom fields + SQL update (~5m). Doc: `Operations/verifications/2026-05-22-bug22-ghl-call-custom-fields.md`.
+- [ ] **5. Bug 26** — Generate GHL webhook secret + SQL update (~5m). Doc: `Operations/verifications/2026-05-22-bug26-ghl-webhook-secret.md`.
+- [ ] **6. Bug 29** — Apply recommended booking-flow prompt diff manually. Diff at `Operations/verifications/2026-05-22-bug29-slot-match-diagnosis.md`. Verify against v48 LLM.
+
+### Brendan-required tier 2 — Try Gary persona provisioning
+
+- [ ] **7. Provision Voice Setters 4-7** via PromptManagement UI (one per agent_style). Doc: `Operations/verifications/2026-05-23-try-gary-persona-slot-routing.md`.
+- [ ] **8. Update `clients.try_gary_persona_slots` map** as each slot lands (one-line SQL UPDATE per persona).
+
+### Brendan verification tier 3 — observe, no action
+
+- [ ] **9. Bug 28** — Real C1 pickup + book test (~10m, ~$1 Retell).
+- [ ] **10. Bug 32** — Slow-replier SMS test (~5m).
+- [ ] **11. Bug 2** — After next outbound call, GET BFD agent + confirm `enable_voicemail_detection=true, voicemail_detection_timeout_ms=15000`.
+- [ ] **12. Try Gary smoke** — fire the curl in the Try Gary report; confirm execution row created + cadence enrolment + persona slot resolved.
+
+### Deferred to next focused session (UI-heavy)
+
+- Bug 9 (inbound mid-cadence) — needs Bug 20 active + Trigger.dev signal pattern (~3-4hr).
+- UI gaps 12, 13, 15 — visual polish needs browser walkthrough (~3hr).
+
+Companion smoke docs: `/srv/bfd/Operations/verifications/2026-05-{21,22,23}-*.md`.
+
+---
+
 **State of play (2026-05-20 EVENING — per-direction agent fork shipped, SOP polished for Client #2 mock, Phase 10 audit done):**
 
 - HEAD: `efa06f2` on Forgejo + GitHub. Session built on top of this morning's FINAL wrap (`c80de8a`); 4 commits + 1 tag.
