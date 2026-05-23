@@ -970,11 +970,20 @@ export const runEngagement = task({
               if (!ch.voice_setter_id) {
                 throw new Error(`phone_call channel in node ${node.id} is missing voice_setter_id`);
               }
+              // Batch 4 — Try Gary persona-slot routing. When the payload's
+              // contact_fields carries voice_setter_id_override (set by
+              // ghl-tag-webhook's handleTryGaryLanding from
+              // clients.try_gary_persona_slots[agent_style]), use it instead
+              // of the channel's hardcoded voice_setter_id. Backward-compat:
+              // absent override → falls through to the channel default.
+              const overrideVoiceSetterId =
+                (payload.contact_fields as Record<string, string> | undefined)?.voice_setter_id_override;
+              const effectiveVoiceSetterId = overrideVoiceSetterId || ch.voice_setter_id;
               await updateExecution({ stage_description: "Queued for outbound call..." });
               const callRun = await placeOutboundCall.triggerAndWait({
                 make_retell_call_url: payload.make_retell_call_url,
                 client_id,
-                voice_setter_id: ch.voice_setter_id,
+                voice_setter_id: effectiveVoiceSetterId,
                 ghl_contact_id: lead_id,
                 ghl_account_id,
                 execution_id,
@@ -1005,7 +1014,7 @@ export const runEngagement = task({
                 channel: "phone_call",
                 node_index: i,
                 node_id: node.id,
-                metadata: { call_id: callId, voice_setter_id: ch.voice_setter_id },
+                metadata: { call_id: callId, voice_setter_id: effectiveVoiceSetterId },
               });
 
               // Bug 1 — wait for call_ended before advancing.
@@ -1340,11 +1349,16 @@ export const runEngagement = task({
           if (!legacyVoiceSetter) {
             throw new Error(`phone_call node ${node.id} is missing voice_setter_id`);
           }
+          // Batch 4 — same Try Gary persona-slot override as the engage-node
+          // phone_call branch. Applies to legacy flat phone_call nodes too.
+          const legacyOverrideVoiceSetterId =
+            (payload.contact_fields as Record<string, string> | undefined)?.voice_setter_id_override;
+          const effectiveLegacyVoiceSetter = legacyOverrideVoiceSetterId || legacyVoiceSetter;
           await updateExecution({ stage_description: "Queued for outbound call..." });
           const legacyCallRun = await placeOutboundCall.triggerAndWait({
             make_retell_call_url: payload.make_retell_call_url,
             client_id,
-            voice_setter_id: legacyVoiceSetter,
+            voice_setter_id: effectiveLegacyVoiceSetter,
             ghl_contact_id: lead_id,
             ghl_account_id,
             execution_id,
@@ -1374,7 +1388,7 @@ export const runEngagement = task({
             channel: "phone_call",
             node_index: i,
             node_id: node.id,
-            metadata: { call_id: legacyCallId, voice_setter_id: legacyVoiceSetter },
+            metadata: { call_id: legacyCallId, voice_setter_id: effectiveLegacyVoiceSetter },
           });
 
           // Bug 1 — wait for call_ended before advancing.

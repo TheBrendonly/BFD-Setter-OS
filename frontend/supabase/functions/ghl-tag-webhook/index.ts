@@ -355,10 +355,11 @@ async function handleTryGaryLanding(
   if (!phone) return jsonResponse({ error: "phone is required" }, 400);
   if (!ghlContactId) return jsonResponse({ error: "ghl_contact_id is required" }, 400);
 
-  // Look up BFD by hardcoded location id.
+  // Look up BFD by hardcoded location id. Pulling try_gary_persona_slots
+  // for the agent_style → Voice Setter slot routing (Batch 4).
   const { data: client, error: clientErr } = await supabase
     .from("clients")
-    .select("id, ghl_location_id, ghl_api_key")
+    .select("id, ghl_location_id, ghl_api_key, try_gary_persona_slots")
     .eq("ghl_location_id", TRY_GARY_BFD_LOCATION_ID)
     .maybeSingle();
   if (clientErr || !client) {
@@ -367,6 +368,17 @@ async function handleTryGaryLanding(
   }
   const clientId = client.id as string;
   const locationId = client.ghl_location_id as string;
+
+  // Resolve persona slot override. NULL or missing key → null (runEngagement
+  // falls back to the channel's hardcoded voice_setter_id). Phase 1 seed
+  // has all 4 styles pointing at slot 2 (BFD's existing Gary); Brendan
+  // updates the map as he provisions slots 4-7.
+  const personaSlots = (client as any).try_gary_persona_slots as Record<string, unknown> | null;
+  const rawSlot = personaSlots?.[agentStyle];
+  const voiceSetterOverride =
+    typeof rawSlot === "number" && rawSlot >= 1 && rawSlot <= 10
+      ? `Voice-Setter-${rawSlot}`
+      : null;
 
   // Phone-dedup guard (reuse the existing 5-min helper).
   const phoneDuplicate = await isPhoneRecentDuplicate(
@@ -455,6 +467,11 @@ async function handleTryGaryLanding(
         utm_source: typeof body.utm_source === "string" ? body.utm_source : undefined,
         utm_medium: typeof body.utm_medium === "string" ? body.utm_medium : undefined,
         utm_campaign: typeof body.utm_campaign === "string" ? body.utm_campaign : undefined,
+        // Batch 4 — Voice Setter slot override. runEngagement applies this
+        // at the phone_call channel so try-gary leads route to per-style
+        // agents (slots 4-7 once Brendan provisions). Null/absent → uses
+        // channel-default Voice-Setter-2.
+        voice_setter_id_override: voiceSetterOverride ?? undefined,
       },
     });
   } catch (enrollErr) {
