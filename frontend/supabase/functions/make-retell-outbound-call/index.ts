@@ -592,6 +592,16 @@ Deno.serve(async (req) => {
       treat_pickup_as_reply: treat_pickup_as_reply ? "true" : "false",
       current_time: currentTimeLocal,
       current_timezone: tz,
+      // Try Gary landing routing: surfaces agent_style + source_type +
+      // utm_* to the Retell prompt so it can switch persona framing
+      // ({{agent_style}}, {{source_type}}). Empty string when not a
+      // try-gary lead — non-breaking for existing prompts that don't
+      // reference these vars.
+      agent_style: fields.agent_style || "",
+      source_type: fields.source_type || "",
+      utm_source: fields.utm_source || "",
+      utm_medium: fields.utm_medium || "",
+      utm_campaign: fields.utm_campaign || "",
       custom_instructions:
         custom_instructions ||
         `Keep the conversation natural and human-like. Speak casually as if you're a real person, not a bot. Use filler words occasionally (like "yeah", "I mean", "for sure"). Keep responses short - 1 to 2 sentences max unless they ask for more detail. Mirror the prospect's energy and pace. If they sound busy, get to the point fast. If they're chatty, match that vibe. Never sound scripted or robotic.`,

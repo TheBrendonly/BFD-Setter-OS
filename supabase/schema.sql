@@ -51,6 +51,22 @@ create table if not exists leads (
   last_message_preview text,
   setter_stopped boolean default false,
 
+  -- Compliance + audit (ACL s18 + Privacy Act APP 1.7-1.9). Populated by
+  -- ingress webhooks (ghl-tag-webhook) when the GHL payload carries these
+  -- custom fields. Defensible "agreed to X on Y from Z" evidence.
+  agent_style text,
+  consent_text text,
+  consent_version text,
+  consent_timestamp timestamptz,
+  source_ip inet,
+  user_agent text,
+  utm_source text,
+  utm_medium text,
+  utm_campaign text,
+  utm_content text,
+  utm_term text,
+  source_type text,
+
   created_at timestamptz default now(),
   updated_at timestamptz default now(),
 
@@ -58,6 +74,11 @@ create table if not exists leads (
 );
 create index if not exists idx_leads_lookup
   on leads (client_id, lead_id);
+-- Supports 5-min phone-dedup guard in ghl-tag-webhook (skip enrolment if
+-- same client_id + phone seen recently).
+create index if not exists idx_leads_phone_dedup_lookup
+  on leads (client_id, phone, created_at desc)
+  where phone is not null;
 
 
 -- ── message_queue ─────────────────────────────────────────────────────────────

@@ -2538,8 +2538,12 @@ export type Database = {
       }
       leads: {
         Row: {
+          agent_style: string | null
           business_name: string | null
           client_id: string | null
+          consent_text: string | null
+          consent_timestamp: string | null
+          consent_version: string | null
           created_at: string
           custom_fields: Json | null
           email: string | null
@@ -2556,13 +2560,25 @@ export type Database = {
           phone: string | null
           phone_valid: boolean
           setter_stopped: boolean
+          source_ip: string | null
+          source_type: string | null
           tagged_silent_after_engagement: boolean
           tags: Json | null
           updated_at: string
+          user_agent: string | null
+          utm_campaign: string | null
+          utm_content: string | null
+          utm_medium: string | null
+          utm_source: string | null
+          utm_term: string | null
         }
         Insert: {
+          agent_style?: string | null
           business_name?: string | null
           client_id?: string | null
+          consent_text?: string | null
+          consent_timestamp?: string | null
+          consent_version?: string | null
           created_at?: string
           custom_fields?: Json | null
           email?: string | null
@@ -2579,13 +2595,25 @@ export type Database = {
           phone?: string | null
           phone_valid?: boolean
           setter_stopped?: boolean
+          source_ip?: string | null
+          source_type?: string | null
           tagged_silent_after_engagement?: boolean
           tags?: Json | null
           updated_at?: string
+          user_agent?: string | null
+          utm_campaign?: string | null
+          utm_content?: string | null
+          utm_medium?: string | null
+          utm_source?: string | null
+          utm_term?: string | null
         }
         Update: {
+          agent_style?: string | null
           business_name?: string | null
           client_id?: string | null
+          consent_text?: string | null
+          consent_timestamp?: string | null
+          consent_version?: string | null
           created_at?: string
           custom_fields?: Json | null
           email?: string | null
@@ -2602,9 +2630,17 @@ export type Database = {
           phone?: string | null
           phone_valid?: boolean
           setter_stopped?: boolean
+          source_ip?: string | null
+          source_type?: string | null
           tagged_silent_after_engagement?: boolean
           tags?: Json | null
           updated_at?: string
+          user_agent?: string | null
+          utm_campaign?: string | null
+          utm_content?: string | null
+          utm_medium?: string | null
+          utm_source?: string | null
+          utm_term?: string | null
         }
         Relationships: [
           {
