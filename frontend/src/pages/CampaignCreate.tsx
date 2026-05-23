@@ -130,6 +130,7 @@ const CampaignCreate = () => {
   // enrolled. Filters compose with AND semantics.
   type ContactPreset = 'cold_60d' | 'sequence_complete' | 'no_booking' | 'not_opted_out';
   const [contactPresets, setContactPresets] = useState<Set<ContactPreset>>(new Set());
+  const [compositeFilterCapped, setCompositeFilterCapped] = useState(false);
   const togglePreset = (p: ContactPreset) => {
     setContactPresets(prev => {
       const next = new Set(prev);
@@ -168,8 +169,18 @@ const CampaignCreate = () => {
     // The remaining two presets require joins; do them client-side after fetch.
     // For sequence_complete: check engagement_executions for kind='new_lead' AND status='completed'.
     // For no_booking: check bookings table NOT EXISTS.
+    //
+    // Batch 3 code-review fix: cap the IN() arrays at 500 so the composite
+    // filter doesn't time out Supabase queries on 10K+ lead clients. The
+    // initial server fetch already limits to 1000; the cap is conservative
+    // for the join paths. UI flags the cap so operators know to narrow.
+    const COMPOSITE_FILTER_CAP = 500;
+    setCompositeFilterCapped(false);
     if (contactPresets.has('sequence_complete') || contactPresets.has('no_booking')) {
-      const leadIds = rows.map((r: any) => r.lead_id).filter(Boolean);
+      if (rows.length > COMPOSITE_FILTER_CAP) {
+        setCompositeFilterCapped(true);
+      }
+      const leadIds = rows.map((r: any) => r.lead_id).filter(Boolean).slice(0, COMPOSITE_FILTER_CAP);
       if (leadIds.length > 0) {
         if (contactPresets.has('sequence_complete')) {
           const { data: execs } = await (supabase
@@ -182,7 +193,7 @@ const CampaignCreate = () => {
           rows = rows.filter((r: any) => completedSet.has(r.lead_id));
         }
         if (contactPresets.has('no_booking')) {
-          const survivors = rows.map((r: any) => r.lead_id);
+          const survivors = rows.map((r: any) => r.lead_id).slice(0, COMPOSITE_FILTER_CAP);
           if (survivors.length > 0) {
             const { data: bks } = await (supabase
               .from('bookings')
@@ -917,6 +928,11 @@ const CampaignCreate = () => {
             {selectedContactIds.size > 100 && (
               <div className="mb-3 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1.5">
                 ⚠ {selectedContactIds.size} leads selected. Reactivation campaigns should usually start at ≤ 100 leads on the first run so cost + delivery anomalies surface early.
+              </div>
+            )}
+            {compositeFilterCapped && (
+              <div className="mb-3 text-xs text-blue-700 bg-blue-50 border border-blue-200 rounded px-2 py-1.5">
+                ℹ Showing first 500 leads only — sequence/booking filters cap their input array for performance. Narrow with "60+ days" or "Not opted out" before applying sequence/booking filters for an accurate count.
               </div>
             )}
             <Table>

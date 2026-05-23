@@ -153,12 +153,22 @@ async function fetchLatestPublishedAgentVersion(
       "GET",
       `get-agent-versions/${agentId}`,
     ) as Array<{ version?: unknown; is_published?: unknown }>;
-    if (!Array.isArray(versions)) return null;
+    if (!Array.isArray(versions)) {
+      console.warn(`[fetchLatestPublishedAgentVersion] non-array response for ${agentId}; falling back to publishResp / get-agent`);
+      return null;
+    }
     let max: number | null = null;
     for (const v of versions) {
       if (v?.is_published === true && typeof v.version === "number") {
         if (max === null || v.version > max) max = v.version;
       }
+    }
+    if (max === null && versions.length > 0) {
+      // Batch 3 code-review fix: surface the legitimate "never published"
+      // case so operators see why phone-version repoint silently used the
+      // fallback path. Without this, an unpublished agent looks identical
+      // to an API error in logs.
+      console.warn(`[fetchLatestPublishedAgentVersion] agent ${agentId} has ${versions.length} versions but none are is_published=true`);
     }
     return max;
   } catch (err) {

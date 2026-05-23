@@ -116,12 +116,12 @@ export function useReactivationData(clientId: string | undefined) {
 
         const { data: execs, error: execErr } = await (supabase
           .from('engagement_executions')
-          .select('id, client_id, status, started_at, stop_reason')
+          .select('id, client_id, status, started_at, stop_reason, reply_channel')
           .eq('client_id', clientId)
           .eq('kind', 'reactivation')
           .gte('started_at', twelveMonthsAgo.toISOString()) as any);
         if (execErr) throw execErr;
-        const execRows = (execs as Array<{ id: string; client_id: string; status: string; started_at: string; stop_reason: string | null }> | null) ?? [];
+        const execRows = (execs as Array<{ id: string; client_id: string; status: string; started_at: string; stop_reason: string | null; reply_channel: string | null }> | null) ?? [];
 
         // Hydrate cadence_metrics for those executions for channel-level counts.
         const execIds = execRows.map(e => e.id);
@@ -183,8 +183,18 @@ export function useReactivationData(clientId: string | undefined) {
           }
           if (exec.stop_reason === 'call_engaged') month.callPositive++;
           if (exec.stop_reason === 'inbound_reply') {
-            if ((m.sms_sent ?? 0) > 0) month.smsPositive++;
-            if ((m.emails_sent ?? 0) > 0) month.emailPositive++;
+            // Batch 3 fix — credit one channel based on engagement_executions.reply_channel
+            // (now populated by endActiveCadences). Fall back to the heuristic
+            // (channel with higher send count, sms-wins-tie) when null for legacy rows.
+            if (exec.reply_channel === 'sms') month.smsPositive++;
+            else if (exec.reply_channel === 'email') month.emailPositive++;
+            else if (exec.reply_channel === 'whatsapp') { /* future: whatsappPositive */ }
+            else {
+              const smsSent = m.sms_sent ?? 0;
+              const emailsSent = m.emails_sent ?? 0;
+              if (smsSent >= emailsSent && smsSent > 0) month.smsPositive++;
+              else if (emailsSent > 0) month.emailPositive++;
+            }
           }
           if (m.booking_created) {
             if ((m.calls_attempted ?? 0) > 0 && (m.calls_picked_up ?? 0) > 0) month.callBookings++;
@@ -202,8 +212,15 @@ export function useReactivationData(clientId: string | undefined) {
             if ((m.emails_sent ?? 0) > 0) totals.emailResponses++;
           }
           if (exec.stop_reason === 'inbound_reply') {
-            if ((m.sms_sent ?? 0) > 0) totals.smsPositive++;
-            if ((m.emails_sent ?? 0) > 0) totals.emailPositive++;
+            if (exec.reply_channel === 'sms') totals.smsPositive++;
+            else if (exec.reply_channel === 'email') totals.emailPositive++;
+            else if (exec.reply_channel === 'whatsapp') { /* future */ }
+            else {
+              const smsSent = m.sms_sent ?? 0;
+              const emailsSent = m.emails_sent ?? 0;
+              if (smsSent >= emailsSent && smsSent > 0) totals.smsPositive++;
+              else if (emailsSent > 0) totals.emailPositive++;
+            }
           }
           if (m.booking_created) {
             if ((m.calls_attempted ?? 0) > 0 && (m.calls_picked_up ?? 0) > 0) totals.callBookings++;

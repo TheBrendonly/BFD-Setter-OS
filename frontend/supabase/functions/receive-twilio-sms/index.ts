@@ -125,6 +125,13 @@ async function endActiveCadences(args: {
         stage_description: stopReason === "opt_out"
           ? "Cancelled — lead opted out."
           : "Lead replied — engagement complete.",
+        // Batch 3 — code-review fix. Tag the channel that delivered the
+        // terminating signal so the reactivation dashboard credits the
+        // right channel instead of guessing from cadence_metrics send
+        // counts (which double-counted multi-channel runs). endActiveCadences
+        // is currently only called from inbound-SMS paths; future inbound
+        // email / voice termination paths should set their own channel.
+        reply_channel: stopReason === "opt_out" ? null : "sms",
       })
       .eq("id", exec.id);
     if (exec.trigger_run_id && triggerKey) {
