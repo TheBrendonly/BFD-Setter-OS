@@ -138,6 +138,7 @@ const TRY_GARY_VALID_STYLES = new Set([
   "mortgage-broker",
   "finance-strategist",
   "generic-demo",
+  "crazy-gary",
 ]);
 
 type ComplianceFields = {
