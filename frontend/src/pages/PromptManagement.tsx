@@ -31,6 +31,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { AIPromptDialog } from '@/components/AIPromptDialog';
 import { SetterPromptAIDialog } from '@/components/SetterPromptAIDialog';
 import { CopySetterDialog } from '@/components/CopySetterDialog';
+import { DuplicateSetterDialog } from '@/components/DuplicateSetterDialog';
 import TestCallDialog from '@/components/TestCallDialog';
 import { PromptChatInterface } from '@/components/PromptChatInterface';
 import { EmbeddedPromptChat } from '@/components/EmbeddedPromptChat';
@@ -4769,6 +4770,8 @@ const PromptManagement = () => {
   const [setterAIJobActive, setSetterAIJobActive] = useState(false);
   const [showCopySetterDialog, setShowCopySetterDialog] = useState(false);
   const [copyJobStarting, setCopyJobStarting] = useState(false);
+  const [showDuplicateDialog, setShowDuplicateDialog] = useState(false);
+  const [duplicateSource, setDuplicateSource] = useState<{ slotId: string; channel: 'text' | 'voice'; name: string } | null>(null);
   const [configGenerating, setConfigGenerating] = useState(false);
   const [showGenerationExitWarning, setShowGenerationExitWarning] = useState(false);
   const pendingGenerationExitRef = useRef<(() => void) | null>(null);
@@ -7540,6 +7543,22 @@ const PromptManagement = () => {
                               <Edit className="w-4 h-4" />
                               {isEmpty ? 'Create Setter' : 'Edit Setter'}
                             </Button>
+                            {!isEmpty && (
+                              <Button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setDuplicateSource({ slotId: slot.id, channel: 'text', name: prompt.name || slot.staticName });
+                                  setShowDuplicateDialog(true);
+                                }}
+                                variant="outline"
+                                size="sm"
+                                aria-label="Duplicate setter"
+                                title="Duplicate this setter into another empty slot"
+                                className="h-8 px-2.5 border-border hover:bg-muted/40"
+                              >
+                                <Copy className="w-4 h-4" />
+                              </Button>
+                            )}
                             {!isEmpty && slot.id !== 'Setter-1' && (
                               <Button
                                 onClick={(e) => { e.stopPropagation(); handleListDelete(prompt, slot.id); }}
@@ -7650,6 +7669,22 @@ const PromptManagement = () => {
                               <Edit className="w-4 h-4" />
                               {isEmpty ? 'Create Setter' : 'Edit Setter'}
                             </Button>
+                            {!isEmpty && (
+                              <Button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setDuplicateSource({ slotId: slot.id, channel: 'voice', name: prompt.name || slot.staticName });
+                                  setShowDuplicateDialog(true);
+                                }}
+                                variant="outline"
+                                size="sm"
+                                aria-label="Duplicate setter"
+                                title="Duplicate this setter into another empty slot"
+                                className="h-8 px-2.5 border-border hover:bg-muted/40"
+                              >
+                                <Copy className="w-4 h-4" />
+                              </Button>
+                            )}
                             {!isEmpty && slot.id !== 'Setter-1' && (
                               <Button
                                 onClick={(e) => { e.stopPropagation(); handleListDelete(prompt, slot.id); }}
@@ -7758,6 +7793,21 @@ const PromptManagement = () => {
           onStartRequested={() => setCopyJobStarting(true)}
           onStartFailed={() => setCopyJobStarting(false)}
           onJobStarted={() => {
+            setConfigReloadTrigger(c => c + 1);
+          }}
+        />
+      )}
+      {clientId && duplicateSource && (
+        <DuplicateSetterDialog
+          open={showDuplicateDialog}
+          onOpenChange={(o) => { setShowDuplicateDialog(o); if (!o) setDuplicateSource(null); }}
+          clientId={clientId}
+          sourceSlotId={duplicateSource.slotId}
+          sourceChannel={duplicateSource.channel}
+          sourceName={duplicateSource.name}
+          onDuplicated={() => {
+            fetchPrompts();
+            refetchAgentSettings();
             setConfigReloadTrigger(c => c + 1);
           }}
         />
