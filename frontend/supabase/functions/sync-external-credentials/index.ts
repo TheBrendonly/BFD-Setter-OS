@@ -84,7 +84,6 @@ Deno.serve(async (req) => {
       supabase_service_role_key: extKey,
       openai_api_key: client.openai_api_key || null,
       openrouter_api_key: client.openrouter_api_key || null,
-      text_engine_webhook: client.text_engine_webhook || null,
       simulation_webhook: client.simulation_webhook || null,
       send_message_webhook_url: client.send_message_webhook_url || null,
       send_followup_webhook_url: client.send_followup_webhook_url || null,

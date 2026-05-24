@@ -363,7 +363,7 @@ Deno.serve(async (req) => {
 
     const { data: client, error: clientError } = await supabase
       .from("clients")
-      .select("id, dm_enabled, debounce_seconds, text_engine_webhook, supabase_url, supabase_service_key, ghl_webhook_secret")
+      .select("id, dm_enabled, debounce_seconds, supabase_url, supabase_service_key, ghl_webhook_secret")
       .eq("ghl_location_id", ghlAccountId)
       .maybeSingle();
 

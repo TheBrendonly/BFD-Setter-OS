@@ -93,15 +93,15 @@ export const processMessages = task({
       // Done BEFORE the debounce wait so the lead appears in the CRM immediately.
       const { data: client, error: clientError } = await supabase
         .from("clients")
-        .select("id, text_engine_webhook, ghl_send_setter_reply_webhook_url, supabase_url, supabase_service_key, supabase_table_name, twilio_account_sid, twilio_auth_token, retell_phone_1, use_native_text_engine, ghl_api_key, ghl_location_id, ghl_conversation_provider_id")
+        .select("id, ghl_send_setter_reply_webhook_url, supabase_url, supabase_service_key, supabase_table_name, twilio_account_sid, twilio_auth_token, retell_phone_1, use_native_text_engine, ghl_api_key, ghl_location_id, ghl_conversation_provider_id")
         .eq("ghl_location_id", ghl_account_id)
         .single();
 
       if (clientError || !client) {
         throw new Error(`Could not find client config for GHL account: ${ghl_account_id}`);
       }
-      if (!client.use_native_text_engine && !client.text_engine_webhook) {
-        throw new Error(`Could not find text_engine_webhook for GHL account: ${ghl_account_id}`);
+      if (!client.use_native_text_engine) {
+        throw new Error(`use_native_text_engine must be true for GHL account: ${ghl_account_id} — n8n path decommissioned (Phase 10)`);
       }
       if (!client.ghl_send_setter_reply_webhook_url) {
         throw new Error(`ghl_send_setter_reply_webhook_url not configured for GHL account: ${ghl_account_id}`);
@@ -199,142 +199,57 @@ export const processMessages = task({
 
       console.log(`Grouped ${messages.length} message(s): "${groupedMessage}"`);
 
-      // ── STEP 5: Send to n8n and WAIT for the full response ──────────────────
-      // n8n can take up to 5 minutes on complex tasks — 10 min timeout is safe.
+      // ── STEP 5: Generate setter reply via processSetterReply task ───────────
       await updateExecution({
         status: "sending",
         stage_description: "Sending to AI engine...",
       });
 
-      let n8nResponseData: unknown;
+      let setterReplyOutput: unknown;
       let setterMessages: string[] = [];
 
-      if (client.use_native_text_engine) {
-        // ── Native path (Phase 1): use processSetterReply Trigger.dev task ──
-        console.log(`Native text engine path for ${ghl_account_id} (use_native_text_engine=true)`);
+      const setterReplyResult = await processSetterReply.triggerAndWait({
+        Message_Body: groupedMessage,
+        Lead_ID: lead_id,
+        Contact_ID: lead_id,
+        GHL_Account_ID: ghl_account_id,
+        Name: contact_name ?? "",
+        Email: contact_email ?? "",
+        Phone: contact_phone ?? "",
+        Setter_Number: setter_number || "1",
+      });
 
-        const setterReplyResult = await processSetterReply.triggerAndWait({
-          Message_Body: groupedMessage,
-          Lead_ID: lead_id,
-          Contact_ID: lead_id,
-          GHL_Account_ID: ghl_account_id,
-          Name: contact_name ?? "",
-          Email: contact_email ?? "",
-          Phone: contact_phone ?? "",
-          Setter_Number: setter_number || "1",
-        });
-
-        if (setterReplyResult.ok !== true) {
-          const failure = setterReplyResult as { error?: unknown };
-          const errMsg = String(failure.error ?? "unknown");
-          await logError(
-            "process_setter_reply_failed",
-            `processSetterReply task failed: ${errMsg}`,
-            { lead_id, ghl_account_id, error: failure.error }
-          );
-          throw new Error(`processSetterReply task failed: ${errMsg}`);
-        }
-
-        n8nResponseData = setterReplyResult.output;
-        const responseObj = n8nResponseData as Record<string, unknown>;
-
-        if (!responseObj.Message_1) {
-          await logError(
-            "native_text_engine_invalid_format",
-            `processSetterReply returned no Message_1. Got: ${JSON.stringify(responseObj).slice(0, 300)}`,
-            { lead_id, ghl_account_id, response: responseObj }
-          );
-          throw new Error("processSetterReply returned no Message_1");
-        }
-
-        let i = 1;
-        while (responseObj[`Message_${i}`]) {
-          setterMessages.push(String(responseObj[`Message_${i}`]));
-          i++;
-        }
-        await updateExecution({ setter_messages: setterMessages });
-      } else {
-        // ── n8n path (legacy) ──
-        console.log(`Sending to n8n: ${client.text_engine_webhook}`);
-
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 10 * 60 * 1000);
-
-        try {
-          // Send to n8n as query parameters — same field names GHL uses
-          const n8nParams = new URLSearchParams({
-            Message_Body: groupedMessage,
-            Lead_ID: lead_id,
-            Contact_ID: lead_id, // n8n getGHL_Conversations node expects Contact_ID (same value as Lead_ID)
-            GHL_Account_ID: ghl_account_id,
-            Name: contact_name ?? "",
-            Email: contact_email ?? "",
-            Phone: contact_phone ?? "",
-            Setter_Number: setter_number || "1",
-          });
-
-          const n8nResponse = await fetch(
-            `${client.text_engine_webhook}?${n8nParams.toString()}`,
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              signal: controller.signal,
-            }
-          );
-
-          if (!n8nResponse.ok) {
-            const errorText = await n8nResponse.text();
-            await logError(
-              "n8n_error",
-              `n8n webhook failed: ${n8nResponse.status} ${errorText}`,
-              { lead_id, ghl_account_id, status: n8nResponse.status }
-            );
-            throw new Error(
-              `n8n webhook failed: ${n8nResponse.status} ${errorText}`
-            );
-          }
-
-          const responseText = await n8nResponse.text();
-          console.log("Received n8n raw response:", responseText);
-
-          if (!responseText || responseText.trim() === "") {
-            await logError("n8n_empty_response", "n8n returned an empty response body", { lead_id, ghl_account_id });
-            throw new Error("n8n returned an empty response body");
-          }
-
-          try {
-            n8nResponseData = JSON.parse(responseText);
-          } catch {
-            await logError("n8n_invalid_json", `n8n returned non-JSON response: ${responseText.slice(0, 200)}`, { lead_id, ghl_account_id });
-            throw new Error(`n8n returned non-JSON response: ${responseText.slice(0, 200)}`);
-          }
-
-          console.log("Parsed n8n response:", JSON.stringify(n8nResponseData));
-
-          // Validate response contains at least Message_1 — if not, it's a format error
-          const responseObj = n8nResponseData as Record<string, unknown>;
-          if (!responseObj.Message_1) {
-            await logError(
-              "n8n_invalid_format",
-              `n8n response missing required field 'Message_1'. Got: ${JSON.stringify(responseObj).slice(0, 300)}`,
-              { lead_id, ghl_account_id, response: responseObj }
-            );
-            throw new Error("n8n response missing required field 'Message_1'");
-          }
-
-          // Extract all Message_N fields in order and store for UI display
-          let i = 1;
-          while (responseObj[`Message_${i}`]) {
-            setterMessages.push(String(responseObj[`Message_${i}`]));
-            i++;
-          }
-          await updateExecution({ setter_messages: setterMessages });
-        } finally {
-          clearTimeout(timeoutId);
-        }
+      if (setterReplyResult.ok !== true) {
+        const failure = setterReplyResult as { error?: unknown };
+        const errMsg = String(failure.error ?? "unknown");
+        await logError(
+          "process_setter_reply_failed",
+          `processSetterReply task failed: ${errMsg}`,
+          { lead_id, ghl_account_id, error: failure.error }
+        );
+        throw new Error(`processSetterReply task failed: ${errMsg}`);
       }
 
-      // ── STEP 6: Forward n8n response to GHL — exact same format n8n returns ─
+      setterReplyOutput = setterReplyResult.output;
+      const responseObj = setterReplyOutput as Record<string, unknown>;
+
+      if (!responseObj.Message_1) {
+        await logError(
+          "native_text_engine_invalid_format",
+          `processSetterReply returned no Message_1. Got: ${JSON.stringify(responseObj).slice(0, 300)}`,
+          { lead_id, ghl_account_id, response: responseObj }
+        );
+        throw new Error("processSetterReply returned no Message_1");
+      }
+
+      let msgIdx = 1;
+      while (responseObj[`Message_${msgIdx}`]) {
+        setterMessages.push(String(responseObj[`Message_${msgIdx}`]));
+        msgIdx++;
+      }
+      await updateExecution({ setter_messages: setterMessages });
+
+      // ── STEP 6: Forward setter reply to GHL — Message_N format ──────────────
       await updateExecution({
         status: "sending",
         stage_description: "Sending reply to GHL...",
@@ -346,13 +261,13 @@ export const processMessages = task({
 
       const ghlReplyUrl = `${client.ghl_send_setter_reply_webhook_url}?Contact_ID=${encodeURIComponent(lead_id)}`;
 
-      // n8n's response has Message_1..5, userID, chat_history — but NO Channel.
+      // The setter reply has Message_1..5, userID, chat_history — but NO Channel.
       // The "Send Setter Reply" GHL workflow's "Which Channel?" decision needs
       // it; without Channel set, the workflow falls to the "None" branch and
       // no message goes out. Inject Channel from the inbound message_queue row
       // (uppercase to match GHL decision conditions like 'includes "SMS"').
       const ghlPayload: Record<string, unknown> = {
-        ...(n8nResponseData as Record<string, unknown>),
+        ...(setterReplyOutput as Record<string, unknown>),
         Channel: channel ? channel.toUpperCase() : "SMS",
       };
 
@@ -438,13 +353,9 @@ export const processMessages = task({
               }
             }
             // Phase B (gap 3) — mirror outbound setter SMS body to GHL so
-            // the agency owner sees the conversation thread. Gated on the
-            // native text engine flag: when use_native_text_engine=false the
-            // legacy n8n→GHL workflow path may already mirror, and we'd
-            // double-log otherwise.
+            // the agency owner sees the conversation thread.
             if (
-              client.use_native_text_engine
-              && (client as any).ghl_api_key
+              (client as any).ghl_api_key
               && (client as any).ghl_location_id
             ) {
               const mirrorResult = await pushSmsToGhl({
