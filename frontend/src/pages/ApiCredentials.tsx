@@ -24,9 +24,6 @@ import { useRetellApi } from '@/hooks/useRetellApi';
 
 // Webhook fields that should fire test payloads
 const WEBHOOK_FIELDS = [
-  'text_engine_webhook',
-  'text_engine_followup_webhook',
-  
   'update_pipeline_webhook_url',
   'knowledge_base_webhook_url',
   'knowledge_base_add_webhook_url',
@@ -244,8 +241,6 @@ interface ApiSettings {
   analytics_webhook_url?: string | null;
   ai_chat_webhook_url?: string | null;
   chat_analytics_webhook_url?: string | null;
-  text_engine_webhook?: string | null;
-  text_engine_followup_webhook?: string | null;
   simulation_webhook?: string | null;
   system_prompt?: string | null;
   database_reactivation_inbound_webhook_url?: string | null;
@@ -408,7 +403,6 @@ const ApiCredentials = () => {
         ghl_api_key: data.ghl_api_key,
         ghl_calendar_id: data.ghl_calendar_id,
         ghl_location_id: data.ghl_location_id,
-        text_engine_webhook: data.text_engine_webhook,
         knowledge_base_webhook: data.knowledge_base_add_webhook_url,
       };
 
@@ -443,8 +437,6 @@ const ApiCredentials = () => {
     analytics_webhook_url: '',
     ai_chat_webhook_url: '',
     chat_analytics_webhook_url: '',
-    text_engine_webhook: '',
-    text_engine_followup_webhook: '',
     simulation_webhook: '',
     system_prompt: '',
     database_reactivation_inbound_webhook_url: '',
@@ -486,7 +478,6 @@ const ApiCredentials = () => {
         analytics_webhook_url: credentials.analytics_webhook_url || '',
         ai_chat_webhook_url: credentials.ai_chat_webhook_url || '',
         chat_analytics_webhook_url: credentials.chat_analytics_webhook_url || '',
-        text_engine_webhook: credentials.text_engine_webhook || '',
         simulation_webhook: (credentials as any).simulation_webhook || '',
         system_prompt: '',
         database_reactivation_inbound_webhook_url: credentials.database_reactivation_inbound_webhook_url || '',
@@ -708,7 +699,6 @@ const ApiCredentials = () => {
         };
       } else if (group === 'webhooks') {
         updates = {
-          text_engine_webhook: settings.text_engine_webhook?.trim() || null,
           simulation_webhook: settings.simulation_webhook?.trim() || null,
         };
       }
@@ -1177,7 +1167,6 @@ const ApiCredentials = () => {
               )}
             </CardHeader>
             <CardContent className="space-y-4">
-              <ApiCredentialField id="text_engine_webhook" label="Text Engine Webhook URL" value={settings.text_engine_webhook || ''} onChange={(value) => handleInputChange('text_engine_webhook', value)} onSave={() => handleSaveField('text_engine_webhook')} isSaving={savingField === 'text_engine_webhook'} disabled={!requiredFieldsConfigured} isSavedConfigured={isCredentialConfigured(credentials?.text_engine_webhook)} placeholder="Enter Text Engine webhook URL" isHighlighted={highlightedField === 'text_engine_webhook'} />
               <ApiCredentialField id="simulation_webhook" label="Simulation Webhook URL" value={settings.simulation_webhook || ''} onChange={(value) => handleInputChange('simulation_webhook', value)} onSave={() => handleSaveField('simulation_webhook')} isSaving={savingField === 'simulation_webhook'} disabled={!requiredFieldsConfigured} isSavedConfigured={isCredentialConfigured((credentials as any)?.simulation_webhook)} placeholder="Enter Simulation webhook URL" />
             </CardContent>
           </Card>

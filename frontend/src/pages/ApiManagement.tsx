@@ -181,8 +181,6 @@ interface ApiSettings {
   analytics_webhook_url?: string | null;
   ai_chat_webhook_url?: string | null;
   chat_analytics_webhook_url?: string | null;
-  text_engine_webhook?: string | null;
-  text_engine_followup_webhook?: string | null;
   simulation_webhook?: string | null;
   outbound_caller_webhook_1_url?: string | null;
   outbound_caller_webhook_2_url?: string | null;
@@ -254,8 +252,6 @@ const ApiManagement = () => {
     analytics_webhook_url: '',
     ai_chat_webhook_url: '',
     chat_analytics_webhook_url: '',
-    text_engine_webhook: '',
-    text_engine_followup_webhook: '',
     simulation_webhook: '',
     outbound_caller_webhook_1_url: '',
     outbound_caller_webhook_2_url: '',
@@ -298,8 +294,6 @@ const ApiManagement = () => {
     analytics_webhook_url: '',
     ai_chat_webhook_url: '',
     chat_analytics_webhook_url: '',
-    text_engine_webhook: '',
-    text_engine_followup_webhook: '',
     simulation_webhook: '',
     outbound_caller_webhook_1_url: '',
     outbound_caller_webhook_2_url: '',
@@ -341,7 +335,7 @@ const ApiManagement = () => {
       const {
         data,
         error
-      } = await (supabase.from('clients').select('name, ghl_api_key, ghl_assignee_id, ghl_calendar_id, ghl_location_id, api_webhook_url, openai_api_key, openrouter_api_key, supabase_service_key, supabase_table_name, supabase_url, campaign_webhook_url, knowledge_base_webhook_url:knowledge_base_add_webhook_url, prompt_webhook_url, analytics_webhook_url, ai_chat_webhook_url, chat_analytics_webhook_url, text_engine_webhook, text_engine_followup_webhook, simulation_webhook, outbound_caller_webhook_1_url, outbound_caller_webhook_2_url, outbound_caller_webhook_3_url, retell_api_key, retell_inbound_agent_id, retell_outbound_agent_id, retell_outbound_followup_agent_id, retell_agent_id_4, retell_phone_1, retell_phone_1_country_code, retell_phone_2, retell_phone_2_country_code, retell_phone_3, retell_phone_3_country_code, transfer_to_human_webhook_url, save_reply_webhook_url, user_details_webhook_url, database_reactivation_inbound_webhook_url, lead_score_webhook_url, update_pipeline_webhook_url, setup_guide_completed_steps' as any).eq('id', clientId).maybeSingle() as any);
+      } = await (supabase.from('clients').select('name, ghl_api_key, ghl_assignee_id, ghl_calendar_id, ghl_location_id, api_webhook_url, openai_api_key, openrouter_api_key, supabase_service_key, supabase_table_name, supabase_url, campaign_webhook_url, knowledge_base_webhook_url:knowledge_base_add_webhook_url, prompt_webhook_url, analytics_webhook_url, ai_chat_webhook_url, chat_analytics_webhook_url, simulation_webhook, outbound_caller_webhook_1_url, outbound_caller_webhook_2_url, outbound_caller_webhook_3_url, retell_api_key, retell_inbound_agent_id, retell_outbound_agent_id, retell_outbound_followup_agent_id, retell_agent_id_4, retell_phone_1, retell_phone_1_country_code, retell_phone_2, retell_phone_2_country_code, retell_phone_3, retell_phone_3_country_code, transfer_to_human_webhook_url, save_reply_webhook_url, user_details_webhook_url, database_reactivation_inbound_webhook_url, lead_score_webhook_url, update_pipeline_webhook_url, setup_guide_completed_steps' as any).eq('id', clientId).maybeSingle() as any);
       if (error) throw error;
       setClientName(data.name);
 
@@ -365,8 +359,6 @@ const ApiManagement = () => {
         analytics_webhook_url: data.analytics_webhook_url || '',
         ai_chat_webhook_url: data.ai_chat_webhook_url || '',
         chat_analytics_webhook_url: data.chat_analytics_webhook_url || '',
-        text_engine_webhook: data.text_engine_webhook || '',
-        text_engine_followup_webhook: data.text_engine_followup_webhook || '',
         simulation_webhook: data.simulation_webhook || '',
         outbound_caller_webhook_1_url: data.outbound_caller_webhook_1_url || '',
         outbound_caller_webhook_2_url: data.outbound_caller_webhook_2_url || '',
@@ -583,7 +575,7 @@ const ApiManagement = () => {
   };
 
   // List of webhook fields that should receive test payloads
-  const webhookFields = ['transfer_to_human_webhook_url', 'save_reply_webhook_url', 'user_details_webhook_url', 'update_pipeline_webhook_url', 'lead_score_webhook_url', 'database_reactivation_inbound_webhook_url', 'text_engine_webhook', 'text_engine_followup_webhook', 'simulation_webhook', 'outbound_caller_webhook_1_url', 'outbound_caller_webhook_2_url', 'outbound_caller_webhook_3_url', 'campaign_webhook_url', 'knowledge_base_webhook_url', 'prompt_webhook_url', 'analytics_webhook_url', 'ai_chat_webhook_url', 'chat_analytics_webhook_url', 'api_webhook_url'];
+  const webhookFields = ['transfer_to_human_webhook_url', 'save_reply_webhook_url', 'user_details_webhook_url', 'update_pipeline_webhook_url', 'lead_score_webhook_url', 'database_reactivation_inbound_webhook_url', 'simulation_webhook', 'outbound_caller_webhook_1_url', 'outbound_caller_webhook_2_url', 'outbound_caller_webhook_3_url', 'campaign_webhook_url', 'knowledge_base_webhook_url', 'prompt_webhook_url', 'analytics_webhook_url', 'ai_chat_webhook_url', 'chat_analytics_webhook_url', 'api_webhook_url'];
 
   // Mapping from database field names to UI-friendly labels
   const fieldLabelMap: Record<string, string> = {
@@ -611,8 +603,6 @@ const ApiManagement = () => {
     supabase_service_key: 'Supabase Service Key',
     supabase_table_name: 'Supabase Table Name',
     // Webhook fields
-    text_engine_webhook: 'Text Engine Webhook',
-    text_engine_followup_webhook: 'Text Engine Followup Webhook',
     simulation_webhook: 'Simulation Webhook',
     transfer_to_human_webhook_url: 'Transfer to Human Webhook',
     save_reply_webhook_url: 'Save Reply Webhook',
@@ -684,8 +674,6 @@ const ApiManagement = () => {
         supabase_service_key: settings.supabase_service_key || null,
         supabase_table_name: settings.supabase_table_name || null,
         // Webhook fields
-        text_engine_webhook: settings.text_engine_webhook || null,
-        text_engine_followup_webhook: settings.text_engine_followup_webhook || null,
         simulation_webhook: settings.simulation_webhook || null,
         transfer_to_human_webhook_url: settings.transfer_to_human_webhook_url || null,
         save_reply_webhook_url: settings.save_reply_webhook_url || null,
@@ -773,12 +761,6 @@ const ApiManagement = () => {
       field: keyof ApiSettings;
       label: string;
     }> = [{
-      field: 'text_engine_webhook',
-      label: 'Text Engine'
-    }, {
-      field: 'text_engine_followup_webhook',
-      label: 'Text Engine Followup'
-    }, {
       field: 'simulation_webhook',
       label: 'Simulation'
     }, {
@@ -848,8 +830,6 @@ const ApiManagement = () => {
         campaign_webhook_url: settings.campaign_webhook_url?.trim() || null,
         knowledge_base_add_webhook_url: settings.knowledge_base_webhook_url?.trim() || null,
         knowledge_base_delete_webhook_url: settings.knowledge_base_webhook_url?.trim() || null,
-        text_engine_webhook: settings.text_engine_webhook?.trim() || null,
-        text_engine_followup_webhook: settings.text_engine_followup_webhook?.trim() || null,
         simulation_webhook: settings.simulation_webhook?.trim() || null,
         outbound_caller_webhook_1_url: settings.outbound_caller_webhook_1_url?.trim() || null,
         outbound_caller_webhook_2_url: settings.outbound_caller_webhook_2_url?.trim() || null,
@@ -878,13 +858,6 @@ const ApiManagement = () => {
 
 
 
-      // Send test payload to Text Engine webhook to initialize n8n workflow
-      if (settings.text_engine_webhook?.trim()) {
-        webhookPromises.push(sendTextEngineTestPayload(settings.text_engine_webhook));
-      }
-      if (settings.text_engine_followup_webhook?.trim()) {
-        webhookPromises.push(sendConfigSavedNotification(settings.text_engine_followup_webhook, 'text_engine_followup_webhook'));
-      }
       if (settings.campaign_webhook_url?.trim()) {
         webhookPromises.push(sendConfigSavedNotification(settings.campaign_webhook_url, 'campaign_webhook_url'));
       }
@@ -957,51 +930,6 @@ const ApiManagement = () => {
 
 
 
-  // Send test payload to Text Engine webhook to initialize n8n workflow and chat memory
-  const sendTextEngineTestPayload = async (webhookUrl: string) => {
-    try {
-      // Wait 5 seconds before sending the request
-      await new Promise(resolve => setTimeout(resolve, 5000));
-      const testPayload = {
-        payload: "Test message to initialize chat memory",
-        userID: "test_user_init",
-        userFullName: "Test User",
-        userEmail: "test@example.com",
-        userPhone: "+15555555555"
-      };
-
-      // Add timeout to prevent hanging
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout (5s delay + 10s request)
-
-      const response = await fetch('https://awzlcmdomhtyqjabzvnn.supabase.co/functions/v1/notify-webhook', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF3emxjbWRvbWh0eXFqYWJ6dm5uIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUzNzU2NjUsImV4cCI6MjA3MDk1MTY2NX0.UK5sJg6901GnvxBFDL6-XWBNTmqfHU7ctBowfRCYSV8'
-        },
-        body: JSON.stringify({
-          url: webhookUrl,
-          payload: testPayload
-        }),
-        signal: controller.signal
-      });
-      clearTimeout(timeoutId);
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Failed to send test payload:', errorText);
-        return;
-      }
-      const result = await response.json();
-      console.log('Test payload sent successfully:', result);
-    } catch (error) {
-      if (error instanceof Error && error.name === 'AbortError') {
-        console.error('Test payload request timed out after 15 seconds');
-      } else {
-        console.error('Error sending test payload:', error);
-      }
-    }
-  };
 
   // Send test payload when webhook is saved to verify connectivity
   const sendConfigSavedNotification = async (url: string, field: string) => {

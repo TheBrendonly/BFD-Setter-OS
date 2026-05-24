@@ -68,13 +68,6 @@ const TEST_PAYLOADS: Record<string, (clientId: string) => object> = {
       previous_score: 0
     }
   }),
-  text_engine_webhook: (clientId) => ({
-    payload: 'Test message to initialize chat memory',
-    userID: 'test_user_init',
-    userFullName: 'Test User',
-    userEmail: 'test@example.com',
-    userPhone: '+15555555555'
-  }),
   knowledge_base_add_webhook_url: (clientId) => ({
     type: 'knowledge_base_webhook_test',
     timestamp: new Date().toISOString(),
@@ -91,8 +84,7 @@ const WEBHOOK_FIELDS = [
   'user_details_webhook_url',
   'update_pipeline_webhook_url',
   'lead_score_webhook_url',
-  'text_engine_webhook',
-  
+
   'knowledge_base_add_webhook_url',
   'database_reactivation_inbound_webhook_url',
   'outbound_caller_webhook_1_url',
@@ -152,18 +144,11 @@ export const useWebhookSave = ({ clientId, onSuccess }: UseWebhookSaveOptions) =
         };
 
     try {
-      // For text_engine_webhook, use edge function to avoid CORS
-      if (fieldName === 'text_engine_webhook') {
-        await supabase.functions.invoke('notify-webhook', {
-          body: { url: webhookUrl, payload: testPayload }
-        });
-      } else {
-        await fetch(webhookUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(testPayload)
-        });
-      }
+      await fetch(webhookUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(testPayload)
+      });
       console.log(`Test payload sent to ${fieldName} webhook`);
     } catch (error) {
       console.error(`Error sending test payload to ${fieldName}:`, error);

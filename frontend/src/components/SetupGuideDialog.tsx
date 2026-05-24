@@ -191,12 +191,6 @@ import retellFunctionsBook from '@/assets/setup-guide/retell-functions-book.png'
 import retellBookAppointmentsEndpoint from '@/assets/setup-guide/retell-book-appointments-endpoint.png';
 import retellRemainingFunctions from '@/assets/setup-guide/retell-remaining-functions.png';
 import retellPublishDialog from '@/assets/setup-guide/retell-publish-dialog.png';
-// Text Engine webhook images
-import n8nTextEngineOptinWebhook from '@/assets/setup-guide/n8n-text-engine-optin-webhook.png';
-import n8nTextEngineProductionUrl from '@/assets/setup-guide/n8n-text-engine-production-url.png';
-import n8nTextEngineFollowupWebhook from '@/assets/setup-guide/n8n-text-engine-followup-webhook.png';
-import n8nTextEngineFollowupUrl from '@/assets/setup-guide/n8n-text-engine-followup-url.png';
-import n8nTextEngineActivate from '@/assets/setup-guide/n8n-text-engine-activate.png';
 // Prompt system explanation images
 import n8nAgentBotPersona from '@/assets/setup-guide/n8n-agent-bot-persona.png';
 import n8nAgentPrompt1 from '@/assets/setup-guide/n8n-agent-prompt-1.png';
@@ -573,10 +567,6 @@ const [loading, setLoading] = useState(false);
   const [callReceivedWebhookUrl, setCallReceivedWebhookUrl] = useState('');
   const [callReceivedWebhookSent, setCallReceivedWebhookSent] = useState(false);
   const [sendingCallReceivedPayload, setSendingCallReceivedPayload] = useState(false);
-  const [textEngineWebhook, setTextEngineWebhook] = useState('');
-  const [textEngineWebhookSaved, setTextEngineWebhookSaved] = useState(false);
-  const [textEngineFollowupWebhook, setTextEngineFollowupWebhook] = useState('');
-  const [textEngineFollowupWebhookSaved, setTextEngineFollowupWebhookSaved] = useState(false);
   const [knowledgebaseWebhook, setKnowledgebaseWebhook] = useState('');
   const [knowledgebaseWebhookSaved, setKnowledgebaseWebhookSaved] = useState(false);
   const [saveReplyWebhookUrl, setSaveReplyWebhookUrl] = useState('');
@@ -665,7 +655,7 @@ const [loading, setLoading] = useState(false);
       const loadConfig = async () => {
         const { data, error } = await (supabase
           .from('clients')
-          .select('supabase_url, supabase_service_key, openrouter_api_key, openai_api_key, ghl_api_key, ghl_assignee_id, ghl_calendar_id, ghl_location_id, retell_api_key, retell_inbound_agent_id, retell_outbound_agent_id, retell_phone_1, retell_phone_1_country_code, retell_phone_2, retell_phone_2_country_code, retell_phone_3, retell_phone_3_country_code, transfer_to_human_webhook_url, user_details_webhook_url, update_pipeline_webhook_url, lead_score_webhook_url, text_engine_webhook, text_engine_followup_webhook, knowledge_base_add_webhook_url, save_reply_webhook_url, outbound_caller_webhook_1_url, setup_guide_completed_steps, prompt_webhook_url') as any)
+          .select('supabase_url, supabase_service_key, openrouter_api_key, openai_api_key, ghl_api_key, ghl_assignee_id, ghl_calendar_id, ghl_location_id, retell_api_key, retell_inbound_agent_id, retell_outbound_agent_id, retell_phone_1, retell_phone_1_country_code, retell_phone_2, retell_phone_2_country_code, retell_phone_3, retell_phone_3_country_code, transfer_to_human_webhook_url, user_details_webhook_url, update_pipeline_webhook_url, lead_score_webhook_url, knowledge_base_add_webhook_url, save_reply_webhook_url, outbound_caller_webhook_1_url, setup_guide_completed_steps, prompt_webhook_url') as any)
           .eq('id', clientId)
           .single();
         
@@ -722,10 +712,6 @@ const [loading, setLoading] = useState(false);
           setPipelineWebhookSaved(!!data.update_pipeline_webhook_url);
           setLeadScoreWebhookUrl(data.lead_score_webhook_url || '');
           setLeadScoreWebhookSaved(!!data.lead_score_webhook_url);
-          setTextEngineWebhook(data.text_engine_webhook || '');
-          setTextEngineWebhookSaved(!!data.text_engine_webhook);
-          setTextEngineFollowupWebhook(data.text_engine_followup_webhook || '');
-          setTextEngineFollowupWebhookSaved(!!data.text_engine_followup_webhook);
           setKnowledgebaseWebhook(data.knowledge_base_add_webhook_url || '');
           setKnowledgebaseWebhookSaved(!!data.knowledge_base_add_webhook_url);
           setSaveReplyWebhookUrl(data.save_reply_webhook_url || '');
@@ -1494,106 +1480,6 @@ const [loading, setLoading] = useState(false);
       setLeadScoreWebhookUrl(webhookUrl);
       setLeadScoreWebhookSaved(true);
       // User must manually click Done button to mark step as complete
-    } catch (error: any) {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to save webhook",
-        variant: "destructive"
-      });
-    } finally {
-      setSavingWebhook(false);
-    }
-  };
-
-  const saveTextEngineWebhook = async (webhookUrl: string, fieldName: 'text_engine_webhook' | 'text_engine_followup_webhook') => {
-    if (!webhookUrl.trim()) {
-      toast({
-        title: "Error",
-        description: "Please enter a webhook URL",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    // Validate URL format
-    try {
-      const urlObj = new URL(webhookUrl);
-      if (urlObj.protocol !== 'https:' && urlObj.protocol !== 'http:') {
-        toast({
-          title: "Invalid URL",
-          description: "Webhook URL must use HTTP or HTTPS",
-          variant: "destructive"
-        });
-        return;
-      }
-    } catch {
-      toast({
-        title: "Invalid URL",
-        description: "Please enter a valid webhook URL",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    setSavingWebhook(true);
-    try {
-      const { error } = await supabase
-        .from('clients')
-        .update({ [fieldName]: webhookUrl })
-        .eq('id', clientId);
-
-      if (error) throw error;
-
-      // Send test payload to the webhook
-      try {
-        if (fieldName === 'text_engine_webhook') {
-          // Text Engine uses edge function to avoid CORS
-          const testPayload = {
-            payload: 'Test message to initialize chat memory',
-            userID: 'test_user_init',
-            userFullName: 'Test User',
-            userEmail: 'test@example.com',
-            userPhone: '+15555555555'
-          };
-          await supabase.functions.invoke('notify-webhook', {
-            body: { url: webhookUrl, payload: testPayload }
-          });
-        } else {
-          const testPayload = {
-            type: 'text_engine_followup_test',
-            timestamp: new Date().toISOString(),
-            client_id: clientId,
-            test: true,
-            message: 'Text Engine Followup webhook configured successfully'
-          };
-          await fetch(webhookUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(testPayload)
-          });
-        }
-      } catch (webhookError) {
-        console.error('Error sending test to webhook:', webhookError);
-      }
-
-
-
-
-      const displayName = fieldName === 'text_engine_webhook' ? 'Text Engine' : 'Text Engine Followup';
-      toast({
-        title: "Saved",
-        description: `${displayName} webhook saved and payload sent to Supabase`
-      });
-
-      if (fieldName === 'text_engine_webhook') {
-        setTextEngineWebhook(webhookUrl);
-        setTextEngineWebhookSaved(true);
-        // User must manually click Done button to mark step as complete
-      } else {
-        setTextEngineFollowupWebhook(webhookUrl);
-        setTextEngineFollowupWebhookSaved(true);
-        // User must manually click Done button to mark step as complete
-      }
     } catch (error: any) {
       toast({
         title: "Error",
@@ -3586,163 +3472,13 @@ const [loading, setLoading] = useState(false);
         },
         {
           id: 'save-text-engine',
-          title: 'Save Text Engine',
-          description: 'Get the Text Engine webhook URL and save it to your API settings',
+          title: 'Text Engine',
+          description: 'Native text engine — no extra setup needed',
           content: (
             <div className="space-y-4">
-              <p className="text-sm text-muted-foreground">Paste the Text Engine webhook URL from n8n below.</p>
-
-              {/* Webhook URL Input Field - at top */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label className="text-sm font-medium">Text Engine Webhook URL</Label>
-                  {textEngineWebhookSaved && (
-                    <Badge className="bg-green-500 hover:bg-green-600 text-white">
-                      Configured
-                    </Badge>
-                  )}
-                </div>
-                <Input
-                  type="text"
-                  value={textEngineWebhook}
-                  onChange={(e) => setTextEngineWebhook(e.target.value)}
-                  placeholder="Paste the Production URL here"
-                  className="font-mono text-sm"
-                />
-                <div className="flex gap-2 pt-2">
-                  <Button
-                    onClick={() => saveTextEngineWebhook(textEngineWebhook, 'text_engine_webhook')}
-                    disabled={savingWebhook || !textEngineWebhook.trim()}
-                    size="sm"
-                  >
-                    {savingWebhook ? (
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current" />
-                    ) : (
-                      'Save'
-                    )}
-                  </Button>
-                </div>
-              </div>
-
-              <div className="bg-muted/50 rounded-lg p-4 space-y-3">
-                <p className="font-medium">Step 1: Click on the Webhook Opt-In node</p>
-                <ol className="list-decimal list-inside space-y-2 ml-2">
-                  <li>In the Text Engine workflow in n8n</li>
-                  <li>Click on the <strong>Webhook</strong> node in the <strong>"Webhook Opt-In"</strong> section</li>
-                </ol>
-              </div>
-
-              <SmoothImage src={n8nTextEngineOptinWebhook} alt="Click on Webhook Opt-In node" />
-
-              <div className="bg-muted/50 rounded-lg p-4 space-y-3">
-                <p className="font-medium">Step 2: Copy the Production URL</p>
-                <ol className="list-decimal list-inside space-y-2 ml-2">
-                  <li>Click on <strong>"Production URL"</strong> tab</li>
-                  <li>Copy the URL shown (starting with POST)</li>
-                  <li>Paste it in the field above and click <strong>Save</strong></li>
-                </ol>
-              </div>
-
-              <SmoothImage src={n8nTextEngineProductionUrl} alt="Copy Production URL" />
-
               <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-4">
                 <p>
-                  <strong>Next:</strong> Now you need to save the Followup Engine webhook URL.
-                </p>
-              </div>
-            </div>
-          )
-        },
-        {
-          id: 'save-followup-engine',
-          title: 'Save Followup Engine',
-          description: 'Get the Followup Engine webhook URL and save it',
-          content: (
-            <div className="space-y-4">
-              <p className="text-sm text-muted-foreground">Paste the Followup Engine webhook URL from n8n below.</p>
-
-              {/* Webhook URL Input Field - at top */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label className="text-sm font-medium">Text Engine Followup Webhook URL</Label>
-                  {textEngineFollowupWebhookSaved && (
-                    <Badge className="bg-green-500 hover:bg-green-600 text-white">
-                      Configured
-                    </Badge>
-                  )}
-                </div>
-                <Input
-                  type="text"
-                  value={textEngineFollowupWebhook}
-                  onChange={(e) => setTextEngineFollowupWebhook(e.target.value)}
-                  placeholder="Paste the Production URL here"
-                  className="font-mono text-sm"
-                />
-                <div className="flex gap-2 pt-2">
-                  <Button
-                    onClick={() => saveTextEngineWebhook(textEngineFollowupWebhook, 'text_engine_followup_webhook')}
-                    disabled={savingWebhook || !textEngineFollowupWebhook.trim()}
-                    size="sm"
-                  >
-                    {savingWebhook ? (
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current" />
-                    ) : (
-                      'Save'
-                    )}
-                  </Button>
-                </div>
-              </div>
-
-              <div className="bg-muted/50 rounded-lg p-4 space-y-3">
-                <p className="font-medium">Step 1: Click on the Webhook1 node in Create Followups</p>
-                <ol className="list-decimal list-inside space-y-2 ml-2">
-                  <li>In the Text Engine workflow in n8n</li>
-                  <li>Click on the <strong>Webhook1</strong> node in the <strong>"Create Followups"</strong> section</li>
-                </ol>
-              </div>
-
-              <SmoothImage src={n8nTextEngineFollowupWebhook} alt="Click on Webhook1 node in Create Followups" />
-
-              <div className="bg-muted/50 rounded-lg p-4 space-y-3">
-                <p className="font-medium">Step 2: Copy the Production URL</p>
-                <ol className="list-decimal list-inside space-y-2 ml-2">
-                  <li>Click on <strong>"Production URL"</strong> tab</li>
-                  <li>Copy the URL shown</li>
-                  <li>Paste it in the field above and click <strong>Save</strong></li>
-                </ol>
-              </div>
-
-              <SmoothImage src={n8nTextEngineFollowupUrl} alt="Copy Production URL for Followup" />
-
-              <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-4">
-                <p>
-                  <strong>Next:</strong> Now activate and save the workflow.
-                </p>
-              </div>
-            </div>
-          )
-        },
-        {
-          id: 'publish-engine',
-          title: 'Publish Engine',
-          description: 'Activate and save the Text Engine workflow',
-          content: (
-            <div className="space-y-4">
-              <p className="text-muted-foreground">Activate and save the Text Engine workflow to make it ready for use.</p>
-
-              <div className="bg-muted/50 rounded-lg p-4 space-y-3">
-                <p className="font-medium">Steps:</p>
-                <ol className="list-decimal list-inside space-y-2 ml-2">
-                  <li>Toggle the <strong>Active</strong> switch to ON in the top right corner</li>
-                  <li>Click <strong>Save</strong> (or wait for auto-save)</li>
-                </ol>
-              </div>
-
-              <SmoothImage src={n8nTextEngineActivate} alt="Activate and save the workflow" />
-
-              <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-4">
-                <p>
-                  <strong>N8N Setup Complete!</strong> All your n8n workflow connections are now configured and the Text Engine is active and ready to use!
+                  <strong>Native text engine active.</strong> The platform's built-in AI generates setter replies — no n8n workflow connection required. Click <strong>Done</strong> to continue.
                 </p>
               </div>
             </div>
@@ -10664,9 +10400,6 @@ const [loading, setLoading] = useState(false);
       'retell-setup-4': retellConfig.retell_inbound_agent_id,
       'retell-setup-5': retellConfig.retell_outbound_agent_id,
       'retell-setup-6': retellConfig.retell_phone_1,
-      // N8N Text Engine (step 9 is Appointment Name - no field required, step 10 is Save Text Engine, step 11 is Save Followup)
-      'n8n-setup-10': textEngineWebhook,
-      'n8n-setup-11': textEngineFollowupWebhook,
       // Knowledgebase (step 0: Open Workflow, step 1: Connect Supabase, step 2: Connect Embeddings, step 3: Setup Webhook)
       'knowledgebase-setup-3': knowledgebaseWebhook,
       // Text Prompts
@@ -10753,7 +10486,6 @@ const [loading, setLoading] = useState(false);
       'highlevel-credentials-0', 'highlevel-credentials-1', 'highlevel-credentials-2', 'highlevel-credentials-3',
       'highlevel-setup-7', 'highlevel-setup-8', 'highlevel-setup-9', 'highlevel-setup-10',
       'retell-setup-3', 'retell-setup-4', 'retell-setup-5', 'retell-setup-6',
-      'n8n-setup-10', 'n8n-setup-11',
       'knowledgebase-setup-2',
       'text-prompts-setup-2', 'text-prompts-setup-3', 'text-prompts-setup-4', 'text-prompts-setup-5',
       'voice-prompts-setup-3', 'voice-prompts-setup-4', 'voice-prompts-setup-5', 'voice-prompts-setup-6'
@@ -10772,7 +10504,7 @@ const [loading, setLoading] = useState(false);
         return next;
       });
     }
-  }, [configLoading, supabaseConfig, llmConfig, ghlConfig, retellConfig, transferHumanWebhookUrl, userDetailsWebhookUrl, pipelineWebhookUrl, leadScoreWebhookUrl, textEngineWebhook, textEngineFollowupWebhook, knowledgebaseWebhook, botPersonaPrompt, prompt1, prompt2, prompt3, voicePrompt0, voicePrompt1, voicePrompt2, voicePrompt5]);
+  }, [configLoading, supabaseConfig, llmConfig, ghlConfig, retellConfig, transferHumanWebhookUrl, userDetailsWebhookUrl, pipelineWebhookUrl, leadScoreWebhookUrl, knowledgebaseWebhook, botPersonaPrompt, prompt1, prompt2, prompt3, voicePrompt0, voicePrompt1, voicePrompt2, voicePrompt5]);
 
   const handleBack = () => {
     if (currentStep > 0) {

@@ -1254,7 +1254,6 @@ export type Database = {
           sync_ghl_booking_enabled: boolean | null
           sync_ghl_enabled: boolean | null
           system_prompt: string | null
-          text_engine_webhook: string | null
           timezone: string
           transfer_to_human_webhook_url: string | null
           twilio_account_sid: string | null
@@ -1367,7 +1366,6 @@ export type Database = {
           sync_ghl_booking_enabled?: boolean | null
           sync_ghl_enabled?: boolean | null
           system_prompt?: string | null
-          text_engine_webhook?: string | null
           timezone?: string
           transfer_to_human_webhook_url?: string | null
           twilio_account_sid?: string | null
@@ -1480,7 +1478,6 @@ export type Database = {
           sync_ghl_booking_enabled?: boolean | null
           sync_ghl_enabled?: boolean | null
           system_prompt?: string | null
-          text_engine_webhook?: string | null
           timezone?: string
           transfer_to_human_webhook_url?: string | null
           twilio_account_sid?: string | null

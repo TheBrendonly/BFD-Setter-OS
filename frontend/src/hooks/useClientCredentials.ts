@@ -32,8 +32,7 @@ export interface ClientCredentials {
   analytics_webhook_url: string | null;
   ai_chat_webhook_url: string | null;
   chat_analytics_webhook_url: string | null;
-  text_engine_webhook: string | null;
-  
+
   outbound_caller_webhook_1_url: string | null;
   outbound_caller_webhook_2_url: string | null;
   outbound_caller_webhook_3_url: string | null;
@@ -89,8 +88,7 @@ const CREDENTIALS_FIELDS = `
   analytics_webhook_url,
   ai_chat_webhook_url,
   chat_analytics_webhook_url,
-  text_engine_webhook,
-  
+
   outbound_caller_webhook_1_url,
   outbound_caller_webhook_2_url,
   outbound_caller_webhook_3_url,
