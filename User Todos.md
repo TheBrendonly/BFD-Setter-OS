@@ -8,10 +8,13 @@ Effort: S = under 30 min, M = 30 min - 2 hr, L = half day+.
 
 ---
 
-## 🔥 ACTIVE PUNCH LIST (refreshed 2026-05-23)
+## 🔥 ACTIVE PUNCH LIST (refreshed 2026-05-24)
 
-Four autonomous batches shipped 2026-05-22 + 2026-05-23. Outcomes doc:
-**→ [Operations/handoffs/2026-05-22-outcomes-and-current-state.md](../../Operations/handoffs/2026-05-22-outcomes-and-current-state.md)**
+Outcomes doc + Phase 10 + Duplicate Setter session add-on:
+**→ [Operations/handoffs/2026-05-22-outcomes-and-current-state.md §9 + §9b](../../Operations/handoffs/2026-05-22-outcomes-and-current-state.md)**
+
+**Next-session prompt + persona prompts:**
+**→ [Operations/handoffs/2026-05-24-finish-100pct-next-session.md](../../Operations/handoffs/2026-05-24-finish-100pct-next-session.md)**
 
 ### Batches shipped (no action needed)
 
@@ -19,34 +22,61 @@ Four autonomous batches shipped 2026-05-22 + 2026-05-23. Outcomes doc:
 - ✅ Try Gary landing ingress (`phase-night-try-gary-landing-ingress`, `0107bdb`).
 - ✅ Batch 3 (2026-05-23): code-review fixes — reply_channel attribution + composite-filter IN-clause cap + retell-proxy empty-array log + dead-mock cleanup.
 - ✅ Batch 4 (2026-05-23): Try Gary persona-slot routing infrastructure.
+- ✅ **Bug 10 phone pin** (2026-05-24 prep session): PATCHed inbound + outbound from v37/v49 → v49/v49.
+- ✅ **Bug 20 webhook_events** (2026-05-24 verify): slot 2 agent `agent_5ec5eb…` already shows `['call_ended', 'call_analyzed']` from Brendan's overnight Save Setter. No action needed.
+- ✅ **Phase 10 n8n decom backend + frontend** (`937254d` + `a5c166d`): 89 LOC backend + 397 LOC frontend deletions. Trigger.dev `v20260524.1` + edge fns `receive-dm-webhook v14` + `sync-external-credentials v11` ACTIVE. **Schema DROP deferred 24h** — earliest 2026-05-25 ~17:30 AEST.
+- ✅ **Duplicate Setter feature** (`dce4a75`, tag `feat-duplicate-setter`): new Copy-icon button on every Voice + Text setter card. One-click pure clone (no AI), distinct from existing AI-rewrite COPY. Edge fn `duplicate-setter-config` v1 ACTIVE. **Use this for Try Gary persona provisioning** — drops time-per-persona from ~30 min → ~5-7 min.
+- ✅ **Crazy Gary allowlist** (`d4f3841`, tag `feat-try-gary-crazy-gary`): added `crazy-gary` to `TRY_GARY_VALID_STYLES` in ghl-tag-webhook v5. Routing ready once slot 8 is provisioned + map updated.
 
-### Brendan-required tier 1 — activates the shipped fixes
+### Brendan-required tier 1 — apply prompt fix FIRST
 
-- [ ] **1. Bug 20** — Save Setter on BFD to activate `call_ended` webhook subscription (~3m). Without this, several shipped fixes (32, 34, 9) can't be observed.
-- [ ] **2. Bug 10** — Phone pin live-state correction. **Affects every live call right now** (BFD pinned to draft v49 inbound + stale v37 outbound). Three options in `Operations/verifications/2026-05-22-bug10-phone-pin-deferral.md`; recommended is one curl PATCH to v48.
-- [ ] **3. Bug 21** — Provision GHL Custom Conversation Provider + SQL update (~10m). Doc: `Operations/verifications/2026-05-22-bug21-ghl-conversation-provider.md`.
-- [ ] **4. Bug 22** — Create 2 GHL custom fields + SQL update (~5m). Doc: `Operations/verifications/2026-05-22-bug22-ghl-call-custom-fields.md`.
-- [ ] **5. Bug 26** — Generate GHL webhook secret + SQL update (~5m). Doc: `Operations/verifications/2026-05-22-bug26-ghl-webhook-secret.md`.
-- [ ] **6. Bug 29** — Apply recommended booking-flow prompt diff manually. Diff at `Operations/verifications/2026-05-22-bug29-slot-match-diagnosis.md`. Verify against v48 LLM.
+- [ ] **1. Bug 29** — Apply recommended booking-flow prompt diff to BFD **slot 2** manually (~10m). Diff at `Operations/verifications/2026-05-22-bug29-slot-match-diagnosis.md`. Verify against v49 LLM (max published 2026-05-24). **DO THIS FIRST** so the fix propagates to slots 4-8 via the new Duplicate button.
 
-### Brendan-required tier 2 — Try Gary persona provisioning
+### Brendan-required tier 2 — Try Gary persona provisioning (5 personas, much faster now)
 
-- [ ] **7. Provision Voice Setters 4-7** via PromptManagement UI (one per agent_style). Doc: `Operations/verifications/2026-05-23-try-gary-persona-slot-routing.md`.
-- [ ] **8. Update `clients.try_gary_persona_slots` map** as each slot lands (one-line SQL UPDATE per persona).
+- [ ] **2. Provision Voice Setter slot 4** — Duplicate BFD slot 2 → slot 4 via new Copy-icon button. Set agent_name = `Gary — Property Coach`. MODIFY SETTER WITH AI using the **Property Coach prompt** from the handoff doc. Save Setter.
+- [ ] **3. Provision Voice Setter slot 5** — Duplicate → slot 5. Name = `Gary — Mortgage Broker`. MODIFY WITH AI using the **Mortgage Broker prompt**. Save Setter.
+- [ ] **4. Provision Voice Setter slot 6** — Duplicate → slot 6. Name = `Gary — Finance Strategist`. MODIFY WITH AI using the **Finance Strategist prompt**. Save Setter.
+- [ ] **5. Provision Voice Setter slot 7** — Duplicate → slot 7. Name = `Gary — Generic Demo`. MODIFY WITH AI using the **Generic Demo prompt**. Save Setter.
+- [ ] **6. Provision Voice Setter slot 8 (crazy-gary)** — Duplicate → slot 8. Name = `Gary — Crazy Gary`. Switch voice to the weird ElevenLabs voice you made. MODIFY WITH AI using the **Crazy Gary prompt**. Save Setter.
 
-### Brendan verification tier 3 — observe, no action
+(All 5 prompts are in the handoff doc verbatim, ready to paste.)
 
-- [ ] **9. Bug 28** — Real C1 pickup + book test (~10m, ~$1 Retell).
-- [ ] **10. Bug 32** — Slow-replier SMS test (~5m).
-- [ ] **11. Bug 2** — After next outbound call, GET BFD agent + confirm `enable_voicemail_detection=true, voicemail_detection_timeout_ms=15000`.
-- [ ] **12. Try Gary smoke** — fire the curl in the Try Gary report; confirm execution row created + cadence enrolment + persona slot resolved.
+After each Save Setter, ping Claude with "slot N saved" — Claude runs the slot-N populated verify SQL + phone-pin drift check + re-PATCH if needed.
 
-### Deferred to next focused session (UI-heavy)
+Once all 5 slots are saved + active, Claude auto-runs Step 2E:
+```sql
+UPDATE clients SET try_gary_persona_slots = '{
+  "property-coach": 4, "mortgage-broker": 5, "finance-strategist": 6,
+  "generic-demo": 7, "crazy-gary": 8
+}'::jsonb WHERE id = 'e467dabc-57ee-416c-8831-83ecd9c7c925';
+```
 
-- Bug 9 (inbound mid-cadence) — needs Bug 20 active + Trigger.dev signal pattern (~3-4hr).
-- UI gaps 12, 13, 15 — visual polish needs browser walkthrough (~3hr).
+### Brendan-required tier 3 — GHL provisioning (small, ~20 min total)
 
-Companion smoke docs: `/srv/bfd/Operations/verifications/2026-05-{21,22,23}-*.md`.
+- [ ] **7. Bug 21** — Provision GHL Custom Conversation Provider + ping with provider_id (~10m). Doc: `Operations/verifications/2026-05-22-bug21-ghl-conversation-provider.md`.
+- [ ] **8. Bug 22** — Create 2 GHL custom fields + ping with both field ids (~5m). Doc: `Operations/verifications/2026-05-22-bug22-ghl-call-custom-fields.md`.
+- [ ] **9. Bug 26** — Generate GHL webhook secret + ping with the secret (~5m). Doc: `Operations/verifications/2026-05-22-bug26-ghl-webhook-secret.md`.
+
+### Brendan-required tier 4 — marketing site (separate repo)
+
+- [ ] **10. Add `crazy-gary` to the marketing site landing-page persona picker.** Backend allowlist is ready (ghl-tag-webhook v5). Out-of-scope for the bfd-setter repo; lives in the marketing site repo.
+
+### Verification (passive — observe during normal use)
+
+- [ ] **11. Bug 28** — Real C1 pickup + book test (~10m, ~$1 Retell). Auto-fires booking-confirm SMS to lead after booked appointment.
+- [ ] **12. Bug 32** — Slow-replier SMS test (~5m). Multiple inbound SMS in quick succession; cadence should not lose the 2nd message.
+- [ ] **13. Bug 2** — After next outbound call, GET BFD agent + confirm `enable_voicemail_detection=true, voicemail_detection_timeout_ms=15000`.
+- [ ] **14. Try Gary smoke (deferred to separate session)** — 5 outbound Retell calls to TEST_PHONE_A, one per persona, verify each opening line matches its framing.
+
+### Claude-side autonomous work (parallel during next session)
+
+- [ ] **A. Phase 10 schema DROP** — once 24h soak passes (earliest 2026-05-25 ~17:30 AEST), Claude auto-runs `ALTER TABLE clients DROP COLUMN IF EXISTS text_engine_webhook` + verifies + reports. Pre-DROP snapshot already at `Operations/archives/2026-05-24-n8n-decom/clients-snapshot.json`. Auth was already explicitly given for Phase 10.
+- [ ] **B. Bug 9 — inbound mid-cadence coordination** (~3-4hr). Now unblocked because Bug 20's `call_ended` subscription is active. Needs Trigger.dev signal pattern.
+- [ ] **C. UI gaps 12 / 13 / 15** — visual polish needing browser walkthrough (~3hr total).
+- [ ] **D. Code-review followups from prior session** — already shipped in batch 3 (2026-05-23). Confirmed no new code-review items to action.
+
+Companion smoke docs: `/srv/bfd/Operations/verifications/2026-05-{21,22,23,24}-*.md`.
 
 ---
 

@@ -1,119 +1,104 @@
 # Next-session prompt
 
-Paste this into a fresh Claude Code session opened on `/srv/bfd/Projects/bfd-setter`. Start in **plan mode**, get user approval, then switch to execution mode.
+Paste the fenced block below into a fresh Claude Code session opened on `/srv/bfd/Projects/bfd-setter`. Start in **plan mode**, get user approval, then switch to execution mode.
 
-The prior session (2026-05-13) closed the last Phase A punch-list item (manual form test) AND shipped the Bug 1 fix (mid-call SMS during active Retell call). Full GHL form → AI setter cadence chain is now verified end-to-end via Pattern B with proper call-outcome coordination. Two bugs remain — Bug 3 is the small momentum win, Bug 2 is the agent-prompt timezone fix.
+The prior session (2026-05-24) shipped Phase 10 n8n decommission (backend + frontend code), built a new Duplicate Setter feature, wired the `crazy-gary` persona into the Try Gary allowlist, verified Bug 20 live, and confirmed Bug 10 phone pin was already correct. HEAD at `d4f3841` on main both remotes. **Next session goal: drive the project to 100%.** Brendan provisions 5 Try Gary persona voice setters + 3 GHL items + applies Bug 29 prompt diff; Claude autonomously executes Phase 10 schema DROP (after 24h soak passes) + Bug 9 + UI gaps 12/13/15 in parallel worktrees.
 
 ---
 
 ```
-Resuming BFD-setter bug triage from /srv/bfd/Operations/handoffs/2026-05-11-ghl-to-1prompt-wiring.md.
+Resuming BFD-setter to drive the platform to 100%. Source-of-truth handoff:
 
-Read these FIRST in this order:
-1. /srv/bfd/Operations/handoffs/2026-05-11-ghl-to-1prompt-wiring.md §D
-   (the closed state from 2026-05-13 + three bugs flagged)
-2. /srv/bfd/Projects/bfd-setter/Docs/CLIENT_ONBOARDING_SOP.md §5.13
-   (Pattern B architecture, just written — context for the bugs)
-3. /srv/bfd/Projects/bfd-setter/Docs/CHANGES_LOG.md row 1
-   (2026-05-13 "night-ghl-form-pattern-b-verified" — what got wired)
-4. /srv/bfd/Projects/bfd-setter/User Todos.md Phase A punch list
-   (items (a), (b), (e) are the three open bugs)
-5. /home/brendan/.claude/projects/-srv-bfd-Projects-1prompt-os/memory/MEMORY.md
-   (see [[session-2026-05-13-state]], [[call-outcome-cadence-bug]],
-    [[ghl-snapshot-pattern-b]], [[twilio-carrier-optout]])
+  /srv/bfd/Operations/handoffs/2026-05-24-finish-100pct-next-session.md
 
-State of play:
-- HEAD: d3d4403 on origin/main (no commits today; all changes via DB +
-  GHL UI + docs only). Today's pending tag `phase-night-ghl-form-pattern-b-verified`
-  not yet pushed — Brendan to commit + push the doc updates first.
-- Schema: prod has `clients.sync_ghl_enabled` column now (added 2026-05-13
-  via Management API). BFD's value is true.
-- Trigger.dev: v20260509.2 (unchanged).
-- Supabase deployed sync-ghl-contact: v12 with edff01f fixes (unchanged).
-- Phase 9 native engine soak: should be complete (>14 days since 2026-04-30).
-  Phase 10 cleanup (drop text_engine_webhook, retire dormant n8n / Send*
-  columns) is safe to schedule.
+Read it IN FULL first. It has everything you need + all 5 Try Gary persona MODIFY WITH AI prompts verbatim.
 
-Pick ONE bug to ship this session (suggest order: 3 → 1 → 2):
+Also read FIRST (in this order):
+1. /srv/bfd/Operations/handoffs/2026-05-22-outcomes-and-current-state.md §9 + §9b
+   (Phase 10 + Duplicate Setter + Crazy Gary shipped state)
+2. /srv/bfd/Projects/bfd-setter/Docs/CHANGES_LOG.md top 4 rows
+   (the 4 commits from 2026-05-24)
+3. /srv/bfd/Projects/bfd-setter/User Todos.md ACTIVE PUNCH LIST
+   (tier 1 thru 4 + Claude autonomous A-D)
+4. ~/.claude/projects/-srv-bfd-Projects-bfd-setter/memory/MEMORY.md
+   (top entry [[project-session-2026-05-24-try-gary-and-phase10]])
 
-# Bug 3 — Twilio error extraction (small, 15 min)
+STATE OF PLAY (verified at handoff write):
+- HEAD: d4f3841 on origin/main AND github/main (parity).
+- Trigger.dev: runEngagement v20260524.1 ACTIVE (10 tasks).
+- Edge fns ACTIVE: receive-dm-webhook v14, sync-external-credentials v11,
+  ghl-tag-webhook v5, duplicate-setter-config v1.
+- BFD phone (+61481614530) Retell pin: inbound v49, outbound v49.
+- BFD agent slot 2 webhook_events: ['call_ended', 'call_analyzed'].
+- try_gary_persona_slots current map: {property-coach:2, mortgage-broker:2,
+  finance-strategist:2, generic-demo:2}. Updates to slot 4-8 happen as
+  Brendan saves each setter.
+- Phase 10 schema DROP DEFERRED 24h. Soak window passes ~2026-05-25 17:30
+  AEST. Pre-DROP snapshot at
+  /srv/bfd/Operations/archives/2026-05-24-n8n-decom/clients-snapshot.json.
 
-trigger/runEngagement.ts:171 reads `twilioJson.error_code` and
-`twilioJson.error_message` from Twilio's REST API response. Twilio
-actually returns `code` and `message` (no error_ prefix). Today's
-SMS-blocked-by-opt-out failure surfaced as
-"Twilio SMS failed: ? unknown" instead of
-"Twilio SMS failed: 21610 Attempt to send to unsubscribed recipient",
-which cost 10 minutes of guessing.
+GOAL THIS SESSION: get to 100%.
 
-Steps:
-1. Change line 173 from `errorCode: twilioJson.error_code,
-   errorMessage: twilioJson.error_message` to
-   `errorCode: (twilioJson as any).code, errorMessage:
-   (twilioJson as any).message`.
-2. Also fix the `twilioJson` typed-object literal on line 171 to declare
-   `code?: number; message?: string` (instead of error_code/error_message).
-3. Smoke test: craft a curl to Twilio's REST API with a bogus number,
-   see the response. Confirm the field names.
-4. Redeploy Trigger.dev: `cd /srv/bfd/Projects/bfd-setter/trigger &&
-   TRIGGER_ACCESS_TOKEN=$(grep '^TRIGGER_DEPLOY_PAT=' /etc/bfd-secrets/bfd-os.env
-   | awk -F= '{print $2}' | awk '{print $1}') npx trigger.dev@4.4.4 deploy`.
-5. Commit + tag `phase-night-runengagement-twilio-error-extraction`.
-6. Add row to CHANGES_LOG.md.
+STREAM A — Brendan-driven UI (interactive, paste prompts from handoff doc):
+  1. Apply Bug 29 booking-flow prompt diff to BFD slot 2 (manual).
+  2. Duplicate slot 2 -> slot 4 (Property Coach), MODIFY WITH AI, Save Setter.
+  3. Duplicate slot 2 -> slot 5 (Mortgage Broker), MODIFY WITH AI, Save Setter.
+  4. Duplicate slot 2 -> slot 6 (Finance Strategist), MODIFY WITH AI, Save Setter.
+  5. Duplicate slot 2 -> slot 7 (Generic Demo), MODIFY WITH AI, Save Setter.
+  6. Duplicate slot 2 -> slot 8 (Crazy Gary), switch voice to weird ElevenLabs,
+     MODIFY WITH AI, Save Setter.
+  7. GHL: Custom Conversation Provider (Bug 21) + 2 custom fields (Bug 22) +
+     webhook secret (Bug 26).
+  8. Marketing site: add 'crazy-gary' to the landing-page persona picker
+     (separate repo).
+  After EACH Save Setter cycle, ping Claude "slot N saved" -> Claude runs
+  slot-populated verify SQL + phone-pin drift check + re-PATCH if drifted.
 
-# Bug 1 — Mid-call SMS during active Retell call ✅ DONE 2026-05-13
+STREAM B — Claude autonomous (parallel, worktree per task):
+  A. Phase 10 schema DROP — once 24h soak passes (>= 17:30 AEST 2026-05-25),
+     auto-execute ALTER TABLE clients DROP COLUMN IF EXISTS text_engine_webhook
+     + post-drop verify + commit + tag phase-10-n8n-decom-schema-drop + push.
+     No further GO needed; auth was already given for Phase 10.
+  B. Bug 9 — inbound mid-cadence coordination (~3-4 hr). Trigger.dev signal
+     pattern. Worktree dev-2026-05-25-bug-9-inbound-mid-cadence.
+  C. UI gaps 12, 13, 15 — Sub-Account Settings save scopes (~1hr),
+     SYSTEM sidebar agency/sub-account labels (~1hr), Agent version
+     indicator widget (~1.5hr). Worktree dev-2026-05-25-ui-gaps-12-13-15.
 
-Shipped as commit `571e18f`, tag `phase-night-bug1-call-outcome-coordination`.
-Trigger.dev `v20260513.1`. Edge function `retell-call-webhook` v10.
+WHEN ALL OF STREAM A + STREAM B DONE:
+  - Claude runs the end-of-session audit query (tests all 5 slots filled,
+    persona map = {property-coach:4, mortgage-broker:5, finance-strategist:6,
+    generic-demo:7, crazy-gary:8}, GHL ids set, webhook_secret set).
+  - Claude updates User Todos.md + writes a session-close memory.
+  - Claude updates Operations/handoffs/2026-05-22-outcomes-and-current-state.md
+    with §10 "2026-05-25 100% completion" row.
 
-Final implementation (slightly different from the original sketch):
-- Added one column `engagement_executions.last_call_outcome JSONB`
-  (not two — `awaiting_call_id` turned out redundant since runEngagement
-  already knows the call_id it placed).
-- `retell-call-webhook` on `call_ended` stamps `last_call_outcome` keyed
-  by `dynamicVars.execution_id`.
-- `runEngagement.ts` polls every 15s (`wait.for` frozen, zero compute)
-  for up to 10 min after each `phone_call` channel. Classification
-  mirrors `retell-call-analysis-webhook.ts:740-750`. New stop_reason
-  `'call_engaged'` introduced. Both phone_call sites (engage channel +
-  legacy flat node) covered.
+STANDING RULES:
+- DO NOT touch clients.use_native_text_engine (vestigial post-Phase 10 but
+  audit kept it intentionally).
+- DO NOT edit any LLM prompt content yourself (Brendan owns prompt edits
+  via UI; Bug 29 is manual).
+- TEST_PHONE_A (+61405482446) free-use; TEST_PHONE_B (+61403804263, wife)
+  requires explicit per-use permission.
+- Max 5 outbound Retell calls without explicit OK (cost gate).
+- Smoke test 5 calls (one per persona) is DEFERRED to a separate session
+  per Brendan's prior selection — do NOT auto-run them this session.
 
-Memory: [[bug1-call-outcome-coordination]] documents the deploy steps
-and the runtime semantics.
+ENV: cd /srv/bfd/Projects/bfd-setter. .env has SUPABASE_PAT,
+BFD_RETELL_API_KEY, BFD_GHL_PIT, TRIGGER_DEPLOY_PAT, TRIGGER_PROD_API_KEY,
+TRIGGER_SECRET_KEY.
 
-Manual end-to-end re-verification still pending — run the form path
-test described in handoff §D and confirm (1) no mid-call SMS on pickup,
-(2) missed-call SMS still fires AFTER call_ended on no-answer/voicemail.
+Stream B worktree pattern (mandatory):
+  git worktree add .worktrees/dev-2026-05-25-<slug> -b dev-2026-05-25-<slug> main
+  cd .worktrees/dev-2026-05-25-<slug>
+  ln -s /srv/bfd/Projects/bfd-setter/node_modules ./node_modules
+  ln -s /srv/bfd/Projects/bfd-setter/frontend/node_modules ./frontend/node_modules
+  cp /srv/bfd/Projects/bfd-setter/.env ./.env
+  git push -u origin dev-2026-05-25-<slug>
+  git push -u github dev-2026-05-25-<slug>
 
-# Bug 2 — Voice agent timezone (low-medium, 1-2h)
-
-§E (a) punch-list item. pre_call_context.metadata.timezone =
-"America/New_York" — should be clients.timezone (= "Australia/Sydney"
-for BFD). Slot list passed to Retell is also in -04:00 offsets.
-
-Two surfaces to fix:
-1. The Retell agent prompt (in client's external Supabase `voice_prompts`
-   table — agent prompt has ET baked into the call-opening template).
-2. voice-booking-tools `get-available-slots` handler in
-   frontend/supabase/functions/voice-booking-tools/index.ts — partial fix
-   already shipped at commit c4499ed (defaults from clients.timezone when
-   caller doesn't pass timeZone). But pre-call context still gets
-   America/New_York from somewhere upstream — likely make-retell-outbound-call
-   building the dynamic_variables. Trace where `timezone: America/New_York`
-   originates.
-
-Workflow rules:
-- Each phase ENDS with a commit, a git tag `phase-N-<slug>`, and a row
-  in Docs/CHANGES_LOG.md with revert command.
-- Test against BFD only — don't fan out to other clients until Phase C.
-- Don't touch clients.use_native_text_engine (still on, soak complete).
-- Bug 1 is closed. Pick Bug 3 first for a momentum win (15 min), then
-  Bug 2 (voice agent timezone).
-
-End-of-run deliverable: update /srv/bfd/Operations/handoffs/2026-05-11-ghl-to-1prompt-wiring.md
-§D with which bug was fixed + the tag + the verification done.
+OK go. Read the handoff doc + the three other context files. Confirm the
+state-of-play matches (HEAD d4f3841, phone pin v49/v49, etc.) with one curl
++ one git log. Then start Stream B autonomous work in the background while
+standing by for Brendan's Stream A pings.
 ```
-
----
-
-End of next-session prompt.
