@@ -3350,6 +3350,7 @@ export type Database = {
           prompt_type: string | null
           slot_id: string | null
           updated_at: string
+          voice_setter_id: string | null
         }
         Insert: {
           category?: string | null
@@ -3365,6 +3366,7 @@ export type Database = {
           prompt_type?: string | null
           slot_id?: string | null
           updated_at?: string
+          voice_setter_id?: string | null
         }
         Update: {
           category?: string | null
@@ -3380,6 +3382,7 @@ export type Database = {
           prompt_type?: string | null
           slot_id?: string | null
           updated_at?: string
+          voice_setter_id?: string | null
         }
         Relationships: [
           {
@@ -3387,6 +3390,13 @@ export type Database = {
             columns: ["client_id"]
             isOneToOne: false
             referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "prompts_voice_setter_id_fkey"
+            columns: ["voice_setter_id"]
+            isOneToOne: false
+            referencedRelation: "voice_setters"
             referencedColumns: ["id"]
           },
         ]
@@ -4310,6 +4320,89 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "voice_chat_analytics_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      voice_setter_phone_bindings: {
+        Row: {
+          client_id: string
+          created_at: string
+          direction: string
+          id: string
+          phone_e164: string
+          setter_id: string
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          direction: string
+          id?: string
+          phone_e164: string
+          setter_id: string
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          direction?: string
+          id?: string
+          phone_e164?: string
+          setter_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "voice_setter_phone_bindings_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "voice_setter_phone_bindings_setter_id_fkey"
+            columns: ["setter_id"]
+            isOneToOne: false
+            referencedRelation: "voice_setters"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      voice_setters: {
+        Row: {
+          client_id: string
+          created_at: string
+          id: string
+          is_active: boolean
+          name: string
+          retell_agent_id: string | null
+          retell_llm_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name: string
+          retell_agent_id?: string | null
+          retell_llm_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          retell_agent_id?: string | null
+          retell_llm_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "voice_setters_client_id_fkey"
             columns: ["client_id"]
             isOneToOne: false
             referencedRelation: "clients"

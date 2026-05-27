@@ -452,38 +452,91 @@ Deno.serve(async (req) => {
       }, 409);
     }
 
-    // 2. Resolve agent_id
-    const slotNumber = parseVoiceSetterSlot(voice_setter_id);
-    if (!slotNumber) {
-      return ok({
-        error: `Invalid voice_setter_id format: ${voice_setter_id}`,
-        code: "invalid_voice_setter_id",
-      }, 400);
-    }
-    const agentColumn = SLOT_TO_AGENT_COLUMN[slotNumber];
-    if (!agentColumn) {
-      return ok({
-        error: `Invalid voice setter slot: ${slotNumber}`,
-        code: "invalid_voice_setter_slot",
-      }, 400);
+    // 2. Resolve agent_id + from-number
+    //
+    // voice_setter_id can be either:
+    //   (a) a UUID — new voice_setters-row model (post phase-voice-setters-redesign 2026-05-27)
+    //   (b) a "Voice-Setter-N" string — legacy slot model (kept for backward compat
+    //       during the transition; remove with the slot-column cleanup migration).
+    const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    let agentId: string | null = null;
+    let fromNumber: string | null = null;
+
+    if (UUID_RE.test(voice_setter_id)) {
+      // ── UUID path: voice_setters + voice_setter_phone_bindings ──
+      const { data: setter, error: setterErr } = await supabase
+        .from("voice_setters")
+        .select("id, retell_agent_id, name, is_active")
+        .eq("id", voice_setter_id)
+        .eq("client_id", client_id)
+        .maybeSingle();
+      if (setterErr || !setter) {
+        return ok({
+          error: `Voice setter ${voice_setter_id} not found for this client.`,
+          code: "voice_setter_not_found",
+        }, 404);
+      }
+      if (!setter.is_active) {
+        return ok({
+          error: `Voice setter "${setter.name}" is inactive.`,
+          code: "voice_setter_inactive",
+        }, 409);
+      }
+      agentId = setter.retell_agent_id;
+      if (!agentId) {
+        return ok({
+          error: `Voice setter "${setter.name}" has no Retell agent provisioned yet.`,
+          code: "no_retell_agent_for_setter",
+          hint: `Open the "${setter.name}" editor and Save to provision the agent.`,
+        }, 409);
+      }
+      // From-number from outbound binding (cadence node `from_number` override checked later).
+      const { data: binding } = await supabase
+        .from("voice_setter_phone_bindings")
+        .select("phone_e164")
+        .eq("setter_id", voice_setter_id)
+        .eq("direction", "outbound")
+        .eq("client_id", client_id)
+        .limit(1)
+        .maybeSingle();
+      if (binding?.phone_e164) fromNumber = binding.phone_e164;
+    } else {
+      // ── Legacy slot path: parse "Voice-Setter-N" ──
+      const slotNumber = parseVoiceSetterSlot(voice_setter_id);
+      if (!slotNumber) {
+        return ok({
+          error: `Invalid voice_setter_id format: ${voice_setter_id}`,
+          code: "invalid_voice_setter_id",
+        }, 400);
+      }
+      const agentColumn = SLOT_TO_AGENT_COLUMN[slotNumber];
+      if (!agentColumn) {
+        return ok({
+          error: `Invalid voice setter slot: ${slotNumber}`,
+          code: "invalid_voice_setter_slot",
+        }, 400);
+      }
+      agentId = (client as Record<string, unknown>)[agentColumn] as string | null;
+      if (!agentId) {
+        return ok({
+          error: `No Retell agent configured for ${voice_setter_id} yet.`,
+          code: "no_agent_for_slot",
+          slot_id: voice_setter_id,
+          slot_number: slotNumber,
+          hint: `Open the ${voice_setter_id} editor, fill in the config, and click "Push to Retell" to provision the agent. Then try the test call again.`,
+        }, 409);
+      }
+      const SLOT_TO_PHONE_COLUMN: Record<number, string> = {
+        1: "retell_phone_1",
+        2: "retell_phone_2",
+        3: "retell_phone_3",
+      };
+      const slotPhoneCol = SLOT_TO_PHONE_COLUMN[slotNumber];
+      const slotPhone = slotPhoneCol ? (client as Record<string, unknown>)[slotPhoneCol] as string | null : null;
+      fromNumber = slotPhone || null;
     }
 
-    const agentId = (client as Record<string, unknown>)[agentColumn] as string | null;
-    if (!agentId) {
-      // Phase 3.1 UX fix: structured error so the TestCallDialog can surface a
-      // clear "push first" prompt instead of "Edge Function returned a non-2xx
-      // status code". HTTP 409 distinguishes "config incomplete" from "bad
-      // request" which carries different UX intent.
-      return ok({
-        error: `No Retell agent configured for ${voice_setter_id} yet.`,
-        code: "no_agent_for_slot",
-        slot_id: voice_setter_id,
-        slot_number: slotNumber,
-        hint: `Open the ${voice_setter_id} editor, fill in the config, and click "Push to Retell" to provision the agent. Then try the test call again.`,
-      }, 409);
-    }
-
-    // 3. Get phone number
+    // 3. Get destination phone number (the lead we're calling)
     const phone = contact_fields?.phone || body.phone;
     if (!phone) {
       return ok({
@@ -493,15 +546,10 @@ Deno.serve(async (req) => {
       }, 400);
     }
 
-    // 4. Determine from_number
-    const SLOT_TO_PHONE_COLUMN: Record<number, string> = {
-      1: "retell_phone_1",
-      2: "retell_phone_2",
-      3: "retell_phone_3",
-    };
-    const slotPhoneCol = SLOT_TO_PHONE_COLUMN[slotNumber];
-    const slotPhone = slotPhoneCol ? (client as Record<string, unknown>)[slotPhoneCol] as string | null : null;
-    let fromNumber = slotPhone || client.retell_phone_2 || client.retell_phone_1 || client.retell_phone_3;
+    // 4. Fallback chain for from-number when not set by setter path above.
+    if (!fromNumber) {
+      fromNumber = client.retell_phone_2 || client.retell_phone_1 || client.retell_phone_3;
+    }
 
     if (!fromNumber) {
       try {
