@@ -468,9 +468,9 @@ Use Pattern B when the client imported the 1Prompt SetterOS GHL snapshot (BFD an
 
 ```
 Lead source (form / LinkedIn / manual / CSV)
-    ↓ adds tag "1prompt - new lead"  (per-source tagging workflow OR form's built-in tag setting)
+    ↓ adds tag "bfd_setter-new_lead"  (per-source tagging workflow OR form's built-in tag setting)
 GHL workflow "Add Lead to 1Prompt OS"
-    Trigger: Contact Tag Added = "1prompt - new lead"
+    Trigger: Contact Tag Added = "bfd_setter-new_lead"
     Action 1: Update Contact Field "GHL Account ID" = <client-location-id>
     Action 2: Custom Webhook POST → sync-ghl-contact
         Body: { Lead_ID, Name, Email, Phone, GHL_Account_ID }
@@ -487,7 +487,7 @@ sync-ghl-contact (Supabase edge function)
 
 In the GHL UI for the client's location, open workflow `Add Lead to 1Prompt OS`:
 
-1. **Trigger:** confirm "Contact Tag Added" with value `1prompt - new lead` (or whatever convention the client uses — must match `clients.new_leads_tag` if you also want `ghl-tag-webhook` to fire, but Pattern B doesn't require this column).
+1. **Trigger:** confirm "Contact Tag Added" with value `bfd_setter-new_lead` (or whatever convention the client uses — must match `engagement_workflows.new_leads_tag` if you also want `ghl-tag-webhook` to fire, but Pattern B doesn't require this column).
 2. **Action 1 — Update Contact Field "GHL Account ID":** set value to `<client-location-id>` (the same as `clients.ghl_location_id`). This is what the next action's body uses to resolve the tenant in `sync-ghl-contact`.
 3. **Action 2 — Custom Webhook:**
    - Method: `POST`
@@ -508,12 +508,12 @@ In the GHL UI for the client's location, open workflow `Add Lead to 1Prompt OS`:
 
 #### 5.13.2 The form-to-tag bridge workflow (one per lead source)
 
-For each lead source (website form, LinkedIn DM, manual entry), build a small workflow that just adds the `1prompt - new lead` tag. This decouples lead sourcing from cadence enrollment — adding new sources is a small workflow, not a touch to sync-ghl-contact.
+For each lead source (website form, LinkedIn DM, manual entry), build a small workflow that just adds the `bfd_setter-new_lead` tag. This decouples lead sourcing from cadence enrollment — adding new sources is a small workflow, not a touch to sync-ghl-contact.
 
 **For a website GHL form:**
-1. In **Campaigns** folder → **+ Create Workflow** → name e.g. `Form Submit - "1prompt - new lead" tag added`.
+1. In **Campaigns** folder → **+ Create Workflow** → name e.g. `Form Submit - "bfd_setter-new_lead" tag added`.
 2. **Trigger:** `Form Submitted` → filter `Form is <form-name>` (e.g. `New Lead to GHL`, form id `<form-id>`). **MUST filter to the specific form** — otherwise every form submit on the location triggers a cadence.
-3. **Action 1:** `Add Contact Tag` → `1prompt - new lead`.
+3. **Action 1:** `Add Contact Tag` → `bfd_setter-new_lead`.
 4. **Publish.**
 
 **Why two workflows and not one combined form-to-webhook:** decoupling means LinkedIn / CSV / manual / future form X all converge on the same tag. Single sync-ghl-contact ingress, multiple lead sources, zero per-source webhook config.

@@ -258,7 +258,7 @@ When a contact gets the tag (manually or via any GHL workflow), the webhook fire
 
 Sig verification: when `clients.ghl_webhook_secret` is set, an HMAC-SHA256 hex `x-wh-signature` header is required (computed over the raw body). Backwards-compat: skipped when no secret is configured.
 
-Smoke-test (BFD): `curl -i -X POST https://bjgrgbgykvjrsuwwruoh.supabase.co/functions/v1/ghl-tag-webhook -H 'Content-Type: application/json' -d '{"contactId":"<bfd-contact-id>","locationId":"xo0XjmenBBJxJgSnAdyM","addedTags":["new-lead"]}'` → expect `{"ok":true,"enrolled":"<execution-id>"}`.
+Smoke-test (BFD): `curl -i -X POST https://bjgrgbgykvjrsuwwruoh.supabase.co/functions/v1/ghl-tag-webhook -H 'Content-Type: application/json' -d '{"contactId":"<bfd-contact-id>","locationId":"xo0XjmenBBJxJgSnAdyM","addedTags":["bfd_setter-new_lead"]}'` → expect `{"ok":true,"enrolled":"<execution-id>"}`.
 
 ## Synthetic probe setup (phase-11g)
 

@@ -109,7 +109,7 @@ The runtime enforces quiet hours (per-lead timezone resolution from phone prefix
 
 **Quiet hours:** every `delay` and outbound `engage` step is wrapped by the quiet-hours guard. Default 09:00–19:00 local to the lead's phone prefix (resolved per call), overridable on the workflow card.
 
-**Auto-enrol:** `UPDATE clients SET auto_engagement_workflow_id = '<workflow_id>'` for `intake-lead` to enrol every fresh lead, OR set the workflow's `is_new_leads_campaign=true` + `new_leads_tag='new-lead'` and have a GHL workflow add the `new-lead` tag on contact create.
+**Auto-enrol:** `UPDATE clients SET auto_engagement_workflow_id = '<workflow_id>'` for `intake-lead` to enrol every fresh lead, OR set the workflow's `is_new_leads_campaign=true` + `new_leads_tag='bfd_setter-new_lead'` and have a GHL workflow add the `bfd_setter-new_lead` tag on contact create.
 
 ---
 
@@ -355,7 +355,7 @@ SELECT '<new-client-uuid>',
        nodes, schedule,
        false,                    -- start as DRAFT
        false,                    -- not the active new-lead campaign yet
-       'new-lead',
+       'bfd_setter-new_lead',
        voicemail_config, quiet_hours_override
 FROM engagement_workflows
 WHERE id = 'c206da3e-b8b7-41f8-9de0-997679abefcb';

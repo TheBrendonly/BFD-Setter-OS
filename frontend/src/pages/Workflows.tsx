@@ -375,7 +375,7 @@ export default function Workflows() {
   // Optimistic flip + server-side updates. Partial unique index enforces invariance.
   async function handleNewLeadsToggle(ew: EngagementWorkflow, on: boolean) {
     if (!clientId) return;
-    const newTag = on ? (ew.new_leads_tag?.trim() || 'new-lead') : null;
+    const newTag = on ? (ew.new_leads_tag?.trim() || 'bfd_setter-new_lead') : null;
     const previousState = engagementWorkflows;
 
     // Optimistic local state: when turning ON, also flip any other ON row in this client OFF.
