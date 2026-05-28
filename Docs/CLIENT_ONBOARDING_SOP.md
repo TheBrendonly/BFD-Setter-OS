@@ -519,7 +519,7 @@ For each lead source (website form, LinkedIn DM, manual entry), build a small wo
 **Why two workflows and not one combined form-to-webhook:** decoupling means LinkedIn / CSV / manual / future form X all converge on the same tag. Single sync-ghl-contact ingress, multiple lead sources, zero per-source webhook config.
 
 **Conventional tags (BFD location uses these — copy to new clients):**
-- `1prompt - new lead` — triggers Add Lead to 1Prompt OS
+- `bfd_setter-new_lead` — triggers Add Lead to 1Prompt OS
 - `bfd_setter-stop_setter` — set when STOP keyword received; triggers `Stop / Activate Setter` workflow
 - `bfd_setter-text_setter`, `bfd_setter-voice_setter` — internal routing tags
 
