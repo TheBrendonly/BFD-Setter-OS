@@ -16,7 +16,6 @@ const RETELL_MODELS = [
   { id: 'claude-4.6-sonnet', name: 'Claude 4.6 Sonnet', provider: 'Anthropic' },
   { id: 'claude-4.5-sonnet', name: 'Claude 4.5 Sonnet', provider: 'Anthropic' },
   { id: 'gemini-3.0-flash', name: 'Gemini 3.0 Flash', provider: 'Google' },
-  { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash', provider: 'Google' },
 ];
 
 interface RetellModelSelectorProps {
