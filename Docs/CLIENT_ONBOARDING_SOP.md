@@ -520,8 +520,8 @@ For each lead source (website form, LinkedIn DM, manual entry), build a small wo
 
 **Conventional tags (BFD location uses these — copy to new clients):**
 - `1prompt - new lead` — triggers Add Lead to 1Prompt OS
-- `1prompt - stop setter` — set when STOP keyword received; triggers `Stop / Activate Setter` workflow
-- `1prompt - text setter`, `1prompt voice setter` — internal routing tags
+- `bfd_setter-stop_setter` — set when STOP keyword received; triggers `Stop / Activate Setter` workflow
+- `bfd_setter-text_setter`, `bfd_setter-voice_setter` — internal routing tags
 
 #### 5.13.3 Disable the snapshot's bookings workflow
 
