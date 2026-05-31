@@ -134,3 +134,30 @@ All code is on `main`, **uncommitted and undeployed**, pending review.
 - Dual root lockfile — NOT removed: no Railway/packageManager config found, so changing it could affect the live build's auto-detection. Recommend deciding npm-vs-pnpm deliberately.
 - CI migrations-converge check — no `.github/workflows` exists yet; add when CI is set up.
 - Regenerate `types.ts` (see above).
+
+---
+
+## Future feature — "Agent-by-form-field" (within-cadence agent override)
+
+**Want:** a form field's value picks which voice agent calls the lead (e.g. service_type=residential → Agent A, commercial → Agent B), within ONE cadence.
+
+**Already possible today (no build):** different form → different tag → different Campaign, each Campaign carries its own agent. Use this when each form/business-line wants its own cadence+agent. Covers ~80% of cases.
+
+**Net-new only needed for:** one shared cadence where the agent varies by a form-field value (not by form identity). The runtime mechanism already exists and is proven by Try-Gary (`voice_setter_id_override` in `contact_fields` → applied in `trigger/runEngagement.ts:973-981, 1353-1356`; no runEngagement changes needed).
+
+**Design (when built):**
+- `engagement_workflows.field_agent_mapping` JSONB: `{ form_field_key, value_to_agent: { <value>: <voice setter>, __default__: <voice setter> } }`.
+- At ingress (ghl-tag-webhook / reactivate-lead-list): read the contact's GHL custom field, look up the map, set `voice_setter_id_override` in `contact_fields`.
+- UI: a small "Override agent by form field" section on the campaign's phone-call node.
+
+**Difficulty: MODERATE** (migration + a GHL custom-field fetch at enrol + UI; downstream already wired). **Recommendation: DEFER** — form-tag routing covers most needs; build when a second client actually needs same-cadence/different-agent. Lightweight interim: auto-generate one sub-campaign per field value from a template.
+
+## UI holes — implementation plan (next session)
+
+Frontend-only; deploys via Railway on push. Suggested order:
+1. **Tag-input UX** (Workflows.tsx ~121-134) — S (~20m): label + helper text ("Form Tag — routes leads with this GHL tag here"), visual save confirmation, field-level empty error. Low risk.
+2. **Activate toggle on the campaign row** (Workflows.tsx ~108-110) — M (~45m): add an enable/disable toggle to the list row reusing Engagement.tsx's is_active update pattern (lines ~3923-3948), with confirm. Low-med risk.
+3. **Default-cadence badge + "Set as default"** (Workflows.tsx ~374-410) — M (~50m): fetch `clients.auto_engagement_workflow_id`, show a DEFAULT badge on that row + a "Set as default" action; help text "receives leads with no matching form tag". Low risk.
+4. **Try-Gary persona-slot editor** (new `TryGaryPersonaSlotMapper`, in ClientSettings or a creator-only Workflows section) — M (~60m): dropdowns mapping agent_style → voice setter slot, writes `clients.try_gary_persona_slots`; hidden for non-BFD locations. Low risk.
+
+Also worth doing in that session: surface/verify the **DB Reactivation** sidebar item for BFD (it's `menuItemsBeforeWebinar` → /campaigns; presentation_only_mode is off, so check the per-client menu config if hidden).
