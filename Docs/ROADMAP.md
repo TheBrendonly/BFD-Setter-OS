@@ -161,3 +161,51 @@ Frontend-only; deploys via Railway on push. Suggested order:
 4. **Try-Gary persona-slot editor** (new `TryGaryPersonaSlotMapper`, in ClientSettings or a creator-only Workflows section) — M (~60m): dropdowns mapping agent_style → voice setter slot, writes `clients.try_gary_persona_slots`; hidden for non-BFD locations. Low risk.
 
 Also worth doing in that session: surface/verify the **DB Reactivation** sidebar item for BFD (it's `menuItemsBeforeWebinar` → /campaigns; presentation_only_mode is off, so check the per-client menu config if hidden).
+
+---
+
+# SESSION LOG — 2026-05-31 (shipped + deployed to prod)
+
+HEAD `14af1ee` on `main` (github + Forgejo). Supabase ref `bjgrgbgykvjrsuwwruoh`. All deployed + verified this session:
+- **Form routing**: migration (multi tag-bound campaigns), `_shared/resolve-workflow.ts`, wired ghl-tag-webhook/sync-ghl-contact/intake-lead, Workflows.tsx UI.
+- **Native reactivation**: `reactivate-lead-list` edge fn + CampaignCreate repoint (webhook path retired in UI).
+- **Voice setters**: backfill migration (legacy_slot bridge), retell-proxy dual-write, 10 slots in RetellAgentsTab.
+- **Isolation**: RLS on message_queue + active_trigger_runs.
+- **Try-Gary**: deterministic routing to the `bfd_setter-try_gary` tag; that tag set on BFD's Try-Gary campaign (`3fda0794`, still inactive + blank cadence).
+- **DB Reactivation sidebar bug**: it was missing from the menu catalog (`DEFAULT_MENU_ITEMS`) so it never rendered for anyone; added to catalog + patched BFD's `client_menu_config`.
+- **Docs**: archived 9 stale docs, added Docs/README index + FORM_ROUTING.md + ROADMAP.md, ARCHITECTURE current.
+- **Cleanup**: archived one-off scripts, removed vestigial webhook UI, renamed dead `bfdVoiceSetterPrompt.ts` -> `.md` (surfaced ~26 pre-existing type-drift errors — not build-breaking).
+
+Verified-FALSE audit claims (left untouched): execution_logs RLS works (campaigns.user_id exists); LEGACY_N8N_HOST in use; elevenlabs-manage-agent referenced by an archived page; webinar components imported by active SetupGuideDialog. **Lesson for next session: verify every "dead code" claim before deleting.**
+
+Ops notes: Supabase Management API SQL runner needs a non-python User-Agent (Cloudflare 1010 bans python-urllib). The `SUPABASE_PAT` in .env was refreshed this session (old one was revoked in the key rotation).
+
+---
+
+# NEXT SESSION — locked scope (decisions 2026-05-31)
+
+**Decisions:** (1) canonical ingress = **sync-ghl-contact** (one URL, route by tag, default fallback). (2) agent-per-form = **tag-per-campaign ONLY** — retire the Try-Gary persona-slot mechanism; do NOT build the within-cadence override or the persona-slot UI. (3) **deploy autonomously** (migrations via PAT + edge fns + push, verifying each). (4) also include: regenerate types.ts, gate /debug-* pages, retire legacy reactivation, resolve dual lockfile. (5) **build the Try-Gary campaign** ready for tag ingress.
+
+## Claude to-do (next session — do all, autonomously, to completion)
+1. **Single-ingress consolidation**: make `sync-ghl-contact` the canonical lead-intake endpoint (robust tag routing + default fallback); **deprecate** the `try-gary-landing` special handler in ghl-tag-webhook (keep working, mark deprecated) and **remove the persona-slot override** (try_gary_persona_slots). Document the "one webhook URL + tag" pattern as THE client setup in FORM_ROUTING.md.
+2. **UI hole 1** — tag-input UX on the campaign row (label, helper text, save confirmation, empty-field error). Workflows.tsx.
+3. **UI hole 2** — activate/enable toggle on the campaign LIST row (reuse Engagement.tsx is_active pattern + confirm). Workflows.tsx.
+4. **UI hole 3** — DEFAULT badge + "Set as default" action on campaign rows (clients.auto_engagement_workflow_id). Workflows.tsx.
+5. **Try-Gary campaign build** — clone the main cadence ("New-Lead Cadence from Form-Fill", `40e8bea3`) into the Try-Gary campaign (`3fda0794`); keep tag `bfd_setter-try_gary`; set the phone_call node's voice setter [Brendan confirms which agent]; leave INACTIVE for Brendan review (do NOT author new message content — clone only).
+6. **Regenerate** `frontend/src/integrations/supabase/types.ts` from the live schema (clears ~26 drift errors; picks up form_source, legacy_slot).
+7. **Gate** /debug-ai-reps*, /debug-inject-lead behind creator/admin mode (App.tsx; useCreatorMode `cb` exists).
+8. **Retire legacy reactivation** — FIRST verify native reactivation works end-to-end this session; then remove campaign-executor / bulk-insert-leads / campaign_leads code + UI refs + a drop/deprecate migration.
+9. **Resolve dual lockfile** — delete root pnpm-lock.yaml, standardize npm; verify Railway build still works.
+10. **Deploy everything autonomously** + verify each (migrations, edge fns, push) + update all docs + commit/push.
+
+## Brendan to-do (hand to me at the end; I'll produce the detailed plan)
+- **GHL** (the main one): point the Try-Gary form's automation at the SAME webhook URL as the main form (sync-ghl-contact) and have it add the routing tag; for each agent/form, one GHL automation that adds its tag + posts to that one URL.
+- **Retell/Twilio**: provision the voice agent(s) + number(s) for Try-Gary / any per-agent campaigns.
+- **Try-Gary cadence**: review/customize the cloned cadence content + confirm which agent calls; then activate it.
+- **Test** end-to-end: submit a Try-Gary lead with its tag -> confirm it routes to the Try-Gary campaign and the right agent calls.
+
+## Constraints for next session
+- No authoring of prompt/message content (clone existing only).
+- Verify every "dead code" claim before deleting (audit was wrong 3x this session).
+- Backward compatible — never break the live main-form flow.
+- Prod deploy authorized; valid SUPABASE_PAT in .env; Management API needs a browser-style User-Agent.

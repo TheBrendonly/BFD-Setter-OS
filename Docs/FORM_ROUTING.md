@@ -2,6 +2,20 @@
 
 How inbound forms route to cadences/agents, the exact BFD setup (main form + Try-Gary), how to add more forms, and how to provision additional voice agents when needed.
 
+## Canonical client setup (the standard): ONE webhook URL + tag
+
+Every client uses a **single inbound webhook URL** — the `sync-ghl-contact` edge function — and routing is decided entirely by the **tag** the lead arrives with. There is no per-form webhook URL.
+
+Per form / per agent, the only setup is a **GHL automation** that:
+1. adds the routing tag to the contact (e.g. `bfd_setter-new_lead`, `bfd_setter-try_gary`, `form-roofing`...), and
+2. posts to the one webhook URL (`sync-ghl-contact`), passing that tag.
+
+Then in the app you create one **Campaign** per tag (clone an existing one and change the tag), each carrying its own agent. The resolver matches the tag → that campaign; no match → the client's default campaign.
+
+**"Different agent per form/field" = tag-per-campaign.** If a form field should pick the agent, have the GHL automation add a different tag per value, each mapped to its own campaign. (A within-cadence "agent varies by field, one cadence" override is intentionally NOT built — the tag-per-campaign model is the standard.)
+
+**Try-Gary note:** historically Try-Gary used a separate direct webhook (`source=try-gary-landing`) — that is **legacy/deprecated**. Try-Gary now follows the same pattern: its form's automation adds the `bfd_setter-try_gary` tag and posts to the one URL.
+
 ## How routing works
 
 Each client can have **many** "new leads" cadences (engagement workflows), each bound to a distinct GHL **tag** (`engagement_workflows.new_leads_tag`). When a lead arrives, the system resolves which cadence to enrol it in:
