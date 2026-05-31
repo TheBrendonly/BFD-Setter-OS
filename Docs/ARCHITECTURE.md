@@ -217,7 +217,7 @@ Different inbound forms for the same client can now activate different agents/ca
 ### Native reactivation (cold-list calling)
 The "DB Reactivation" flow now enrols an uploaded CSV / selected contacts into a chosen cadence **natively** via `runEngagement` — no external/n8n webhook.
 - New `reactivate-lead-list` edge fn: verifies the operator once, then per lead upserts the lead + inserts `engagement_executions` + fires `run-engagement` (chunked). Pure helpers in `_shared/reactivate-list.ts` (unit-tested).
-- The legacy `campaign_leads` → `campaign-executor` → `campaign_webhook_url` path is superseded (retire after confirming unused).
+- The legacy `campaign_leads` → `campaign-executor` → `campaign_webhook_url` path is **retired (2026-05-31)**: the `campaign-executor` and `bulk-insert-leads` edge functions were deleted, the `campaign_leads` table no longer exists, and `campaigns` is marked deprecated (read only by the legacy campaign Dashboard/CampaignDetail UI).
 
 ### Voice setters (UUID model, populated)
 The `voice_setters` / `voice_setter_phone_bindings` tables are now real for every client:

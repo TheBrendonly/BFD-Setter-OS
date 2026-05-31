@@ -401,6 +401,106 @@ export type Database = {
           },
         ]
       }
+      cadence_metrics: {
+        Row: {
+          ai_cost_cents: number
+          booking_created: boolean | null
+          booking_id: string | null
+          calls_attempted: number | null
+          calls_picked_up: number | null
+          client_id: string | null
+          cost_estimate_cents: number
+          created_at: string | null
+          emails_sent: number
+          ended_at: string | null
+          execution_id: string | null
+          id: string
+          lead_id: string | null
+          nodes_fired: number | null
+          reply_received: boolean | null
+          sms_delivered: number | null
+          sms_sent: number | null
+          stop_reason: string | null
+          time_to_booking_seconds: number | null
+          time_to_first_response_seconds: number | null
+          voicemails_dropped: number | null
+          whatsapp_sent: number | null
+          workflow_id: string | null
+        }
+        Insert: {
+          ai_cost_cents?: number
+          booking_created?: boolean | null
+          booking_id?: string | null
+          calls_attempted?: number | null
+          calls_picked_up?: number | null
+          client_id?: string | null
+          cost_estimate_cents?: number
+          created_at?: string | null
+          emails_sent?: number
+          ended_at?: string | null
+          execution_id?: string | null
+          id?: string
+          lead_id?: string | null
+          nodes_fired?: number | null
+          reply_received?: boolean | null
+          sms_delivered?: number | null
+          sms_sent?: number | null
+          stop_reason?: string | null
+          time_to_booking_seconds?: number | null
+          time_to_first_response_seconds?: number | null
+          voicemails_dropped?: number | null
+          whatsapp_sent?: number | null
+          workflow_id?: string | null
+        }
+        Update: {
+          ai_cost_cents?: number
+          booking_created?: boolean | null
+          booking_id?: string | null
+          calls_attempted?: number | null
+          calls_picked_up?: number | null
+          client_id?: string | null
+          cost_estimate_cents?: number
+          created_at?: string | null
+          emails_sent?: number
+          ended_at?: string | null
+          execution_id?: string | null
+          id?: string
+          lead_id?: string | null
+          nodes_fired?: number | null
+          reply_received?: boolean | null
+          sms_delivered?: number | null
+          sms_sent?: number | null
+          stop_reason?: string | null
+          time_to_booking_seconds?: number | null
+          time_to_first_response_seconds?: number | null
+          voicemails_dropped?: number | null
+          whatsapp_sent?: number | null
+          workflow_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cadence_metrics_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cadence_metrics_execution_id_fkey"
+            columns: ["execution_id"]
+            isOneToOne: true
+            referencedRelation: "engagement_executions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cadence_metrics_workflow_id_fkey"
+            columns: ["workflow_id"]
+            isOneToOne: false
+            referencedRelation: "engagement_workflows"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       calendar_events: {
         Row: {
           anyone_can_add_self: boolean | null
@@ -2545,6 +2645,7 @@ export type Database = {
           custom_fields: Json | null
           email: string | null
           first_name: string | null
+          form_source: string | null
           id: string
           last_inbound_at: string | null
           last_message_at: string | null
@@ -2580,6 +2681,7 @@ export type Database = {
           custom_fields?: Json | null
           email?: string | null
           first_name?: string | null
+          form_source?: string | null
           id?: string
           last_inbound_at?: string | null
           last_message_at?: string | null
@@ -2615,6 +2717,7 @@ export type Database = {
           custom_fields?: Json | null
           email?: string | null
           first_name?: string | null
+          form_source?: string | null
           id?: string
           last_inbound_at?: string | null
           last_message_at?: string | null
@@ -4375,6 +4478,7 @@ export type Database = {
           created_at: string
           id: string
           is_active: boolean
+          legacy_slot: number | null
           name: string
           retell_agent_id: string | null
           retell_llm_id: string | null
@@ -4385,6 +4489,7 @@ export type Database = {
           created_at?: string
           id?: string
           is_active?: boolean
+          legacy_slot?: number | null
           name: string
           retell_agent_id?: string | null
           retell_llm_id?: string | null
@@ -4395,6 +4500,7 @@ export type Database = {
           created_at?: string
           id?: string
           is_active?: boolean
+          legacy_slot?: number | null
           name?: string
           retell_agent_id?: string | null
           retell_llm_id?: string | null

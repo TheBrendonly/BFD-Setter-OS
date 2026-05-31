@@ -970,12 +970,12 @@ export const runEngagement = task({
               if (!ch.voice_setter_id) {
                 throw new Error(`phone_call channel in node ${node.id} is missing voice_setter_id`);
               }
-              // Batch 4 — Try Gary persona-slot routing. When the payload's
-              // contact_fields carries voice_setter_id_override (set by
-              // ghl-tag-webhook's handleTryGaryLanding from
-              // clients.try_gary_persona_slots[agent_style]), use it instead
-              // of the channel's hardcoded voice_setter_id. Backward-compat:
-              // absent override → falls through to the channel default.
+              // DEPRECATED (2026-05-31): persona-slot voice-setter override.
+              // The try_gary_persona_slots mechanism is retired — nothing sets
+              // voice_setter_id_override anymore, so this read is inert and
+              // always falls through to the channel's voice_setter_id. Kept as
+              // a harmless defensive read; can be removed on the next trigger
+              // deploy. Agent selection is now per-campaign (tag-per-campaign).
               const overrideVoiceSetterId =
                 (payload.contact_fields as Record<string, string> | undefined)?.voice_setter_id_override;
               const effectiveVoiceSetterId = overrideVoiceSetterId || ch.voice_setter_id;
@@ -1349,8 +1349,9 @@ export const runEngagement = task({
           if (!legacyVoiceSetter) {
             throw new Error(`phone_call node ${node.id} is missing voice_setter_id`);
           }
-          // Batch 4 — same Try Gary persona-slot override as the engage-node
-          // phone_call branch. Applies to legacy flat phone_call nodes too.
+          // DEPRECATED (2026-05-31): same retired persona-slot override as the
+          // engage-node phone_call branch. Inert (nothing sets the field now);
+          // falls through to the node's voice_setter_id. Removable next deploy.
           const legacyOverrideVoiceSetterId =
             (payload.contact_fields as Record<string, string> | undefined)?.voice_setter_id_override;
           const effectiveLegacyVoiceSetter = legacyOverrideVoiceSetterId || legacyVoiceSetter;

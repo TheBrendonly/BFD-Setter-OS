@@ -5,6 +5,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate, useLocation, useParams } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
+import { useCreatorMode } from "@/hooks/useCreatorMode";
 import { ImageZoomProvider } from "@/contexts/ImageZoomContext";
 import { NavigationGuardProvider } from "@/contexts/NavigationGuardContext";
 import { ThemeProvider } from "next-themes";
@@ -155,6 +156,17 @@ const ClientRouteGuard = ({ children }: { children: React.ReactNode }) => {
   return <>{children}</>;
 };
 
+// Gates internal debug/diagnostic pages behind creator mode. Non-creators are
+// redirected to the client's dashboard instead of seeing the debug tools.
+const CreatorRouteGuard = ({ children }: { children: React.ReactNode }) => {
+  const { clientId } = useParams<{ clientId: string }>();
+  const { isCreatorMode } = useCreatorMode();
+  if (!isCreatorMode) {
+    return <Navigate to={`/client/${clientId}/analytics/chatbot/dashboard`} replace />;
+  }
+  return <>{children}</>;
+};
+
 const IndexRoute = () => {
   const { user, loading } = useAuth();
   
@@ -267,10 +279,10 @@ const App = () => {
               <Route path="prompts/voice" element={<PromptManagement />} />
               <Route path="prompts/viz-demo" element={<VisualizationDemo />} />
               <Route path="deploy-ai-reps" element={<DeployAIReps />} />
-              <Route path="debug-ai-reps" element={<DebugAIReps />} />
-              <Route path="debug-ai-reps/text" element={<DebugTextAIRep />} />
-              <Route path="debug-ai-reps/voice" element={<DebugVoiceAIRep />} />
-              <Route path="debug-inject-lead" element={<DebugInjectLead />} />
+              <Route path="debug-ai-reps" element={<CreatorRouteGuard><DebugAIReps /></CreatorRouteGuard>} />
+              <Route path="debug-ai-reps/text" element={<CreatorRouteGuard><DebugTextAIRep /></CreatorRouteGuard>} />
+              <Route path="debug-ai-reps/voice" element={<CreatorRouteGuard><DebugVoiceAIRep /></CreatorRouteGuard>} />
+              <Route path="debug-inject-lead" element={<CreatorRouteGuard><DebugInjectLead /></CreatorRouteGuard>} />
               <Route path="knowledge-base" element={<KnowledgeBase />} />
               <Route path="leads" element={<Contacts />} />
               <Route path="leads/files" element={<LeadFileProcessing />} />

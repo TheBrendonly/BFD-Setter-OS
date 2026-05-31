@@ -337,17 +337,14 @@ async function enrollLeadInEngagement(args: {
   return execution.id as string;
 }
 
-// Try Gary landing-page ingress (Phase 1). The GHL workflow on BFD's location
-// fires a custom-body webhook with the flat JSON shape:
-//   { source: "try-gary-landing", first_name, phone, agent_style,
-//     utm_source/medium/campaign, consent_text_version, consent_timestamp,
-//     ghl_contact_id }
-// We look up BFD by hardcoded location id, validate the agent_style enum,
-// upsert leads with compliance + UTM fields, then enrol into the BFD
-// new-leads cadence with agent_style passed through as a Retell
-// dynamic_variable. The 4-persona prompt differentiation is downstream of
-// this — first-pass uses BFD's existing Gary agent; per-style prompt edits
-// happen via Brendan's normal PromptManagement / Save Setter flow.
+// DEPRECATED (2026-05-31). Try-Gary now follows the canonical one-URL+tag
+// pattern: its GHL automation adds the `bfd_setter-try_gary` tag and posts to
+// the single ingress (sync-ghl-contact), which routes via the tagged cadence.
+// This direct `source: "try-gary-landing"` handler is retained for backward
+// compatibility only and no longer applies a per-persona voice-setter override
+// (the try_gary_persona_slots mechanism is retired). It still resolves the
+// `bfd_setter-try_gary` cadence and enrols the lead (agent_style + UTM ride
+// through as Retell dynamic_variables). New setups should NOT use this path.
 async function handleTryGaryLanding(
   supabase: any,
   body: any,
@@ -361,11 +358,10 @@ async function handleTryGaryLanding(
   if (!phone) return jsonResponse({ error: "phone is required" }, 400);
   if (!ghlContactId) return jsonResponse({ error: "ghl_contact_id is required" }, 400);
 
-  // Look up BFD by hardcoded location id. Pulling try_gary_persona_slots
-  // for the agent_style → Voice Setter slot routing (Batch 4).
+  // Look up BFD by hardcoded location id.
   const { data: client, error: clientErr } = await supabase
     .from("clients")
-    .select("id, ghl_location_id, ghl_api_key, try_gary_persona_slots")
+    .select("id, ghl_location_id, ghl_api_key")
     .eq("ghl_location_id", TRY_GARY_BFD_LOCATION_ID)
     .maybeSingle();
   if (clientErr || !client) {
@@ -374,17 +370,6 @@ async function handleTryGaryLanding(
   }
   const clientId = client.id as string;
   const locationId = client.ghl_location_id as string;
-
-  // Resolve persona slot override. NULL or missing key → null (runEngagement
-  // falls back to the channel's hardcoded voice_setter_id). Phase 1 seed
-  // has all 4 styles pointing at slot 2 (BFD's existing Gary); Brendan
-  // updates the map as he provisions slots 4-7.
-  const personaSlots = (client as any).try_gary_persona_slots as Record<string, unknown> | null;
-  const rawSlot = personaSlots?.[agentStyle];
-  const voiceSetterOverride =
-    typeof rawSlot === "number" && rawSlot >= 1 && rawSlot <= 10
-      ? `Voice-Setter-${rawSlot}`
-      : null;
 
   // Phone-dedup guard (reuse the existing 5-min helper).
   const phoneDuplicate = await isPhoneRecentDuplicate(
@@ -486,11 +471,9 @@ async function handleTryGaryLanding(
         utm_source: typeof body.utm_source === "string" ? body.utm_source : undefined,
         utm_medium: typeof body.utm_medium === "string" ? body.utm_medium : undefined,
         utm_campaign: typeof body.utm_campaign === "string" ? body.utm_campaign : undefined,
-        // Batch 4 — Voice Setter slot override. runEngagement applies this
-        // at the phone_call channel so try-gary leads route to per-style
-        // agents (slots 4-7 once Brendan provisions). Null/absent → uses
-        // channel-default Voice-Setter-2.
-        voice_setter_id_override: voiceSetterOverride ?? undefined,
+        // Persona-slot voice-setter override retired 2026-05-31: agent selection
+        // is now per-campaign (tag-per-campaign), not per-persona within one
+        // cadence. The cadence's own phone_call node decides the voice setter.
       },
     });
   } catch (enrollErr) {

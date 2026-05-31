@@ -1,3 +1,12 @@
+// CANONICAL LEAD-INTAKE INGRESS (2026-05-31).
+// This is THE single inbound webhook URL for every client. Routing is decided
+// entirely by the tag(s) the lead arrives with: a tag matching an active
+// new-leads cadence (engagement_workflows.new_leads_tag) routes the lead there;
+// no match falls back to the client's default cadence
+// (clients.auto_engagement_workflow_id). Tags are read from the query string
+// (Tag/tag/Form_Tag/route_tag), the JSON body (tag/tags[]) and contact.tags.
+// Per form/agent, the only client setup is one GHL automation that adds a
+// routing tag and posts here. See Docs/FORM_ROUTING.md.
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.49.1";
 import { fetchActiveNewLeadsWorkflows, resolveWorkflow } from "../_shared/resolve-workflow.ts";

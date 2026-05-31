@@ -209,3 +209,20 @@ Ops notes: Supabase Management API SQL runner needs a non-python User-Agent (Clo
 - Verify every "dead code" claim before deleting (audit was wrong 3x this session).
 - Backward compatible — never break the live main-form flow.
 - Prod deploy authorized; valid SUPABASE_PAT in .env; Management API needs a browser-style User-Agent.
+
+---
+
+# SESSION LOG — 2026-05-31 (continuation: autonomous build of the locked NEXT SESSION scope) — SHIPPED + DEPLOYED
+
+All 10 Claude items done, deployed, verified. Backend on Supabase ref `bjgrgbgykvjrsuwwruoh` (= `SUPABASE_URL` / `BFD_PLATFORM_URL`; note `BFD_SETTER_LIVE_URL` `qildpilxjodxdifggmto` is a separate project).
+
+- **1. Single-ingress + persona-slot retire**: `sync-ghl-contact` declared THE canonical ingress (header comment); deployed **v16**. `ghl-tag-webhook` `handleTryGaryLanding` marked DEPRECATED, persona-slot override (`try_gary_persona_slots` read + `voice_setter_id_override` emission) removed; deployed **v8**. `runEngagement.ts` override reads marked DEPRECATED/inert (comment-only; no trigger.dev redeploy). `clients.try_gary_persona_slots` column kept but COMMENT-deprecated.
+- **2-4. Workflows.tsx campaign-row UI**: Form Tag label + helper tooltip + amber empty-tag warning (empty-error/save toasts already existed); Power activate/disable toggle on the row (confirm dialog, reuses Engagement is_active pattern); DEFAULT badge + Crown "Set as default" action (reads/writes `clients.auto_engagement_workflow_id`, now fetched in `fetchAll`). Frontend deploys via Railway on push.
+- **5. Try-Gary campaign**: cloned cadence `40e8bea3` (9 nodes) → `3fda0794` verbatim via `scripts/clone_try_gary_cadence.mjs`; both phone_call nodes' `voice_setter_id` set to sentinel **`TODO-confirm-try-gary-agent`**; left INACTIVE, tag `bfd_setter-try_gary` preserved. No message content authored.
+- **6. types.ts — SURGICAL, not wholesale (evidence-based deviation)**: a full `gen types` from the platform DB **regressed tsc 26 → 232 errors** (the frontend is multi-DB; ~30 files use typed `.from()` on tables not in the platform schema: `campaign_leads`, `client_portals`, `lead_tags`, `webinar_setup`, `analytics_chat_*`, RPC `delete_campaign_with_data`, …). Instead surgically added `cadence_metrics` table + `leads.form_source` + `voice_setters.legacy_slot` → **26 → 24 errors, zero regressions**. Remaining 24 are pre-existing local-type issues (LeadReactivation `ReactivationTotals`, Engagement WorkflowNode, Json/Timeout), NOT schema drift.
+- **7. Debug routes gated**: `CreatorRouteGuard` (uses `useCreatorMode`) wraps `/debug-ai-reps*` + `/debug-inject-lead` in `App.tsx`; non-creators redirect to dashboard.
+- **8. Legacy reactivation retired**: native path verified live (`reactivate-lead-list` HTTP 400 reachable; `CampaignCreate` invokes it). Deleted edge fns `campaign-executor` + `bulk-insert-leads`; removed dead `triggerProcessing` (RealTimeDashboard), the RequestLogs label, and both deploy SLUGS. **Finding: `campaign_leads` table does not exist in the platform DB** (so nothing to drop) — `campaigns` exists (legacy Dashboard UI) and is now COMMENT-deprecated. Migration `20260531140000`.
+- **9. Dual lockfile**: removed tracked root `pnpm-lock.yaml` + local `frontend/pnpm-lock.yaml` (latter was already gitignored); standardized npm. Verified `npm ci` (546 pkgs) + `npm run build` (vite, 22s) green → Railway build unaffected.
+- **10. Deploy/verify/docs**: migration applied + comments verified; 2 edge fns deployed + probed; docs updated (FORM_ROUTING one-URL+tag standard + persona-slot retired, ARCHITECTURE legacy-path retired, CADENCE_DESIGN business-hours pointer). Pushed to github + origin.
+
+Verified-FALSE / corrected assumptions this session: (a) types.ts wholesale regen was WRONG (multi-DB app); surgical is correct. (b) `campaign_leads` is not "live-but-dead-code" — it simply doesn't exist in the platform DB; the legacy campaign Dashboard/CampaignDetail UI reads it and errors at runtime (pre-existing, left intact, out of scope).

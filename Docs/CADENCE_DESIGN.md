@@ -119,7 +119,7 @@ if (START_KEYWORDS_RE.test(messageBody)) {
 }
 ```
 
-`isWithinBusinessHours()` from `bulk-insert-leads/index.ts:30-61` is reused (move to `frontend/supabase/functions/_shared/business-hours.ts`).
+`isWithinBusinessHours()` lives in `frontend/supabase/functions/_shared/business-hours.ts` (originally inlined in the now-deleted `bulk-insert-leads`; extracted for reuse).
 
 **Per-lead TZ resolution** (best-effort, not authoritative):
 

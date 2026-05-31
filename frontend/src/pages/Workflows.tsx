@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { StatusTag } from '@/components/StatusTag';
 import { toast } from 'sonner';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
-import { Pencil, Trash2, Plus, GripVertical, Save } from '@/components/icons';
+import { Pencil, Trash2, Plus, GripVertical, Save, Power, PowerOff, Crown } from '@/components/icons';
 import { Switch } from '@/components/ui/switch';
 import type { Workflow } from '@/types/workflow';
 import RetroLoader from '@/components/RetroLoader';
@@ -47,19 +47,25 @@ interface EngagementWorkflow {
 function SortableCampaignRow({
   ew,
   clientId,
+  defaultWorkflowId,
   navigate,
   onEdit,
   onDelete,
   onNewLeadsToggle,
   onNewLeadsTagChange,
+  onActivateToggle,
+  onSetDefault,
 }: {
   ew: EngagementWorkflow;
   clientId: string;
+  defaultWorkflowId: string | null;
   navigate: (path: string) => void;
   onEdit: (ew: EngagementWorkflow) => void;
   onDelete: (id: string, name: string, e: React.MouseEvent) => void;
   onNewLeadsToggle: (ew: EngagementWorkflow, on: boolean) => void;
   onNewLeadsTagChange: (ew: EngagementWorkflow, tag: string) => void;
+  onActivateToggle: (ew: EngagementWorkflow) => void;
+  onSetDefault: (ew: EngagementWorkflow) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: ew.id });
   const { cb } = useCreatorMode();
@@ -83,6 +89,11 @@ function SortableCampaignRow({
     if (trimmed === (ew.new_leads_tag ?? '')) return;
     onNewLeadsTagChange(ew, trimmed);
   };
+
+  const isDefault = !!defaultWorkflowId && ew.id === defaultWorkflowId;
+  // A new-leads campaign with no tag only receives leads if it is the default
+  // (untagged fallback). Otherwise it is unreachable until a tag is set.
+  const tagMissing = !!ew.is_new_leads_campaign && !tagDraft.trim() && !isDefault;
 
   return (
     <div
@@ -109,32 +120,95 @@ function SortableCampaignRow({
           {ew.is_active ? 'ACTIVE' : 'INACTIVE'}
         </StatusTag>
         <StatusTag variant="warning">CAMPAIGN</StatusTag>
+        {isDefault && (
+          <TooltipProvider delayDuration={200}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="cursor-default"><StatusTag variant="positive">DEFAULT</StatusTag></span>
+              </TooltipTrigger>
+              <TooltipContent side="top" className="max-w-[240px] text-center">
+                <p className="field-text">Receives new leads that arrive with no matching form tag (the untagged fallback).</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        )}
         <div
           className="flex items-center gap-2"
           onClick={(e) => e.stopPropagation()}
         >
-          <span className="text-muted-foreground field-text uppercase" style={{ fontSize: 11 }}>NEW LEADS</span>
+          <TooltipProvider delayDuration={200}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Label className="text-muted-foreground field-text uppercase cursor-help" style={{ fontSize: 11 }}>NEW LEADS</Label>
+              </TooltipTrigger>
+              <TooltipContent side="top" className="max-w-[260px] text-center">
+                <p className="field-text">Turn on to route inbound leads here. Set a Form Tag to match a specific form, or make this the default to catch untagged leads.</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
           <Switch
             checked={!!ew.is_new_leads_campaign}
             onCheckedChange={(on) => onNewLeadsToggle(ew, on)}
           />
           {ew.is_new_leads_campaign && (
-            <Input
-              autoFocus
-              value={tagDraft}
-              onChange={(e) => setTagDraft(e.target.value)}
-              onBlur={commitTag}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') { e.currentTarget.blur(); }
-                if (e.key === 'Escape') { setTagDraft(ew.new_leads_tag ?? ''); e.currentTarget.blur(); }
-              }}
-              placeholder="form tag (e.g. form-roofing)"
-              className="field-text h-8 w-44"
-            />
+            <div className="flex flex-col">
+              <Input
+                value={tagDraft}
+                onChange={(e) => setTagDraft(e.target.value)}
+                onBlur={commitTag}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') { e.currentTarget.blur(); }
+                  if (e.key === 'Escape') { setTagDraft(ew.new_leads_tag ?? ''); e.currentTarget.blur(); }
+                }}
+                placeholder="Form Tag (e.g. form-roofing)"
+                aria-label="Form Tag"
+                className={`field-text h-8 w-44 ${tagMissing ? 'border-amber-500 focus-visible:ring-amber-500' : ''}`}
+              />
+              <span
+                className={`field-text mt-0.5 ${tagMissing ? 'text-amber-500' : 'text-muted-foreground'}`}
+                style={{ fontSize: 10 }}
+              >
+                {tagMissing
+                  ? 'No tag — only the default catches these leads'
+                  : 'Routes leads with this GHL tag here'}
+              </span>
+            </div>
           )}
         </div>
       </div>
       <div className="flex items-center gap-1 shrink-0">
+        {ew.is_new_leads_campaign && !isDefault && (
+          <TooltipProvider delayDuration={200}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  className="groove-btn !h-8 !w-8 !p-0 !min-h-[32px] !min-w-[32px] flex items-center justify-center bg-muted/50"
+                  onClick={(e) => { e.stopPropagation(); onSetDefault(ew); }}
+                >
+                  <Crown className="h-4 w-4" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="top" className="max-w-[220px] text-center">
+                <p className="field-text">Set as default (untagged-lead fallback)</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        )}
+        <TooltipProvider delayDuration={200}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                className={`groove-btn !h-8 !w-8 !p-0 !min-h-[32px] !min-w-[32px] flex items-center justify-center ${ew.is_active ? 'groove-btn-destructive' : 'groove-btn-positive'}`}
+                onClick={(e) => { e.stopPropagation(); onActivateToggle(ew); }}
+              >
+                {ew.is_active ? <PowerOff className="h-4 w-4" /> : <Power className="h-4 w-4" />}
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="top" className="max-w-[200px] text-center">
+              <p className="field-text">{ew.is_active ? 'Disable campaign' : 'Enable campaign'}</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
         <button
           className="groove-btn !h-8 !w-8 !p-0 !min-h-[32px] !min-w-[32px] flex items-center justify-center bg-muted/50"
           onClick={(e) => { e.stopPropagation(); onEdit(ew); }}
@@ -157,20 +231,26 @@ function CampaignsDndList({
   engagementWorkflows,
   setEngagementWorkflows,
   clientId,
+  defaultWorkflowId,
   navigate,
   onEdit,
   onDelete,
   onNewLeadsToggle,
   onNewLeadsTagChange,
+  onActivateToggle,
+  onSetDefault,
 }: {
   engagementWorkflows: EngagementWorkflow[];
   setEngagementWorkflows: React.Dispatch<React.SetStateAction<EngagementWorkflow[]>>;
   clientId: string;
+  defaultWorkflowId: string | null;
   navigate: (path: string) => void;
   onEdit: (ew: EngagementWorkflow) => void;
   onDelete: (id: string, name: string, e: React.MouseEvent) => void;
   onNewLeadsToggle: (ew: EngagementWorkflow, on: boolean) => void;
   onNewLeadsTagChange: (ew: EngagementWorkflow, tag: string) => void;
+  onActivateToggle: (ew: EngagementWorkflow) => void;
+  onSetDefault: (ew: EngagementWorkflow) => void;
 }) {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
@@ -209,11 +289,14 @@ function CampaignsDndList({
               key={ew.id}
               ew={ew}
               clientId={clientId}
+              defaultWorkflowId={defaultWorkflowId}
               navigate={navigate}
               onEdit={onEdit}
               onDelete={onDelete}
               onNewLeadsToggle={onNewLeadsToggle}
               onNewLeadsTagChange={onNewLeadsTagChange}
+              onActivateToggle={onActivateToggle}
+              onSetDefault={onSetDefault}
             />
           ))}
         </div>
@@ -227,6 +310,8 @@ export default function Workflows() {
   const navigate = useNavigate();
   const [workflows, setWorkflows] = useState<Workflow[]>([]);
   const [engagementWorkflows, setEngagementWorkflows] = useState<EngagementWorkflow[]>([]);
+  const [defaultWorkflowId, setDefaultWorkflowId] = useState<string | null>(null);
+  const [activateTarget, setActivateTarget] = useState<EngagementWorkflow | null>(null);
   const [loading, setLoading] = useState(true);
   const [editingName, setEditingName] = useState<{ id: string; name: string; type: 'custom' | 'campaign' } | null>(null);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
@@ -263,7 +348,7 @@ export default function Workflows() {
       setEngagementWorkflows(cached.ew);
       setLoading(false);
     }
-    const [wfRes, ewRes] = await Promise.all([
+    const [wfRes, ewRes, clientRes] = await Promise.all([
       (supabase as any)
         .from('workflows')
         .select('*')
@@ -275,11 +360,17 @@ export default function Workflows() {
         .eq('client_id', clientId)
         .order('sort_order', { ascending: true })
         .order('created_at', { ascending: false }),
+      (supabase as any)
+        .from('clients')
+        .select('auto_engagement_workflow_id')
+        .eq('id', clientId)
+        .maybeSingle(),
     ]);
     const wf = (wfRes.data as Workflow[]) || [];
     const ew = (ewRes.data as EngagementWorkflow[]) || [];
     setWorkflows(wf);
     setEngagementWorkflows(ew);
+    setDefaultWorkflowId((clientRes.data?.auto_engagement_workflow_id as string | null) ?? null);
     setCache(cacheKey, { wf, ew });
     setLoading(false);
   }
@@ -401,11 +492,15 @@ export default function Workflows() {
         if (!clientRow?.auto_engagement_workflow_id) {
           await (supabase as any).from('clients')
             .update({ auto_engagement_workflow_id: ew.id }).eq('id', clientId);
+          setDefaultWorkflowId(ew.id);
+        } else {
+          setDefaultWorkflowId(clientRow.auto_engagement_workflow_id as string);
         }
       } else {
         await (supabase as any).from('clients')
           .update({ auto_engagement_workflow_id: null })
           .eq('id', clientId).eq('auto_engagement_workflow_id', ew.id);
+        setDefaultWorkflowId(prev => (prev === ew.id ? null : prev));
       }
       toast.success(on
         ? (newTag
@@ -435,6 +530,42 @@ export default function Workflows() {
       return;
     }
     toast.success(`Tag updated to '${tag}'`);
+  }
+
+  // Activate/disable a campaign from the list row (confirmed). Mirrors the
+  // is_active toggle pattern in Engagement.tsx.
+  async function confirmActivateToggle() {
+    const ew = activateTarget;
+    if (!ew) return;
+    const nextActive = !ew.is_active;
+    const { error } = await (supabase as any)
+      .from('engagement_workflows')
+      .update({ is_active: nextActive, updated_at: new Date().toISOString() })
+      .eq('id', ew.id);
+    if (error) {
+      toast.error('Failed to update campaign status');
+    } else {
+      setEngagementWorkflows(prev => prev.map(w => w.id === ew.id ? { ...w, is_active: nextActive } : w));
+      toast.success(nextActive ? `'${ew.name}' activated` : `'${ew.name}' disabled`);
+    }
+    setActivateTarget(null);
+  }
+
+  // Make a (new-leads) campaign the client default: the untagged-lead fallback.
+  async function handleSetDefault(ew: EngagementWorkflow) {
+    if (!clientId) return;
+    const prevDefault = defaultWorkflowId;
+    setDefaultWorkflowId(ew.id);
+    const { error } = await (supabase as any)
+      .from('clients')
+      .update({ auto_engagement_workflow_id: ew.id })
+      .eq('id', clientId);
+    if (error) {
+      toast.error('Failed to set default campaign');
+      setDefaultWorkflowId(prevDefault);
+      return;
+    }
+    toast.success(`'${ew.name}' is now the default (untagged-lead fallback)`);
   }
 
   async function confirmDelete() {
@@ -507,11 +638,14 @@ export default function Workflows() {
             engagementWorkflows={engagementWorkflows}
             setEngagementWorkflows={setEngagementWorkflows}
             clientId={clientId!}
+            defaultWorkflowId={defaultWorkflowId}
             navigate={navigate}
             onEdit={(ew) => setEditingName({ id: ew.id, name: ew.name, type: 'campaign' })}
             onDelete={(id, name, e) => handleDeleteClick(id, name, 'campaign', e)}
             onNewLeadsToggle={handleNewLeadsToggle}
             onNewLeadsTagChange={handleNewLeadsTagChange}
+            onActivateToggle={(ew) => setActivateTarget(ew)}
+            onSetDefault={handleSetDefault}
           />
         )}
 
@@ -729,6 +863,19 @@ export default function Workflows() {
         title={deleteTarget?.type === 'campaign' ? 'Delete Campaign Workflow' : 'Delete Workflow'}
         itemName={deleteTarget?.name}
         description={deleteTarget?.type === 'campaign' ? 'This will permanently delete this campaign workflow, all associated engagement executions, and the analytics dashboard for any campaigns linked to it. This action cannot be undone.' : undefined}
+      />
+
+      <DeleteConfirmDialog
+        open={!!activateTarget}
+        onOpenChange={(open) => { if (!open) setActivateTarget(null); }}
+        onConfirm={confirmActivateToggle}
+        title={activateTarget?.is_active ? 'Disable Campaign' : 'Enable Campaign'}
+        itemName={activateTarget?.name}
+        confirmLabel={activateTarget?.is_active ? 'Disable' : 'Enable'}
+        confirmIcon={activateTarget?.is_active ? <PowerOff className="w-4 h-4 mr-2" /> : <Power className="w-4 h-4 mr-2" />}
+        description={activateTarget?.is_active
+          ? 'This will disable the campaign. No new leads will be enrolled until it is re-enabled.'
+          : 'This will enable the campaign. New leads will be enrolled based on its form-tag / default routing.'}
       />
     </div>
   );

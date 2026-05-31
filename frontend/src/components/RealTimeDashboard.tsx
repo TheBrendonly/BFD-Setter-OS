@@ -227,29 +227,6 @@ const RealTimeDashboard = () => {
     }
   };
 
-  // Trigger manual processing
-  const triggerProcessing = async () => {
-    try {
-      const { error } = await supabase.functions.invoke('campaign-executor', {
-        body: { action: 'process' }
-      });
-
-      if (error) throw error;
-
-      toast({
-        title: "Processing triggered",
-        description: "Manual campaign processing has been triggered",
-      });
-    } catch (error) {
-      console.error('Error triggering processing:', error);
-      toast({
-        title: "Error",
-        description: "Failed to trigger processing",
-        variant: "destructive"
-      });
-    }
-  };
-
   // Delete campaign and all associated data
   const deleteCampaign = async (campaign: Campaign) => {
     try {

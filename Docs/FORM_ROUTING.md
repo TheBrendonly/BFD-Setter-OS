@@ -14,7 +14,7 @@ Then in the app you create one **Campaign** per tag (clone an existing one and c
 
 **"Different agent per form/field" = tag-per-campaign.** If a form field should pick the agent, have the GHL automation add a different tag per value, each mapped to its own campaign. (A within-cadence "agent varies by field, one cadence" override is intentionally NOT built — the tag-per-campaign model is the standard.)
 
-**Try-Gary note:** historically Try-Gary used a separate direct webhook (`source=try-gary-landing`) — that is **legacy/deprecated**. Try-Gary now follows the same pattern: its form's automation adds the `bfd_setter-try_gary` tag and posts to the one URL.
+**Try-Gary note:** historically Try-Gary used a separate direct webhook (`source=try-gary-landing`) plus a per-persona voice-setter override (`clients.try_gary_persona_slots`). Both are **legacy/deprecated as of 2026-05-31**. Try-Gary now follows the same pattern as everything else: its form's automation adds the `bfd_setter-try_gary` tag and posts to the one URL, and the Try-Gary cadence's own phone_call node decides which agent calls (tag-per-campaign). There is no within-cadence "agent varies by persona/field" override — that mechanism was removed.
 
 ## How routing works
 
@@ -35,7 +35,9 @@ Resolver: `frontend/supabase/functions/_shared/resolve-workflow.ts`. It's used b
 **Default-cadence rule:** in the Workflows UI, the **first** cadence you toggle "NEW LEADS" on becomes the client's default (untagged-fallback). Additional ones are tag-routed only.
 
 ### Try-Gary (BFD-specific)
-The Try-Gary landing page posts `source: "try-gary-landing"` directly to `ghl-tag-webhook`, which has a dedicated handler. It routes to the cadence tagged **`bfd_setter-try_gary`** (constant `TRY_GARY_WORKFLOW_TAG`), falling back to the single active new-leads cadence if none is tagged. Persona → agent selection within that cadence is driven by `clients.try_gary_persona_slots` (maps `agent_style` → a voice setter slot 1-10).
+The canonical path is the one-URL+tag pattern above: the Try-Gary form adds the `bfd_setter-try_gary` tag and posts to `sync-ghl-contact`, which routes to the cadence tagged **`bfd_setter-try_gary`**, else the default.
+
+A **deprecated** legacy path still exists for backward compatibility: the old Try-Gary landing page posts `source: "try-gary-landing"` directly to `ghl-tag-webhook`, whose handler resolves the same `bfd_setter-try_gary` cadence (constant `TRY_GARY_WORKFLOW_TAG`), falling back to the single active new-leads cadence if none is tagged. As of 2026-05-31 this handler **no longer applies any per-persona voice-setter override** — `clients.try_gary_persona_slots` is retired and unread. The agent that calls is whatever the cadence's phone_call node is set to. New setups should not use the `try-gary-landing` direct webhook.
 
 ---
 
@@ -51,8 +53,8 @@ You have a **main form** and the **Try-Gary form**. Both ingress paths already e
 ### 2. Try-Gary form → Try-Gary cadence
 1. App → **Workflows** → open (or create) the **Try-Gary cadence** (the persona/agent setup for the demo).
 2. Toggle **NEW LEADS** on and set the **form tag** to exactly **`bfd_setter-try_gary`**.
-3. No GHL form/workflow change needed: the Try-Gary landing posts directly to `ghl-tag-webhook` and now resolves to this tagged cadence.
-4. (Optional) To use different voice personas, set `clients.try_gary_persona_slots`, e.g. `{ "property-coach": 4, "mortgage-broker": 5 }` (style → voice setter slot). Provision those slots first (see below).
+3. Point the Try-Gary form's GHL automation at the one webhook URL (`sync-ghl-contact`) and have it add the `bfd_setter-try_gary` tag. (The legacy `try-gary-landing` direct webhook still resolves the same cadence, but the canonical setup is the one-URL+tag pattern.)
+4. Set the agent that calls in the cadence itself: open the Try-Gary cadence's phone_call node(s) and choose the voice setter. (There is no per-persona override anymore — one cadence, one configured agent per phone_call node. To vary the agent by form, use a separate tag + campaign.)
 
 ### Result
 - Main-form leads → main cadence/agent (default).
@@ -93,7 +95,7 @@ When you do need one:
    - Slots 1-3 use the legacy columns `retell_phone_1..3` (already backfilled into `voice_setter_phone_bindings` as outbound bindings).
    - For slots 4-10 today, set the number via the legacy mechanism / DB; a per-setter phone-binding UI is a planned enhancement (see ROADMAP). The call resolver reads the outbound binding (`voice_setter_phone_bindings.direction='outbound'`), else the slot's legacy phone.
    - Buy/port numbers in Twilio; one number should belong to **one** client (run `scripts/phone_uniqueness_audit_and_fix.sql` before scaling clients).
-4. **Use it in a cadence**: reference the slot (`Voice-Setter-N`) in a phone-call node, or (for Try-Gary) map a persona to the slot via `try_gary_persona_slots`.
+4. **Use it in a cadence**: reference the slot (`Voice-Setter-N`) in a phone-call node of the relevant campaign. (To have a different agent per form, give each form its own tag + campaign and set that campaign's phone-call node to the desired agent.)
 
 Cost note: Retell agents and Twilio numbers are external, paid resources.
 

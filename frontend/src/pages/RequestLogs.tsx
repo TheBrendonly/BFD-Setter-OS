@@ -673,7 +673,6 @@ const RequestLogs = () => {
       'analyze-simulation': 'Simulation Analysis',
       'save-external-prompt': 'Save Prompt',
       'notify-webhook': 'Webhook Notify',
-      'campaign-executor': 'Campaign Exec',
     };
     return labels[source] || source;
   };

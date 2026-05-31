@@ -11,7 +11,7 @@ const FN_DIR = '/srv/bfd/Projects/bfd-setter/frontend/supabase/functions';
 // included so any reference to ../_shared/X.ts resolves.
 const SLUGS = [
   'analytics-v2-process','analytics-v2-suggest-widgets','analyze-chat-history','analyze-metric',
-  'analyze-setter-prompt','analyze-simulation','bulk-insert-leads','campaign-executor',
+  'analyze-setter-prompt','analyze-simulation',
   'chat-with-history','check-client-subscription','copy-setter-config','format-metric-chart',
   'generate-ai-prompt','generate-conversation-examples','generate-setter-config',
   'generate-simulation-config','generate-simulation-personas','generate-simulation-report',
