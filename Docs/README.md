@@ -13,6 +13,7 @@ Start here. The docs are now a small, maintained set; everything historical live
 | [`CLIENT_ONBOARDING_SOP.md`](CLIENT_ONBOARDING_SOP.md) | Step-by-step new-client provisioning. |
 | [`CADENCE_DESIGN.md`](CADENCE_DESIGN.md) | The engagement cadence engine: state machine, node types, guards. |
 | [`CAMPAIGN_PLAYBOOK.md`](CAMPAIGN_PLAYBOOK.md) | Operator recipes: new-lead, reactivation (native), and list campaigns. |
+| [`FORM_ROUTING.md`](FORM_ROUTING.md) | Operator guide: how inbound forms route to cadences/agents (incl. BFD's main + Try-Gary setup), adding new forms, and provisioning additional voice agents. |
 | [`ROADMAP.md`](ROADMAP.md) | Active build roadmap + the Claude/Brendan to-do lists. |
 | [`SELF_HOSTING_FEASIBILITY.md`](SELF_HOSTING_FEASIBILITY.md) | Future-reference investigation: replacing Supabase + Trigger.dev with self-hosted infra on Railway. Findings, pros/cons, recommendation, migration steps. |
 

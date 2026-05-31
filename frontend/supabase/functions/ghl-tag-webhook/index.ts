@@ -127,6 +127,11 @@ function readCustomField(
 
 const TRY_GARY_TAG_PREFIX = "1prompt-try-gary-";
 
+// The new_leads_tag that marks the Try-Gary cadence. Set this as the form tag on
+// the Try-Gary campaign in the Workflows UI so the Try-Gary landing routes to it
+// deterministically (a client may now have several new-leads workflows).
+const TRY_GARY_WORKFLOW_TAG = "bfd_setter-try_gary";
+
 // Phase 1 try-gary landing page lives on BFD's marketing site → posts to BFD's
 // GHL location → custom-body webhook to this fn with source="try-gary-landing".
 // Hardcoded for Phase 1 because try-gary is BFD-only; promote to a
@@ -432,16 +437,29 @@ async function handleTryGaryLanding(
     });
   }
 
-  // Look up the active new-leads workflow on BFD. Tag-match not used here
-  // (try-gary leads don't carry a workflow-matching tag in the body).
-  const { data: workflow, error: wfErr } = await supabase
+  // Resolve the Try-Gary cadence. Prefer a new-leads workflow explicitly tagged
+  // TRY_GARY_WORKFLOW_TAG (deterministic now that a client may have several
+  // new-leads workflows); fall back to the single active new-leads workflow for
+  // backward compat when no Try-Gary cadence is tagged.
+  let { data: workflow, error: wfErr } = await supabase
     .from("engagement_workflows")
     .select("id, name")
     .eq("client_id", clientId)
     .eq("is_active", true)
     .eq("is_new_leads_campaign", true)
+    .eq("new_leads_tag", TRY_GARY_WORKFLOW_TAG)
     .limit(1)
     .maybeSingle();
+  if (!workflow) {
+    ({ data: workflow, error: wfErr } = await supabase
+      .from("engagement_workflows")
+      .select("id, name")
+      .eq("client_id", clientId)
+      .eq("is_active", true)
+      .eq("is_new_leads_campaign", true)
+      .limit(1)
+      .maybeSingle());
+  }
   if (wfErr || !workflow) {
     console.warn("ghl-tag-webhook[try-gary]: no active new-leads workflow", wfErr);
     return jsonResponse({ error: "no_active_new_leads_workflow" }, 404);
