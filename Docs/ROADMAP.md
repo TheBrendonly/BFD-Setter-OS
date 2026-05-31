@@ -108,3 +108,29 @@ All code is on `main`, **uncommitted and undeployed**, pending review.
 ### Verified-FALSE audit findings (no action)
 - `execution_logs` RLS is NOT unguarded — `campaigns.user_id` exists and the policies work (user-scoped).
 - `LEGACY_N8N_HOST` in retell-proxy is NOT dead — used for booking-URL substitution (line ~473).
+
+---
+
+## Part B progress — 2026-05-31 (post-deploy)
+
+**Done (safe, verified):**
+- Try-Gary cadence resolution made deterministic (`bfd_setter-try_gary` tag), deployed `ghl-tag-webhook` v7.
+- `Docs/FORM_ROUTING.md` added (form→agent routing + voice-agent provisioning reference); linked from README + ARCHITECTURE.
+- Archived 6 one-off scripts → `scripts/archive/`.
+- Removed the vestigial Campaign Webhook URL field + unused state/import from CampaignCreate (native reactivation leftover).
+- Renamed dead `bfdVoiceSetterPrompt.ts` → `.md` (unused; was breaking tsc).
+
+**Verified-and-NOT-touched (audit's "dead code" claims were wrong):**
+- `elevenlabs-manage-agent`: still referenced by `pages/_archived/VoiceAISetter.tsx`. Left in place.
+- Webinar components (`WebinarSetupGuideDialog`, `WebinarPresentationAgentChatInterface`): imported by the ACTIVE `SetupGuideDialog.tsx`. Removing requires untangling that first. Left in place.
+
+**Newly surfaced (was masked by the broken prompt file):**
+- `tsc --noEmit` now shows ~26 PRE-EXISTING type-drift errors across 7 files (top: `LeadReactivation.tsx`, `useReactivationData.ts` — `cadence_metrics` missing from generated `types.ts`; some Json-type mismatches). The build is unaffected (`vite build` doesn't run tsc). Fix = regenerate `frontend/src/integrations/supabase/types.ts` from the current DB schema (also picks up `leads.form_source`, `voice_setters.legacy_slot`). Tracked as a follow-up.
+
+**Deferred (with reasons), still on Claude's list:**
+- Per-setter phone-binding UI (slots 4-10) + UUID-native cadence picker in `Engagement.tsx` — large net-new UI on big files; legacy slot path works today.
+- Retire legacy reactivation (`bulk-insert-leads`/`campaign-executor`/`campaign_leads`) — wait until native reactivation is confirmed by a real prod run.
+- Gate `/debug-*` routes behind creator mode in App.tsx — useCreatorMode (`cb`) is available; needs careful routing edit.
+- Dual root lockfile — NOT removed: no Railway/packageManager config found, so changing it could affect the live build's auto-detection. Recommend deciding npm-vs-pnpm deliberately.
+- CI migrations-converge check — no `.github/workflows` exists yet; add when CI is set up.
+- Regenerate `types.ts` (see above).
