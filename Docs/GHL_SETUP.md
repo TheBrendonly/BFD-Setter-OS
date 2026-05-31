@@ -118,10 +118,42 @@ These came from the snapshot and are not used by the native engine. They do no h
 
 ---
 
-## 3. Try-Gary specifics
-1. Try-Gary form's automation adds the tag `bfd_setter-try_gary` (per section 2A).
-2. The central "Add Lead" automation fires the webhook (per section 2B); it routes to the Try-Gary cadence because that cadence's Form Tag is `bfd_setter-try_gary`.
-3. Before it will actually call anyone, in the app you must: (a) open the Try-Gary cadence and replace the `TODO-confirm-try-gary-agent` placeholder in each phone-call node with the real voice agent, and (b) toggle the cadence **active** (it ships inactive on purpose).
+## 3. Try-Gary specifics (lead picks the agent = tag-per-persona)
+
+The Try-Gary demo lets the lead **choose which agent calls them**. Each choice is a genuinely different Retell agent, and we route it with the **tag-per-campaign** model (decided 2026-05-31): the agent picker maps each choice to its own tag, each tag routes to its own Try-Gary campaign, and each campaign's phone-call node is set to that persona's Retell agent. No code: it is all GHL config + app campaigns + a Retell agent per persona.
+
+> There is no within-cadence "agent varies by field" override (that mechanism was retired 2026-05-31). The lead's choice picks a **tag/campaign**, not a dynamic agent inside one cadence.
+
+### Tag scheme (one per persona)
+Build only the personas you will actually offer and provision an agent for.
+
+| Lead picks | Tag the form adds | Campaign (app) | Retell agent |
+|---|---|---|---|
+| Property Coach | `bfd_setter-try_gary-property_coach` | Try-Gary: Property Coach | agent A |
+| Mortgage Broker | `bfd_setter-try_gary-mortgage_broker` | Try-Gary: Mortgage Broker | agent B |
+| Finance Strategist | `bfd_setter-try_gary-finance_strategist` | Try-Gary: Finance Strategist | agent C |
+| Generic Demo | `bfd_setter-try_gary-generic_demo` | Try-Gary: Generic Demo | agent D (the existing Gary) |
+| Crazy Gary | `bfd_setter-try_gary-crazy_gary` | Try-Gary: Crazy Gary | agent E |
+
+A lead must carry **exactly one** of these tags (mutually exclusive), so routing is unambiguous.
+
+### Try-Gary form fields
+First Name, Phone (required), Email, a consent checkbox, plus **"Choose your agent"** (radio/dropdown whose options are the personas above).
+
+### Try-Gary form-bridge automation (branch on the choice)
+- Node 1 (Trigger): **Form Submitted** -> Try-Gary form.
+- Node 2 (If/Else on the "Choose your agent" value), one branch per persona, each branch action = **Add Contact Tag** -> the matching tag above. (If your form builder supports per-option tagging, you can skip the If/Else and tag directly from the option.)
+
+### Central "Add Lead" automation
+Add **all** the persona tags to Automation 3's trigger filter (the Contact Tag Added list), alongside `bfd_setter-new_lead`. They all post to the same one webhook URL.
+
+### App: one campaign per persona
+For each persona: create a Campaign (clone the Try-Gary cadence), set its **Form Tag** to that persona's tag, set its phone-call node(s) to that persona's Retell agent, then **activate** it. The existing Try-Gary campaign (`3fda0794`, tag `bfd_setter-try_gary`) can be repurposed as one persona (e.g. Generic Demo) or kept as a catch-all fallback.
+
+### Provisioning (Brendan, external + paid)
+Each persona needs its own Retell agent (and an outbound number if it places calls). Create/Push those in Voice setup -> Retell Agents, then reference each in its campaign's phone-call node.
+
+**Scaling note:** this is linear (N personas = N campaigns + N Retell agents). That is the trade-off of tag-per-campaign. If persona count grows large and per-persona cadence content is identical, the (retired) within-cadence override would cut maintenance to one cadence; revisit only if that becomes painful.
 
 ---
 
