@@ -163,4 +163,77 @@ For each automation, confirm:
 | `intake-lead` | API / website snippet (needs a bearer secret) | `?clientId` + secret | body `tags[]` |
 | `bookings-webhook` | Appointment created/updated/cancelled | location id | n/a (booking, not lead) |
 
+---
+
+## 6. BFD current setup, build-ready (2 forms + 5 automations)
+
+This is the exact set to have right now. Field = what the form collects (mapped to the GHL standard contact field). Nodes = the steps inside the GHL automation.
+
+### Forms (2)
+
+**Form 1 — Main Lead Form** (on buildingflowdigital.com)
+
+| Form field | Maps to GHL contact field | Required? |
+|---|---|---|
+| First Name | `first_name` | yes |
+| Last Name | `last_name` | recommended |
+| Email | `email` | recommended |
+| Phone | `phone` | **required** (no phone = no call/SMS) |
+
+**Form 2 — Try-Gary Form**
+
+| Form field | Maps to GHL contact field | Required? |
+|---|---|---|
+| First Name | `first_name` | yes |
+| Phone | `phone` | **required** |
+| Email | `email` | recommended |
+| Consent checkbox ("I agree to be contacted by an AI agent") | a custom field or note | recommended (it places live calls) |
+
+Only First Name + Phone + Email actually need to reach the webhook (they ride on the standard contact fields automatically). Extra form fields are fine; they just aren't used for routing/calling unless you add them as Custom Data on the webhook.
+
+### Automations (5)
+
+**Automation 1 — `Form Submit: Main Form -> tag`**
+- Node 1 (Trigger): **Form Submitted** -> filter to the Main Lead Form.
+- Node 2 (Action): **Add Contact Tag** -> `bfd_setter-new_lead`.
+
+**Automation 2 — `Form Submit: Try-Gary -> tag`**
+- Node 1 (Trigger): **Form Submitted** -> filter to the Try-Gary Form.
+- Node 2 (Action): **Add Contact Tag** -> `bfd_setter-try_gary`.
+
+**Automation 3 — `Add Lead to 1Prompt OS`** (the one central webhook)
+- Node 1 (Trigger): **Contact Tag** (Added) -> filter tags: `bfd_setter-new_lead`, `bfd_setter-try_gary` (add future routing tags here).
+- Node 2 (Action): **Webhook** (standard Outbound)
+  - Method: `POST`
+  - URL: `https://bjgrgbgykvjrsuwwruoh.supabase.co/functions/v1/sync-ghl-contact` (no `?clientId=`)
+  - Payload: standard/default (sends `location.id`, `contact_id`, name/phone/email, `tags`). No custom mapping needed.
+
+> You likely already have a combined version of Automations 1 + 3 for the main form ("Add Lead to BFD-Setter OS"). That still works. The clean split above is what scales as you add forms: every form just drops a tag, and Automation 3 is the only thing that talks to the webhook.
+
+**Automation 4 — `BFD bookings -> 1prompt (BOOKED)`**
+- Node 1 (Trigger): **Appointment Status** -> filter: `Confirmed` (and/or `New`).
+- Node 2 (Action): **Custom Webhook**
+  - Method: `POST`, Content-Type: `application/x-www-form-urlencoded`
+  - URL: `https://bjgrgbgykvjrsuwwruoh.supabase.co/functions/v1/bookings-webhook`
+  - Body fields:
+    - `appointmentId` = `{{appointment.id}}`
+    - `contactId` = `{{contact.id}}`
+    - `calendarId` = `{{appointment.calendar.id}}` (or hardcode the calendar id)
+    - `locationId` = `{{location.id}}` (or hardcode)
+    - `startTime` = `{{appointment.start_time}}`
+    - `endTime` = `{{appointment.end_time}}`
+    - `status` = `confirmed` (hardcoded)
+
+**Automation 5 — `BFD bookings -> 1prompt (CANCELLED)`**
+- Same as Automation 4, but Node 1 filter: `Cancelled`, and body `status` = `cancelled`.
+- (BOOKED ends the active cadence; CANCELLED only records the status.)
+
+### Tag spelling (exact)
+- `bfd_setter-new_lead` (underscore between `bfd` `setter`... it is `bfd_setter` then hyphen `new_lead`).
+- `bfd_setter-try_gary`.
+
+These must match the Form Tag set on each Campaign in the app's Workflows page exactly.
+
+---
+
 See also: [FORM_ROUTING.md](FORM_ROUTING.md) (routing internals), [ARCHITECTURE.md](ARCHITECTURE.md) (system overview), [CADENCE_DESIGN.md](CADENCE_DESIGN.md) (the cadence engine).
