@@ -224,12 +224,23 @@ Deno.serve(async (req) => {
     // (a routing tag) or the contact's own tags. A tag matching an active
     // new-leads workflow routes the lead there; otherwise we fall back to the
     // client's default cadence (auto_engagement_workflow_id).
+    // Tags may arrive as an array (intake-lead / contact-tag webhooks) OR as a
+    // comma-separated string — GHL's standard outbound Webhook action sends
+    // "tags":"a,b" (a STRING, verified 2026-05-31), and a custom webhook may
+    // pass ?tags=a,b. Normalise both shapes so routing works regardless.
+    const asTagList = (v: unknown): string[] =>
+      Array.isArray(v)
+        ? v.filter((t): t is string => typeof t === "string")
+        : typeof v === "string"
+        ? v.split(",")
+        : [];
     const candidateTags: string[] = [
       url.searchParams.get("Tag"), url.searchParams.get("tag"),
       url.searchParams.get("Form_Tag"), url.searchParams.get("route_tag"),
-      typeof body.tag === "string" ? body.tag : null,
-      ...(Array.isArray(body.tags) ? body.tags : []),
-      ...(Array.isArray(contact.tags) ? contact.tags : []),
+      ...asTagList(url.searchParams.get("tags")),
+      ...asTagList(body.tag),
+      ...asTagList(body.tags),
+      ...asTagList(contact.tags),
     ].filter((t): t is string => typeof t === "string" && t.trim().length > 0).map((t) => t.trim());
 
     async function logExecution(
