@@ -124,18 +124,25 @@ The Try-Gary demo lets the lead **choose which agent calls them**. Each choice i
 
 > There is no within-cadence "agent varies by field" override (that mechanism was retired 2026-05-31). The lead's choice picks a **tag/campaign**, not a dynamic agent inside one cadence.
 
-### Tag scheme (one per persona)
-Build only the personas you will actually offer and provision an agent for.
+### Tag scheme (one per persona) — campaigns already created
+The persona campaigns are cloned and live (inactive) in the app. Generic Demo is the existing base Try-Gary campaign; the rest are dedicated clones.
 
-| Lead picks | Tag the form adds | Campaign (app) | Retell agent |
+| Lead picks | Tag the form adds | Campaign (app) | Voice/text setter |
 |---|---|---|---|
-| Property Coach | `bfd_setter-try_gary-property_coach` | Try-Gary: Property Coach | agent A |
-| Mortgage Broker | `bfd_setter-try_gary-mortgage_broker` | Try-Gary: Mortgage Broker | agent B |
-| Finance Strategist | `bfd_setter-try_gary-finance_strategist` | Try-Gary: Finance Strategist | agent C |
-| Generic Demo | `bfd_setter-try_gary-generic_demo` | Try-Gary: Generic Demo | agent D (the existing Gary) |
-| Crazy Gary | `bfd_setter-try_gary-crazy_gary` | Try-Gary: Crazy Gary | agent E |
+| Generic Demo | `bfd_setter-try_gary` | Try-Gary (base) | the existing Gary |
+| Property Coach | `bfd_setter-try_gary-property_coach` | Try-Gary: Property Coach | persona setters (you create) |
+| Mortgage Broker | `bfd_setter-try_gary-mortgage_broker` | Try-Gary: Mortgage Broker | persona setters (you create) |
+| Finance Strategist | `bfd_setter-try_gary-finance_strategist` | Try-Gary: Finance Strategist | persona setters (you create) |
+| Crazy Gary | `bfd_setter-try_gary-crazy_gary` | Try-Gary: Crazy Gary | persona setters (you create) |
 
 A lead must carry **exactly one** of these tags (mutually exclusive), so routing is unambiguous.
+
+**Creating each persona's setters + pointing the campaign at them: see [PERSONA_SETUP.md](PERSONA_SETUP.md)** (Duplicate setter -> Modify with AI -> select the setter in the campaign).
+
+### Where setters are selected (this is the part that is easy to miss)
+You select setters **inside the campaign editor** (click into a campaign), not on the Workflows list:
+- **Text setter = campaign-level.** The Engage config has a **"Text Setter"** picker ("Handles SMS and WhatsApp replies for this campaign"); it is stored on `engagement_campaigns.text_setter_number` and handles all inbound text replies for the campaign.
+- **Voice setter = per phone-call node.** Each `phone_call` node has its own **Voice Setter** picker (`voice_setter_id`). The persona clones ship with a `TODO-confirm-...-agent` placeholder you replace there.
 
 ### Try-Gary form fields
 First Name, Phone (required), Email, a consent checkbox, plus **"Choose your agent"** (radio/dropdown whose options are the personas above).
@@ -147,11 +154,11 @@ First Name, Phone (required), Email, a consent checkbox, plus **"Choose your age
 ### Central "Add Lead" automation
 Add **all** the persona tags to Automation 3's trigger filter (the Contact Tag Added list), alongside `bfd_setter-new_lead`. They all post to the same one webhook URL.
 
-### App: one campaign per persona
-For each persona: create a Campaign (clone the Try-Gary cadence), set its **Form Tag** to that persona's tag, set its phone-call node(s) to that persona's Retell agent, then **activate** it. The existing Try-Gary campaign (`3fda0794`, tag `bfd_setter-try_gary`) can be repurposed as one persona (e.g. Generic Demo) or kept as a catch-all fallback.
+### App: campaigns (already created)
+The five persona campaigns exist in the app (cloned from the base Try-Gary cadence, inactive, correctly tagged). For each one you only need to: create the persona's setters, select them in the campaign (text setter at campaign level, voice setter on each phone-call node), then **activate**. Full steps: [PERSONA_SETUP.md](PERSONA_SETUP.md).
 
 ### Provisioning (Brendan, external + paid)
-Each persona needs its own Retell agent (and an outbound number if it places calls). Create/Push those in Voice setup -> Retell Agents, then reference each in its campaign's phone-call node.
+Each persona needs its own Retell agent (and an outbound number if it places calls), plus a text setter if it replies by SMS. Create them by duplicating the base Gary and re-shaping with "Modify with AI" (see PERSONA_SETUP.md), then select the resulting `Voice-Setter-N` / `Setter-N` in the campaign.
 
 **Scaling note:** this is linear (N personas = N campaigns + N Retell agents). That is the trade-off of tag-per-campaign. If persona count grows large and per-persona cadence content is identical, the (retired) within-cadence override would cut maintenance to one cadence; revisit only if that becomes painful.
 

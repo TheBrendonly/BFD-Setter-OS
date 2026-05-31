@@ -152,6 +152,30 @@ All code is on `main`, **uncommitted and undeployed**, pending review.
 
 **Difficulty: MODERATE** (migration + a GHL custom-field fetch at enrol + UI; downstream already wired). **Recommendation: DEFER** — form-tag routing covers most needs; build when a second client actually needs same-cadence/different-agent. Lightweight interim: auto-generate one sub-campaign per field value from a template.
 
+## Future feature — campaign-level voice-setter default (UX enhancement)
+
+**Today (verified 2026-06-01):** text setter is selected at the campaign level (`engagement_campaigns.text_setter_number`, picker in the Engage config), and voice setter is selected **per phone_call node** (`node.channels[].voice_setter_id`, picker in each node). So per-campaign setter routing already works; the only gap vs the "set it once at the top" mental model is that voice has no campaign-level default — you set it on each call node.
+
+**Want:** a campaign-level "default voice setter" that all phone_call nodes inherit, with an optional per-node override for niche cases (matches how text already works). Low value while campaigns have 1-2 call nodes; nice as campaigns grow.
+
+**Design (when built):** add `engagement_campaigns.default_voice_setter_id` (or a workflow-level field); in the Engagement editor show a top-level Voice Setter picker; phone_call nodes use their own `voice_setter_id` if set, else the campaign default. `runEngagement` already resolves `ch.voice_setter_id` per node — add a fallback to the campaign default when the node's is empty. **Difficulty: LOW-MODERATE.** **Recommendation: DEFER** (per-node selection works now).
+
+## Future feature — A/B testing (split-test two campaigns under one tag)
+
+**Want:** group two (or more) campaigns so inbound leads for one tag are split between them, to test timing, framework (text vs text+call), or just the agent. Initial behaviour: simple round-robin (lead A -> variant A, lead B -> variant B, lead C -> variant A, ...). Then compare outcomes (reply rate, bookings) per variant.
+
+**Key constraints to solve (verified):**
+- The partial unique index `(client_id, new_leads_tag) WHERE is_new_leads_campaign` currently **prevents two new-leads campaigns from sharing a tag**. A/B needs grouped campaigns to share one tag, so this must be relaxed for grouped campaigns (or the group, not the campaign, owns the tag).
+- The resolver (`_shared/resolve-workflow.ts`) returns the **first** tag match (deterministic), not a rotation. A/B needs the resolver to detect "this tag maps to an A/B group" and pick a variant.
+
+**Design (when built):**
+- New `ab_test_groups` (id, client_id, new_leads_tag, variant_workflow_ids[], split: 'round_robin'|weighted, assign_counter or per-lead hash). The group owns the tag; member campaigns drop their own `new_leads_tag` (or keep it null) and reference the group.
+- Resolver: if an inbound tag matches an A/B group, choose a variant by round-robin (increment `assign_counter` atomically, mod N) or by a sticky hash of `lead_id` (so re-fires of the same lead stay in the same variant). Round-robin is simplest for v1; sticky-by-lead is safer if a lead can re-enter.
+- UI: in the Workflows CAMPAIGNS top section, multi-select campaigns -> "Group as A/B test" -> assign the shared tag + split mode; show an A/B-GROUP badge and side-by-side variant metrics (the per-campaign analytics already exist via `engagement_campaigns` + `cadence_metrics`).
+- Analytics: surface variant comparison (enrolled, reply rate, bookings) using existing per-campaign metrics.
+
+**Difficulty: MODERATE** (index change + group table + resolver rotation + grouping UI + comparison view). **Recommendation: DEFER to a dedicated build;** broadly useful across clients, so worth doing properly (with sticky-by-lead assignment and a clean comparison dashboard) rather than a quick hack.
+
 ## UI holes — implementation plan (next session)
 
 Frontend-only; deploys via Railway on push. Suggested order:
