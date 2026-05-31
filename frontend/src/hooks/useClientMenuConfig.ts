@@ -31,6 +31,10 @@ export const DEFAULT_MENU_ITEMS: MenuItemConfig[] = [
   { key: 'section-ops', label: 'OPS', visible: true, position: 11, locked: true, type: 'section-label' },
   { key: 'simulator', label: 'Simulator', visible: true, position: 12, type: 'item', icon: '⚔' },
   { key: 'workflows', label: 'Campaigns', visible: true, position: 13, type: 'item', icon: '⛓' },
+  // DB Reactivation (cold-list reactivation -> /campaigns). Was missing from this
+  // catalog so it never rendered in the sidebar for any client; route + MENU_ROUTE_MAP
+  // already existed. Position 13.5 slots it right after Campaigns in OPS.
+  { key: 'db-reactivation', label: 'DB Reactivation', visible: true, position: 13.5, type: 'item', icon: '⟳' },
   // Engagement page is a full workflow editor at /workflows/engagement but it's
   // also reachable from the Workflows (Campaigns) list. Hiding from sidebar to
   // reduce nav clutter; direct URL + Workflows entry still surface it.
