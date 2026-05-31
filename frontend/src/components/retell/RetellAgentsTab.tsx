@@ -720,6 +720,12 @@ const RetellAgentsTab: React.FC<RetellAgentsTabProps> = ({ clientId }) => {
                           { key: 'retell_outbound_agent_id', label: 'Outbound' },
                           { key: 'retell_outbound_followup_agent_id', label: 'Followup' },
                           { key: 'retell_agent_id_4', label: 'Agent 4' },
+                          { key: 'retell_agent_id_5', label: 'Agent 5' },
+                          { key: 'retell_agent_id_6', label: 'Agent 6' },
+                          { key: 'retell_agent_id_7', label: 'Agent 7' },
+                          { key: 'retell_agent_id_8', label: 'Agent 8' },
+                          { key: 'retell_agent_id_9', label: 'Agent 9' },
+                          { key: 'retell_agent_id_10', label: 'Agent 10' },
                         ].map(({ key, label }) => {
                           const isAssigned = credentials?.[key as keyof typeof credentials] === agent.agent_id;
                           return (

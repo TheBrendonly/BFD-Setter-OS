@@ -132,6 +132,45 @@ const SLOT_TO_AGENT_COLUMN: Record<number, string> = {
   10: "retell_agent_id_10",
 };
 
+// Dual-write the new voice_setters UUID model alongside the legacy slot column,
+// keyed on (client_id, legacy_slot). Non-blocking: a failure here never breaks
+// the live legacy slot path. Backfill migration 20260531120000 stamps existing
+// rows' legacy_slot so this upsert hits the right row.
+// deno-lint-ignore no-explicit-any
+async function dualWriteVoiceSetter(
+  supabase: any,
+  clientId: string,
+  slotNumber: number,
+  agentName: string,
+  agentId: string,
+  llmId: string | null,
+): Promise<void> {
+  try {
+    const { data: existing } = await supabase
+      .from("voice_setters")
+      .select("id")
+      .eq("client_id", clientId)
+      .eq("legacy_slot", slotNumber)
+      .maybeSingle();
+    if (existing?.id) {
+      await supabase.from("voice_setters")
+        .update({ retell_agent_id: agentId, retell_llm_id: llmId, is_active: true })
+        .eq("id", existing.id);
+    } else {
+      await supabase.from("voice_setters").insert({
+        client_id: clientId,
+        legacy_slot: slotNumber,
+        name: agentName || `Voice Setter ${slotNumber}`,
+        retell_agent_id: agentId,
+        retell_llm_id: llmId,
+        is_active: true,
+      });
+    }
+  } catch (e) {
+    console.warn("[sync-voice-setter] voice_setters dual-write failed (non-blocking):", e);
+  }
+}
+
 function getAutoWebhookUrl(): string {
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   return `${supabaseUrl}/functions/v1/retell-call-analysis-webhook`;
@@ -662,6 +701,7 @@ On inbound calls to a BYO Twilio number, Retell does NOT inject dynamic variable
       }
       // EE1: fan out direction selection across clients columns + sibling slots.
       await fanOutDirections(supabase, clientId, `Voice-Setter-${slotNumber}`, existingAgentId, directions);
+      await dualWriteVoiceSetter(supabase, clientId, slotNumber, agentName, existingAgentId, llmId);
       return { success: true, action: "updated_and_published", agent_id: existingAgentId, llm_id: llmId, llm: updatedLlm, publish_warning: publishWarning };
     } else {
       const newLlm = await retellFetch(apiKey, "POST", "create-retell-llm", llmPayload) as any;
@@ -688,6 +728,7 @@ On inbound calls to a BYO Twilio number, Retell does NOT inject dynamic variable
       }
       // EE1: fan out direction selection across clients columns + sibling slots.
       await fanOutDirections(supabase, clientId, `Voice-Setter-${slotNumber}`, existingAgentId, directions);
+      await dualWriteVoiceSetter(supabase, clientId, slotNumber, agentName, existingAgentId, newLlm.llm_id);
       return { success: true, action: "updated_with_new_llm_and_published", agent_id: existingAgentId, llm_id: newLlm.llm_id, publish_warning: publishWarning };
     }
   } else {
@@ -737,6 +778,7 @@ On inbound calls to a BYO Twilio number, Retell does NOT inject dynamic variable
     }
     // EE1: fan out direction selection across clients columns + sibling slots.
     await fanOutDirections(supabase, clientId, `Voice-Setter-${slotNumber}`, newAgent.agent_id, directions);
+    await dualWriteVoiceSetter(supabase, clientId, slotNumber, agentName, newAgent.agent_id, newLlm.llm_id);
     return { success: true, action: "created_and_published", agent_id: newAgent.agent_id, llm_id: newLlm.llm_id, publish_warning: publishWarning };
   }
 }

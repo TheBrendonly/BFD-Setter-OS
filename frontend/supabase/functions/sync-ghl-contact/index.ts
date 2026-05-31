@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.49.1";
+import { fetchActiveNewLeadsWorkflows, resolveWorkflow } from "../_shared/resolve-workflow.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -210,6 +211,18 @@ Deno.serve(async (req) => {
       contact.Phone, contact.phone, contact.phone_number, contact.phoneNumber,
     );
 
+    // Form-to-agent routing: collect candidate tags from the GHL workflow POST
+    // (a routing tag) or the contact's own tags. A tag matching an active
+    // new-leads workflow routes the lead there; otherwise we fall back to the
+    // client's default cadence (auto_engagement_workflow_id).
+    const candidateTags: string[] = [
+      url.searchParams.get("Tag"), url.searchParams.get("tag"),
+      url.searchParams.get("Form_Tag"), url.searchParams.get("route_tag"),
+      typeof body.tag === "string" ? body.tag : null,
+      ...(Array.isArray(body.tags) ? body.tags : []),
+      ...(Array.isArray(contact.tags) ? contact.tags : []),
+    ].filter((t): t is string => typeof t === "string" && t.trim().length > 0).map((t) => t.trim());
+
     async function logExecution(
       clientId: string | null, externalId: string, contactName: string | null,
       status: string, errorMessage: string | null, steps: Step[],
@@ -365,6 +378,14 @@ Deno.serve(async (req) => {
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     } else {
+      // Resolve the target workflow from the inbound tags (else default).
+      const newLeadsWorkflows = await fetchActiveNewLeadsWorkflows(supabase, clientId, candidateTags);
+      const routed = resolveWorkflow({
+        workflows: newLeadsWorkflows,
+        candidateTags,
+        fallbackWorkflowId: (clientRow.auto_engagement_workflow_id as string | null) ?? null,
+      });
+
       const { data: newContact, error: createErr } = await supabase
         .from("leads")
         .insert({
@@ -374,6 +395,7 @@ Deno.serve(async (req) => {
           last_name: lastName || null,
           phone: phone || null,
           email: email || null,
+          form_source: routed.matchedTag,
         })
         .select("id")
         .single();
@@ -389,15 +411,15 @@ Deno.serve(async (req) => {
 
       steps.push(makeStep("sync-create", "Create New Lead", "create_contact", "completed", `Created ${newContact.id}`));
 
-      // Auto-enroll in default engagement cadence when client opts in.
-      // Disabled until clients.auto_engagement_workflow_id is non-null —
-      // safe to ship; current default is NULL across all clients.
-      if (clientRow.auto_engagement_workflow_id) {
+      // Enrol into the routed workflow: a tag-matched new-leads workflow when
+      // the inbound carries a routing tag, else the client's default cadence
+      // (auto_engagement_workflow_id). No tag match and no default => skip.
+      if (routed.workflowId) {
         try {
           await enrollLeadInEngagement({
             supabase,
             clientId,
-            workflowId: clientRow.auto_engagement_workflow_id,
+            workflowId: routed.workflowId,
             ghlAccountId,
             leadId: contactId,
             contactName: name || null,
@@ -405,7 +427,7 @@ Deno.serve(async (req) => {
             contactEmail: email || null,
           });
           steps.push(makeStep("sync-engage", "Enroll in Engagement Cadence", "enroll_engagement", "completed",
-            `Workflow ${clientRow.auto_engagement_workflow_id}`));
+            `Workflow ${routed.workflowId} (${routed.source}${routed.matchedTag ? `: ${routed.matchedTag}` : ""})`));
         } catch (enrollErr: any) {
           // Non-blocking: lead is created, engagement is opt-in. Log but don't fail.
           console.error("[sync-ghl-contact] auto-enroll failed:", enrollErr);

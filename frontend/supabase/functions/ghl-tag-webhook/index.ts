@@ -615,6 +615,7 @@ Deno.serve(async (req) => {
         last_name: contact?.lastName ?? null,
         phone: contact?.phone ?? null,
         email: contact?.email ?? null,
+        form_source: matchedTag,
         ...compliance,
       },
       { onConflict: "client_id,lead_id" },

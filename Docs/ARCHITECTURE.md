@@ -199,3 +199,28 @@ sequenceDiagram
 ├── Docs/                      # this directory
 └── .env                       # gitignored, local secrets
 ```
+
+---
+
+## Capability set (updated 2026-05-31)
+
+Three capabilities were added/completed in the 2026-05-31 build. All are backward compatible and gated behind deploy (see ROADMAP.md).
+
+### Form-to-agent routing
+Different inbound forms for the same client can now activate different agents/cadences. A client may have **many** "new leads" workflows, each bound to a distinct GHL tag (`engagement_workflows.new_leads_tag`); the prior one-per-client cap was relaxed (unique now on `(client_id, new_leads_tag)`).
+- Resolver: `frontend/supabase/functions/_shared/resolve-workflow.ts` (tag → workflow, else `clients.auto_engagement_workflow_id` fallback). Unit-tested.
+- Wired into `ghl-tag-webhook`, `sync-ghl-contact`, `intake-lead`; `leads.form_source` records the originating tag.
+- Managed in the Workflows UI (multiple tag-bound campaigns per client).
+- Operator action: each GHL form/workflow must emit its routing tag into the webhook.
+
+### Native reactivation (cold-list calling)
+The "DB Reactivation" flow now enrols an uploaded CSV / selected contacts into a chosen cadence **natively** via `runEngagement` — no external/n8n webhook.
+- New `reactivate-lead-list` edge fn: verifies the operator once, then per lead upserts the lead + inserts `engagement_executions` + fires `run-engagement` (chunked). Pure helpers in `_shared/reactivate-list.ts` (unit-tested).
+- The legacy `campaign_leads` → `campaign-executor` → `campaign_webhook_url` path is superseded (retire after confirming unused).
+
+### Voice setters (UUID model, populated)
+The `voice_setters` / `voice_setter_phone_bindings` tables are now real for every client:
+- Backfill migration populates them from the legacy slot columns (idempotent; stamps a `legacy_slot` bridge).
+- `retell-proxy` dual-writes `voice_setters` on agent create/update.
+- The Retell Agents UI exposes all 10 slots.
+- The legacy `Voice-Setter-N` slot path remains the live resolution path (zero risk to live calls); a UUID-native cadence picker + per-setter phone-binding UI are the documented follow-ups.

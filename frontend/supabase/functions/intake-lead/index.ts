@@ -21,6 +21,7 @@
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { fetchActiveNewLeadsWorkflows, resolveWorkflow } from "../_shared/resolve-workflow.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -309,6 +310,19 @@ Deno.serve(async (req) => {
 
     // Upsert into platform leads
     const fullName = [firstName, lastName].filter(Boolean).join(" ").trim() || null;
+
+    // Form-to-agent routing: a posted tag matching an active new-leads workflow
+    // routes the lead there; otherwise fall back to the default cadence.
+    const candidateTags = (Array.isArray(body.tags) ? body.tags : [])
+      .filter((t): t is string => typeof t === "string" && t.trim().length > 0)
+      .map((t) => t.trim());
+    const newLeadsWorkflows = await fetchActiveNewLeadsWorkflows(supabase, client.id as string, candidateTags);
+    const routed = resolveWorkflow({
+      workflows: newLeadsWorkflows,
+      candidateTags,
+      fallbackWorkflowId: (client.auto_engagement_workflow_id as string | null) ?? null,
+    });
+
     await supabase
       .from("leads")
       .upsert(
@@ -319,6 +333,7 @@ Deno.serve(async (req) => {
           last_name: lastName,
           phone,
           email,
+          form_source: routed.matchedTag,
         },
         { onConflict: "client_id,lead_id" },
       );
@@ -341,12 +356,12 @@ Deno.serve(async (req) => {
 
     // Optional cadence enrolment
     let executionId: string | null = null;
-    if (client.auto_engagement_workflow_id) {
+    if (routed.workflowId) {
       try {
         executionId = await enrollLeadInEngagement({
           supabase,
           clientId: client.id,
-          workflowId: client.auto_engagement_workflow_id as string,
+          workflowId: routed.workflowId,
           ghlAccountId: client.ghl_location_id as string,
           leadId: contactId,
           contactName: fullName,

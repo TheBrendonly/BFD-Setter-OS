@@ -128,7 +128,7 @@ function SortableCampaignRow({
                 if (e.key === 'Enter') { e.currentTarget.blur(); }
                 if (e.key === 'Escape') { setTagDraft(ew.new_leads_tag ?? ''); e.currentTarget.blur(); }
               }}
-              placeholder="tag name (e.g. new-lead)"
+              placeholder="form tag (e.g. form-roofing)"
               className="field-text h-8 w-44"
             />
           )}
@@ -371,51 +371,50 @@ export default function Workflows() {
     setDeleteTarget({ id, name, type });
   }
 
-  // Phase-11c: at-most-one new-leads campaign per client.
-  // Optimistic flip + server-side updates. Partial unique index enforces invariance.
+  // Form-to-agent routing (2026-05-30): a client may have MANY new-leads
+  // campaigns, each bound to a distinct form tag (different forms -> different
+  // agents/cadences). The untagged-lead fallback is tracked separately in
+  // clients.auto_engagement_workflow_id.
   async function handleNewLeadsToggle(ew: EngagementWorkflow, on: boolean) {
     if (!clientId) return;
-    const newTag = on ? (ew.new_leads_tag?.trim() || 'bfd_setter-new_lead') : null;
+    const newTag = on ? (ew.new_leads_tag?.trim() || null) : null;
     const previousState = engagementWorkflows;
 
-    // Optimistic local state: when turning ON, also flip any other ON row in this client OFF.
-    setEngagementWorkflows(prev => prev.map(w => {
-      if (w.id === ew.id) return { ...w, is_new_leads_campaign: on, new_leads_tag: newTag };
-      if (on && w.client_id === ew.client_id && w.is_new_leads_campaign) {
-        return { ...w, is_new_leads_campaign: false, new_leads_tag: null };
-      }
-      return w;
-    }));
+    // Optimistic local state: flip only THIS row; other campaigns stay as-is.
+    setEngagementWorkflows(prev => prev.map(w =>
+      w.id === ew.id ? { ...w, is_new_leads_campaign: on, new_leads_tag: newTag } : w
+    ));
 
     try {
-      if (on) {
-        const { error: clearErr } = await (supabase as any)
-          .from('engagement_workflows')
-          .update({ is_new_leads_campaign: false, new_leads_tag: null })
-          .eq('client_id', clientId)
-          .neq('id', ew.id)
-          .eq('is_new_leads_campaign', true);
-        if (clearErr) throw clearErr;
-      }
       const { error: setErr } = await (supabase as any)
         .from('engagement_workflows')
         .update({ is_new_leads_campaign: on, new_leads_tag: newTag })
         .eq('id', ew.id);
       if (setErr) throw setErr;
-      // Keep clients.auto_engagement_workflow_id in sync for the legacy intake-lead path.
-      const { error: clientErr } = await (supabase as any)
-        .from('clients')
-        .update({ auto_engagement_workflow_id: on ? ew.id : null })
-        .eq('id', clientId);
-      if (clientErr) {
-        console.warn('Failed to sync clients.auto_engagement_workflow_id', clientErr);
+
+      // Maintain the untagged-lead fallback: the first new-leads campaign
+      // becomes the default; turning off the current default clears it.
+      // Additional campaigns are tag-routed only.
+      if (on) {
+        const { data: clientRow } = await (supabase as any)
+          .from('clients').select('auto_engagement_workflow_id').eq('id', clientId).maybeSingle();
+        if (!clientRow?.auto_engagement_workflow_id) {
+          await (supabase as any).from('clients')
+            .update({ auto_engagement_workflow_id: ew.id }).eq('id', clientId);
+        }
+      } else {
+        await (supabase as any).from('clients')
+          .update({ auto_engagement_workflow_id: null })
+          .eq('id', clientId).eq('auto_engagement_workflow_id', ew.id);
       }
       toast.success(on
-        ? `'${ew.name}' is now the auto-enrol campaign for tag '${newTag}'`
-        : `'${ew.name}' is no longer the auto-enrol campaign`);
+        ? (newTag
+            ? `'${ew.name}' now routes leads tagged '${newTag}'`
+            : `'${ew.name}' is a new-leads campaign — set its form tag`)
+        : `'${ew.name}' is no longer a new-leads campaign`);
     } catch (err: any) {
       console.error('handleNewLeadsToggle failed', err);
-      toast.error(err?.message || 'Failed to update auto-enrol campaign');
+      toast.error(err?.message || 'Failed to update new-leads campaign');
       setEngagementWorkflows(previousState);
     }
   }
@@ -428,7 +427,10 @@ export default function Workflows() {
       .update({ new_leads_tag: tag })
       .eq('id', ew.id);
     if (error) {
-      toast.error('Failed to update tag');
+      const dup = (error.code === '23505') || /duplicate|unique/i.test(error.message || '');
+      toast.error(dup
+        ? `Tag '${tag}' is already used by another campaign for this client`
+        : 'Failed to update tag');
       setEngagementWorkflows(previousState);
       return;
     }

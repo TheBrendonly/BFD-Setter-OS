@@ -58,7 +58,11 @@ const CampaignCreate = () => {
   const [allContacts, setAllContacts] = useState<any[]>([]);
   const [selectedContactIds, setSelectedContactIds] = useState<Set<string>>(new Set());
   const [contactLeadData, setContactLeadData] = useState<any[]>([]);
-  
+
+  // Native reactivation: which cadence the uploaded/selected leads run through.
+  const [reactivationWorkflows, setReactivationWorkflows] = useState<Array<{ id: string; name: string }>>([]);
+  const [selectedWorkflowId, setSelectedWorkflowId] = useState('');
+
   const [scheduleData, setScheduleData] = useState<ScheduleData>({
     daysOfWeek: [2, 3, 4, 5, 6], // Tue-Sat
     startTime: '09:00',
@@ -85,6 +89,22 @@ const CampaignCreate = () => {
       window.history.replaceState({}, document.title);
     }
   }, [location.state]);
+
+  // Load this client's active engagement workflows to pick a reactivation cadence.
+  useEffect(() => {
+    if (!clientId) return;
+    (async () => {
+      const { data, error } = await (supabase as any)
+        .from('engagement_workflows')
+        .select('id, name, is_active, sort_order')
+        .eq('client_id', clientId)
+        .eq('is_active', true)
+        .order('sort_order', { ascending: true });
+      if (!error) {
+        setReactivationWorkflows(((data as Array<{ id: string; name: string }>) ?? []).map(w => ({ id: w.id, name: w.name })));
+      }
+    })();
+  }, [clientId]);
 
   useEffect(() => {
     const fetchClientData = async () => {
@@ -267,6 +287,9 @@ const CampaignCreate = () => {
     const leadData = selected.map(c => {
       const data: Record<string, string> = { first_name: c.first_name || '', last_name: c.last_name || '', email: c.email || '', phone: c.phone || '', business_name: c.business_name || '', ...((c.custom_fields || {}) as Record<string, string>) };
       return {
+        // Carry the existing lead id so native reactivation re-enrols the same
+        // lead instead of creating a duplicate.
+        lead_id: (c as any).lead_id || c.id || '',
         'First Name': data['First Name'] || data['first_name'] || '',
         'Last Name': data['Last Name'] || data['last_name'] || '',
         'Email': data['Email'] || data['email'] || '',
@@ -453,228 +476,68 @@ const CampaignCreate = () => {
       return;
     }
 
-    if (!campaignName.trim() || !reactivationNotes.trim()) {
+    if (!selectedWorkflowId) {
       toast({
-        title: "Missing information",
-        description: "Please fill in campaign name and reactivation notes",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (!webhookUrl.trim()) {
-      toast({
-        title: "Webhook Not Configured",
-        description: "Please configure the campaign webhook in APIs & Integrations before creating a campaign",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (!supabaseConfigured) {
-      toast({
-        title: "Supabase Not Configured",
-        description: "Please configure Supabase credentials in APIs & Integrations before creating a campaign",
+        title: "No cadence selected",
+        description: "Pick the reactivation cadence these leads should run through",
         variant: "destructive",
       });
       return;
     }
 
     setIsLoading(true);
-    console.log('Submitting campaign with schedule:', { campaignName, reactivationNotes, webhookUrl, scheduleData });
 
     try {
       let csvData: any[];
-
       if (contactLeadData.length > 0) {
-        // Using contacts as lead source
         csvData = contactLeadData;
-        console.log('Using contact list:', csvData.length, 'leads');
       } else if (selectedFile) {
-        // Parse CSV file
-        console.log('Starting CSV file parsing...');
         const rawCsvData = await parseCsvFile(selectedFile);
-        console.log(`CSV parsed: ${rawCsvData.length} rows found`);
-        
-        // Validate CSV data against template
         const validation = validateCsvData(rawCsvData);
-        
         if (!validation.isValid) {
-          console.error('CSV validation failed:', validation.errors);
-          const errorMessage = validation.errors.length === 1 
+          const errorMessage = validation.errors.length === 1
             ? validation.errors[0]
             : `Multiple issues found:\n• ${validation.errors.join('\n• ')}`;
-          
           toast({ title: "CSV Upload Failed", description: errorMessage, variant: "destructive" });
+          setIsLoading(false);
           return;
         }
         csvData = rawCsvData;
       } else {
         toast({ title: "No leads", description: "Please select a lead source", variant: "destructive" });
+        setIsLoading(false);
         return;
       }
-      
-      console.log('Leads ready:', csvData.length, 'rows');
 
-      // Show success message with lead count
       toast({
-        title: "CSV Validated Successfully",
-        description: `✅ ${csvData.length.toLocaleString()} leads ready for campaign launch`,
+        title: "Reactivating…",
+        description: `Enrolling ${csvData.length.toLocaleString()} leads into the cadence…`,
       });
 
-      // Create campaign record first with "pending" status
-      const { data: campaign, error: campaignError } = await supabase
-        .from('campaigns')
-        .insert({
-          campaign_name: campaignName,
-          reactivation_notes: reactivationNotes,
-          webhook_url: webhookUrl,
-          status: 'pending', // Start as pending until leads are inserted
-          total_leads: csvData.length,
-          processed_leads: 0,
-          client_id: clientId, // Use client_id instead of user_id
-          user_id: user.id, // Set user_id explicitly for RLS
-          days_of_week: scheduleData.daysOfWeek,
-          start_time: scheduleData.startTime,
-          end_time: scheduleData.endTime,
-          timezone: scheduleData.timezone,
-          batch_size: scheduleData.batchSize,
-          batch_interval_minutes: scheduleData.batchIntervalMinutes,
-          lead_delay_seconds: scheduleData.leadDelaySeconds
-        })
-        .select()
-        .single();
-
-      if (campaignError) throw campaignError;
-
-      console.log('Campaign created, now inserting leads...');
-      
-      // Show processing message
-      toast({
-        title: "Uploading leads...",
-        description: `Processing ${csvData.length} leads. Please wait...`,
+      // Native reactivation: enrol each lead into the chosen cadence via
+      // runEngagement (no external webhook). Replaces the old campaign_leads ->
+      // campaign-executor -> webhook path.
+      const { data: result, error: enrollError } = await supabase.functions.invoke('reactivate-lead-list', {
+        body: { client_id: clientId, workflow_id: selectedWorkflowId, kind: 'reactivation', leads: csvData },
       });
+      if (enrollError) throw enrollError;
 
-      // Process leads using new bulk insert with proper parameters
-      try {
-        console.log(`=== STARTING LEAD PROCESSING ===`);
-        console.log(`Campaign ID: ${campaign.id}`);
-        console.log(`Total leads to process: ${csvData.length}`);
-        console.log(`Sample lead data:`, csvData[0]);
-        
-        // Use bulk insert edge function with proper parameters
-        console.log('Using bulk insert edge function for fast, reliable uploads...');
-        
-        const { data: bulkResult, error: bulkError } = await supabase.functions.invoke('bulk-insert-leads', {
-          body: {
-            campaignId: campaign.id,
-            leads: csvData,
-            batchSize: scheduleData.batchSize,
-            batchIntervalMinutes: scheduleData.batchIntervalMinutes,
-            leadDelaySeconds: scheduleData.leadDelaySeconds,
-            startTime: scheduleData.startTime,
-            endTime: scheduleData.endTime,
-            timezone: scheduleData.timezone,
-            daysOfWeek: scheduleData.daysOfWeek
-          }
-        });
-        
-        if (bulkError) {
-          console.error('Bulk insert failed:', bulkError);
-          throw new Error(`Failed to insert leads: ${bulkError.message}`);
-        }
-        
-        console.log('✅ Bulk insert completed:', bulkResult);
-        
-        // Show success message and redirect immediately after bulk insert
-        toast({
-          title: "Campaign Launched Successfully!",
-          description: `${bulkResult.actualInserted} leads inserted and campaign is starting`,
-        });
-        
-        console.log('✅ Redirecting to campaign page:', campaign.id);
-        navigate(`/client/${clientId}/campaigns/${campaign.id}`);
-        
-        // Update campaign status to active in background (don't wait)
-        console.log('Updating campaign status to active in background...');
-        supabase
-          .from('campaigns')
-          .update({ 
-            status: 'active',
-            total_leads: bulkResult.actualInserted
-          })
-          .eq('id', campaign.id)
-          .then(({ error: updateError }) => {
-            if (updateError) {
-              console.error('Failed to update campaign status:', updateError);
-            } else {
-              console.log('✅ Campaign status updated to active');
-            }
-          });
-        
-        // Trigger campaign executor in background (don't wait)
-        console.log('Triggering campaign executor in background...');
-        supabase.functions.invoke('campaign-executor')
-          .then(() => {
-            console.log('✅ Campaign executor triggered successfully');
-          })
-          .catch((executorError) => {
-            console.warn('Failed to trigger executor:', executorError);
-          });
-        
-        
-      } catch (error) {
-        console.error('=== LEAD PROCESSING FAILED ===');
-        console.error('Error details:', error);
-        
-        // Update campaign status to failed
-        await supabase
-          .from('campaigns')
-          .update({ 
-            status: 'failed',
-            reactivation_notes: `${reactivationNotes}\n\n❌ Processing Error: ${error.message || 'Lead insertion failed'}`
-          })
-          .eq('id', campaign.id);
-        
-        throw error; // Re-throw to be caught by outer try-catch
-      }
-      
-    } catch (error) {
-      console.error('Error launching campaign:', error);
-      
-      // Provide specific error messages based on error type
-      let errorMessage = "An unexpected error occurred. Please try again.";
-      let errorTitle = "Campaign Launch Failed";
-      
-      // Check for Supabase error object structure
-      if (error && typeof error === 'object' && 'message' in error) {
-        const errorObj = error as any;
-        
-        if (errorObj.message?.includes('validation failed')) {
-          errorTitle = "CSV Validation Error"; 
-          errorMessage = errorObj.message.replace('CSV validation failed: ', '');
-        } else if (errorObj.message?.includes('network') || errorObj.message?.includes('fetch')) {
-          errorTitle = "Connection Error";
-          errorMessage = "❌ Network connection failed. Please check your internet connection and try again.";
-        } else if (errorObj.message?.includes('timeout')) {
-          errorTitle = "Upload Timeout";
-          errorMessage = "❌ Upload took too long. Please try with a smaller file or check your connection.";
-        } else if (errorObj.message?.includes('duplicate')) {
-          errorTitle = "Duplicate Data Error";
-          errorMessage = "❌ Some leads in your CSV already exist. Please remove duplicates and try again.";
-        } else if (errorObj.message?.includes('permission') || errorObj.message?.includes('unauthorized')) {
-          errorTitle = "Permission Error";
-          errorMessage = "❌ You don't have permission to create campaigns for this client. Please contact support.";
-        } else {
-          errorMessage = `❌ ${errorObj.message || 'Database error occurred. Please try again.'}`;
-        }
-      } else if (error instanceof Error) {
-        errorMessage = `❌ ${error.message}`;
-      }
-
+      const enrolled = (result as any)?.enrolled ?? 0;
+      const failed = (result as any)?.failed ?? 0;
+      const skipped = (result as any)?.skipped ?? 0;
       toast({
-        title: errorTitle,
-        description: errorMessage,
+        title: "Reactivation launched",
+        description: failed === 0 && skipped === 0
+          ? `${enrolled} lead${enrolled === 1 ? '' : 's'} enrolled — calls/texts will begin shortly.`
+          : `Enrolled ${enrolled}, skipped ${skipped} (no phone/email), failed ${failed}.`,
+        variant: failed > 0 ? "destructive" : undefined,
+      });
+      navigate(`/client/${clientId}/lead-reactivation`);
+    } catch (error: any) {
+      console.error('Error launching reactivation:', error);
+      toast({
+        title: "Reactivation Failed",
+        description: `❌ ${error?.message || 'An unexpected error occurred. Please try again.'}`,
         variant: "destructive",
       });
     } finally {
@@ -811,11 +674,34 @@ const CampaignCreate = () => {
               </Card>
             )}
 
+            {/* Reactivation cadence picker */}
+            <Card className="material-surface">
+              <CardHeader>
+                <CardTitle className="text-lg">Reactivation Cadence</CardTitle>
+                <CardDescription>Which engagement workflow should these leads run through? Calls/texts fire natively (no external webhook).</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <select
+                  value={selectedWorkflowId}
+                  onChange={(e) => setSelectedWorkflowId(e.target.value)}
+                  className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
+                >
+                  <option value="">Select a cadence…</option>
+                  {reactivationWorkflows.map((w) => (
+                    <option key={w.id} value={w.id}>{w.name}</option>
+                  ))}
+                </select>
+                {reactivationWorkflows.length === 0 && (
+                  <p className="text-sm text-muted-foreground mt-2">No active workflows yet. Create one in Workflows first.</p>
+                )}
+              </CardContent>
+            </Card>
+
             {/* Launch Campaign Button */}
             <div className="flex justify-center mt-12">
               <Button
                 onClick={launchClick}
-                disabled={(!selectedFile && contactLeadData.length === 0) || !campaignName.trim() || !reactivationNotes.trim() || isLoading}
+                disabled={(!selectedFile && contactLeadData.length === 0) || !selectedWorkflowId || isLoading}
                 size="lg"
                 className="min-w-[280px]"
               >

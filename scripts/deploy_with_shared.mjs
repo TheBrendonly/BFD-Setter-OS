@@ -18,6 +18,10 @@ const SLUGS = [
   'match-webinar-contacts','modify-prompt-ai','notify-webhook','process-lead-file',
   'push-contact-to-external','run-simulation','stripe-checkout','stripe-portal','stripe-webhook',
   'sync-external-contacts','sync-external-credentials','test-external-supabase',
+  // Form-to-agent routing (2026-05-30): these import ../_shared/resolve-workflow.ts
+  'sync-ghl-contact','intake-lead',
+  // Native bulk reactivation (2026-05-31): imports ../_shared/{assert-client-access,reactivate-list}.ts
+  'reactivate-lead-list',
 ];
 
 const sharedFiles = readdirSync(join(FN_DIR, '_shared')).filter(f => f.endsWith('.ts'));
