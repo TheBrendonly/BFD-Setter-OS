@@ -138,7 +138,7 @@ You also need a second Supabase project per client (for their leads, chat histor
 
 ## High-Level Setup Steps
 
-See [SETUP_OVERVIEW.md](./SETUP_OVERVIEW.md) for the full technical reference.
+See [SETUP_OVERVIEW.md](./SETUP_OVERVIEW.md) for the full technical reference, and [Docs/GHL_SETUP.md](./Docs/GHL_SETUP.md) for the GoHighLevel operator guide (forms, tags, automations, webhooks + verification checklist).
 
 ---
 

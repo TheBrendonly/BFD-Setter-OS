@@ -2,6 +2,8 @@
 
 How inbound forms route to cadences/agents, the exact BFD setup (main form + Try-Gary), how to add more forms, and how to provision additional voice agents when needed.
 
+> **Setting up the GHL side?** Use [GHL_SETUP.md](GHL_SETUP.md) for the step-by-step operator guide (which automations to build, exact triggers/actions/bodies, and a verification checklist). This page covers the routing internals.
+
 ## Canonical client setup (the standard): ONE webhook URL + tag
 
 Every client uses a **single inbound webhook URL** — the `sync-ghl-contact` edge function — and routing is decided entirely by the **tag** the lead arrives with. There is no per-form webhook URL.
