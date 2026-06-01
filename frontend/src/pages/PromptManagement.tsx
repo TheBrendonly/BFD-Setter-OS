@@ -32,6 +32,7 @@ import { AIPromptDialog } from '@/components/AIPromptDialog';
 import { SetterPromptAIDialog } from '@/components/SetterPromptAIDialog';
 import { CopySetterDialog } from '@/components/CopySetterDialog';
 import { DuplicateSetterDialog } from '@/components/DuplicateSetterDialog';
+import { CreateSetterDialog } from '@/components/CreateSetterDialog';
 import TestCallDialog from '@/components/TestCallDialog';
 import { PromptChatInterface } from '@/components/PromptChatInterface';
 import { EmbeddedPromptChat } from '@/components/EmbeddedPromptChat';
@@ -4779,6 +4780,7 @@ const PromptManagement = () => {
   const [isConfigReady, setIsConfigReady] = useState(false);
   const [allLayersComplete, setAllLayersComplete] = useState(false);
   const [creatingNewSetter, setCreatingNewSetter] = useState(false);
+  const [showCreateSetterDialog, setShowCreateSetterDialog] = useState(false);
   const [deletingSetter, setDeletingSetter] = useState(false);
   const [showDeleteSetterDialog, setShowDeleteSetterDialog] = useState(false);
   const [showDeleteSetterStep2, setShowDeleteSetterStep2] = useState(false);
@@ -5479,7 +5481,7 @@ const PromptManagement = () => {
   }, [prompts, agentSettingsMap]);
 
   // Create new setter
-  const handleCreateNewSetter = async () => {
+  const handleCreateNewSetter = async (setterName?: string) => {
     if (!clientId || creatingNewSetter) return;
     setCreatingNewSetter(true);
     try {
@@ -5493,6 +5495,9 @@ const PromptManagement = () => {
       const findLowestMissingSlot = (numbers: number[]) => {
         const occupied = new Set(numbers.filter((n) => Number.isInteger(n) && n > 0));
         occupied.add(1); // Setter-1 / Voice-Setter-1 is always reserved
+        // Voice slots 2 & 3 map to the primary agent's outbound / followup Retell
+        // agent columns, so they are reserved too — voice setters allocate from 4.
+        if (isVoice) { occupied.add(2); occupied.add(3); }
         let candidate = 1;
         while (occupied.has(candidate)) candidate += 1;
         return candidate;
@@ -5553,7 +5558,7 @@ const PromptManagement = () => {
 
         const { error: insertError } = await supabase.from('prompts').insert({
           client_id: clientId,
-          name: '',
+          name: setterName?.trim() || '',
           content: '',
           persona: '',
           slot_id: newSlotId,
@@ -6623,7 +6628,7 @@ const PromptManagement = () => {
         {
           label: creatingNewSetter ? 'CREATING...' : 'CREATE NEW SETTER',
           icon: <Plus className="w-4 h-4" />,
-          onClick: handleCreateNewSetter,
+          onClick: () => setShowCreateSetterDialog(true),
           variant: 'default' as const,
           className: 'groove-btn',
           disabled: creatingNewSetter,
@@ -7810,6 +7815,15 @@ const PromptManagement = () => {
             refetchAgentSettings();
             setConfigReloadTrigger(c => c + 1);
           }}
+        />
+      )}
+      {clientId && (
+        <CreateSetterDialog
+          open={showCreateSetterDialog}
+          onOpenChange={setShowCreateSetterDialog}
+          channel={activeTab === 'voice' ? 'voice' : 'text'}
+          submitting={creatingNewSetter}
+          onConfirm={(name) => { setShowCreateSetterDialog(false); handleCreateNewSetter(name); }}
         />
       )}
     </div>;

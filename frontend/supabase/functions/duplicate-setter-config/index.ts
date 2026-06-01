@@ -30,20 +30,57 @@ function isVoiceSlot(slotId: string): boolean {
   return slotId.startsWith("Voice-");
 }
 
+// Lowest slot the allocator may hand out per channel. Voice 1-3 are permanently
+// reserved for the primary agent's inbound/outbound/followup columns; text 1 is
+// the reserved default setter.
+const VOICE_FIRST_FREE = 4;
+const TEXT_FIRST_FREE = 2;
+
+// Find the lowest free slot for a channel. A slot is free when it has no rows in
+// any of the three slot-keyed tables AND (voice only) its Retell agent column is
+// null. Returns the slot_id (e.g. "Voice-Setter-4") or null when 4-10 / 2-10 are
+// all taken. Same emptiness rule the explicit-target path enforces below, so the
+// frontend can never disagree with the backend about what's free.
+// deno-lint-ignore no-explicit-any
+async function findFreeSlot(supabase: any, clientId: string, isVoice: boolean): Promise<string | null> {
+  const prefix = isVoice ? "Voice-Setter-" : "Setter-";
+  const start = isVoice ? VOICE_FIRST_FREE : TEXT_FIRST_FREE;
+  for (let n = start; n <= 10; n++) {
+    const slotId = `${prefix}${n}`;
+    const [p, c, a] = await Promise.all([
+      supabase.from("prompts").select("id").eq("client_id", clientId).eq("slot_id", slotId).limit(1),
+      supabase.from("prompt_configurations").select("id").eq("client_id", clientId).eq("slot_id", slotId).limit(1),
+      supabase.from("agent_settings").select("id").eq("client_id", clientId).eq("slot_id", slotId).limit(1),
+    ]);
+    if ((p.data?.length ?? 0) > 0 || (c.data?.length ?? 0) > 0 || (a.data?.length ?? 0) > 0) continue;
+    if (isVoice) {
+      const col = VOICE_SLOT_TO_AGENT_COLUMN[n];
+      if (col) {
+        const { data: cc } = await supabase.from("clients").select(col).eq("id", clientId).single();
+        if (cc && (cc as Record<string, unknown>)[col]) continue;
+      }
+    }
+    return slotId;
+  }
+  return null;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { clientId, sourceSlotId, targetSlotId } = await req.json();
+    const { clientId, sourceSlotId, targetSlotId: explicitTargetSlotId, name } = await req.json();
 
-    if (!clientId || !sourceSlotId || !targetSlotId) {
+    if (!clientId || !sourceSlotId) {
       return new Response(
-        JSON.stringify({ error: "clientId, sourceSlotId, and targetSlotId are required." }),
+        JSON.stringify({ error: "clientId and sourceSlotId are required." }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    if (sourceSlotId === targetSlotId) {
+    // explicitTargetSlotId is optional. When omitted we auto-allocate the lowest
+    // free slot below. The two checks here only apply to an explicit target.
+    if (explicitTargetSlotId && sourceSlotId === explicitTargetSlotId) {
       return new Response(
         JSON.stringify({ error: "Source and target slots must be different." }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -53,7 +90,7 @@ Deno.serve(async (req) => {
     // Same-channel only — duplicating across text↔voice doesn't make sense for a
     // pure clone (parameter catalogs differ). Use the existing COPY (AI-rewrite)
     // flow for cross-channel adaptation.
-    if (isVoiceSlot(sourceSlotId) !== isVoiceSlot(targetSlotId)) {
+    if (explicitTargetSlotId && isVoiceSlot(sourceSlotId) !== isVoiceSlot(explicitTargetSlotId)) {
       return new Response(
         JSON.stringify({ error: "Cross-channel duplication is not supported. Source and target must both be voice or both be text." }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -82,6 +119,23 @@ Deno.serve(async (req) => {
         { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+
+    // Resolve the target slot: use the explicit one if given (back-compat), else
+    // auto-allocate the lowest free slot for the source's channel.
+    let targetSlotId: string = explicitTargetSlotId;
+    if (!targetSlotId) {
+      const freeSlot = await findFreeSlot(supabase, clientId, isVoiceSlot(sourceSlotId));
+      if (!freeSlot) {
+        return new Response(
+          JSON.stringify({ error: "All setter slots are in use (max 10). Delete one to free a slot." }),
+          { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      targetSlotId = freeSlot;
+    }
+
+    // Optional caller-supplied name for the new setter (overrides the "(Copy)" suffix).
+    const desiredName = typeof name === "string" && name.trim().length > 0 ? name.trim() : null;
 
     // Validate target slot is empty across all three slot-keyed tables we clone into.
     const [tgtPrompts, tgtConfigs, tgtSettings] = await Promise.all([
@@ -147,9 +201,11 @@ Deno.serve(async (req) => {
     // for text).
     const promptsToInsert = (srcPrompts.data ?? []).map((row: Record<string, unknown>) => {
       const { id: _id, created_at: _c, updated_at: _u, ...rest } = row;
-      const suffixedName = typeof rest.name === "string" && rest.name.trim().length > 0
-        ? `${rest.name} (Copy)`
-        : `${sourceSlotId} (Copy)`;
+      const suffixedName = desiredName
+        ? desiredName
+        : typeof rest.name === "string" && rest.name.trim().length > 0
+          ? `${rest.name} (Copy)`
+          : `${sourceSlotId} (Copy)`;
       return { ...rest, slot_id: targetSlotId, name: suffixedName, is_active: false };
     });
 
@@ -187,9 +243,11 @@ Deno.serve(async (req) => {
     // so the next Save Setter / channel sync picks it up.
     if (srcSettings.data) {
       const { id: _id, created_at: _c, updated_at: _u, ...rest } = srcSettings.data as Record<string, unknown>;
-      const suffixedAgentName = typeof rest.name === "string" && rest.name.trim().length > 0
-        ? `${rest.name} (Copy)`
-        : null;
+      const suffixedAgentName = desiredName
+        ? desiredName
+        : typeof rest.name === "string" && rest.name.trim().length > 0
+          ? `${rest.name} (Copy)`
+          : null;
       const settingsToInsert = {
         ...rest,
         slot_id: targetSlotId,

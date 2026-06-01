@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogClose, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
+import { Input } from '@/components/ui/input';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { Copy, Loader2, X } from '@/components/icons';
@@ -9,9 +9,6 @@ import { cn } from '@/lib/utils';
 
 const FONT = { fontFamily: "'IBM Plex Mono', monospace", fontSize: '13px' };
 const LABEL_FONT = { fontFamily: "'VT323', monospace", fontSize: '18px', letterSpacing: '0.5px' };
-
-// Same slot count as PromptManagement's iteration — 10 slots per channel.
-const SLOT_COUNT = 10;
 
 interface DuplicateSetterDialogProps {
   open: boolean;
@@ -23,12 +20,6 @@ interface DuplicateSetterDialogProps {
   onDuplicated: (targetSlotId: string) => void;
 }
 
-interface SlotState {
-  slotId: string;
-  label: string;
-  occupied: boolean;
-}
-
 export const DuplicateSetterDialog: React.FC<DuplicateSetterDialogProps> = ({
   open,
   onOpenChange,
@@ -38,68 +29,29 @@ export const DuplicateSetterDialog: React.FC<DuplicateSetterDialogProps> = ({
   sourceName,
   onDuplicated,
 }) => {
-  const [slots, setSlots] = useState<SlotState[]>([]);
-  const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
-  const [loadingSlots, setLoadingSlots] = useState(true);
+  const [name, setName] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
+  // Pre-fill with "<source> (Copy)" each time the dialog opens so the user can
+  // accept it or type a persona name (e.g. "Gary - Property Coach").
   useEffect(() => {
-    if (!open || !clientId) return;
-    setSelectedSlot(null);
-
-    const loadSlots = async () => {
-      setLoadingSlots(true);
-      try {
-        // Pull all occupied slot_ids from the three slot-keyed tables we care
-        // about, then derive which of the SLOT_COUNT slots are free for the
-        // active channel.
-        const [{ data: pRows }, { data: cRows }, { data: aRows }] = await Promise.all([
-          (supabase as any).from('prompts').select('slot_id').eq('client_id', clientId),
-          (supabase as any).from('prompt_configurations').select('slot_id').eq('client_id', clientId),
-          (supabase as any).from('agent_settings').select('slot_id').eq('client_id', clientId),
-        ]);
-
-        const occupied = new Set<string>();
-        for (const arr of [pRows, cRows, aRows]) {
-          for (const r of (arr ?? [])) {
-            if (typeof r?.slot_id === 'string') occupied.add(r.slot_id);
-          }
-        }
-
-        const prefix = sourceChannel === 'voice' ? 'Voice-Setter-' : 'Setter-';
-        const built: SlotState[] = [];
-        for (let i = 1; i <= SLOT_COUNT; i++) {
-          const slotId = `${prefix}${i}`;
-          if (slotId === sourceSlotId) continue;
-          built.push({
-            slotId,
-            label: `Slot ${i}`,
-            occupied: occupied.has(slotId),
-          });
-        }
-        setSlots(built);
-      } catch (e) {
-        console.error('[DuplicateSetterDialog] load slots failed', e);
-        toast.error('Failed to load slot inventory');
-      } finally {
-        setLoadingSlots(false);
-      }
-    };
-
-    loadSlots();
-  }, [open, clientId, sourceSlotId, sourceChannel]);
+    if (open) setName(`${(sourceName || sourceSlotId).trim()} (Copy)`);
+  }, [open, sourceName, sourceSlotId]);
 
   const handleDuplicate = async () => {
-    if (!selectedSlot || !clientId) return;
+    if (!clientId || submitting) return;
+    const finalName = name.trim();
     setSubmitting(true);
     try {
+      // No targetSlotId — the edge function auto-allocates the lowest free slot
+      // for this channel and applies the name. Slots never surface in the UI.
       const { data, error } = await supabase.functions.invoke('duplicate-setter-config', {
-        body: { clientId, sourceSlotId, targetSlotId: selectedSlot },
+        body: { clientId, sourceSlotId, name: finalName || undefined },
       });
       if (error) throw new Error(error.message || 'Failed to duplicate setter');
       if (data?.error) throw new Error(data.error);
-      toast.success(`Duplicated to ${selectedSlot}. Open it + click Save Setter to activate.`);
-      onDuplicated(selectedSlot);
+      toast.success(`Created "${finalName || `${sourceName} (Copy)`}". Open it + click Save Setter to activate.`);
+      if (data?.targetSlotId) onDuplicated(data.targetSlotId);
       onOpenChange(false);
     } catch (err: any) {
       toast.error(err.message || 'Failed to duplicate setter');
@@ -126,47 +78,27 @@ export const DuplicateSetterDialog: React.FC<DuplicateSetterDialogProps> = ({
         <div className="px-6 py-5 space-y-4">
           <div style={FONT} className="text-muted-foreground space-y-1">
             <p>
-              Pure clone of <strong className="text-foreground">{sourceName || sourceSlotId}</strong> ({channelLabel} channel) into another empty slot. All parameters, prompts, and agent settings copied verbatim — no AI rewrite.
+              Pure clone of <strong className="text-foreground">{sourceName || sourceSlotId}</strong> ({channelLabel} channel). All parameters, prompts, and agent settings copied verbatim — no AI rewrite.
             </p>
             <p>
               The new setter starts as <strong>Not Active</strong>. Open it and click Save Setter to provision the Retell agent / push to the external Supabase.
             </p>
           </div>
 
-          {loadingSlots ? (
-            <div className="flex items-center justify-center py-8 gap-2 text-muted-foreground" style={FONT}>
-              <Loader2 className="w-4 h-4 animate-spin" />
-              Checking slots...
-            </div>
-          ) : (
-            <div className="space-y-2">
-              <div style={FONT} className="text-foreground">{channelLabel} Setter slots</div>
-              {slots.map((s) => {
-                const isSelected = selectedSlot === s.slotId;
-                const disabled = s.occupied;
-                return (
-                  <button
-                    key={s.slotId}
-                    onClick={() => !disabled && setSelectedSlot(s.slotId)}
-                    disabled={disabled}
-                    className={cn(
-                      'w-full flex items-center gap-3 px-3 py-2.5 groove-border text-left transition-colors',
-                      isSelected ? 'bg-primary/10' : 'bg-card',
-                      disabled ? 'opacity-50 cursor-not-allowed' : 'hover:bg-muted/40'
-                    )}
-                  >
-                    <Checkbox checked={isSelected} disabled={disabled} className="flex-shrink-0" tabIndex={-1} />
-                    <div className="flex-1 min-w-0 flex items-center justify-between">
-                      <div style={{ ...FONT, fontWeight: 500 }} className="text-foreground">{s.label}</div>
-                      <div style={FONT} className={disabled ? 'text-destructive/70' : 'text-muted-foreground'}>
-                        {disabled ? 'Occupied' : 'Empty'}
-                      </div>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          )}
+          <div className="space-y-1.5">
+            <label htmlFor="dup-setter-name" style={FONT} className="text-foreground block">Name</label>
+            <Input
+              id="dup-setter-name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') handleDuplicate(); }}
+              placeholder="e.g. Gary - Property Coach"
+              style={FONT}
+              autoFocus
+              disabled={submitting}
+            />
+            <p style={FONT} className="text-muted-foreground">A free slot is assigned automatically. You identify the setter by this name.</p>
+          </div>
 
           <div className="flex gap-2 pt-1">
             <Button
@@ -178,9 +110,9 @@ export const DuplicateSetterDialog: React.FC<DuplicateSetterDialogProps> = ({
               CANCEL
             </Button>
             <Button
-              className={cn('flex-1 groove-btn-positive', (!selectedSlot || submitting) && 'opacity-50')}
+              className={cn('flex-1 groove-btn-positive', submitting && 'opacity-50')}
               style={LABEL_FONT}
-              disabled={!selectedSlot || submitting}
+              disabled={submitting}
               onClick={handleDuplicate}
             >
               {submitting ? (
