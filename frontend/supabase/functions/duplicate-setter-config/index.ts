@@ -206,7 +206,11 @@ Deno.serve(async (req) => {
         : typeof rest.name === "string" && rest.name.trim().length > 0
           ? `${rest.name} (Copy)`
           : `${sourceSlotId} (Copy)`;
-      return { ...rest, slot_id: targetSlotId, name: suffixedName, is_active: false };
+      // Clear inherited directions: a cloned setter must NOT own the source's
+      // inbound/outbound/followup direction columns. Otherwise saving it fans the
+      // clone's new agent into the primary agent's columns (the 2026-05-18 wipe
+      // class). The clone is used via a campaign's phone_call node, not directions.
+      return { ...rest, slot_id: targetSlotId, name: suffixedName, is_active: false, directions: [] };
     });
 
     if (promptsToInsert.length > 0) {
