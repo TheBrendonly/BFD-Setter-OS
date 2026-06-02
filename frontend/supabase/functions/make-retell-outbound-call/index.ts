@@ -461,6 +461,12 @@ Deno.serve(async (req) => {
     const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     let agentId: string | null = null;
     let fromNumber: string | null = null;
+    // Hoisted to outer scope so the post-call debug metadata (slot_number /
+    // agent_column) can read them on BOTH paths. On the UUID path they stay null
+    // — referencing the legacy-branch consts there threw "slotNumber is not
+    // defined" AFTER the call placed, causing a retry/re-dial loop.
+    let slotNumber: number | null = null;
+    let agentColumn: string | null = null;
 
     if (UUID_RE.test(voice_setter_id)) {
       // ── UUID path: voice_setters + voice_setter_phone_bindings ──
@@ -502,14 +508,14 @@ Deno.serve(async (req) => {
       if (binding?.phone_e164) fromNumber = binding.phone_e164;
     } else {
       // ── Legacy slot path: parse "Voice-Setter-N" ──
-      const slotNumber = parseVoiceSetterSlot(voice_setter_id);
+      slotNumber = parseVoiceSetterSlot(voice_setter_id);
       if (!slotNumber) {
         return ok({
           error: `Invalid voice_setter_id format: ${voice_setter_id}`,
           code: "invalid_voice_setter_id",
         }, 400);
       }
-      const agentColumn = SLOT_TO_AGENT_COLUMN[slotNumber];
+      agentColumn = SLOT_TO_AGENT_COLUMN[slotNumber];
       if (!agentColumn) {
         return ok({
           error: `Invalid voice setter slot: ${slotNumber}`,
