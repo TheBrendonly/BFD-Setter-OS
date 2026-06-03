@@ -2,6 +2,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import { resolveContactId } from "./contactId.ts";
 import { classifyCallOutcome } from "./classifyCallOutcome.ts";
 import { pushCallEventToGhl } from "../_shared/ghl-conversations.ts";
+import { parseCallbackTime } from "../_shared/parseCallbackTime.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -361,6 +362,46 @@ Deno.serve(async (req) => {
 
       // Build contact name from dynamic vars
       const contactName = [dynamicVars.first_name, dynamicVars.last_name].filter(Boolean).join(" ") || null;
+
+      // ── Callback scheduling: lead asked to be called back later (NOT a booking) ──
+      // Agent should emit custom_analysis_data.requested_callback_time (preferred) or
+      // callback_intent; we also fall back to scanning the result text. Dormant until
+      // the agent prompt emits these fields.
+      const requestedCallbackRaw =
+        (typeof customAnalysis.requested_callback_time === "string" && customAnalysis.requested_callback_time) ||
+        (typeof customAnalysis.callback_time === "string" && customAnalysis.callback_time) ||
+        (typeof customAnalysis.callback_intent === "string" && customAnalysis.callback_intent) || "";
+      const wantsCallback = !!requestedCallbackRaw ||
+        customAnalysis.callback_requested === true ||
+        /\bcall (me )?back\b|call me (later|tomorrow|this afternoon|in)/i.test(callResultStr);
+      if (wantsCallback && !appointmentBooked && clientId && contactId && setterId) {
+        try {
+          const toPhone = call.to_number || (dynamicVars.phone as string | undefined) || null;
+          if (toPhone) {
+            const { data: clientTz } = await supabase.from("clients").select("timezone").eq("id", clientId).maybeSingle();
+            const tz = (clientTz?.timezone as string | null) || "Australia/Brisbane";
+            const parsed = parseCallbackTime(String(requestedCallbackRaw || callResultStr || "later"), new Date(), tz);
+            const { data: cbRow } = await supabase.from("scheduled_callbacks").insert({
+              client_id: clientId, ghl_contact_id: contactId, ghl_account_id: resolvedGhlAccountId,
+              voice_setter_id: setterId, call_id: callId, contact_name: contactName, contact_phone: toPhone,
+              scheduled_for: parsed.scheduledFor, callback_reason: parsed.reason, status: "pending",
+            }).select("id").single();
+            if (cbRow?.id) {
+              const triggerKey = Deno.env.get("TRIGGER_SECRET_KEY");
+              if (triggerKey) {
+                await fetch("https://api.trigger.dev/api/v1/tasks/schedule-callback/trigger", {
+                  method: "POST",
+                  headers: { Authorization: `Bearer ${triggerKey}`, "Content-Type": "application/json" },
+                  body: JSON.stringify({ payload: { scheduled_callback_id: cbRow.id } }),
+                });
+              }
+              console.log(`📅 callback scheduled for ${parsed.scheduledFor} (cb=${cbRow.id}, reason="${parsed.reason}")`);
+            }
+          }
+        } catch (e) {
+          console.warn("callback scheduling failed (non-fatal):", e);
+        }
+      }
 
       // Extract campaign_id from dynamic vars if available
       const campaignId = dynamicVars.campaign_id || null;

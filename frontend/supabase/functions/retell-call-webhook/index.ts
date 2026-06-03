@@ -134,8 +134,16 @@ Deno.serve(async (req) => {
           })
           .eq("id", executionId);
         if (execErr) {
-          console.warn(
-            `retell-call-webhook: last_call_outcome write failed for exec ${executionId}: ${execErr.message}`
+          // CRITICAL: runEngagement polls last_call_outcome to break its wait loop
+          // and decide advance-vs-terminate. If this write is lost, the cadence
+          // hangs or mis-classifies as a missed call. Return non-2xx so Retell
+          // retries the webhook rather than silently dropping the outcome.
+          console.error(
+            `retell-call-webhook: CRITICAL last_call_outcome write failed for exec ${executionId}: ${execErr.message}`
+          );
+          return new Response(
+            JSON.stringify({ error: "Failed to persist call outcome", retry: true }),
+            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
           );
         } else {
           console.log(
