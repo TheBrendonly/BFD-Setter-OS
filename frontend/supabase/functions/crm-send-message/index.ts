@@ -1,4 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { assertClientAccess, AssertAccessError } from "../_shared/assert-client-access.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -20,29 +21,6 @@ Deno.serve(async (req) => {
     );
 
     const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    const token = authHeader.replace("Bearer ", "");
-    const base64Payload = token.split(".")[1];
-    if (!base64Payload) {
-      return new Response(JSON.stringify({ error: "Invalid token" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-    const payload = JSON.parse(atob(base64Payload));
-    const userId = payload.sub;
-    if (!userId) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
 
     const { client_id, contact_id, message, channel } = await req.json();
 
@@ -51,6 +29,20 @@ Deno.serve(async (req) => {
         JSON.stringify({ error: "Missing client_id, contact_id, or message" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
+    }
+
+    // Verify the caller's JWT signature AND that they own client_id. Previously
+    // the token was base64-decoded without verification and client_id was never
+    // ownership-checked → any forged token could send a message as ANY tenant.
+    try {
+      await assertClientAccess(authHeader, client_id);
+    } catch (e) {
+      if (e instanceof AssertAccessError) {
+        return new Response(JSON.stringify({ error: e.message }), {
+          status: e.status, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      throw e;
     }
 
     const selectedChannel = channel || 'sms';

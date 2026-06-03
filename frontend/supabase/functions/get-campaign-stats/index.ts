@@ -1,4 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2.49.1";
+import { assertClientAccess, AssertAccessError } from "../_shared/assert-client-access.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -44,6 +45,31 @@ Deno.serve(async (req) => {
       }
     } else if (campaignId) {
       campaignIds = [campaignId];
+    }
+
+    // AUTH: this endpoint was public (verify_jwt=false, service-role) → anyone
+    // could read any tenant's enrolment data by guessing a campaign/workflow UUID.
+    // Verify the caller's JWT AND that they own the client these campaigns belong to.
+    {
+      const authHeader = req.headers.get("Authorization");
+      const { data: ownerRows } = await supabase
+        .from("engagement_campaigns").select("client_id").in("id", campaignIds);
+      const ownerClientIds = [...new Set((ownerRows || []).map((r: any) => r.client_id).filter(Boolean))];
+      if (ownerClientIds.length !== 1) {
+        return new Response(JSON.stringify({ error: "Forbidden" }), {
+          status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      try {
+        await assertClientAccess(authHeader, ownerClientIds[0] as string);
+      } catch (e) {
+        if (e instanceof AssertAccessError) {
+          return new Response(JSON.stringify({ error: e.message }), {
+            status: e.status, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        throw e;
+      }
     }
 
     // If date filtering, first get the lead_ids enrolled in that range
