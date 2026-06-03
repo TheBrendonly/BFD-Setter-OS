@@ -181,7 +181,9 @@ Deno.serve(async (req) => {
     }
 
     // Second fallback: resolve via client retell agent columns (all 10 slots)
-    if (!clientId && agentId) {
+    // agentId is interpolated into the .or() filter string below; validate its
+    // shape (real Retell agent ids are "agent_<hex>") to prevent filter injection.
+    if (!clientId && agentId && /^agent_[A-Za-z0-9]+$/.test(agentId)) {
       const { data: clients } = await supabase
         .from("clients")
         .select("id, ghl_location_id, phone_call_webhook_url")

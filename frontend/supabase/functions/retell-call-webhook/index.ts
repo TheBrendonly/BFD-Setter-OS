@@ -39,6 +39,15 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
+    // Guard: agentId comes from the (public) webhook body and is interpolated into
+    // a PostgREST .or() filter string below — validate its shape to prevent filter
+    // injection. Real Retell agent ids look like "agent_<hex>".
+    if (typeof agentId !== "string" || !/^agent_[A-Za-z0-9]+$/.test(agentId)) {
+      return new Response(JSON.stringify({ ok: true, skipped: true, reason: "invalid_agent_id" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     // Find client by matching the agent_id across all 10 agent slots
     const { data: clients, error: clientErr } = await internalSupabase
       .from("clients")

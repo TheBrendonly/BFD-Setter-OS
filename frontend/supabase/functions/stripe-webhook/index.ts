@@ -46,7 +46,13 @@ Deno.serve(async (req) => {
 
     const webhookSecret = Deno.env.get("STRIPE_WEBHOOK_SECRET");
     if (!webhookSecret) {
-      log("WARNING: STRIPE_WEBHOOK_SECRET not configured — webhook signature verification disabled");
+      // Fail closed: without the signing secret we cannot verify the event came
+      // from Stripe, so refuse rather than process a potentially forged webhook.
+      log("ERROR: STRIPE_WEBHOOK_SECRET not configured — refusing unverified webhook");
+      return new Response(JSON.stringify({ error: "Webhook signature verification not configured" }), {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      });
     }
 
     const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
