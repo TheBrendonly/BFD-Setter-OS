@@ -1019,7 +1019,9 @@ export const runEngagement = task({
 
               // Bug 1 — wait for call_ended before advancing.
               if (callId) {
-                await updateExecution({ stage_description: "Call in progress — awaiting outcome..." });
+                // active_call_id is the hold signal: the text setter (processMessages)
+                // waits while this is non-null; retell-call-webhook clears it on call_ended.
+                await updateExecution({ stage_description: "Call in progress — awaiting outcome...", active_call_id: callId });
                 const waitResult = await waitForCallOutcome({
                   supabase,
                   executionId: execution_id,
@@ -1394,7 +1396,7 @@ export const runEngagement = task({
 
           // Bug 1 — wait for call_ended before advancing.
           if (legacyCallId) {
-            await updateExecution({ stage_description: "Call in progress — awaiting outcome..." });
+            await updateExecution({ stage_description: "Call in progress — awaiting outcome...", active_call_id: legacyCallId });
             const legacyWaitResult = await waitForCallOutcome({
               supabase,
               executionId: execution_id,

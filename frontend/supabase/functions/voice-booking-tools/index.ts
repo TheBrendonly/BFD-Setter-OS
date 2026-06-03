@@ -30,6 +30,8 @@
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { pushSmsToGhl } from "../_shared/ghl-conversations.ts";
+import { parseCallbackTime } from "../_shared/parseCallbackTime.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -92,12 +94,20 @@ type ClientRow = {
   gohighlevel_booking_title: string | null;
   intake_lead_secret: string | null;
   timezone: string | null;
+  // Added for the send-sms / schedule-callback tools.
+  twilio_account_sid: string | null;
+  twilio_auth_token: string | null;
+  twilio_default_phone: string | null;
+  retell_phone_1: string | null;
+  ghl_conversation_provider_id: string | null;
+  supabase_url: string | null;
+  supabase_service_key: string | null;
 };
 
 async function resolveClient(supabase: any, clientId: string, authHeader: string | null): Promise<ClientRow> {
   const { data: client, error } = await supabase
     .from("clients")
-    .select("id, ghl_api_key, ghl_calendar_id, ghl_location_id, ghl_assignee_id, gohighlevel_booking_title, intake_lead_secret, timezone")
+    .select("id, ghl_api_key, ghl_calendar_id, ghl_location_id, ghl_assignee_id, gohighlevel_booking_title, intake_lead_secret, timezone, twilio_account_sid, twilio_auth_token, twilio_default_phone, retell_phone_1, ghl_conversation_provider_id, supabase_url, supabase_service_key")
     .eq("id", clientId)
     .maybeSingle();
   if (error || !client) throw new ToolError(404, "Client not found");
@@ -692,6 +702,118 @@ async function toolLookupContact(args: {
   };
 }
 
+// ── Tool: send-sms ── voice agent texts the lead mid-call. Sends immediately
+// and writes the message to the lead's conversation history (external
+// chat_history as an "ai" turn) + mirrors to GHL Conversations, so the text
+// setter has the context the instant the lead replies.
+async function toolSendSms(args: { client: ClientRow; body: Record<string, unknown>; supabase: any }): Promise<unknown> {
+  const { client, body, supabase } = args;
+  const message = typeof body.message === "string" ? body.message.trim() : "";
+  if (!message) throw new ToolError(400, "message is required");
+
+  const { contactId } = await resolveContactId({ client, body, createIfMissing: false, supabase });
+
+  // Opt-out guard (compliance): never text a contact who replied STOP.
+  const { data: leadRow } = await supabase
+    .from("leads").select("setter_stopped").eq("client_id", client.id).eq("lead_id", contactId).maybeSingle();
+  if (leadRow?.setter_stopped === true) {
+    return { sent: false, reason: "Contact has opted out (STOP); SMS not sent." };
+  }
+
+  const toNumber = typeof body.phone === "string" ? body.phone : null;
+  const fromNumber = client.twilio_default_phone || client.retell_phone_1;
+  if (!client.twilio_account_sid || !client.twilio_auth_token || !fromNumber) {
+    throw new ToolError(409, "Twilio is not configured for this client.");
+  }
+  if (!toNumber) throw new ToolError(400, "No phone number for the lead.");
+
+  // 1) Send via Twilio.
+  const twilioRes = await fetch(
+    `https://api.twilio.com/2010-04-01/Accounts/${client.twilio_account_sid}/Messages.json`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        Authorization: `Basic ${btoa(`${client.twilio_account_sid}:${client.twilio_auth_token}`)}`,
+      },
+      body: new URLSearchParams({ From: fromNumber, To: toNumber, Body: message }).toString(),
+    },
+  );
+  const twilioJson = await twilioRes.json().catch(() => null);
+  if (!twilioRes.ok) {
+    throw new ToolError(502, `Twilio send failed (${twilioRes.status}): ${twilioJson?.message || "unknown"}`);
+  }
+  const sid: string | null = twilioJson?.sid ?? null;
+
+  // 2) Write to the lead's conversation history on the EXTERNAL client DB so the
+  //    text setter reads it as a prior assistant turn (type:"ai") immediately.
+  if (client.supabase_url && client.supabase_service_key) {
+    try {
+      const ext = createClient(client.supabase_url, client.supabase_service_key);
+      await ext.from("chat_history").insert({
+        session_id: contactId,
+        message: { type: "ai", content: message, tool_calls: [], additional_kwargs: {}, response_metadata: {}, invalid_tool_calls: [] },
+        timestamp: new Date().toISOString(),
+      });
+    } catch (e) { console.warn("send-sms: chat_history write failed (non-fatal):", e); }
+  }
+
+  // 3) Mirror to GHL Conversations + bump leads.last_outbound_at.
+  try {
+    await pushSmsToGhl({
+      ghlApiKey: client.ghl_api_key as string,
+      ghlLocationId: client.ghl_location_id as string,
+      contactId, conversationProviderId: client.ghl_conversation_provider_id ?? null,
+      message, direction: "outbound", altId: sid,
+    });
+  } catch (e) { console.warn("send-sms: GHL mirror failed (non-fatal):", e); }
+  try {
+    await supabase.from("leads").update({ last_outbound_at: new Date().toISOString() })
+      .eq("client_id", client.id).eq("lead_id", contactId);
+  } catch { /* non-fatal */ }
+
+  return { sent: true, sid };
+}
+
+// ── Tool: schedule-callback ── voice agent schedules an AI callback at a time
+// the lead asked for (reuses the scheduled_callbacks + scheduleCallback task).
+async function toolScheduleCallback(args: { client: ClientRow; body: Record<string, unknown>; callMeta: Record<string, unknown> | null; supabase: any }): Promise<unknown> {
+  const { client, body, callMeta, supabase } = args;
+  const when = typeof body.when === "string" ? body.when : (typeof body.time === "string" ? body.time : "later");
+  const { contactId } = await resolveContactId({ client, body, createIfMissing: false, supabase });
+
+  // voice_setter_id: prefer the call's dynamic var, else the client's first active setter.
+  const dv = (callMeta && typeof callMeta.retell_llm_dynamic_variables === "object" && callMeta.retell_llm_dynamic_variables)
+    ? callMeta.retell_llm_dynamic_variables as Record<string, unknown> : {};
+  let voiceSetterId = typeof dv.voice_setter_id === "string" ? dv.voice_setter_id : null;
+  if (!voiceSetterId) {
+    const { data: vs } = await supabase.from("voice_setters").select("id")
+      .eq("client_id", client.id).eq("is_active", true).order("legacy_slot", { ascending: true }).limit(1).maybeSingle();
+    voiceSetterId = vs?.id ?? null;
+  }
+  if (!voiceSetterId) throw new ToolError(409, "No voice setter available to call back with.");
+
+  const parsed = parseCallbackTime(when, new Date(), client.timezone || "Australia/Brisbane");
+  const { data: cbRow } = await supabase.from("scheduled_callbacks").insert({
+    client_id: client.id, ghl_contact_id: contactId, ghl_account_id: client.ghl_location_id,
+    voice_setter_id: voiceSetterId, call_id: (typeof body.source_call_id === "string" ? body.source_call_id : null),
+    contact_phone: (typeof body.phone === "string" ? body.phone : null),
+    scheduled_for: parsed.scheduledFor, callback_reason: parsed.reason, status: "pending",
+  }).select("id").single();
+
+  if (cbRow?.id) {
+    const triggerKey = Deno.env.get("TRIGGER_SECRET_KEY");
+    if (triggerKey) {
+      await fetch("https://api.trigger.dev/api/v1/tasks/schedule-callback/trigger", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${triggerKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ payload: { scheduled_callback_id: cbRow.id } }),
+      });
+    }
+  }
+  return { scheduled: true, scheduled_for: parsed.scheduledFor, when: parsed.reason };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -761,6 +883,14 @@ Deno.serve(async (req) => {
       case "lookup-contact":
       case "lookup_contact":
         result = await toolLookupContact({ client, body, supabase });
+        break;
+      case "send-sms":
+      case "send_sms":
+        result = await toolSendSms({ client, body, supabase });
+        break;
+      case "schedule-callback":
+      case "schedule_callback":
+        result = await toolScheduleCallback({ client, body, callMeta, supabase });
         break;
       default:
         throw new ToolError(400, `Unknown tool: ${tool}`);

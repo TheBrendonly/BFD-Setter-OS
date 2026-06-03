@@ -157,6 +157,29 @@ export const processMessages = task({
       console.log(`Waiting until ${resumeAt.toISOString()} before processing...`);
       await wait.until({ date: resumeAt });
 
+      // ── Voice-call HOLD ──────────────────────────────────────────────────────
+      // Don't generate an SMS reply while a voice call is live for this contact —
+      // the agent is talking to them right now. Wait for engagement_executions
+      // .active_call_id to clear (set by runEngagement when the call is placed,
+      // cleared by retell-call-webhook on call_ended). Bounded to ~15 min so a
+      // missed clear can't hang the reply forever.
+      {
+        const holdDeadline = Date.now() + 15 * 60 * 1000;
+        for (;;) {
+          const { data: liveCall } = await supabase
+            .from("engagement_executions")
+            .select("id")
+            .eq("ghl_contact_id", lead_id)
+            .eq("ghl_account_id", ghl_account_id)
+            .not("active_call_id", "is", null)
+            .limit(1)
+            .maybeSingle();
+          if (!liveCall || Date.now() >= holdDeadline) break;
+          console.log(`Voice call active for ${lead_id} — holding SMS reply until it ends...`);
+          await wait.until({ date: new Date(Date.now() + 20_000) });
+        }
+      }
+
       // ── STEP 2: Fetch all unprocessed messages ──────────────────────────────
       await updateExecution({
         status: "grouping",

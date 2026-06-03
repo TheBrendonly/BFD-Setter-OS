@@ -131,6 +131,9 @@ Deno.serve(async (req) => {
               call_status: call.call_status || call.status || null,
               ended_at: new Date().toISOString(),
             },
+            // Clear the voice-call hold signal so the text setter (processMessages)
+            // can release any SMS the lead sent during the call.
+            active_call_id: null,
           })
           .eq("id", executionId);
         if (execErr) {

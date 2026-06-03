@@ -795,9 +795,22 @@ Deno.serve(async (req) => {
         nudge_count: 0,
       }, { onConflict: "client_id,lead_id" });
 
+    // Voice-call coordination: if a cadence voice call is live for this contact,
+    // do NOT end the cadence — the call is mid-flight and the text setter
+    // (processMessages) will hold this reply until call_ended. Ending here would
+    // cancel the in-flight call's own execution.
+    let voiceCallActive = false;
+    {
+      const { data: lc } = await supabase
+        .from("engagement_executions").select("id")
+        .eq("ghl_contact_id", contactId).eq("client_id", client.id)
+        .not("active_call_id", "is", null).limit(1).maybeSingle();
+      voiceCallActive = !!lc;
+    }
+
     // Phase 4c — reply-detected cadence-end. Inbound SMS means the human
     // (or AI) takes the conversation; running cadence sends should stop.
-    if (triggerKey) {
+    if (triggerKey && !voiceCallActive) {
       await endActiveCadences({
         supabase,
         clientId: client.id,

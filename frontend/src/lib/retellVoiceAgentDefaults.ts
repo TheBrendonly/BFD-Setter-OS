@@ -241,6 +241,60 @@ export const DEFAULT_RETELL_GENERAL_TOOLS = [
       required: ["email", "timeZone"],
     },
   },
+  {
+    type: "custom",
+    name: "send-sms",
+    url: "__BFD_VOICE_BOOKING_TOOLS__",
+    method: "POST",
+    parameter_type: "json",
+    args_at_root: false,
+    query_params: { "function-type": "send-sms" },
+    headers: {},
+    timeout_ms: 120000,
+    speak_during_execution: true,
+    speak_after_execution: false,
+    execution_message_description:
+      "Say a brief natural phrase like \"Sure, texting that to you now\". Under 10 words.",
+    response_variables: {},
+    description:
+      "Send an SMS to the lead during the call. Use when the caller asks you to text them a link, address, booking confirmation, or any info that's easier in writing.",
+    parameters: {
+      type: "object",
+      properties: {
+        message: { type: "string", description: "The exact SMS body to text the lead." },
+      },
+      required: ["message"],
+    },
+  },
+  {
+    type: "custom",
+    name: "schedule-callback",
+    url: "__BFD_VOICE_BOOKING_TOOLS__",
+    method: "POST",
+    parameter_type: "json",
+    args_at_root: false,
+    query_params: { "function-type": "schedule-callback" },
+    headers: {},
+    timeout_ms: 120000,
+    speak_during_execution: true,
+    speak_after_execution: false,
+    execution_message_description:
+      "Confirm casually, e.g. \"Great, I'll give you a call back then\". Under 12 words.",
+    response_variables: {},
+    description:
+      "Schedule an AI callback when the lead can't talk now but wants to be called back later. Use ONLY when they are NOT booking an appointment.",
+    parameters: {
+      type: "object",
+      properties: {
+        when: {
+          type: "string",
+          description:
+            "When to call back, in the lead's own words — e.g. 'this afternoon', 'tomorrow morning', 'at 3pm', 'in an hour', or an explicit time.",
+        },
+      },
+      required: ["when"],
+    },
+  },
 ] as const;
 
 export const DEFAULT_RETELL_VOICEMAIL_OPTION = {
