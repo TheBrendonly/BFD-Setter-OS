@@ -392,6 +392,41 @@ Deno.serve(async (req) => {
 
       steps.push(makeStep("sync-update", "Update Lead", "update_contact", "completed", `Updated ${existingContact.id}`));
       steps.push(makeStep("sync-create", "Create New Lead", "create_contact", "skipped"));
+
+      // Multi-persona re-enrolment: an EXISTING contact who submits Try-Gary again
+      // (a different persona) otherwise gets only an update with no call. If an
+      // inbound bfd_setter-try_gary* tag matches an ACTIVE campaign and the contact
+      // has no running execution for that workflow, enrol them so they get that
+      // persona's call. Scoped to try_gary tags so routine contact.update echoes for
+      // the main cadence never re-trigger. Non-fatal.
+      const tryGaryTags = candidateTags.filter((t) => t.startsWith("bfd_setter-try_gary"));
+      if (tryGaryTags.length > 0) {
+        try {
+          const wfs = await fetchActiveNewLeadsWorkflows(supabase, clientId, tryGaryTags);
+          const reRouted = resolveWorkflow({ workflows: wfs, candidateTags: tryGaryTags, fallbackWorkflowId: null });
+          if (reRouted.workflowId) {
+            const { data: activeExec } = await supabase
+              .from("engagement_executions")
+              .select("id")
+              .eq("client_id", clientId)
+              .eq("ghl_contact_id", contactId)
+              .eq("workflow_id", reRouted.workflowId)
+              .in("status", ["pending", "running"])
+              .limit(1);
+            if (!activeExec || activeExec.length === 0) {
+              await enrollLeadInEngagement({
+                supabase, clientId, workflowId: reRouted.workflowId, ghlAccountId,
+                leadId: contactId, contactName: name || null, contactPhone: phone || null, contactEmail: email || null,
+              });
+              steps.push(makeStep("sync-reenrol", "Re-enrol (Try-Gary persona)", "enroll", "completed",
+                `Workflow ${reRouted.workflowId} (${reRouted.matchedTag})`));
+            }
+          }
+        } catch (e) {
+          console.warn("[sync-ghl-contact] try-gary re-enrol failed (non-fatal):", e);
+        }
+      }
+
       await logExecution(clientId, contactId, name || null, "updated", null, steps);
       return new Response(
         JSON.stringify({ status: "updated", contact_id: existingContact.id }),
