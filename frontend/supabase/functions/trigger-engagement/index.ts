@@ -161,7 +161,7 @@ Deno.serve(async (req) => {
 
     let leadQuery = supabase
       .from("leads")
-      .select("first_name, last_name, phone, email, business_name, custom_fields")
+      .select("first_name, last_name, phone, email")
       .eq("client_id", client_id)
       .eq("lead_id", lead_id)
       .limit(1);

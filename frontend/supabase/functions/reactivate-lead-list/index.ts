@@ -65,7 +65,6 @@ async function enrollOne(args: {
         {
           client_id: clientId,
           lead_id: leadId,
-          ghl_account_id: ghlAccountId,
           first_name: lead.first_name || null,
           last_name: lead.last_name || null,
           phone: lead.phone || null,

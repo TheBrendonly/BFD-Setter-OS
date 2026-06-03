@@ -38,7 +38,7 @@ Deno.serve(async (req) => {
     // 1. Get the engagement execution
     const { data: execution, error: execError } = await supabase
       .from("engagement_executions")
-      .select("id, status, trigger_run_id, lead_id, ghl_account_id, client_id, contact_name, contact_phone, contact_email, workflow_id, campaign_id, current_node_index")
+      .select("id, status, trigger_run_id, ghl_contact_id, ghl_account_id, client_id, contact_name, contact_phone, contact_email, workflow_id, campaign_id, current_node_index")
       .eq("id", execution_id)
       .single();
 
@@ -97,8 +97,8 @@ Deno.serve(async (req) => {
     let leadData: Record<string, string> = {};
     const { data: lead } = await supabase
       .from("leads")
-      .select("first_name, last_name, phone, email, business_name, custom_fields")
-      .or(`id.eq.${execution.lead_id},lead_id.eq.${execution.lead_id}`)
+      .select("first_name, last_name, phone, email")
+      .or(`id.eq.${execution.ghl_contact_id},lead_id.eq.${execution.ghl_contact_id}`)
       .limit(1)
       .maybeSingle();
 
@@ -137,7 +137,7 @@ Deno.serve(async (req) => {
         body: JSON.stringify({
           payload: {
             execution_id: execution.id,
-            Lead_ID: execution.lead_id,
+            Lead_ID: execution.ghl_contact_id,
             GHL_Account_ID: execution.ghl_account_id || execution.client_id,
             client_id: execution.client_id,
             workflow_id: execution.workflow_id || null,

@@ -80,7 +80,7 @@ Deno.serve(async (req) => {
     // GHL contact-id-only flows are valid.
     const { data: leadRow } = await supabase
       .from("leads")
-      .select("first_name, last_name, phone, email, custom_fields, ghl_account_id")
+      .select("first_name, last_name, phone, email")
       .eq("client_id", client_id)
       .eq("lead_id", lead_id)
       .maybeSingle();
