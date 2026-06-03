@@ -59,27 +59,18 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Decode JWT locally to avoid session-not-found errors from getUser()
-    const token = authHeader.replace("Bearer ", "");
-    let jwtPayload: { sub?: string; email?: string };
-    try {
-      const payloadBase64 = token.split(".")[1];
-      jwtPayload = JSON.parse(atob(payloadBase64));
-    } catch {
+    // Verify the JWT signature via GoTrue. (Previously the payload was atob-decoded
+    // without verification, trusting forged tokens. getUser(token) validates the
+    // token directly and does not require a server-side session.)
+    const token = authHeader.replace("Bearer ", "").trim();
+    const { data: authData, error: authErr } = await supabase.auth.getUser(token);
+    if (authErr || !authData?.user?.id) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-
-    if (!jwtPayload.sub) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    const user = { id: jwtPayload.sub, email: jwtPayload.email ?? null };
+    const user = { id: authData.user.id, email: authData.user.email ?? null };
 
     const { client_id } = await req.json();
     if (!client_id) {

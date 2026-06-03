@@ -46,20 +46,6 @@ function jsonResponse(body: unknown, status = 200) {
   });
 }
 
-function decodeJwtSub(authHeader: string | null): string {
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    throw new AuthError(401, "Unauthorized");
-  }
-  const token = authHeader.slice("Bearer ".length);
-  try {
-    const payload = JSON.parse(atob(token.split(".")[1]));
-    if (!payload?.sub) throw new Error("no sub");
-    return payload.sub as string;
-  } catch {
-    throw new AuthError(401, "Unauthorized");
-  }
-}
-
 function getSupabaseAdmin() {
   return createClient(
     Deno.env.get("SUPABASE_URL")!,
@@ -67,8 +53,20 @@ function getSupabaseAdmin() {
   );
 }
 
+// Verify the JWT signature (not just base64-decode it) via GoTrue and return the
+// authenticated user id. Decoding with atob() trusted forged tokens.
+async function verifyUserId(authHeader: string | null): Promise<string> {
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    throw new AuthError(401, "Unauthorized");
+  }
+  const token = authHeader.slice("Bearer ".length).trim();
+  const { data, error } = await getSupabaseAdmin().auth.getUser(token);
+  if (error || !data?.user?.id) throw new AuthError(401, "Unauthorized");
+  return data.user.id;
+}
+
 async function assertClientAccess(authHeader: string | null, clientId: string): Promise<void> {
-  const userId = decodeJwtSub(authHeader);
+  const userId = await verifyUserId(authHeader);
   const admin = getSupabaseAdmin();
   const [{ data: client }, { data: roleData }, { data: profile }] = await Promise.all([
     admin.from("clients").select("id, agency_id").eq("id", clientId).maybeSingle(),

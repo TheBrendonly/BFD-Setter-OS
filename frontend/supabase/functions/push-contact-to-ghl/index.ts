@@ -53,16 +53,13 @@ function getSupabaseAdmin() {
 
 async function assertClientAccess(authHeader: string | null, clientId: string): Promise<{ agencyId: string | null }> {
   if (!authHeader?.startsWith("Bearer ")) throw new AuthError(401, "Unauthorized");
-  let userId: string;
-  try {
-    const payload = JSON.parse(atob(authHeader.slice("Bearer ".length).split(".")[1]));
-    if (!payload.sub) throw new Error("no sub");
-    userId = payload.sub;
-  } catch {
-    throw new AuthError(401, "Unauthorized");
-  }
-
   const supabase = getSupabaseAdmin();
+  // Verify the JWT signature via GoTrue (was: unverified atob → forged tokens passed).
+  const token = authHeader.slice("Bearer ".length).trim();
+  const { data: authData, error: authErr } = await supabase.auth.getUser(token);
+  const userId = authData?.user?.id;
+  if (authErr || !userId) throw new AuthError(401, "Unauthorized");
+
   const [{ data: client }, { data: roleData }, { data: profile }] = await Promise.all([
     supabase.from("clients").select("id, agency_id").eq("id", clientId).maybeSingle(),
     supabase.from("user_roles").select("role").eq("user_id", userId).limit(1).maybeSingle(),

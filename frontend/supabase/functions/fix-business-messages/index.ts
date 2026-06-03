@@ -1,4 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { assertClientAccess, AssertAccessError } from "../_shared/assert-client-access.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -25,29 +26,26 @@ Deno.serve(async (req) => {
       });
     }
 
-    const token = authHeader.replace("Bearer ", "");
-    const base64Payload = token.split(".")[1];
-    if (!base64Payload) {
-      return new Response(JSON.stringify({ error: "Invalid token" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-    const payload = JSON.parse(atob(base64Payload));
-    const userId = payload.sub;
-    if (!userId) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
     const { client_id } = await req.json();
     if (!client_id) {
       return new Response(JSON.stringify({ error: "client_id is required" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
+    }
+
+    // Verify the caller's JWT AND that they own client_id. Previously the token was
+    // atob-decoded without verification and ownership was never checked → a forged
+    // token + any client_id could read that client's external Supabase service key.
+    try {
+      await assertClientAccess(authHeader, client_id);
+    } catch (e) {
+      if (e instanceof AssertAccessError) {
+        return new Response(JSON.stringify({ error: e.message }), {
+          status: e.status, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      throw e;
     }
 
     // Get client's external Supabase credentials

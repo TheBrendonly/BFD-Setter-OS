@@ -60,19 +60,15 @@ class RetellProxyAuthError extends Error {
 // brittle getUser() session-not-found issues and is sufficient because
 // every subsequent DB query goes through the service role + an
 // agency/client ownership check below.
-function decodeJwtSub(authHeader: string | null): string {
+// Verify the JWT signature via GoTrue (was: unverified atob → forged tokens passed).
+async function verifyUserId(authHeader: string | null): Promise<string> {
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
     throw new RetellProxyAuthError(401, "Unauthorized");
   }
-  const token = authHeader.slice("Bearer ".length);
-  let payload: { sub?: string };
-  try {
-    payload = JSON.parse(atob(token.split(".")[1]));
-  } catch {
-    throw new RetellProxyAuthError(401, "Unauthorized");
-  }
-  if (!payload.sub) throw new RetellProxyAuthError(401, "Unauthorized");
-  return payload.sub;
+  const token = authHeader.slice("Bearer ".length).trim();
+  const { data, error } = await getSupabaseAdmin().auth.getUser(token);
+  if (error || !data?.user?.id) throw new RetellProxyAuthError(401, "Unauthorized");
+  return data.user.id;
 }
 
 // Verify the calling user is allowed to act on `clientId`.
@@ -80,7 +76,7 @@ function decodeJwtSub(authHeader: string | null): string {
 // Client users: profile.client_id must match clients.id.
 // This is the same check check-client-subscription performs.
 async function assertClientAccess(authHeader: string | null, clientId: string): Promise<void> {
-  const userId = decodeJwtSub(authHeader);
+  const userId = await verifyUserId(authHeader);
   const supabase = getSupabaseAdmin();
 
   const [{ data: client }, { data: roleData }, { data: profile }] = await Promise.all([
