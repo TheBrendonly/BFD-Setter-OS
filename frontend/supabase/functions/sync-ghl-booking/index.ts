@@ -623,7 +623,7 @@ Deno.serve(async (req) => {
       const { data: recentExec } = await supabase
         .from("engagement_executions")
         .select("id, campaign_id")
-        .eq("lead_id", leadIdForAttribution)
+        .eq("ghl_contact_id", leadIdForAttribution)
         .gte("started_at", fourteenDaysAgo)
         .order("started_at", { ascending: false })
         .limit(1)

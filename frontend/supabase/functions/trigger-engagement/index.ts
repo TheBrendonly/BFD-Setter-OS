@@ -109,11 +109,14 @@ Deno.serve(async (req) => {
       send_engagement_webhook_url = client?.send_engagement_webhook_url || null;
     }
 
-    // Cancel any active engagement executions for the same contact
+    // Cancel any active engagement executions for the same contact.
+    // NOTE: engagement_executions keys the contact on `ghl_contact_id` on this
+    // platform DB (the ghl_contact_id→lead_id rename migration was never applied);
+    // the lead's identifier is held in the `lead_id` variable.
     const { data: activeEngagements } = await supabase
       .from("engagement_executions")
       .select("id, trigger_run_id")
-      .eq("lead_id", lead_id)
+      .eq("ghl_contact_id", lead_id)
       .eq("client_id", client_id)
       .in("status", ["pending", "running"]);
 
@@ -209,7 +212,7 @@ Deno.serve(async (req) => {
       .insert({
         client_id,
         workflow_id: workflow_id || null,
-        lead_id: lead_id,
+        ghl_contact_id: lead_id,
         ghl_account_id: ghl_account_id || client_id,
         contact_name: resolvedName,
         contact_phone: resolvedPhone,

@@ -82,7 +82,7 @@ async function enrollOne(args: {
       .insert({
         client_id: clientId,
         workflow_id: workflowId,
-        lead_id: leadId,
+        ghl_contact_id: leadId,
         ghl_account_id: ghlAccountId,
         contact_name: contactName,
         contact_phone: lead.phone || null,

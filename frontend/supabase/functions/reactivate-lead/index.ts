@@ -99,7 +99,7 @@ Deno.serve(async (req) => {
       .insert({
         client_id,
         workflow_id,
-        lead_id,
+        ghl_contact_id: lead_id,
         ghl_account_id,
         contact_name: `${first_name} ${last_name}`.trim() || null,
         contact_phone: phone || null,

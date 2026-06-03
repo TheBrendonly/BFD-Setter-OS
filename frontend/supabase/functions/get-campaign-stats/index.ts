@@ -90,7 +90,7 @@ Deno.serve(async (req) => {
       (() => {
         let q = supabase.from("engagement_executions").select("id", { count: "exact", head: true })
           .in("campaign_id", campaignIds).eq("status", "running");
-        if (enrolledLeadIds) q = q.in("lead_id", enrolledLeadIds);
+        if (enrolledLeadIds) q = q.in("ghl_contact_id", enrolledLeadIds);
         return q;
       })(),
 
@@ -98,7 +98,7 @@ Deno.serve(async (req) => {
       (() => {
         let q = supabase.from("engagement_executions").select("id", { count: "exact", head: true })
           .in("campaign_id", campaignIds).eq("status", "completed").eq("stop_reason", "sequence_complete");
-        if (enrolledLeadIds) q = q.in("lead_id", enrolledLeadIds);
+        if (enrolledLeadIds) q = q.in("ghl_contact_id", enrolledLeadIds);
         return q;
       })(),
 
@@ -138,9 +138,9 @@ Deno.serve(async (req) => {
       // Executions with last_completed_node_index for step attribution
       (() => {
         let q = supabase.from("engagement_executions")
-          .select("id, lead_id, last_completed_node_index")
+          .select("id, last_completed_node_index")
           .in("campaign_id", campaignIds);
-        if (enrolledLeadIds) q = q.in("lead_id", enrolledLeadIds);
+        if (enrolledLeadIds) q = q.in("ghl_contact_id", enrolledLeadIds);
         return q;
       })(),
 
