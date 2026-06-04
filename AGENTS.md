@@ -1,6 +1,8 @@
-# CLAUDE.md
+# AGENTS.md
 
-This file provides project-specific guidance to Claude Code when working in this repository.
+This file provides project-specific guidance to AI coding agents working in this repository.
+It is the cross-platform twin of CLAUDE.md (used by Claude Code) and applies to Cursor, GitHub
+Copilot, Gemini CLI, OpenAI Codex, Windsurf, Aider, and other AGENTS.md-aware tools.
 
 ## Behavioral Guidelines
 
@@ -70,12 +72,17 @@ shell commands, and other important information, read the current plan
 ## Spec-Driven Development (spec-kit)
 
 This repo is wired for GitHub spec-kit (v0.9.3). The spec -> plan -> tasks -> implement loop runs
-through `/speckit-*` slash-command skills (in `.claude/skills/`); shared project memory and
-templates live in `.specify/`.
+through `/speckit-*` commands/skills; shared project memory and templates live in `.specify/`.
+Per-tool command files: Claude (`.claude/skills/`), Codex (`.agents/skills/` + this AGENTS.md),
+Cursor (`.cursor/`), Gemini (`.gemini/commands/` + GEMINI.md), Copilot (`.github/` + `.vscode/`).
 
 - Constitution / principles: `.specify/memory/constitution.md` (fill or amend via `/speckit-constitution`).
 - Core loop: `/speckit-specify` -> `/speckit-clarify` -> `/speckit-plan` -> `/speckit-tasks` -> `/speckit-implement`.
 - Supporting: `/speckit-analyze`, `/speckit-checklist`. Git helpers: `/speckit-git-*`.
 - `/speckit-taskstoissues` is GitHub-only and a NO-OP here (we use Forgejo `origin`).
-- Other AI tools are wired too: Codex (`.agents/` + AGENTS.md), Cursor (`.cursor/`), Gemini (`.gemini/` + GEMINI.md), Copilot (`.github/` + `.vscode/`).
 - Complementary to the workspace `/init` scaffolder: `/init` builds folder structure + repo + vault + ralph + the PRD/SOP; spec-kit adds the per-feature SDD loop on top. A project has one `/init` PRD and many spec-kit specs over its life.
+
+## Cross-Platform Sync Note
+This AGENTS.md is the twin of CLAUDE.md in the same directory (used by Claude Code).
+If you update project workflows, file structures, or coding standards during your session,
+please also update CLAUDE.md to keep both files in sync. Both files should always contain equivalent information.

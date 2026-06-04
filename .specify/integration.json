@@ -1,0 +1,35 @@
+{
+  "version": "0.9.3",
+  "integration_state_schema": 1,
+  "installed_integrations": [
+    "claude",
+    "cursor-agent",
+    "codex",
+    "gemini",
+    "copilot"
+  ],
+  "integration_settings": {
+    "claude": {
+      "script": "sh",
+      "invoke_separator": "-"
+    },
+    "cursor-agent": {
+      "script": "sh",
+      "invoke_separator": "-"
+    },
+    "codex": {
+      "script": "sh",
+      "invoke_separator": "-"
+    },
+    "gemini": {
+      "script": "sh",
+      "invoke_separator": "."
+    },
+    "copilot": {
+      "script": "sh",
+      "invoke_separator": "."
+    }
+  },
+  "integration": "claude",
+  "default_integration": "claude"
+}
