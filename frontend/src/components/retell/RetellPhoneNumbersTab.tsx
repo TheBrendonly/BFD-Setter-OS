@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
 import { Plus, Trash2, RefreshCw, Loader2, Phone } from 'lucide-react';
-import { useRetellApi, RetellPhoneNumber, RetellAgent } from '@/hooks/useRetellApi';
+import { useRetellApi, RetellPhoneNumber, RetellAgent, getInboundAgentId, getOutboundAgentId } from '@/hooks/useRetellApi';
 import { supabase } from '@/integrations/supabase/client';
 import { fetchTwilioPhoneNumbers } from '@/lib/twilioNumbers';
 
@@ -129,10 +129,11 @@ const RetellPhoneNumbersTab: React.FC<RetellPhoneNumbersTabProps> = ({ clientId 
     }
   };
 
-  const handleAssignAgent = async (phoneNumber: string, field: 'inbound_agent_id' | 'outbound_agent_id', agentId: string | null) => {
+  const handleAssignAgent = async (phoneNumber: string, direction: 'inbound' | 'outbound', agentId: string | null) => {
     setUpdatingPhone(phoneNumber);
     try {
-      await retell.updatePhoneNumber(phoneNumber, { [field]: agentId || null });
+      const key = direction === 'inbound' ? 'inbound_agents' : 'outbound_agents';
+      await retell.updatePhoneNumber(phoneNumber, { [key]: agentId ? [{ agent_id: agentId, weight: 1 }] : [] });
       toast.success('Phone number updated');
       await fetchAll();
     } catch (err) {
@@ -348,8 +349,8 @@ const RetellPhoneNumbersTab: React.FC<RetellPhoneNumbersTabProps> = ({ clientId 
                   <div>
                     <Label className="text-xs">Inbound Agent</Label>
                     <Select
-                      value={phone.inbound_agent_id || 'none'}
-                      onValueChange={v => handleAssignAgent(phone.phone_number, 'inbound_agent_id', v === 'none' ? null : v)}
+                      value={getInboundAgentId(phone) || 'none'}
+                      onValueChange={v => handleAssignAgent(phone.phone_number, 'inbound', v === 'none' ? null : v)}
                       disabled={updatingPhone === phone.phone_number}
                     >
                       <SelectTrigger className="h-8 text-sm">
@@ -368,8 +369,8 @@ const RetellPhoneNumbersTab: React.FC<RetellPhoneNumbersTabProps> = ({ clientId 
                   <div>
                     <Label className="text-xs">Outbound Agent</Label>
                     <Select
-                      value={phone.outbound_agent_id || 'none'}
-                      onValueChange={v => handleAssignAgent(phone.phone_number, 'outbound_agent_id', v === 'none' ? null : v)}
+                      value={getOutboundAgentId(phone) || 'none'}
+                      onValueChange={v => handleAssignAgent(phone.phone_number, 'outbound', v === 'none' ? null : v)}
                       disabled={updatingPhone === phone.phone_number}
                     >
                       <SelectTrigger className="h-8 text-sm">

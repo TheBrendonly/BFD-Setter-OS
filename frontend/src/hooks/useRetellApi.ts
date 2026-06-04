@@ -211,15 +211,34 @@ export interface RetellKnowledgeBase {
   last_refreshed_timestamp?: number;
 }
 
+// Retell's weighted-agent-list element (replaces the deprecated single-agent
+// fields on the phone-number API: inbound_agent_id / outbound_agent_id, etc).
+export interface AgentWeight {
+  agent_id: string;
+  agent_version?: number;
+  weight: number;
+}
+
 export interface RetellPhoneNumber {
   phone_number: string;
   phone_number_pretty?: string;
   phone_number_type?: string;
+  // Current (post-deprecation) shape: weighted agent lists.
+  inbound_agents?: AgentWeight[] | null;
+  outbound_agents?: AgentWeight[] | null;
+  // Deprecated single-agent fields, kept for backward-compatible reads.
   inbound_agent_id?: string | null;
   outbound_agent_id?: string | null;
   nickname?: string | null;
   last_modification_timestamp?: number;
 }
+
+// Read the primary assigned agent for a phone, preferring the new weighted-list
+// fields and falling back to the deprecated single-agent fields.
+export const getInboundAgentId = (p: RetellPhoneNumber): string | null =>
+  p.inbound_agents?.[0]?.agent_id ?? p.inbound_agent_id ?? null;
+export const getOutboundAgentId = (p: RetellPhoneNumber): string | null =>
+  p.outbound_agents?.[0]?.agent_id ?? p.outbound_agent_id ?? null;
 
 export interface RetellCall {
   call_id: string;

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useRetellApi, RetellPhoneNumber } from '@/hooks/useRetellApi';
+import { useRetellApi, RetellPhoneNumber, getInboundAgentId, getOutboundAgentId } from '@/hooks/useRetellApi';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -160,7 +160,7 @@ export const RetellPhoneNumberSelector: React.FC<RetellPhoneNumberSelectorProps>
       return;
     }
     const assigned = phoneNumbers.find(
-      (p) => p.inbound_agent_id === currentAgentId || p.outbound_agent_id === currentAgentId
+      (p) => getInboundAgentId(p) === currentAgentId || getOutboundAgentId(p) === currentAgentId
     );
     setSelectedPhone(assigned?.phone_number || 'none');
   }, [currentAgentId, phoneNumbers]);
@@ -175,11 +175,11 @@ export const RetellPhoneNumberSelector: React.FC<RetellPhoneNumberSelectorProps>
       if (phoneNumber === 'none') {
         // Unassign: find currently assigned phone and clear it
         const current = phoneNumbers.find(
-          (p) => p.inbound_agent_id === currentAgentId || p.outbound_agent_id === currentAgentId
+          (p) => getInboundAgentId(p) === currentAgentId || getOutboundAgentId(p) === currentAgentId
         );
         if (current) {
           await updatePhoneNumber(current.phone_number, {
-            outbound_agent_id: null,
+            outbound_agents: [],
           });
         }
         setSelectedPhone('none');
@@ -194,7 +194,7 @@ export const RetellPhoneNumberSelector: React.FC<RetellPhoneNumberSelectorProps>
       } else {
         // Assign outbound only (no inbound assignment)
         await updatePhoneNumber(phoneNumber, {
-          outbound_agent_id: currentAgentId,
+          outbound_agents: [{ agent_id: currentAgentId, weight: 1 }],
         });
         setSelectedPhone(phoneNumber);
         // Persist to DB so make-retell-outbound-call can find it
@@ -288,7 +288,7 @@ export const RetellPhoneNumberSelector: React.FC<RetellPhoneNumberSelectorProps>
           options={[
             { value: 'none', label: 'No phone number' },
             ...phoneNumbers.map((p) => {
-              const assignedTo = p.inbound_agent_id || p.outbound_agent_id;
+              const assignedTo = getInboundAgentId(p) || getOutboundAgentId(p);
               const isAssignedHere = assignedTo === currentAgentId;
               const isAssignedElsewhere = assignedTo && !isAssignedHere;
               return {

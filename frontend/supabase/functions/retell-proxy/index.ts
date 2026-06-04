@@ -215,7 +215,8 @@ async function fetchLatestPublishedAgentVersion(
 // EE2: After publishing an agent, Retell phone-number version pins do NOT auto-update.
 // Without this, every UI push silently fails to make tool changes live on real calls
 // because the phone keeps routing to the previously-pinned (stale) agent version.
-// Slot 1 → inbound_agent_version; slots 2 + 3 → outbound_agent_version.
+// Slot 1 → inbound_agents; slots 2 + 3 → outbound_agents (weighted-list format,
+// which replaced the deprecated inbound_agent_version / outbound_agent_version fields).
 // Slots 4-10 currently have no canonical phone routing and are skipped with a log.
 // Bug 1 (2026-05-22) — precedence inverted: prefer authoritative
 // get-agent-versions filtered to is_published=true over publishResp.version,
@@ -247,11 +248,13 @@ async function repointPhoneVersionsAfterPublish(
     return;
   }
 
-  const fields: { inbound_agent_version?: number; outbound_agent_version?: number } = {};
+  type AgentWeight = { agent_id: string; agent_version?: number; weight: number };
+  const entry: AgentWeight = { agent_id: agentId, agent_version: publishedVersion, weight: 1 };
+  const fields: { inbound_agents?: AgentWeight[]; outbound_agents?: AgentWeight[] } = {};
   if (slotNumber === 1) {
-    fields.inbound_agent_version = publishedVersion;
+    fields.inbound_agents = [entry];
   } else if (slotNumber === 2 || slotNumber === 3) {
-    fields.outbound_agent_version = publishedVersion;
+    fields.outbound_agents = [entry];
   } else {
     console.log(`[repoint-phones] Slot ${slotNumber} has no canonical phone routing; skipping phone repoint`);
     return;
