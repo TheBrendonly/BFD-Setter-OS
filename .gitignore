@@ -12,3 +12,6 @@ frontend/src/.letta/
 supabase/.temp/
 frontend/supabase/.temp/
 frontend/pnpm-lock.yaml
+
+# graphify knowledge-graph output (regenerated locally from synced code)
+graphify-out/
