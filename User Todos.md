@@ -8,6 +8,23 @@ Effort: S = under 30 min, M = 30 min - 2 hr, L = half day+.
 
 ---
 
+## 🔒 SECURITY REVIEW (2026-06-05) — shipped `c2ca345`
+
+Whole-codebase security review shipped + deployed to `bjgrgbgykvjrsuwwruoh`. Full detail:
+`Docs/SECURITY_REVIEW_2026-06-05.md` + handoff `Operations/handoffs/2026-06-05-security-review.md`.
+
+**Done (deployed + verified live):**
+- ✅ Cross-tenant IDOR closed on 34 edge functions (new `_shared/authorize-client-request.ts` dual-mode guard). Verified: anon→401, internal service-role→200.
+- ✅ SSRF (`notify-webhook`), open proxy (`github-proxy`), XSS (`EmailInbox.tsx`), Stripe fail-closed, Twilio-inbound signature, prompt-chat RLS tenant-scoped (F6 migration applied).
+
+**Open — Brendan to action:**
+- [ ] **(S, per client) Provision webhook secrets** — GHL/Retell/Unipile/workflow webhooks are still forgeable (0/2 clients have secrets). Set `clients.<provider>_webhook_secret` + configure the upstream provider to send it, then flip handlers to fail-closed. **This is now a NEW onboarding step.** Runbook in the Docs file.
+- [ ] **(S) Rotate or remove `GITHUB_PAT`** — currently expired; `github-proxy` source-files feature is broken until rotated.
+- [ ] **(M, low) F7:** stop exposing `clients` secret columns to the browser (column-restricted view/RPC).
+- [ ] **(S, low) F10:** rotate the anon key/project ref `awzlcmdomhtyqjabzvnn` baked into 5 old cron migrations, if that project is still live.
+
+---
+
 ## 🔥 ACTIVE PUNCH LIST (refreshed 2026-05-24)
 
 Outcomes doc + Phase 10 + Duplicate Setter session add-on:
