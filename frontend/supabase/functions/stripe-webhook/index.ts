@@ -7,12 +7,9 @@ const log = (step: string, details?: any) => {
 };
 
 Deno.serve(async (req) => {
-  // Log every incoming request immediately
-  console.log("[STRIPE-WEBHOOK] Incoming request:", {
-    method: req.method,
-    url: req.url,
-    headers: Object.fromEntries(req.headers.entries()),
-  });
+  // Log every incoming request immediately (do NOT dump headers — they carry the
+  // stripe-signature / authorization secrets).
+  console.log("[STRIPE-WEBHOOK] Incoming request:", { method: req.method });
 
   try {
     // Handle non-POST methods gracefully
@@ -35,7 +32,6 @@ Deno.serve(async (req) => {
     }
 
     const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
-    log("Key prefix", { prefix: stripeKey?.substring(0, 7) });
     if (!stripeKey) {
       log("ERROR: STRIPE_SECRET_KEY not configured");
       return new Response(JSON.stringify({ error: "STRIPE_SECRET_KEY not configured" }), {
@@ -71,34 +67,28 @@ Deno.serve(async (req) => {
     const body = await req.text();
     const sig = req.headers.get("stripe-signature");
 
-    let event: Stripe.Event;
+    // Fail closed: a missing signature header means we cannot prove the event came
+    // from Stripe. (webhookSecret is guaranteed set — we returned above otherwise.)
+    if (!sig) {
+      log("ERROR: Missing stripe-signature header — refusing unverified webhook");
+      return new Response(JSON.stringify({ error: "Missing stripe-signature header" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
 
-    if (webhookSecret && sig) {
-      try {
-        event = await stripe.webhooks.constructEventAsync(body, sig, webhookSecret);
-        log("Signature verified");
-      } catch (verifyErr) {
-        log("ERROR: Webhook signature verification failed", {
-          error: verifyErr instanceof Error ? verifyErr.message : String(verifyErr),
-        });
-        return new Response(JSON.stringify({ error: "Webhook signature verification failed" }), {
-          status: 400,
-          headers: { "Content-Type": "application/json" },
-        });
-      }
-    } else {
-      log("WARNING: No webhook secret or signature — accepting unverified event");
-      try {
-        event = JSON.parse(body) as Stripe.Event;
-      } catch (parseErr) {
-        log("ERROR: Failed to parse request body as JSON", {
-          error: parseErr instanceof Error ? parseErr.message : String(parseErr),
-        });
-        return new Response(JSON.stringify({ error: "Invalid JSON body" }), {
-          status: 400,
-          headers: { "Content-Type": "application/json" },
-        });
-      }
+    let event: Stripe.Event;
+    try {
+      event = await stripe.webhooks.constructEventAsync(body, sig, webhookSecret);
+      log("Signature verified");
+    } catch (verifyErr) {
+      log("ERROR: Webhook signature verification failed", {
+        error: verifyErr instanceof Error ? verifyErr.message : String(verifyErr),
+      });
+      return new Response(JSON.stringify({ error: "Webhook signature verification failed" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
     }
 
     log("Event received", { type: event.type, id: event.id });

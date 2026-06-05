@@ -1,4 +1,5 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
+import { authorizeClientRequest, AssertAccessError } from "../_shared/authorize-client-request.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -16,13 +17,25 @@ Deno.serve(async (req) => {
 
     // Validate input parameters
     if (!clientId) {
-      return new Response(JSON.stringify({ 
+      return new Response(JSON.stringify({
         success: false,
-        error: 'Client ID is required' 
+        error: 'Client ID is required'
       }), {
         status: 200,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
+    }
+
+    // SECURITY: block cross-tenant access before any external connection.
+    try {
+      await authorizeClientRequest(req.headers.get('Authorization'), clientId);
+    } catch (e) {
+      if (e instanceof AssertAccessError) {
+        return new Response(JSON.stringify({ error: e.message }), {
+          status: e.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      throw e;
     }
 
     if (!supabaseConfig?.serviceKey) {
@@ -77,8 +90,26 @@ Deno.serve(async (req) => {
       });
     }
 
+    // SECURITY: this is a connection tester for the caller's OWN client (authorized
+    // above), invoked from the UI to validate creds before they are saved — so the
+    // body-supplied creds are used. Constrain the URL to a genuine Supabase project
+    // host so the server cannot be used as an SSRF probe against internal/metadata
+    // endpoints.
+    const supabaseHostOk = /^https:\/\/[a-z0-9]{20}\.supabase\.co\/?$/.test(
+      String(supabaseConfig.url || '').trim(),
+    );
+    if (!supabaseHostOk) {
+      return new Response(JSON.stringify({
+        success: false,
+        error: 'Invalid Supabase project URL. Expected https://<project-ref>.supabase.co'
+      }), {
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     console.log('Testing connection to:', supabaseConfig.url, 'table:', supabaseConfig.tableName);
-    
+
     // Create external Supabase client
     const externalSupabase = createClient(supabaseConfig.url, supabaseConfig.serviceKey);
 

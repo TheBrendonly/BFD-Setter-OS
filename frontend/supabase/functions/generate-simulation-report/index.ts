@@ -1,4 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { authorizeClientRequest, AssertAccessError } from "../_shared/authorize-client-request.ts";
 // loggedFetch no longer needed — AI calls delegated to Trigger.dev
 
 const corsHeaders = {
@@ -23,6 +24,15 @@ Deno.serve(async (req) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
+
+    try {
+      await authorizeClientRequest(req.headers.get("Authorization"), clientId);
+    } catch (e) {
+      if (e instanceof AssertAccessError) {
+        return new Response(JSON.stringify({ error: e.message }), { status: e.status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+      throw e;
+    }
 
     // 1. Get client's OpenRouter API key
     const { data: client, error: clientErr } = await supabase

@@ -1,5 +1,6 @@
 import { loggedFetch } from "../_shared/request-logger.ts";
 import { createClient } from 'npm:@supabase/supabase-js@2';
+import { authorizeClientRequest, AssertAccessError } from "../_shared/authorize-client-request.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -17,6 +18,18 @@ Deno.serve(async (req) => {
 
     if (!clientId || !supabaseConfig?.serviceKey || !supabaseConfig?.tableName || !openrouterApiKey || !question) {
       throw new Error('Missing required parameters');
+    }
+
+    // SECURITY: block cross-tenant access before any external connection.
+    try {
+      await authorizeClientRequest(req.headers.get('Authorization'), clientId);
+    } catch (e) {
+      if (e instanceof AssertAccessError) {
+        return new Response(JSON.stringify({ error: e.message }), {
+          status: e.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      throw e;
     }
 
     // Calculate date range with natural-language overrides from the question
@@ -92,11 +105,28 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Extract project URL from service key
-    const supabaseUrl = `https://${extractProjectId(supabaseConfig.serviceKey)}.supabase.co`;
-    
+    // SECURITY: ignore any body-supplied service key. Look up the tenant's real
+    // external Supabase credentials server-side, keyed by the authorized clientId.
+    const internalSupabase = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+    );
+    const { data: clientRow, error: clientRowError } = await internalSupabase
+      .from('clients')
+      .select('supabase_url, supabase_service_key')
+      .eq('id', clientId)
+      .single();
+
+    if (clientRowError || !clientRow?.supabase_url || !clientRow?.supabase_service_key) {
+      return new Response(JSON.stringify({ error: 'External Supabase credentials not configured' }), {
+        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    const supabaseUrl = clientRow.supabase_url;
+
     // Create external Supabase client
-    const externalSupabase = createClient(supabaseUrl, supabaseConfig.serviceKey);
+    const externalSupabase = createClient(supabaseUrl, clientRow.supabase_service_key);
 
     // Peek at one row to infer schema
     const sampleRes = await externalSupabase
@@ -407,17 +437,6 @@ IMPORTANT: Base your analysis on the COMPLETE dataset of ${chatData?.length || 0
     });
   }
 });
-
-function extractProjectId(serviceKey: string): string {
-  try {
-    const base64Payload = serviceKey.split('.')[1];
-    const decoded = JSON.parse(atob(base64Payload));
-    return decoded.ref || 'unknown-project';
-  } catch (error) {
-    console.error('Failed to extract project ID from service key:', error);
-    throw new Error('Invalid service key format. Please provide a valid Supabase service role key.');
-  }
-}
 
 function classifyIntent(raw: string): 'greeting' | 'how_are_you' | 'who_are_you' | 'capabilities' | 'thanks' | 'smalltalk' | 'data' | 'conversation' {
   const q = (raw || '').toLowerCase().trim();

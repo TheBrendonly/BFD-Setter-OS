@@ -14,6 +14,7 @@ import RetroLoader from "@/components/RetroLoader";
 import LockedToolPanel from "@/components/LockedToolPanel";
 import { usePageHeader } from "@/contexts/PageHeaderContext";
 import { format } from "date-fns";
+import DOMPurify from "dompurify";
 
 interface UnipileAccount {
   id: string;
@@ -431,7 +432,12 @@ export default function EmailInbox() {
                 <div
                   className="prose prose-sm dark:prose-invert max-w-none text-sm"
                   dangerouslySetInnerHTML={{
-                    __html: emailDetail?.body || selectedEmail.body || `<pre class="whitespace-pre-wrap">${emailDetail?.body_plain || selectedEmail.body_plain || ""}</pre>`,
+                    // SECURITY: email body is untrusted (external mailbox); sanitize
+                    // before rendering to prevent stored/reflected XSS.
+                    __html: DOMPurify.sanitize(
+                      emailDetail?.body || selectedEmail.body || `<pre class="whitespace-pre-wrap">${emailDetail?.body_plain || selectedEmail.body_plain || ""}</pre>`,
+                      { ADD_ATTR: ["target"] },
+                    ),
                   }}
                 />
               ) : (

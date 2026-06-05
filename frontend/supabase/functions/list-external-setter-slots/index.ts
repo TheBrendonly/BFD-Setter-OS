@@ -1,5 +1,6 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { z } from "npm:zod@3.25.76";
+import { authorizeClientRequest, AssertAccessError } from "../_shared/authorize-client-request.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -48,6 +49,15 @@ Deno.serve(async (req) => {
     }
 
     const { client_id, channel } = parsed.data;
+
+    try {
+      await authorizeClientRequest(req.headers.get("Authorization"), client_id);
+    } catch (e) {
+      if (e instanceof AssertAccessError) {
+        return new Response(JSON.stringify({ error: e.message }), { status: e.status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+      throw e;
+    }
 
     const internalSupabase = createClient(
       Deno.env.get("SUPABASE_URL")!,

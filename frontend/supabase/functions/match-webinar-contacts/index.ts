@@ -1,5 +1,6 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { loggedFetch } from "../_shared/request-logger.ts";
+import { authorizeClientRequest, AssertAccessError } from "../_shared/authorize-client-request.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -70,6 +71,15 @@ Deno.serve(async (req) => {
 
     if (!clientId) {
       throw new Error("Client ID is required");
+    }
+
+    try {
+      await authorizeClientRequest(req.headers.get("Authorization"), clientId);
+    } catch (e) {
+      if (e instanceof AssertAccessError) {
+        return new Response(JSON.stringify({ error: e.message }), { status: e.status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+      throw e;
     }
 
     console.log(`Processing matching for client ${clientId}`);

@@ -1,4 +1,5 @@
 import { loggedFetch } from "../_shared/request-logger.ts";
+import { authorizeClientRequest, AssertAccessError } from "../_shared/authorize-client-request.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -304,6 +305,15 @@ Deno.serve(async (req) => {
         JSON.stringify({ error: "client_id, metric_name and widget_type are required" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
+    }
+
+    try {
+      await authorizeClientRequest(req.headers.get("Authorization"), client_id);
+    } catch (e) {
+      if (e instanceof AssertAccessError) {
+        return new Response(JSON.stringify({ error: e.message }), { status: e.status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+      throw e;
     }
 
     // ── Compute exact date boundaries ──

@@ -3,8 +3,36 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
+    "authorization, x-client-info, apikey, content-type, x-twilio-signature",
 };
+
+// Twilio signature: HMAC-SHA1 of (full public URL + sorted concatenation of form
+// param key+value pairs), base64-encoded. Compare against X-Twilio-Signature.
+async function verifyTwilioSignature(
+  url: string,
+  params: Record<string, string>,
+  signatureHeader: string | null,
+  authToken: string,
+): Promise<boolean> {
+  if (!signatureHeader) return false;
+  const sortedKeys = Object.keys(params).sort();
+  let data = url;
+  for (const k of sortedKeys) data += k + params[k];
+
+  const enc = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    "raw",
+    enc.encode(authToken),
+    { name: "HMAC", hash: "SHA-1" },
+    false,
+    ["sign"],
+  );
+  const sigBuf = await crypto.subtle.sign("HMAC", key, enc.encode(data));
+  const sigBytes = new Uint8Array(sigBuf);
+  let bin = "";
+  for (const b of sigBytes) bin += String.fromCharCode(b);
+  return btoa(bin) === signatureHeader;
+}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -17,14 +45,16 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    // Twilio sends form-encoded data
+    // Twilio sends form-encoded data. Capture ALL params for signature checking.
     const formData = await req.formData();
-    const from = formData.get("From") as string;
-    const to = formData.get("To") as string;
-    const body = formData.get("Body") as string;
-    const messageSid = formData.get("MessageSid") as string;
-
-    console.log(`Inbound SMS from ${from} to ${to}: ${body}`);
+    const params: Record<string, string> = {};
+    for (const [k, v] of formData.entries()) {
+      params[k] = typeof v === "string" ? v : "";
+    }
+    const from = params["From"];
+    const to = params["To"];
+    const body = params["Body"];
+    const messageSid = params["MessageSid"];
 
     if (!from || !to || !body) {
       return new Response(
@@ -36,7 +66,7 @@ Deno.serve(async (req) => {
     // Find the client that owns this Twilio number
     const { data: clients, error: clientError } = await supabase
       .from("clients")
-      .select("id")
+      .select("id, twilio_auth_token")
       .eq("twilio_default_phone", to);
 
     if (clientError || !clients || clients.length === 0) {
@@ -49,6 +79,35 @@ Deno.serve(async (req) => {
     }
 
     const clientId = clients[0].id;
+
+    // SECURITY: verify the request actually came from Twilio before trusting any
+    // of its contents. `req.url` is the internal host inside Supabase Edge, so the
+    // signed public URL must be reconstructed from SUPABASE_URL (matches the
+    // SmsUrl set by twilio-configure-webhook).
+    const authToken = clients[0].twilio_auth_token as string | null;
+    if (!authToken) {
+      console.warn("No twilio_auth_token configured for client; rejecting", { clientId });
+      return new Response('<Response></Response>', {
+        status: 403,
+        headers: { "Content-Type": "text/xml" },
+      });
+    }
+    const publicUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/twilio-inbound-sms`;
+    const signatureOk = await verifyTwilioSignature(
+      publicUrl,
+      params,
+      req.headers.get("X-Twilio-Signature"),
+      authToken,
+    );
+    if (!signatureOk) {
+      console.warn("Twilio signature verification failed; rejecting", { clientId, to });
+      return new Response('<Response></Response>', {
+        status: 403,
+        headers: { "Content-Type": "text/xml" },
+      });
+    }
+
+    console.log(`Inbound SMS from ${from} to ${to}: ${body}`);
 
     // Find the contact by phone number within this client
     const { data: contacts, error: contactError } = await supabase

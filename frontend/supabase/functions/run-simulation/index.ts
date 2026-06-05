@@ -1,5 +1,6 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { loggedFetch, logRequest } from "../_shared/request-logger.ts";
+import { authorizeClientRequest, AssertAccessError } from "../_shared/authorize-client-request.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -44,6 +45,15 @@ Deno.serve(async (req) => {
       .eq("id", simId)
       .single();
     if (simError || !simulation) throw new Error("Simulation not found");
+
+    try {
+      await authorizeClientRequest(req.headers.get("Authorization"), simulation.client_id);
+    } catch (e) {
+      if (e instanceof AssertAccessError) {
+        return new Response(JSON.stringify({ error: e.message }), { status: e.status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+      throw e;
+    }
 
     const { data: client, error: clientError } = await supabase
       .from("clients")

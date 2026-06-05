@@ -1,4 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { authorizeClientRequest, AssertAccessError } from "../_shared/authorize-client-request.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -68,6 +69,19 @@ Deno.serve(async (req) => {
       case "hosted-auth-link": {
         const body = await req.json();
         const { clientId, providers = ["INSTAGRAM"] } = body;
+
+        // SECURITY: verify the caller owns this client before binding a Unipile
+        // hosted-auth account / notify_url to it.
+        try {
+          await authorizeClientRequest(authHeader, clientId);
+        } catch (e) {
+          if (e instanceof AssertAccessError) {
+            return new Response(JSON.stringify({ error: e.message }), {
+              status: e.status, headers: { ...corsHeaders, "Content-Type": "application/json" },
+            });
+          }
+          throw e;
+        }
 
         // Generate hosted auth link
         const expiresOn = new Date(Date.now() + 30 * 60 * 1000).toISOString();

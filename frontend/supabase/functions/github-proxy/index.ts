@@ -1,6 +1,9 @@
 // Server-side proxy for GitHub API calls. Uses the GITHUB_PAT secret to get
 // a 5000 req/hr rate limit and never exposes the token to the browser.
 //
+// SECURITY: requires an authenticated user — the proxy spends the server's
+// GITHUB_PAT, so it must not be callable anonymously.
+//
 // Supported actions (sent in the JSON body):
 //   { action: "repo",     owner, repo }                  -> repo metadata
 //   { action: "tree",     owner, repo, branch?, recursive? } -> full file tree
@@ -15,6 +18,8 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
+
+import { createClient } from "npm:@supabase/supabase-js@2";
 
 const GITHUB_API = "https://api.github.com";
 
@@ -66,6 +71,31 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({ error: "Method not allowed" }), {
       status: 405,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
+  // SECURITY: require an authenticated user before spending the server PAT.
+  const authHeader = req.headers.get("Authorization");
+  if (!authHeader?.startsWith("Bearer ")) {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+  try {
+    const authClient = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_ANON_KEY")!,
+      { global: { headers: { Authorization: authHeader } } },
+    );
+    const { data: { user }, error: authErr } = await authClient.auth.getUser();
+    if (authErr || !user) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+  } catch {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 

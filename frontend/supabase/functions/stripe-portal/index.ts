@@ -1,5 +1,6 @@
 import Stripe from "npm:stripe@18.5.0";
 import { createClient } from "npm:@supabase/supabase-js@2.45.0";
+import { authorizeClientRequest, AssertAccessError } from "../_shared/authorize-client-request.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -31,6 +32,22 @@ Deno.serve(async (req) => {
     }
 
     const { type, client_id, return_url } = await req.json();
+
+    // SECURITY: the service-role client bypasses RLS; verify the caller owns this
+    // client before opening its Stripe billing portal.
+    if (type === "client" && client_id) {
+      try {
+        await authorizeClientRequest(authHeader, client_id);
+      } catch (e) {
+        if (e instanceof AssertAccessError) {
+          return new Response(JSON.stringify({ error: e.message }), {
+            status: e.status, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        throw e;
+      }
+    }
+
     const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
 
     let stripeCustomerId: string | null = null;

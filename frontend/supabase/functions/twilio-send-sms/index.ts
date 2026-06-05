@@ -1,4 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { authorizeClientRequest, AssertAccessError } from "../_shared/authorize-client-request.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -43,6 +44,19 @@ Deno.serve(async (req) => {
         JSON.stringify({ error: "Missing client_id, contact_id, or message" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
+    }
+
+    // SECURITY: the service-role client below bypasses RLS, so verify the caller
+    // owns this client before reading its Twilio credentials / sending SMS.
+    try {
+      await authorizeClientRequest(authHeader, client_id);
+    } catch (e) {
+      if (e instanceof AssertAccessError) {
+        return new Response(JSON.stringify({ error: e.message }), {
+          status: e.status, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      throw e;
     }
 
     // Get client's Twilio credentials
