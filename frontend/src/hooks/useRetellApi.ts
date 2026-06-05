@@ -233,12 +233,19 @@ export interface RetellPhoneNumber {
   last_modification_timestamp?: number;
 }
 
-// Read the primary assigned agent for a phone, preferring the new weighted-list
-// fields and falling back to the deprecated single-agent fields.
+// Read the primary assigned agent for a phone. A *present* weighted-list array is
+// authoritative — including an empty array, which means "unassigned". Only fall
+// back to the deprecated single-agent field when the array is absent
+// (undefined/null), so an unassign (writes []) doesn't read back a ghost agent
+// from the still-populated deprecated field during Retell's interim back-compat.
 export const getInboundAgentId = (p: RetellPhoneNumber): string | null =>
-  p.inbound_agents?.[0]?.agent_id ?? p.inbound_agent_id ?? null;
+  Array.isArray(p.inbound_agents)
+    ? p.inbound_agents[0]?.agent_id ?? null
+    : p.inbound_agent_id ?? null;
 export const getOutboundAgentId = (p: RetellPhoneNumber): string | null =>
-  p.outbound_agents?.[0]?.agent_id ?? p.outbound_agent_id ?? null;
+  Array.isArray(p.outbound_agents)
+    ? p.outbound_agents[0]?.agent_id ?? null
+    : p.outbound_agent_id ?? null;
 
 export interface RetellCall {
   call_id: string;

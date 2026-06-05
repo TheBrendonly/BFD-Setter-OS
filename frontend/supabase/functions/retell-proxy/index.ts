@@ -250,7 +250,11 @@ async function repointPhoneVersionsAfterPublish(
 
   type AgentWeight = { agent_id: string; agent_version?: number; weight: number };
   const entry: AgentWeight = { agent_id: agentId, agent_version: publishedVersion, weight: 1 };
+  // We send only the slot's OWN direction; Retell preserves the omitted direction
+  // on a partial PATCH (empirically confirmed — a live phone holds different
+  // inbound/outbound versions, only possible if partial PATCH preserves the rest).
   const fields: { inbound_agents?: AgentWeight[]; outbound_agents?: AgentWeight[] } = {};
+  const direction: "inbound" | "outbound" = slotNumber === 1 ? "inbound" : "outbound";
   if (slotNumber === 1) {
     fields.inbound_agents = [entry];
   } else if (slotNumber === 2 || slotNumber === 3) {
@@ -282,13 +286,38 @@ async function repointPhoneVersionsAfterPublish(
 
   for (const phone of phones) {
     try {
+      // Only re-pin a phone that ALREADY routes this direction to the agent we
+      // just published — i.e. bump its version, never change its agent_id. The
+      // weighted-list entry necessarily carries agent_id, so blindly PATCHing
+      // every phone would clobber any phone bound to a DIFFERENT agent in this
+      // direction (a multi-phone client). The deprecated *_agent_version write
+      // this replaced was version-only and didn't have that risk.
+      const cur = await retellFetch(
+        apiKey,
+        "GET",
+        `get-phone-number/${encodeURIComponent(phone)}`,
+      ) as {
+        inbound_agents?: AgentWeight[] | null;
+        outbound_agents?: AgentWeight[] | null;
+        inbound_agent_id?: string | null;
+        outbound_agent_id?: string | null;
+      };
+      const list = direction === "inbound" ? cur.inbound_agents : cur.outbound_agents;
+      const deprecated = direction === "inbound" ? cur.inbound_agent_id : cur.outbound_agent_id;
+      // A present array (incl. empty) is authoritative; fall back to the
+      // deprecated single-agent field only when the array is absent.
+      const curAgent = Array.isArray(list) ? list[0]?.agent_id ?? null : deprecated ?? null;
+      if (curAgent !== agentId) {
+        console.log(`[repoint-phones] ${phone} ${direction} routes to ${curAgent ?? "none"}, not ${agentId}; skipping (slot ${slotNumber})`);
+        continue;
+      }
       await retellFetch(
         apiKey,
         "PATCH",
         `update-phone-number/${encodeURIComponent(phone)}`,
         fields,
       );
-      console.log(`[repoint-phones] Repointed ${phone} to ${JSON.stringify(fields)} (slot ${slotNumber}, agent ${agentId})`);
+      console.log(`[repoint-phones] Repointed ${phone} ${direction} to ${JSON.stringify(fields)} (slot ${slotNumber}, agent ${agentId})`);
     } catch (phoneErr) {
       console.warn(`[repoint-phones] Failed to repoint phone ${phone}:`, phoneErr);
     }
