@@ -79,3 +79,13 @@ templates live in `.specify/`.
 - `/speckit-taskstoissues` is GitHub-only and a NO-OP here (we use Forgejo `origin`).
 - Other AI tools are wired too: Codex (`.agents/` + AGENTS.md), Cursor (`.cursor/`), Gemini (`.gemini/` + GEMINI.md), Copilot (`.github/` + `.vscode/`).
 - Complementary to the workspace `/init` scaffolder: `/init` builds folder structure + repo + vault + ralph + the PRD/SOP; spec-kit adds the per-feature SDD loop on top. A project has one `/init` PRD and many spec-kit specs over its life.
+
+## Voice Agent Prompts (Retell): Do Not Edit, Report Only
+
+The voice agent prompts live in Retell and are managed by Brendan through the BFD setter UI. This is a hard rule, established 2026-06-06 after repeated revert churn:
+
+- **Never edit a voice agent prompt directly.** Not on the Retell backend (dashboard, or REST PATCH / publish-agent), and not by authoring prompt-content changes in the repo prompt files (`frontend/src/data/bfdVoiceSetterPrompt.md`, `frontend/src/data/defaultBookingPrompt.ts`, and similar). Edits do not stick: the canonical save only happens through the BFD setter UI, so anything changed on the backend or in the repo gets reverted on the next push or recommit. Editing it causes more problems than it solves.
+- **If you find a prompt or function issue** (a function not firing from Retell, a booking-flow flaw, wrong wording, and so on), report it to Brendan with specifics: the exact location and the recommended change. Brendan applies it in Retell / the BFD setter UI. Do not apply it yourself, even when the `.env` Retell key is available. Read-only checks against Retell are fine; writes (PATCH/publish) are not.
+- **Ignore the phone number attached to an agent in Retell.** The BFD setter pushes a prompt onto a chosen agent and overrides the number at push time, so the number hardwired to an agent does not indicate which agent is live. Example: "Voice-Setter-Test" currently holds the dogfood number but is NOT in use.
+- **Agents Brendan actively uses (canonical set):** Gary - Crazy Gary, Gary - Finance Strategist, Gary - Mortgage Broker, Gary - Property Coach, and Voice-Setter-master.
+- **Repo and live Retell have drifted.** The repo prompt files, `.env`, and `scripts/deploy_voice_prompt.mjs` still reference a deleted LLM id (`llm_22e795...`). Do not treat the repo prompt files as the source of truth for what a live agent says. Read the live agent (read-only) or ask Brendan.
