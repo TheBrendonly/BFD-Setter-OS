@@ -8,6 +8,30 @@ Effort: S = under 30 min, M = 30 min - 2 hr, L = half day+.
 
 ---
 
+## 🧪 FUNCTIONAL VERIFICATION (2026-06-06)
+
+Whole-platform functional pass/fail verification. Full report + evidence:
+**→ [Operations/handoffs/2026-06-05-functional-verification.md](../../Operations/handoffs/2026-06-05-functional-verification.md)**
+
+Outcome: system is **functionally healthy end-to-end**. Live E2E to TEST_PHONE_A confirmed ingress (`intake-lead`) -> cadence SMS -> real Retell call answered 47s -> inbound AI text reply, all DB-confirmed. Auth layer solid (anon->401 everywhere; `make-retell-outbound-call` dual-mode; `retell-proxy` JWT-only). `classifyCallOutcome` byte-identical + Bug-33 guard intact. `duplicate-setter-config` still clones `directions:[]`. Synthetic test lead `iAHb62nsQVOEIl8kbCi4` + its GHL contact deleted post-test (done 2026-06-06).
+
+### Brendan-required — ordered by severity
+
+- [ ] **V1. (HIGH, S) Restore the synthetic probe** — runs hourly but failed **0/48 in 48h**: `Missing env: PROBE_CLIENT_ID, PROBE_INTAKE_SECRET, PROBE_TEST_PHONE` (never set in Trigger.dev **prod**). The canary verifies nothing right now. Set those 3 env vars in Trigger.dev prod, AND give probe client `b0e4f199-3fa5-4c8d-851b-6167ff46ad91` a sendable from-number (its `retell_phone_1` is null) or its cadence SMS step fails even once env is set. Code: [trigger/syntheticProbe.ts](trigger/syntheticProbe.ts) lines 57-88.
+- [ ] **V2. (HIGH, M/L) AU SMS deliverability** — messages are accepted by Twilio (`sent`, no error) but AU handset delivery on bare long code `+61481614530` is slow/unconfirmed since ~Jun 5 (Jun 3 DLR took 6.7h; recipient saw them eventually). NOT a code fault. Pursue **A2P / a registered Messaging Service** for the number. Separately, the number-level `status_callback` is stale -> `https://api.vapi.ai/twilio/status` (Vapi leftover); repoint to `.../functions/v1/twilio-status-webhook` (per-message callbacks already work, so this is cleanup not the cause).
+- [ ] **V3. (MED) Webhook secrets still unset** — reconfirmed: BFD has zero `ghl/retell/unipile_webhook_secret`, so verify-if-present HMAC is inert and those webhooks are forgeable. **Same item as the SECURITY REVIEW "Provision webhook secrets" task below** — not new, reconfirmed live.
+- [ ] **V4. (LOW, S, optional) Snappier text replies** — the ~2 min reply delay is ~60s intentional debounce (`clients.debounce_seconds=60`) + ~70s gemini-2.5-pro generation. Lower `debounce_seconds` (e.g. 20-30s) for faster replies, at a small risk of answering before a multi-text lead finishes. Code: [trigger/processMessages.ts](trigger/processMessages.ts) lines 146-158.
+- [ ] **V5. (LOW, S, optional) Close code-verified-only items** — STOP/START opt-out flow and the UI Save+publish smoke were verified by code, not live-fired this session. Run when convenient (STOP -> opt-out + one compliance reply -> START resubscribe; publish -> phone agent repoint).
+- [ ] **V6. (LOW, prompt-manual) Agent offered a weekend slot** — during the test call the agent offered a Sat slot not in `get-available-slots` (calendar is Mon-Fri). Prompt-behaviour, so Brendan-manual per [[feedback_no_internal_prompt_edits]] — consider constraining the agent to only offer returned slots.
+
+### Claude / coding-agent — ordered by severity
+
+- [ ] **VC1. (MED, S) Clear `active_call_id` on execution cancel/complete** — found this session: cancelling an `engagement_executions` row while a call is live leaves `active_call_id` dangling (live agent uses `retell-call-analysis-webhook`'s `treat_pickup_as_reply`, which doesn't touch that field). Cosmetic but messy; null it in the cancel/complete paths. Ref: [frontend/supabase/functions/retell-call-analysis-webhook/index.ts](frontend/supabase/functions/retell-call-analysis-webhook/index.ts) lines 761-840.
+- [ ] **VC2. (MED, M) `lead_optouts`-without-`setter_stopped` resume gap** — known gap reconfirmed: cadence resume guards on `leads.setter_stopped` but has no second-line `lead_optouts` check, so if `setter_stopped` is cleared while a `lead_optouts` row persists, the cadence can resume against an opted-out lead. Add the second guard in `runEngagement` isCancelled. Ref: [trigger/runEngagement.ts](trigger/runEngagement.ts).
+- [ ] **VC3. (LOW, S/doc) Document/consolidate the two voice-coordination paths** — `retell-call-webhook` (`last_call_outcome` polling, the "Bug 1" path) vs `retell-call-analysis-webhook` (`treat_pickup_as_reply` -> mark completed + cancel Trigger run). Live BFD agent `agent_f45f4dd87a4072424f3c84b74c` uses the analysis webhook, so `last_call_outcome`/`active_call_id` are vestigial on the live path. Decide which is canonical and document (or retire the unused one).
+
+---
+
 ## 🔒 SECURITY REVIEW (2026-06-05) — shipped `c2ca345`
 
 Whole-codebase security review shipped + deployed to `bjgrgbgykvjrsuwwruoh`. Full detail:
@@ -22,6 +46,33 @@ Whole-codebase security review shipped + deployed to `bjgrgbgykvjrsuwwruoh`. Ful
 - [ ] **(S) Rotate or remove `GITHUB_PAT`** — currently expired; `github-proxy` source-files feature is broken until rotated.
 - [ ] **(M, low) F7:** stop exposing `clients` secret columns to the browser (column-restricted view/RPC).
 - [ ] **(S, low) F10:** rotate the anon key/project ref `awzlcmdomhtyqjabzvnn` baked into 5 old cron migrations, if that project is still live.
+
+---
+
+## 🔎 ONBOARDING DRY-RUN SIMULATION (2026-06-06) — gaps to action
+
+Full simulation walkthrough (all 11 phases, provision/store/verify/breaks-if-skipped + 12-item gap list):
+`~/.claude/plans/you-are-a-senior-calm-cocke.md` (durable copy of findings in handoff
+**→ [Operations/handoffs/2026-06-06-onboarding-simulation-gaps.md](../../Operations/handoffs/2026-06-06-onboarding-simulation-gaps.md)**).
+Nothing was executed — this was a read-only audit of `Docs/CLIENT_ONBOARDING_SOP.md` against live code.
+Note: edge fns live under `frontend/supabase/functions/`. These items feed Phase C (onboard Client #2) + the §A6 / security items above.
+
+### Coding-agent (autonomous code) — by severity
+
+- [ ] **CA1. 🔴 SECURITY — add request-auth/signature verify to the 4 forgeable webhook handlers.** Verified: zero secret/HMAC code in `frontend/supabase/functions/{sync-ghl-contact,sync-ghl-booking,workflow-inbound-webhook,retell-call-webhook}/index.ts`. Setting `clients.*_webhook_secret` does NOT protect these (it only arms `bookings-webhook` / `receive-dm-webhook` / `retell-call-analysis-webhook` / `unipile-webhook`). `sync-ghl-contact` is the **primary lead ingress** and is forgeable by anyone who learns a `ghl_location_id`. This is the code half of **§A6** + the security-review open item (line 21). Pattern to copy: the HMAC check already in `bookings-webhook/index.ts`. *(M)*
+- [ ] **CA2. 🟠 Fix `twilio-configure-webhook` wrong slug.** `frontend/supabase/functions/twilio-configure-webhook/index.ts:49` builds `.../twilio-inbound-sms` (legacy, logs to `sms_messages` only, no engagement/GHL/queue) and writes it as `SmsUrl` at `:87`. Canonical is `receive-twilio-sms`. Both verify the Twilio sig, so a mis-config gives no error — inbound SMS silently bypasses the cadence. Fix the URL or deprecate the auto-config. *(S)*
+- [ ] **CA3. 🟠 Confirm `lead_optouts` is enforced on the send path.** STOP writes `lead_optouts` + cancels the exec, but verify `runEngagement.ts` / `processMessages.ts` actually READ `lead_optouts` before each send (carrier `21610` is the only confirmed backstop today). If a re-enrolled contact can be messaged post-STOP, add the guard. *(S to confirm, M if guard missing)*
+- [ ] **CA4. 🟠 `ghl_channel_field_id` schema gap.** Selected by `receive-twilio-sms/index.ts:432`, used at `:636`, warns-and-skips at `:287` when null — but the column is **absent from `frontend/supabase/migrations/` and `types.ts`**. First verify whether it exists in the live platform DB `bjgrgbgykvjrsuwwruoh` (Mgmt API `information_schema.columns`). If present-but-uncaptured: add a no-op migration + types.ts entry so a regen can't drop it. If absent: the `select` would error — add the migration. *(S)*
+- [ ] **CA5. 🟡 `test-external-supabase` false-negatives `sb_secret_*` keys.** `frontend/supabase/functions/test-external-supabase/index.ts:83` validates `eyJ` + 3-part JWT shape, so it rejects valid modern service keys during onboarding. Accept `sb_secret_*` (or add a real REST connectivity probe). *(S)*
+- [ ] **CA6. 🟡 `onboard-client.mjs` omits required columns.** `scripts/onboard-client.mjs` does NOT set `subscription_status` (defaults `'free'` = client gated OUT), `ghl_calendar_id`, `ghl_assignee_id`, `supabase_url/service_key/table_name`, the retell agent-id columns, `voicemail_config`, `ghl_channel_field_id`, or the 3 webhook secrets. At minimum set `subscription_status='active'` and print a loud REQUIRED-MANUAL block; ideally cover the rest. Clone source is hardcoded to `40e8bea3-…` (generic), not BFD v2 `c206da3e-…`. *(M)*
+- [ ] **CA7. 🟡 `types.ts` drift — add `ghl_last_synced_from_field_value`** (used by `sync-ghl-contact` but missing from `frontend/src/integrations/supabase/types.ts`). Bundle with CA4. *(S)*
+- [ ] **CA8. 🟢 SOP doc fixes in `Docs/CLIENT_ONBOARDING_SOP.md`:** (a) tag inconsistency — §5.13.1 says `bfd_setter-new_lead`, §5.13.5 Hop-1 says `1prompt - new lead`; pick one. (b) `llm_model` divergence — script hardcodes `openai/gpt-4.1-nano`, migration default is `google/gemini-2.5-pro`; document the intended default. (c) note edge fns live under `frontend/supabase/functions/`. (d) clarify canonical booking path is `bookings-webhook` (verifies), distinct from the unverified `sync-ghl-booking`. *(S)*
+
+### Brendan-required — by severity
+
+- [ ] **BR1. 🟠 Retell publish smoke (KNOWN OPEN ITEM).** Save Setter → publish on a live agent, then confirm `get-phone-number` shows the weighted `inbound_agents`/`outbound_agents` list pinned to the PUBLISHED version (not draft). Until this runs, "pinned to published" is unverified. $1 test call to TEST_PHONE_A (+61405482446) should use the new prompt. *(S)*
+- [ ] **BR2. 🟡 Decide the intended `llm_model` for new clients** (`openai/gpt-4.1-nano` vs `google/gemini-2.5-pro`) so CA6/CA8 can encode it. *(decision)*
+- [ ] **BR3. 🟡 (per client, at onboarding) Provision the 3 webhook secrets AND configure the upstream provider to send them.** Same as the security-review open item (line 21). NOTE: until **CA1** ships, setting these does nothing for the lead ingress / call-event paths. *(S per client)*
 
 ---
 
