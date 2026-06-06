@@ -1,11 +1,12 @@
 // Deploy BFD voice setter prompt to Retell LLM, then publish the agent.
-// Reads BFD_VOICE_SETTER_PROMPT from frontend/src/data/bfdVoiceSetterPrompt.ts.
+// Reads BFD_VOICE_SETTER_PROMPT from frontend/src/data/bfdVoiceSetterPrompt.md.
 // Run with: node --env-file=.env scripts/deploy_voice_prompt.mjs
 //
 // Env vars (from .env):
 //   BFD_RETELL_API_KEY       Retell account API key (required)
-//   BFD_RETELL_LLM_ID        LLM to patch (default: llm_22e795de19b4d25cb579013586be)
-//   BFD_RETELL_AGENT_ID      Agent to publish (default: agent_5ec5eb129f3165cfa07b581a1a)
+//   BFD_RETELL_LLM_ID        LLM to patch. SET THIS IN .env: the fallback below (llm_22e795...) is STALE,
+//                            that LLM no longer exists in the Retell account. Confirm the current id first.
+//   BFD_RETELL_AGENT_ID      Agent to publish. SET THIS IN .env: the fallback below (agent_5ec5eb...) is STALE too.
 //
 // A PATCH on the LLM does NOT propagate to the running agent until the agent is
 // republished, so this script does both, in order: GET current LLM (to preserve
@@ -19,7 +20,7 @@ if (!RETELL_KEY) { console.error('Missing BFD_RETELL_API_KEY in .env'); process.
 const LLM_ID = process.env.BFD_RETELL_LLM_ID || 'llm_22e795de19b4d25cb579013586be';
 const AGENT_ID = process.env.BFD_RETELL_AGENT_ID || 'agent_5ec5eb129f3165cfa07b581a1a';
 
-const promptFileUrl = new URL('../frontend/src/data/bfdVoiceSetterPrompt.ts', import.meta.url);
+const promptFileUrl = new URL('../frontend/src/data/bfdVoiceSetterPrompt.md', import.meta.url);
 const content = readFileSync(promptFileUrl, 'utf8');
 const match = content.match(/BFD_VOICE_SETTER_PROMPT = `([\s\S]+?)`;/);
 if (!match) { console.error('BFD_VOICE_SETTER_PROMPT template not found in', promptFileUrl.pathname); process.exit(1); }
