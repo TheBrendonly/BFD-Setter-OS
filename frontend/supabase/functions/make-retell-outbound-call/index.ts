@@ -570,7 +570,7 @@ Deno.serve(async (req) => {
     if (!fromNumber) {
       try {
         console.log("📞 No legacy phone columns set, querying Retell API for phone numbers...");
-        const retellPhonesResult = await debugFetch(`${RETELL_BASE}/list-phone-numbers`, {
+        const retellPhonesResult = await debugFetch(`${RETELL_BASE}/v2/list-phone-numbers`, {
           method: "GET",
           headers: {
             Authorization: `Bearer ${client.retell_api_key}`,
@@ -582,11 +582,13 @@ Deno.serve(async (req) => {
           const retellPhonesData = retellPhonesResult.data;
           const retellPhones = Array.isArray(retellPhonesData)
             ? retellPhonesData
-            : Array.isArray((retellPhonesData as any)?.phone_numbers)
-              ? (retellPhonesData as any).phone_numbers
-              : Array.isArray((retellPhonesData as any)?.data)
-                ? (retellPhonesData as any).data
-                : [];
+            : Array.isArray((retellPhonesData as any)?.items)
+              ? (retellPhonesData as any).items
+              : Array.isArray((retellPhonesData as any)?.phone_numbers)
+                ? (retellPhonesData as any).phone_numbers
+                : Array.isArray((retellPhonesData as any)?.data)
+                  ? (retellPhonesData as any).data
+                  : [];
 
           const usablePhone = retellPhones.find((entry: any) => {
             if (!entry || typeof entry !== "object") return false;

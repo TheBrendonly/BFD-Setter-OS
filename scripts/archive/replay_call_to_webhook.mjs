@@ -31,13 +31,16 @@ const fetchJson = (hostname, path, method = 'GET', headers = {}, body = null) =>
   console.log('Fetching call from Retell...');
   const retellRes = await fetchJson(
     'api.retellai.com',
-    `/v2/list-calls`,
+    `/v3/list-calls`,
     'POST',
     { 'Authorization': `Bearer ${RETELL_KEY}`, 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength('{"limit":50}') },
     '{"limit":50}'
   );
 
-  const calls = Array.isArray(retellRes.body) ? retellRes.body : [];
+  // v3/list-calls returns { items, pagination_key, has_more } instead of a top-level array.
+  const calls = Array.isArray(retellRes.body?.items)
+    ? retellRes.body.items
+    : Array.isArray(retellRes.body) ? retellRes.body : [];
   const call = calls.find(c => c.call_id === CALL_ID);
   if (!call) { console.error('Call not found in recent list'); process.exit(1); }
 

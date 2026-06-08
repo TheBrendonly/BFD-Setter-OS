@@ -884,6 +884,16 @@ async function retellFetch(
   return data;
 }
 
+// Versioned Retell list endpoints (v2/v3) return { items, pagination_key, has_more }
+// instead of a top-level array. Unwrap so the proxy's external contract (a plain
+// array) is unchanged and no UI consumer needs to change.
+function unwrapList(raw: unknown): unknown {
+  if (raw && typeof raw === "object" && Array.isArray((raw as { items?: unknown }).items)) {
+    return (raw as { items: unknown }).items;
+  }
+  return raw;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -930,7 +940,7 @@ Deno.serve(async (req) => {
 
       // ===== RETELL LLMs =====
       case "list-llms":
-        result = await retellFetch(apiKey, "GET", "list-retell-llms");
+        result = unwrapList(await retellFetch(apiKey, "GET", "v2/list-retell-llms"));
         break;
 
       case "get-llm":
@@ -1004,7 +1014,7 @@ Deno.serve(async (req) => {
 
       // ===== PHONE NUMBERS =====
       case "list-phone-numbers":
-        result = await retellFetch(apiKey, "GET", "list-phone-numbers");
+        result = unwrapList(await retellFetch(apiKey, "GET", "v2/list-phone-numbers"));
         break;
 
       case "import-phone-number":
@@ -1032,7 +1042,9 @@ Deno.serve(async (req) => {
 
       // ===== CALLS =====
       case "list-calls":
-        result = await retellFetch(apiKey, "GET", "list-calls");
+        result = unwrapList(
+          await retellFetch(apiKey, "POST", "v3/list-calls", { sort_order: "descending", limit: 50 })
+        );
         break;
 
       case "get-call":
