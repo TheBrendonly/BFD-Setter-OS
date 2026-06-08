@@ -1,4 +1,10 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
+import {
+  BFD_VOICE_BOOKING_TOOLS_PLACEHOLDER,
+  BFD_VOICE_BOOKING_TOOL_NAMES,
+  BFD_SEND_SMS_TOOL,
+  BFD_SCHEDULE_CALLBACK_TOOL,
+} from "../_shared/bfdVoiceTools.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -475,8 +481,56 @@ async function syncVoiceSetter(
             : {}),
         }))
     : [{ type: "end_call", name: "end_call" }];
-  // Validate webhook tool URLs — strip tools with invalid URLs to prevent Retell API errors
-  const validatedTools = rawTools.filter((t) => {
+  // BFD voice-tool URL authority + default-tool injection.
+  // BFD's own function-call tools (booking + send-sms + schedule-callback) must
+  // always hit our voice-booking-tools edge fn with a per-tenant clientId + Bearer
+  // auth, regardless of whatever URL is stored (legacy upstream n8n host, the
+  // sentinel placeholder, or any stale host). We key on the tool NAME so an
+  // unrecognised old URL can never slip through; genuine custom user tools and
+  // end_call/transfer_call pass through untouched.
+  //
+  // This runs BEFORE URL validation on purpose: the placeholder is not a valid
+  // URL, so a placeholder-seeded tool would otherwise be stripped as "invalid".
+  const supabaseUrlForTools = Deno.env.get("SUPABASE_URL")!;
+  const VOICE_BOOKING_TOOLS_URL = `${supabaseUrlForTools}/functions/v1/voice-booking-tools`;
+  const LEGACY_N8N_HOST = "n8n-1prompt.99players.com";
+  const forceBfdToolUrl = (t: Record<string, unknown>) => {
+    const toolName = typeof t.name === "string" ? t.name.trim() : "";
+    return {
+      ...t,
+      name: toolName,
+      url: VOICE_BOOKING_TOOLS_URL,
+      query_params: { tool: toolName, clientId },
+      headers: intakeSecret ? { Authorization: `Bearer ${intakeSecret}` } : {},
+    };
+  };
+  const substitutedTools = rawTools.map((t) => {
+    if (t.type === "end_call" || t.type === "transfer_call") return t;
+    const toolName = typeof t.name === "string" ? t.name.trim() : "";
+    const url = typeof t.url === "string" ? t.url : "";
+    // Authoritative by NAME: any known BFD tool always points at voice-booking-tools.
+    if (BFD_VOICE_BOOKING_TOOL_NAMES.has(toolName)) return forceBfdToolUrl(t);
+    // Defensive fallback: name-unknown tools still carrying our placeholder or the
+    // legacy n8n host also get rewritten.
+    if (url === BFD_VOICE_BOOKING_TOOLS_PLACEHOLDER || url.includes(LEGACY_N8N_HOST)) return forceBfdToolUrl(t);
+    return t;
+  });
+  // Inject the default SMS + callback tools if this setter predates them, so every
+  // voice setter ships with the full BFD tool set without any manual editing.
+  // Always present (independent of the booking-enabled toggle).
+  const presentNames = new Set(
+    substitutedTools.map((t) => (typeof t.name === "string" ? t.name.trim() : "")),
+  );
+  if (!(presentNames.has("send-sms") || presentNames.has("send_sms"))) {
+    substitutedTools.push(forceBfdToolUrl(BFD_SEND_SMS_TOOL as Record<string, unknown>));
+  }
+  if (!(presentNames.has("schedule-callback") || presentNames.has("schedule_callback"))) {
+    substitutedTools.push(forceBfdToolUrl(BFD_SCHEDULE_CALLBACK_TOOL as Record<string, unknown>));
+  }
+  // Validate webhook tool URLs — strip tools with invalid URLs to prevent Retell
+  // API errors. BFD tools were already forced to a valid URL above; this only
+  // catches a genuine custom user tool with a malformed URL.
+  const validatedTools = substitutedTools.filter((t) => {
     if (t.type === 'end_call' || t.type === 'transfer_call') return true;
     if (t.url !== undefined && !isValidUrl(t.url)) {
       console.warn(`[sync-voice-setter] Skipping tool "${t.name}" — invalid URL: "${t.url}"`);
@@ -484,36 +538,12 @@ async function syncVoiceSetter(
     }
     return true;
   });
-  // Multi-tenant booking-tool URL substitution:
-  // The frontend defaults file (retellVoiceAgentDefaults.ts) ships with either the
-  // legacy upstream n8n URL or a sentinel placeholder for the 5 booking tools.
-  // Rewrite both into our own voice-booking-tools edge fn URL with per-tenant
-  // clientId query param + Bearer auth. End-call / transfer-call pass through
-  // unchanged. Tools that already point at a custom user-defined URL also pass
-  // through (only substitute the known upstream patterns + the placeholder).
-  const supabaseUrlForTools = Deno.env.get("SUPABASE_URL")!;
-  const VOICE_BOOKING_TOOLS_URL = `${supabaseUrlForTools}/functions/v1/voice-booking-tools`;
-  const BFD_VOICE_BOOKING_TOOLS_PLACEHOLDER = "__BFD_VOICE_BOOKING_TOOLS__";
-  const LEGACY_N8N_HOST = "n8n-1prompt.99players.com";
-  const substitutedTools = validatedTools.map((t) => {
-    if (t.type === "end_call" || t.type === "transfer_call") return t;
-    const url = typeof t.url === "string" ? t.url : "";
-    const needsSubstitution = url === BFD_VOICE_BOOKING_TOOLS_PLACEHOLDER || url.includes(LEGACY_N8N_HOST);
-    if (!needsSubstitution) return t;
-    const toolName = typeof t.name === "string" ? t.name.trim() : "";
-    return {
-      ...t,
-      url: VOICE_BOOKING_TOOLS_URL,
-      query_params: { tool: toolName, clientId },
-      headers: intakeSecret ? { Authorization: `Bearer ${intakeSecret}` } : {},
-    };
-  });
-  const generalTools = substitutedTools.length > 0 ? substitutedTools : [{ type: "end_call", name: "end_call" }];
+  const generalTools = validatedTools.length > 0 ? validatedTools : [{ type: "end_call", name: "end_call" }];
   console.log(`[sync-voice-setter] Tools received (${rawTools.length}):`, JSON.stringify(rawTools.map((t: any) => t.name || t.type)));
   console.log(`[sync-voice-setter] Tools to sync (${generalTools.length}):`, JSON.stringify(generalTools.map((t: any) => t.name || t.type)));
-  const substitutedCount = substitutedTools.filter((t) => t.url === VOICE_BOOKING_TOOLS_URL).length;
-  if (substitutedCount > 0) {
-    console.log(`[sync-voice-setter] Rewrote ${substitutedCount} booking-tool URL(s) to voice-booking-tools for client ${clientId}`);
+  const forcedCount = generalTools.filter((t: any) => t.url === VOICE_BOOKING_TOOLS_URL).length;
+  if (forcedCount > 0) {
+    console.log(`[sync-voice-setter] Forced ${forcedCount} BFD tool URL(s) to voice-booking-tools for client ${clientId}`);
   }
   const knowledgeBaseIds = Array.isArray(llmSettings?.knowledge_base_ids)
     ? (llmSettings.knowledge_base_ids as unknown[]).filter(
