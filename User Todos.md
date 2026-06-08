@@ -8,6 +8,22 @@ Effort: S = under 30 min, M = 30 min - 2 hr, L = half day+.
 
 ---
 
+## 📡 RETELL LEGACY LIST-ENDPOINT MIGRATION (2026-06-09) — shipped `b835675`, deployed
+
+Retell deprecation email: legacy list endpoints are **removed 2026-06-15**; our workspace (`org_9MFI6tmn0hdfowaS`) was still calling three. Migrated to versioned endpoints, deployed to `bjgrgbgykvjrsuwwruoh`, verified live. Full writeup: **→ [Operations/handoffs/2026-06-09-retell-list-endpoint-migration.md](../../Operations/handoffs/2026-06-09-retell-list-endpoint-migration.md)**. Memory: `project_retell_legacy_list_endpoint_migration_2026_06_09`.
+
+**Done (deployed + verified live):**
+- ✅ `GET /list-retell-llms` -> `GET /v2/list-retell-llms`; `GET /list-phone-numbers` -> `GET /v2/list-phone-numbers`; `GET /list-calls` + `POST /v2/list-calls` -> `POST /v3/list-calls`. In `retell-proxy/index.ts`, `make-retell-outbound-call/index.ts`, and archived `replay_call_to_webhook.mjs`.
+- ✅ Handled the response-shape change (v2/v3 return `{items, pagination_key, has_more}`, not a top-level array) via an `unwrapList()` helper in the proxy so callers still get a plain array = zero frontend changes. `make-retell-outbound-call` unwrap chain got `.items` added.
+- ✅ Verified: live reads return `{items}`; deployed proxy boots clean (`400 clientId required`, not a 500).
+
+**Open — Brendan to action:**
+- [ ] **(S) UI smoke** — open a client's **Call Logs** + **Phone Numbers** tabs; rows should render exactly as before. Only check Claude couldn't auto-run (proxy needs a real user JWT; service-role not accepted).
+
+**Note:** the email's "97 POST /v2/list-calls" is likely inflated by Retell's own MCP server (`mcp__retell__list_calls` etc.) used in prior Claude sessions. That is Retell's software, not ours, and will keep emitting until Retell updates it. Our app code is now clean.
+
+---
+
 ## 🧪 FUNCTIONAL VERIFICATION (2026-06-06)
 
 Whole-platform functional pass/fail verification. Full report + evidence:
