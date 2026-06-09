@@ -17,9 +17,11 @@ Refreshed the Voice Setter model + voice selectors. Commit `41113a5`; retell-pro
 - ✅ "Fast Tier" toggle now sits next to the model selector (= Retell `model_high_priority`: same model, dedicated low-latency pool, ~1.5× cost). Removed the duplicate "High Priority LLM" toggle from the advanced voice settings.
 - ✅ Voice picker now loads your real Retell voice catalog (312 voices) incl. your 14 custom ElevenLabs clones — searchable, grouped (custom first, then recommended), with ▶ preview playback. No more copy-pasting voice ids from the Retell dashboard. Paste fallback kept.
 
-**Open — Brendan to action:**
-- [ ] **(S) Confirm Railway build** — `main` pushed to GitHub (`024f6d2`) which triggers the Railway frontend deploy. (Railway builds from `github`, not Forgejo `origin`.) Confirm the build went green.
-- [ ] **(S) UI smoke** — open a Voice Setter: model dropdown shows the new list, Fast Tier toggle works, voice picker lists your custom voices + previews play. Pick a voice + Save.
+**Done:**
+- [x] **Railway build live** — `main` pushed to GitHub (`b51dbab`); Railway rebuilt the frontend (builds from `github`, not Forgejo `origin`). Brendan confirmed 2026-06-09 the new model selector + voice picker are visible.
+
+**Open — Brendan to action (optional):**
+- [ ] **(S) Deeper UI smoke when convenient** — play a voice preview, pick a custom ElevenLabs voice + Save, confirm it pushes; toggle Fast Tier on/off.
 
 ---
 
@@ -32,8 +34,8 @@ Save Setter on Voice-Setter-1 failed with **"Push blocked — agent shared acros
 - ✅ Layer 2: the agent push + publish **always** runs now; only the direction-column fan-out is gated — if it would clear a shared column it is skipped and a non-fatal `direction_warning` is returned instead of a 409. Frontend surfaces the warning with the Fork opt-in.
 - ✅ Verified: v30 ACTIVE; BFD's agent columns unchanged (still all the master agent — no wipe).
 
-**Open — Brendan to action:**
-- [ ] **(S) Save Voice-Setter-1** in the UI to push the new send-sms / schedule-callback tools live. Any save now pushes. To avoid the benign "direction ownership unchanged" warning, tick **all three** direction toggles (Inbound, Outbound initial, Outbound follow-up) before saving — BFD's one master agent serves all three.
+**Done:**
+- [x] **Save Voice-Setter-1** — Brendan confirmed saved (2026-06-09); the new send-sms / schedule-callback tools are pushed live. (Tip for future: tick all three direction toggles before saving to avoid the benign "direction ownership unchanged" warning — BFD's one master agent serves all three.)
 
 ---
 
