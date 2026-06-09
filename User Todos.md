@@ -8,6 +8,21 @@ Effort: S = under 30 min, M = 30 min - 2 hr, L = half day+.
 
 ---
 
+## 🎚️ VOICE SETTER: CURRENT MODELS + FAST TIER + LIVE VOICE PICKER (2026-06-09) — shipped `41113a5`, deployed
+
+Refreshed the Voice Setter model + voice selectors. Commit `41113a5`; retell-proxy **v31** on `bjgrgbgykvjrsuwwruoh`.
+
+**Done (deployed):**
+- ✅ Model dropdown now matches the exact current Retell `model` enum (verified live against the create-retell-llm API ref): GPT-4.1/5/5.1/5.2/5.4/5.5 families incl. mini/nano, Claude 4.6/4.5 Sonnet + 4.5 Haiku, Gemini 3.1/3.0/2.5 Flash(-Lite). Old models removed from the UI (gpt-4o*, gemini-2.0*, claude-4.0/3.x). Backend `mapToRetellModel` mirrors the enum and forward-maps deprecated ids so existing setters keep working.
+- ✅ "Fast Tier" toggle now sits next to the model selector (= Retell `model_high_priority`: same model, dedicated low-latency pool, ~1.5× cost). Removed the duplicate "High Priority LLM" toggle from the advanced voice settings.
+- ✅ Voice picker now loads your real Retell voice catalog (312 voices) incl. your 14 custom ElevenLabs clones — searchable, grouped (custom first, then recommended), with ▶ preview playback. No more copy-pasting voice ids from the Retell dashboard. Paste fallback kept.
+
+**Open — Brendan to action:**
+- [ ] **(S) Frontend deploy** — the UI changes go live on the next Railway frontend deploy (push is on `main`). Confirm it built.
+- [ ] **(S) UI smoke** — open a Voice Setter: model dropdown shows the new list, Fast Tier toggle works, voice picker lists your custom voices + previews play. Pick a voice + Save.
+
+---
+
 ## 🛡️ SAVE SETTER UNBLOCKED — "agent shared across slots" (2026-06-09) — shipped `3023c7c`, deployed
 
 Save Setter on Voice-Setter-1 failed with **"Push blocked — agent shared across slots"**. Root cause: BFD's master agent (`agent_f45f4dd87a4072424f3c84b74c`) sits in all three direction columns (inbound + outbound + outbound_followup), and the EE1 guard threw a 409 **before** the Retell push — so the new send-sms / schedule-callback tools never reached the live agent. NOT caused by the webhook work; that just prompted the Save that surfaced pre-existing drift (Voice-Setter-1 `directions` had gone empty while the master still owned all three columns). Verified the call-routing model first: outbound picks the agent via the workflow node's `voice_setter_id` (`override_agent_id`), inbound routes off the Retell phone binding, so the agent push is always safe — only a column-clear can wipe live state.
