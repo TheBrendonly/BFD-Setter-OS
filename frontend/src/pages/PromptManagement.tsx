@@ -6132,9 +6132,12 @@ const PromptManagement = () => {
                 },
               },
             });
-            // EE1 safety-guard surfacing: when retell-proxy aborts the push because
-            // this slot's agent is shared across slot anchor columns (would wipe
-            // another slot's LLM), the body returns {code: 'agent_shared_across_slots',
+            // EE1 safety-guard surfacing (FALLBACK path): as of Layer 2 (2026-06-09)
+            // retell-proxy no longer aborts the push for a shared agent — it pushes,
+            // skips the fan-out, and returns a non-fatal direction_warning (handled in
+            // the success branch below). This 409 'agent_shared_across_slots' handler is
+            // retained only for a pre-Layer-2 (<= v28) proxy still in the rollout window.
+            // When triggered, the body returns {code: 'agent_shared_across_slots',
             // shared_columns, conflicting_agent_id}. Show a longer, action-oriented toast
             // so the user knows exactly how to recover instead of seeing a generic warning.
             //
@@ -6229,12 +6232,42 @@ const PromptManagement = () => {
                   duration: 15000,
                 });
               } else {
-                toast({
-                  title: 'Retell AI Synced',
-                  description: retellResult?.action === 'created'
-                    ? `New Retell agent created (ID: ${retellResult.agent_id})`
-                    : 'Retell agent prompt updated and published',
-                });
+                // Layer 2 (2026-06-09): the agent push always succeeds now. If the
+                // backend SKIPPED the direction-column fan-out because this slot's
+                // agent is shared across slots, it returns a non-fatal
+                // direction_warning (the push + publish still happened). Surface it
+                // with the same Fork opt-in the old hard-block path offered, instead
+                // of a plain success toast.
+                const directionWarning = (retellResult as { direction_warning?: string } | null)?.direction_warning;
+                if (directionWarning) {
+                  const conflictingAgentId = (retellResult as { conflicting_agent_id?: string } | null)?.conflicting_agent_id ?? null;
+                  const onlyOneDirection = voiceSetterDirections.length === 1 ? voiceSetterDirections[0] : null;
+                  const showForkButton = !!(onlyOneDirection && conflictingAgentId);
+                  toast({
+                    title: '✅ Published — direction ownership unchanged',
+                    description: directionWarning,
+                    duration: 18000,
+                    action: showForkButton ? (
+                      <ToastAction
+                        altText="Fork to dedicated agent for this direction"
+                        onClick={() => setForkModalState({
+                          open: true,
+                          direction: onlyOneDirection,
+                          sourceAgentId: conflictingAgentId,
+                        })}
+                      >
+                        Fork
+                      </ToastAction>
+                    ) : undefined,
+                  });
+                } else {
+                  toast({
+                    title: 'Retell AI Synced',
+                    description: retellResult?.action === 'created'
+                      ? `New Retell agent created (ID: ${retellResult.agent_id})`
+                      : 'Retell agent prompt updated and published',
+                  });
+                }
               }
               // Fetch cost after successful sync
               if (retellResult?.agent_id) {

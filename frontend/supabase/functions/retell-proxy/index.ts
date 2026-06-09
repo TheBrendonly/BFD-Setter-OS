@@ -684,42 +684,76 @@ On inbound calls to a BYO Twilio number, Retell does NOT inject dynamic variable
   const clientRowAgents = clientData as Record<string, string | null>;
   const existingAgentId = clientRowAgents[agentColumn];
 
-  // EE1 safety guard (added after the 2026-05-18 fan-out incident).
-  // If `existingAgentId` is referenced by MULTIPLE slot anchor columns and this
-  // push's `directions` do NOT claim every one of those columns, then `fanOut`
-  // would CLEAR the unclaimed columns from a shared agent — silently overwriting
-  // the LLM that another slot is actively serving (the wipe scenario from the
-  // 2026-05-18 incident). Abort with a structured 409-style error and direct the
-  // user to detach to a new agent for this slot before pushing.
+  // Hardening (2026-06-09): a content-only Save with NO directions selected
+  // (stale/empty toggles) would otherwise make fanOutDirections RELEASE every
+  // direction column this agent occupies — unbinding a single master agent that
+  // legitimately serves all directions, and tripping the EE1 guard below. When
+  // the slot's existing agent already owns one or more direction columns and the
+  // push selects none, interpret empty as "preserve current ownership" instead of
+  // "release all". This only ever EXPANDS the claim to columns the SAME agent
+  // already holds, so it can never claim a column held by a different agent and
+  // cannot cause a cross-slot wipe. Explicit partial saves (a non-empty subset)
+  // are untouched and still hit the guard.
+  let effectiveDirections = directions;
+  if (existingAgentId && directions.length === 0) {
+    const ownedDirections = Object.entries(DIRECTION_TO_AGENT_COLUMN)
+      .filter(([, col]) => clientRowAgents[col] === existingAgentId)
+      .map(([dir]) => dir);
+    if (ownedDirections.length > 0) {
+      effectiveDirections = ownedDirections;
+      console.log(
+        `[sync-voice-setter] Empty directions on save; preserving current ownership for agent ${existingAgentId}: ${JSON.stringify(ownedDirections)}`,
+      );
+      // Best-effort self-heal: write the expanded set back to this slot's prompts
+      // row so the UI toggles reflect reality on next load. Non-blocking.
+      const { error: healErr } = await supabase
+        .from("prompts")
+        .update({ directions: effectiveDirections })
+        .eq("client_id", clientId)
+        .eq("slot_id", `Voice-Setter-${slotNumber}`)
+        .eq("category", "voice_setter");
+      if (healErr) {
+        console.warn(`[sync-voice-setter] directions self-heal failed (non-blocking): ${healErr.message}`);
+      }
+    }
+  }
+
+  // EE1 safety (Layer 2, 2026-06-09): the agent PUSH + publish is always safe and
+  // idempotent, so a Save NEVER aborts here anymore — the agent always updates and
+  // publishes. What stays gated is the DIRECTION-COLUMN FAN-OUT. If `existingAgentId`
+  // is referenced by MULTIPLE slot anchor columns and this push's directions do NOT
+  // claim every one of them, running fanOutDirections would CLEAR the unclaimed shared
+  // column(s) — wiping the agent another slot, or a legacy "Voice-Setter-N" cadence
+  // that reads those columns, is serving (the 2026-05-18 incident). In that case we
+  // SKIP the fan-out and return a non-fatal warning so the user can resolve ownership
+  // via Fork / Delete, WITHOUT losing the agent push. (Layer 1 above already expands an
+  // empty selection to the agent's currently-owned columns, so a routine content-only
+  // Save is never flagged here.)
+  let directionFanOutBlocked = false;
+  let directionWarning: string | null = null;
+  let directionConflictColumns: string[] = [];
   if (existingAgentId) {
     const columnsPointingAtThisAgent = allAgentColumns.filter(
       (col) => clientRowAgents[col] === existingAgentId,
     );
     if (columnsPointingAtThisAgent.length > 1) {
       const claimedColumns = new Set(
-        directions.map((d) => DIRECTION_TO_AGENT_COLUMN[d]).filter(Boolean),
+        effectiveDirections.map((d) => DIRECTION_TO_AGENT_COLUMN[d]).filter(Boolean),
       );
       const unclaimedSharedColumns = columnsPointingAtThisAgent.filter(
         (col) => !claimedColumns.has(col),
       );
       if (unclaimedSharedColumns.length > 0) {
-        const err = new Error(
-          `agent_shared_across_slots: Agent ${existingAgentId} is currently bound to ` +
-          `column(s) ${columnsPointingAtThisAgent.join(", ")} but this push from ` +
-          `Voice-Setter-${slotNumber} only claims direction(s) ${directions.length > 0 ? directions.join(", ") : "(none selected)"}. ` +
-          `Continuing would clear the unclaimed shared column(s) [${unclaimedSharedColumns.join(", ")}] ` +
-          `and likely overwrite the LLM another slot is serving (this is the 2026-05-18 wipe scenario). ` +
-          `Fix: either select directions that cover every shared column, OR delete this voice-setter slot ` +
-          `(Delete Voice Setter button) and recreate it so a fresh agent is provisioned for it.`,
-        );
-        (err as Error & { status?: number; code?: string; sharedColumns?: string[]; conflictingAgentId?: string }).status = 409;
-        (err as Error & { code?: string }).code = "agent_shared_across_slots";
-        (err as Error & { sharedColumns?: string[] }).sharedColumns = columnsPointingAtThisAgent;
-        (err as Error & { conflictingAgentId?: string }).conflictingAgentId = existingAgentId;
-        console.warn(
-          `[sync-voice-setter] SAFETY GUARD: ${err.message}`,
-        );
-        throw err;
+        directionFanOutBlocked = true;
+        directionConflictColumns = columnsPointingAtThisAgent;
+        directionWarning =
+          `Agent updated and published, but direction ownership was left unchanged: agent ${existingAgentId} ` +
+          `is shared across column(s) ${columnsPointingAtThisAgent.join(", ")} and this Save only claims ` +
+          `direction(s) ${directions.length > 0 ? directions.join(", ") : "(none selected)"}. ` +
+          `Applying it would have cleared the shared column(s) [${unclaimedSharedColumns.join(", ")}], which could ` +
+          `break another slot or a legacy "Voice-Setter-N" cadence that reads those columns. To change direction ` +
+          `ownership, Fork this direction onto its own agent, or delete + recreate this slot on a dedicated agent.`;
+        console.warn(`[sync-voice-setter] DIRECTION FAN-OUT SKIPPED (non-fatal): ${directionWarning}`);
       }
     }
   }
@@ -757,10 +791,13 @@ On inbound calls to a BYO Twilio number, Retell does NOT inject dynamic variable
         console.warn(`[sync-voice-setter] Auto-publish failed (non-blocking):`, message);
         publishWarning = message;
       }
-      // EE1: fan out direction selection across clients columns + sibling slots.
-      await fanOutDirections(supabase, clientId, `Voice-Setter-${slotNumber}`, existingAgentId, directions);
+      // EE1: fan out direction selection across clients columns + sibling slots
+      // (skipped when it would clear a shared column — Layer 2 guard above).
+      if (!directionFanOutBlocked) {
+        await fanOutDirections(supabase, clientId, `Voice-Setter-${slotNumber}`, existingAgentId, effectiveDirections);
+      }
       await dualWriteVoiceSetter(supabase, clientId, slotNumber, agentName, existingAgentId, llmId);
-      return { success: true, action: "updated_and_published", agent_id: existingAgentId, llm_id: llmId, llm: updatedLlm, publish_warning: publishWarning };
+      return { success: true, action: "updated_and_published", agent_id: existingAgentId, llm_id: llmId, llm: updatedLlm, publish_warning: publishWarning, direction_warning: directionWarning, conflicting_agent_id: directionFanOutBlocked ? existingAgentId : null, shared_columns: directionFanOutBlocked ? directionConflictColumns : null };
     } else {
       const newLlm = await retellFetch(apiKey, "POST", "create-retell-llm", llmPayload) as any;
       await retellFetch(apiKey, "PATCH", `update-agent/${existingAgentId}`, {
@@ -784,10 +821,13 @@ On inbound calls to a BYO Twilio number, Retell does NOT inject dynamic variable
         console.warn(`[sync-voice-setter] Auto-publish failed (non-blocking):`, message);
         publishWarning = message;
       }
-      // EE1: fan out direction selection across clients columns + sibling slots.
-      await fanOutDirections(supabase, clientId, `Voice-Setter-${slotNumber}`, existingAgentId, directions);
+      // EE1: fan out direction selection across clients columns + sibling slots
+      // (skipped when it would clear a shared column — Layer 2 guard above).
+      if (!directionFanOutBlocked) {
+        await fanOutDirections(supabase, clientId, `Voice-Setter-${slotNumber}`, existingAgentId, effectiveDirections);
+      }
       await dualWriteVoiceSetter(supabase, clientId, slotNumber, agentName, existingAgentId, newLlm.llm_id);
-      return { success: true, action: "updated_with_new_llm_and_published", agent_id: existingAgentId, llm_id: newLlm.llm_id, publish_warning: publishWarning };
+      return { success: true, action: "updated_with_new_llm_and_published", agent_id: existingAgentId, llm_id: newLlm.llm_id, publish_warning: publishWarning, direction_warning: directionWarning, conflicting_agent_id: directionFanOutBlocked ? existingAgentId : null, shared_columns: directionFanOutBlocked ? directionConflictColumns : null };
     }
   } else {
     console.log(`[sync-voice-setter] Creating new agent for slot ${slotNumber}`);
@@ -835,7 +875,7 @@ On inbound calls to a BYO Twilio number, Retell does NOT inject dynamic variable
       console.warn(`[sync-voice-setter] Auto-publish of new agent failed (non-blocking):`, pubErr);
     }
     // EE1: fan out direction selection across clients columns + sibling slots.
-    await fanOutDirections(supabase, clientId, `Voice-Setter-${slotNumber}`, newAgent.agent_id, directions);
+    await fanOutDirections(supabase, clientId, `Voice-Setter-${slotNumber}`, newAgent.agent_id, effectiveDirections);
     await dualWriteVoiceSetter(supabase, clientId, slotNumber, agentName, newAgent.agent_id, newLlm.llm_id);
     return { success: true, action: "created_and_published", agent_id: newAgent.agent_id, llm_id: newLlm.llm_id, publish_warning: publishWarning };
   }
