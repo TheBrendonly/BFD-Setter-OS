@@ -25,22 +25,36 @@ function mapToRetellModel(model: string): string {
   // Strip OpenRouter-style prefixes (e.g., "openai/gpt-5" -> "gpt-5")
   const stripped = model.includes('/') ? model.split('/').pop()! : model;
   
+  // Forward-map deprecated / renamed ids onto the nearest CURRENT model so
+  // setters stored with an old value keep working after the UI drops old models.
   const mapping: Record<string, string> = {
-    "claude-sonnet-4": "claude-4.0-sonnet",
-    "claude-4-sonnet": "claude-4.0-sonnet",
-    "claude-sonnet-4.5": "claude-4.5-sonnet",
-    "claude-haiku-3.5": "claude-4.5-haiku",
+    // OpenAI legacy
+    "gpt-4o": "gpt-4.1",
+    "gpt-4o-mini": "gpt-4.1-mini",
+    "gpt-4": "gpt-4.1",
+    "gpt-4-turbo": "gpt-4.1",
     "deepseek-chat": "gpt-4.1-nano",
-    "gpt-4": "gpt-4o",
-    "gpt-4-turbo": "gpt-4o",
+    // Anthropic legacy / alias naming
+    "claude-sonnet-4": "claude-4.5-sonnet",
+    "claude-4-sonnet": "claude-4.5-sonnet",
+    "claude-4.0-sonnet": "claude-4.5-sonnet",
+    "claude-sonnet-4.5": "claude-4.5-sonnet",
+    "claude-3.7-sonnet": "claude-4.5-sonnet",
+    "claude-haiku-3.5": "claude-4.5-haiku",
+    // Google legacy
+    "gemini-2.0-flash": "gemini-3.0-flash",
+    "gemini-2.0-flash-lite": "gemini-2.5-flash-lite",
+    "gemini-2.5-flash": "gemini-3.0-flash",
   };
   if (mapping[stripped]) return mapping[stripped];
+  // Exact current Retell `model` enum (create-retell-llm, verified 2026-06-09).
+  // Keep in sync with RETELL_MODELS in frontend/src/components/RetellModelSelector.tsx.
   const validModels = [
-    "gpt-4o", "gpt-4o-mini", "gpt-4.1", "gpt-4.1-mini", "gpt-4.1-nano",
-    "gpt-5", "gpt-5-mini", "gpt-5-nano", "gpt-5.1", "gpt-5.2",
-    "gpt-5.4", "gpt-5.4-mini", "gpt-5.4-nano",
-    "claude-4.0-sonnet", "claude-4.5-sonnet", "claude-4.6-sonnet", "claude-4.5-haiku",
-    "gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-3.0-flash",
+    "gpt-4.1", "gpt-4.1-mini", "gpt-4.1-nano",
+    "gpt-5", "gpt-5-mini", "gpt-5-nano",
+    "gpt-5.1", "gpt-5.2", "gpt-5.4", "gpt-5.4-mini", "gpt-5.4-nano", "gpt-5.5",
+    "claude-4.6-sonnet", "claude-4.5-sonnet", "claude-4.5-haiku",
+    "gemini-3.1-flash-lite", "gemini-3.0-flash", "gemini-2.5-flash-lite",
   ];
   if (validModels.includes(stripped)) return stripped;
   console.warn(`[retell-proxy] Unknown model "${model}", falling back to gpt-4.1-nano`);

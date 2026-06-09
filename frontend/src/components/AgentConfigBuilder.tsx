@@ -3284,6 +3284,25 @@ export const AgentConfigBuilder: React.FC<AgentConfigBuilderProps> = ({
                         label="AI Model"
                       />
                     )}
+                    {/* Fast Tier toggle (Retell model_high_priority): same model,
+                        dedicated low-latency pool, ~1.5x cost. Lives next to the
+                        model selector; the field still persists via retellVoiceSettings. */}
+                    {mode === 'voice' && retellVoiceSettings && onRetellVoiceSettingsChange && (
+                      <div className="flex items-center justify-between gap-4 mt-3">
+                        <div>
+                          <label className="text-sm font-medium" style={{ fontSize: '13px', fontFamily: "'IBM Plex Mono', monospace", fontWeight: 500 }}>Fast Tier</label>
+                          <p className="text-muted-foreground" style={{ fontSize: '11px', fontFamily: "'IBM Plex Mono', monospace" }}>Lower latency, ~1.5× cost — same model.</p>
+                        </div>
+                        <Switch
+                          checked={!!retellVoiceSettings.model_high_priority}
+                          onCheckedChange={(c) => {
+                            onRetellVoiceSettingsChange({ model_high_priority: !!c });
+                            onMarkNeedsSync?.();
+                          }}
+                          disabled={disabled}
+                        />
+                      </div>
+                    )}
                   </div>
 
                   {/* Voice-specific Retell settings (BASIC only) */}

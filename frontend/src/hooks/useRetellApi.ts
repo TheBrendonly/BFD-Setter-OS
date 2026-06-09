@@ -274,4 +274,7 @@ export interface RetellVoice {
   gender?: string;
   age?: string;
   preview_audio_url?: string | null;
+  recommended?: boolean;
+  voice_type?: string;
+  avatar_url?: string | null;
 }

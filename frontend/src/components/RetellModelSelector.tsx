@@ -9,13 +9,32 @@ import {
 } from '@/components/ui/popover';
 import { StatusTag } from '@/components/StatusTag';
 
+// Current Retell-supported LLM models (mirrors the create-retell-llm `model`
+// enum, verified 2026-06-09). Keep this in sync with `mapToRetellModel`'s
+// validModels in supabase/functions/retell-proxy/index.ts. Old models (gpt-4o*,
+// gemini-2.0*, claude-4.0/3.x, gpt-3.5) are intentionally excluded.
 const RETELL_MODELS = [
-  { id: 'gpt-5.4', name: 'Gpt-5.4', provider: 'Openai' },
-  { id: 'gpt-5.2', name: 'Gpt-5.2', provider: 'Openai' },
-  { id: 'gpt-5', name: 'Gpt-5', provider: 'Openai' },
+  // OpenAI — newest first; -mini/-nano are the faster/cheaper variants.
+  { id: 'gpt-5.5', name: 'GPT-5.5', provider: 'OpenAI' },
+  { id: 'gpt-5.4', name: 'GPT-5.4', provider: 'OpenAI' },
+  { id: 'gpt-5.4-mini', name: 'GPT-5.4 Mini', provider: 'OpenAI' },
+  { id: 'gpt-5.4-nano', name: 'GPT-5.4 Nano', provider: 'OpenAI' },
+  { id: 'gpt-5.2', name: 'GPT-5.2', provider: 'OpenAI' },
+  { id: 'gpt-5.1', name: 'GPT-5.1', provider: 'OpenAI' },
+  { id: 'gpt-5', name: 'GPT-5', provider: 'OpenAI' },
+  { id: 'gpt-5-mini', name: 'GPT-5 Mini', provider: 'OpenAI' },
+  { id: 'gpt-5-nano', name: 'GPT-5 Nano', provider: 'OpenAI' },
+  { id: 'gpt-4.1', name: 'GPT-4.1', provider: 'OpenAI' },
+  { id: 'gpt-4.1-mini', name: 'GPT-4.1 Mini', provider: 'OpenAI' },
+  { id: 'gpt-4.1-nano', name: 'GPT-4.1 Nano', provider: 'OpenAI' },
+  // Anthropic
   { id: 'claude-4.6-sonnet', name: 'Claude 4.6 Sonnet', provider: 'Anthropic' },
   { id: 'claude-4.5-sonnet', name: 'Claude 4.5 Sonnet', provider: 'Anthropic' },
+  { id: 'claude-4.5-haiku', name: 'Claude 4.5 Haiku', provider: 'Anthropic' },
+  // Google
+  { id: 'gemini-3.1-flash-lite', name: 'Gemini 3.1 Flash Lite', provider: 'Google' },
   { id: 'gemini-3.0-flash', name: 'Gemini 3.0 Flash', provider: 'Google' },
+  { id: 'gemini-2.5-flash-lite', name: 'Gemini 2.5 Flash Lite', provider: 'Google' },
 ];
 
 interface RetellModelSelectorProps {

@@ -1232,16 +1232,8 @@ export const VoiceRetellSettings: React.FC<VoiceRetellSettingsProps> = memo(({
             <FieldGroup title="Voice Temperature" subtitle="Controls the randomness and expressiveness of the voice.">
               <DebouncedNumberInput className="h-8" style={monoStyle} step="0.01" min={0} max={2} value={settings.voice_temperature} onChange={handleChange('voice_temperature')} disabled={disabled} />
             </FieldGroup>
-
-            <div className="border-t border-dashed border-border" />
-
-            <ToggleField
-              label="High Priority LLM"
-              subtitle="Keeps the Retell LLM on the high-priority tier for faster responses."
-              checked={settings.model_high_priority}
-              disabled={disabled}
-              onChange={handleChange('model_high_priority')}
-            />
+            {/* "High Priority LLM" (model_high_priority) moved to the "Fast Tier"
+                toggle next to the AI Model selector in AgentConfigBuilder. */}
           </div>
 
           <div className="border-t border-dashed border-border" />
