@@ -8,6 +8,20 @@ Effort: S = under 30 min, M = 30 min - 2 hr, L = half day+.
 
 ---
 
+## 🛡️ SAVE SETTER UNBLOCKED — "agent shared across slots" (2026-06-09) — shipped `3023c7c`, deployed
+
+Save Setter on Voice-Setter-1 failed with **"Push blocked — agent shared across slots"**. Root cause: BFD's master agent (`agent_f45f4dd87a4072424f3c84b74c`) sits in all three direction columns (inbound + outbound + outbound_followup), and the EE1 guard threw a 409 **before** the Retell push — so the new send-sms / schedule-callback tools never reached the live agent. NOT caused by the webhook work; that just prompted the Save that surfaced pre-existing drift (Voice-Setter-1 `directions` had gone empty while the master still owned all three columns). Verified the call-routing model first: outbound picks the agent via the workflow node's `voice_setter_id` (`override_agent_id`), inbound routes off the Retell phone binding, so the agent push is always safe — only a column-clear can wipe live state.
+
+**Done (deployed + verified live, retell-proxy v30 on `bjgrgbgykvjrsuwwruoh`):**
+- ✅ Layer 1: empty direction toggles now mean "preserve current ownership" (no longer "release all"); self-heals `prompts.directions`.
+- ✅ Layer 2: the agent push + publish **always** runs now; only the direction-column fan-out is gated — if it would clear a shared column it is skipped and a non-fatal `direction_warning` is returned instead of a 409. Frontend surfaces the warning with the Fork opt-in.
+- ✅ Verified: v30 ACTIVE; BFD's agent columns unchanged (still all the master agent — no wipe).
+
+**Open — Brendan to action:**
+- [ ] **(S) Save Voice-Setter-1** in the UI to push the new send-sms / schedule-callback tools live. Any save now pushes. To avoid the benign "direction ownership unchanged" warning, tick **all three** direction toggles (Inbound, Outbound initial, Outbound follow-up) before saving — BFD's one master agent serves all three.
+
+---
+
 ## 📡 RETELL LEGACY LIST-ENDPOINT MIGRATION (2026-06-09) — shipped `b835675`, deployed
 
 Retell deprecation email: legacy list endpoints are **removed 2026-06-15**; our workspace (`org_9MFI6tmn0hdfowaS`) was still calling three. Migrated to versioned endpoints, deployed to `bjgrgbgykvjrsuwwruoh`, verified live. Full writeup: **→ [Operations/handoffs/2026-06-09-retell-list-endpoint-migration.md](../../Operations/handoffs/2026-06-09-retell-list-endpoint-migration.md)**. Memory: `project_retell_legacy_list_endpoint_migration_2026_06_09`.
