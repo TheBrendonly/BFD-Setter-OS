@@ -20,11 +20,11 @@ Multi-agent full audit (80 raised → **62 confirmed**) + the CA1-CA8 onboarding
 - ✅ GHL auth (WI-1): static `x-wh-token` on sync-ghl-contact + SOP §5.3 corrected (native Webhook V2 is RSA, unsupported — use static token header).
 - ✅ Deps/tooling: dompurify ^3.4.8; node engines; `scripts/check-schema-drift.mjs` guard (found 11 missing tables).
 
-**Remaining — Claude (next session #1):**
-- [ ] (M) Build `process-lead-file` schema (5 tables + `leads` cols + RLS).
-- [ ] (M) Webhook-secret UI in ApiManagement (unblocks BR3).
-- [ ] (M) Finish dep sweep: GHL static-token → other 5 handlers; supabase-js pins; `npm audit fix`.
-- [ ] (L) More error_logs + idempotency/retry-storm on the paid call path (CAD-01/02, REL-01/04).
+**Remaining — Claude (next session #1):** ✅ ALL 4 DONE + DEPLOYED 2026-06-10 (second wave, HEAD `302ad45`; Trigger.dev **v20260610.2**; 2 new migrations applied live; fleet redeploy of all edge fns with pinned supabase-js 2.101.0)
+- [x] (M) Build `process-lead-file` schema (5 tables + `leads` cols + F6 RLS) — migration `20260610130000`, drift guard 11→6 missing tables.
+- [x] (M) Webhook-secret UI in ApiManagement ("Webhook Security" card: ghl/retell/unipile masked inputs) — BR3 unblocked.
+- [x] (M) Dep sweep: x-wh-token → all 5 remaining GHL handlers (workflow-inbound-webhook now STRICT per SEC-09); supabase-js pinned 2.101.0 across all 84 edge-fn imports; npm audit fix (react-router-dom 6.30.4, vite 5.4.21; esbuild dev-server advisory deferred — needs breaking vite major). RUNBOOK's "enable native Webhook V2" instructions replaced (they were the WI-1 footgun).
+- [x] (L) Paid call path: `call_history.idempotency_key` dedup (migration `20260610140000` + edge-fn guard at entry AND pre-dial) + Trigger-native idempotencyKey on placeOutboundCall triggers + AbortTaskRunError on permanent Retell 4xx + campaign_events per-channel replay markers + `active_call_id` cleared on every wait-exit + error_logs in retell-call-webhook / receive-twilio-sms. ⚠️ Found + fixed: yesterday's REL-03 error_logs insert used non-existent columns (`message`/`raw_payload`) so it was silently inert. Adversarially reviewed (3-lens multi-agent) pre-deploy; accepted residual: 2+ phone_call channels in ONE engage node can stall ~10 min on a replay (rare config, documented in handoff).
 
 **From the 2026-06-10 deploy smoke-test (Brendan walkthrough):**
 - [x] **`push-followup-now` 401 / wrong-project — FIXED this session.** The "Push follow-up now" button used a raw `fetch` with no JWT *and* the stale `qfbhcixkxzivpmxlciot` host. Switched to `supabase.functions.invoke` (forwards the JWT, targets the live project). Pushed to GitHub → Railway.

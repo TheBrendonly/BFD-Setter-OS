@@ -6,6 +6,12 @@ Severity: high 14 · medium 26 · low 22. Owner: Claude/code 57 · Brendan/ops 5
 
 > **Not yet deployed:** this audit reflects code on disk. The CA1-CA8 fixes from the prior session are also not yet deployed.
 
+> **Update 2026-06-10 (later session):** the first audit-fix wave (CA1-CA8 + security/RLS/data-integrity/cadence, see handoff) deployed live earlier today. A second wave then closed the four remaining Claude task groups, all deployed:
+> - **DI-4 / §6 lead-file schema:** `lead_ai_columns`, `lead_ai_values`, `lead_tags`, `lead_tag_assignments`, `client_custom_fields` + `leads.{business_name,custom_fields,phone_valid,tags}` created on the platform DB with F6-pattern RLS (`20260610130000`). Drift guard down from 11 missing tables to 6 (messages, payment_attempts, simulation_analysis_messages, supabase_usage_cache, sync_ghl_executions, sync_ghl_booking_executions remain open).
+> - **§6 webhook-secret UI:** ApiManagement "Webhook Security" card (ghl/retell/unipile secrets) shipped — BR3 unblocked.
+> - **WI-1 + SEC-09:** x-wh-token static-token auth rolled to all 5 remaining GHL handlers; workflow-inbound-webhook now strict; RUNBOOK's dangerous native-Webhook-V2 instructions replaced. DEP pins: supabase-js `2.101.0` across all 84 edge-fn imports; react-router-dom 6.30.4 + vite 5.4.21 via npm audit fix (esbuild dev-server advisory deferred: needs breaking vite major).
+> - **CAD-01/CAD-02/REL-01/REL-04/REL-06 + REL-03 repair:** call-path idempotency (`call_history.idempotency_key` `20260610140000` + edge-fn dedup guard + Trigger-native idempotencyKey), AbortTaskRunError on permanent Retell 4xx, campaign_events send-markers w/ per-channel replay skip, active_call_id cleared on wait-exit, error_logs coverage in retell-call-webhook + receive-twilio-sms. NOTE: the REL-03 fix shipped in the first wave was inert (inserted non-existent `message`/`raw_payload` columns) — repaired in this wave.
+
 ---
 
 ## 1. Brendan action items (owner = Brendan — I cannot do these)
