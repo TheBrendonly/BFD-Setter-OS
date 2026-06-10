@@ -73,8 +73,8 @@ shell commands, and other important information, read the current plan
 
 This repo is wired for GitHub spec-kit (v0.9.3). The spec -> plan -> tasks -> implement loop runs
 through `/speckit-*` commands/skills; shared project memory and templates live in `.specify/`.
-Per-tool command files: Claude (`.claude/skills/`), Codex (`.agents/skills/` + this AGENTS.md),
-Cursor (`.cursor/`), Gemini (`.gemini/commands/` + GEMINI.md), Copilot (`.github/` + `.vscode/`).
+Per-tool command files: Claude (`.claude/skills/`) only — the Codex/Cursor/Gemini/Copilot
+spec-kit mirrors were removed 2026-06-10 (unused on this project).
 
 - Constitution / principles: `.specify/memory/constitution.md` (fill or amend via `/speckit-constitution`).
 - Core loop: `/speckit-specify` -> `/speckit-clarify` -> `/speckit-plan` -> `/speckit-tasks` -> `/speckit-implement`.

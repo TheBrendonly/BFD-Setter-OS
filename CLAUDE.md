@@ -77,7 +77,7 @@ templates live in `.specify/`.
 - Core loop: `/speckit-specify` -> `/speckit-clarify` -> `/speckit-plan` -> `/speckit-tasks` -> `/speckit-implement`.
 - Supporting: `/speckit-analyze`, `/speckit-checklist`. Git helpers: `/speckit-git-*`.
 - `/speckit-taskstoissues` is GitHub-only and a NO-OP here (we use Forgejo `origin`).
-- Other AI tools are wired too: Codex (`.agents/` + AGENTS.md), Cursor (`.cursor/`), Gemini (`.gemini/` + GEMINI.md), Copilot (`.github/` + `.vscode/`).
+- The Codex/Cursor/Gemini/Copilot spec-kit mirrors (`.agents/skills/`, `.cursor/skills/`, `.gemini/commands/speckit.*`, `.github/agents+prompts`) were removed 2026-06-10 (unused on this project). Claude Code (`.claude/skills/`) + `.specify/` are the only spec-kit surfaces here.
 - Complementary to the workspace `/init` scaffolder: `/init` builds folder structure + repo + vault + ralph + the PRD/SOP; spec-kit adds the per-feature SDD loop on top. A project has one `/init` PRD and many spec-kit specs over its life.
 
 ## Voice Agent Prompts (Retell): Do Not Edit, Report Only
