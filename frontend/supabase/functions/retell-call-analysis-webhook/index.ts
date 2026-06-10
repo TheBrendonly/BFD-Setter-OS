@@ -1,4 +1,4 @@
-import { createClient } from "npm:@supabase/supabase-js@2";
+import { createClient } from "npm:@supabase/supabase-js@2.101.0";
 import { resolveContactId } from "./contactId.ts";
 import { classifyCallOutcome } from "./classifyCallOutcome.ts";
 import { pushCallEventToGhl } from "../_shared/ghl-conversations.ts";

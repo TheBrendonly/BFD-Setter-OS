@@ -1,4 +1,4 @@
-import { createClient } from "npm:@supabase/supabase-js@2";
+import { createClient } from "npm:@supabase/supabase-js@2.101.0";
 import { loggedFetch, logRequest } from "../_shared/request-logger.ts";
 import { authorizeClientRequest, AssertAccessError } from "../_shared/authorize-client-request.ts";
 

@@ -1,4 +1,4 @@
-import { createClient } from 'npm:@supabase/supabase-js@2';
+import { createClient } from 'npm:@supabase/supabase-js@2.101.0';
 
 // Inline base64 encoder (jsr:@std/encoding/base64 is blocked by Supabase's
 // edge runtime --no-remote flag; native btoa works fine here).

@@ -25,7 +25,7 @@
 //     throw e;
 //   }
 
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.101.0";
 import { assertClientAccess, AssertAccessError } from "./assert-client-access.ts";
 
 // Constant-time string comparison to avoid leaking the service key via timing.

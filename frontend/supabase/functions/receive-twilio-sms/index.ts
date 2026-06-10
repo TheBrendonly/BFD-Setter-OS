@@ -16,7 +16,7 @@
 //      active_trigger_runs + fire process-messages Trigger.dev task.
 //   6. Return empty TwiML (Twilio expects <Response/>).
 
-import { createClient } from "npm:@supabase/supabase-js@2";
+import { createClient } from "npm:@supabase/supabase-js@2.101.0";
 import { pushSmsToGhl } from "../_shared/ghl-conversations.ts";
 
 // Schedule a fire-and-forget GHL mirror that completes after the TwiML response

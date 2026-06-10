@@ -29,7 +29,7 @@
 // idempotent retries.
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "npm:@supabase/supabase-js@2";
+import { createClient } from "npm:@supabase/supabase-js@2.101.0";
 import { pushSmsToGhl } from "../_shared/ghl-conversations.ts";
 import { parseCallbackTime } from "../_shared/parseCallbackTime.ts";
 

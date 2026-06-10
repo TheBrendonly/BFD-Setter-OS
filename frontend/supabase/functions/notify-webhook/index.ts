@@ -7,7 +7,7 @@
 // public endpoint) and blocks SSRF to private / loopback / link-local / cloud
 // metadata addresses so it cannot be turned into an internal-network probe.
 
-import { createClient } from "npm:@supabase/supabase-js@2";
+import { createClient } from "npm:@supabase/supabase-js@2.101.0";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",

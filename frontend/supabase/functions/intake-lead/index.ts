@@ -20,7 +20,7 @@
 // Idempotency: relies on UNIQUE (client_id, lead_id) on platform.leads.
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "npm:@supabase/supabase-js@2";
+import { createClient } from "npm:@supabase/supabase-js@2.101.0";
 import { fetchActiveNewLeadsWorkflows, resolveWorkflow } from "../_shared/resolve-workflow.ts";
 
 const corsHeaders = {

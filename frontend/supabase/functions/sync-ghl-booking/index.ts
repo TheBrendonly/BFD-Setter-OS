@@ -1,11 +1,19 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "npm:@supabase/supabase-js@2.49.1";
+import { createClient } from "npm:@supabase/supabase-js@2.101.0";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-wh-signature, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+    "authorization, x-client-info, apikey, content-type, x-wh-signature, x-wh-token, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
+
+// Constant-time string compare for the static-token webhook proof.
+function ctEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let mismatch = 0;
+  for (let i = 0; i < a.length; i++) mismatch |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return mismatch === 0;
+}
 
 // Optional GHL Webhook V2 signature verification (HMAC-SHA256 hex over the raw
 // body, keyed by clients.ghl_webhook_secret). Mirrors bookings-webhook. Only
@@ -521,16 +529,18 @@ Deno.serve(async (req) => {
 
     const clientId = clientRow.id;
 
-    // Optional GHL Webhook V2 signature check. Inert until the client stamps
-    // ghl_webhook_secret AND the upstream GHL webhook is configured to sign
-    // (onboarding BR3). Canonical verified booking ingress is bookings-webhook;
-    // this path mirrors its verify-if-present behaviour.
+    // Optional GHL webhook auth (verify-if-present). Inert until the client
+    // stamps ghl_webhook_secret. Two accepted proofs (mirrors sync-ghl-contact):
+    //   (1) a static `x-wh-token` header equal to the secret — the mechanism for
+    //       the GHL Workflow "Custom Webhook" action (SOP §5.3).
+    //   (2) an HMAC-SHA256 `x-wh-signature` over the raw body.
+    // NOTE: GHL *native* Webhook V2 signs with RSA (not HMAC) and is NOT
+    // supported — provision the secret as a static token, not a V2 secret.
     if (clientRow.ghl_webhook_secret) {
-      const sigOk = await verifyGhlSignature(
-        rawBody,
-        req.headers.get("x-wh-signature"),
-        clientRow.ghl_webhook_secret,
-      );
+      const secret = clientRow.ghl_webhook_secret as string;
+      const tokenOk = ctEqual(req.headers.get("x-wh-token") ?? "", secret);
+      const sigOk = tokenOk ||
+        await verifyGhlSignature(rawBody, req.headers.get("x-wh-signature"), secret);
       if (!sigOk) {
         console.warn("[sync-ghl-booking] GHL signature mismatch", { clientId, bookingId });
         return new Response(

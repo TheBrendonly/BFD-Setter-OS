@@ -19,7 +19,7 @@
 // retrying this URL", which is the correct behaviour.
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "npm:@supabase/supabase-js@2";
+import { createClient } from "npm:@supabase/supabase-js@2.101.0";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",

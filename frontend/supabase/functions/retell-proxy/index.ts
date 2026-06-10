@@ -1,4 +1,4 @@
-import { createClient } from "npm:@supabase/supabase-js@2";
+import { createClient } from "npm:@supabase/supabase-js@2.101.0";
 import {
   BFD_VOICE_BOOKING_TOOLS_PLACEHOLDER,
   BFD_VOICE_BOOKING_TOOL_NAMES,

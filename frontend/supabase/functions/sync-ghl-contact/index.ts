@@ -8,7 +8,7 @@
 // Per form/agent, the only client setup is one GHL automation that adds a
 // routing tag and posts here. See Docs/FORM_ROUTING.md.
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "npm:@supabase/supabase-js@2.49.1";
+import { createClient } from "npm:@supabase/supabase-js@2.101.0";
 import { fetchActiveNewLeadsWorkflows, resolveWorkflow } from "../_shared/resolve-workflow.ts";
 
 const corsHeaders = {

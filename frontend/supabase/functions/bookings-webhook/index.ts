@@ -19,11 +19,11 @@
 // status, source } as best-effort from common shapes.
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "npm:@supabase/supabase-js@2";
+import { createClient } from "npm:@supabase/supabase-js@2.101.0";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-wh-signature",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-wh-signature, x-wh-token",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
@@ -58,6 +58,14 @@ function parseGhlTimestamp(s: string | null, tz: string): string | null {
   const tzAsIfUtc = new Date(wallInTz.replace(" ", "T") + "Z").getTime();
   const offsetMs = naive.getTime() - tzAsIfUtc;
   return new Date(naive.getTime() + offsetMs).toISOString();
+}
+
+// Constant-time string compare for the static-token webhook proof.
+function ctEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let mismatch = 0;
+  for (let i = 0; i < a.length; i++) mismatch |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return mismatch === 0;
 }
 
 async function verifyGhlSignature(
@@ -176,13 +184,16 @@ Deno.serve(async (req) => {
       return jsonResponse({ ok: false, error: "client not found" }, 200);
     }
 
-    // Optional sig verification (mandatory once Brendan stamps the secret)
+    // Optional webhook auth (mandatory once Brendan stamps the secret). Two
+    // proofs (mirrors sync-ghl-contact): a static `x-wh-token` header equal to
+    // the secret (GHL Workflow Custom-Webhook custom header, SOP §5.3) or an
+    // HMAC-SHA256 `x-wh-signature` over the raw body. GHL *native* Webhook V2
+    // signs with RSA and is NOT supported.
     if (client.ghl_webhook_secret) {
-      const sigOk = await verifyGhlSignature(
-        rawBody,
-        req.headers.get("x-wh-signature"),
-        client.ghl_webhook_secret,
-      );
+      const secret = client.ghl_webhook_secret as string;
+      const tokenOk = ctEqual(req.headers.get("x-wh-token") ?? "", secret);
+      const sigOk = tokenOk ||
+        await verifyGhlSignature(rawBody, req.headers.get("x-wh-signature"), secret);
       if (!sigOk) {
         console.warn("bookings-webhook: GHL signature mismatch", { clientId: client.id, ghlLocationId });
         return jsonResponse({ ok: false, error: "Forbidden" }, 403);

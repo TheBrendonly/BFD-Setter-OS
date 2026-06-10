@@ -1,17 +1,24 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "npm:@supabase/supabase-js@2.49.1";
+import { createClient } from "npm:@supabase/supabase-js@2.101.0";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-wh-signature, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+    "authorization, x-client-info, apikey, content-type, x-wh-signature, x-wh-token, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-// Optional GHL Webhook V2 signature verification (HMAC-SHA256 hex over the raw
-// body, keyed by clients.ghl_webhook_secret). Best-effort: this endpoint also
-// serves non-GHL callers that pass client_id directly and may not sign, so we
-// only reject on an actual mismatch when both a secret and a signature header
-// are present (see the gate below).
+// Constant-time string compare for the static-token webhook proof.
+function ctEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let mismatch = 0;
+  for (let i = 0; i < a.length; i++) mismatch |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return mismatch === 0;
+}
+
+// Optional GHL webhook auth (verify-if-present, mirrors sync-ghl-contact).
+// Once the client has ghl_webhook_secret set, callers must present either a
+// static `x-wh-token` header or an HMAC-SHA256 `x-wh-signature`; non-GHL
+// callers that pass client_id directly must include the token header too.
 async function verifyGhlSignature(
   rawBody: string,
   signatureHeader: string | null,
@@ -87,12 +94,13 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Optional signature verification (best-effort). This endpoint also serves
-    // non-GHL callers that pass client_id directly and may not sign, so we only
-    // reject on an actual mismatch when the client has ghl_webhook_secret set AND
-    // an x-wh-signature header is present. Secret set but no header => accept and
-    // log (a non-GHL caller). NOTE for Brendan: if you want this strict (require
-    // a signature whenever the secret is set), change the warn branch to a 403.
+    // Optional webhook auth (verify-if-present, STRICT — audit SEC-09). Once
+    // the client has ghl_webhook_secret set, every caller (GHL workflow or
+    // direct) must present a static `x-wh-token` header equal to the secret,
+    // or an HMAC-SHA256 `x-wh-signature` over the raw body. Secret set but no
+    // valid proof => 403 (previously warn-and-accept). NOTE: GHL *native*
+    // Webhook V2 signs with RSA and is NOT supported — provision the secret
+    // as a static token (SOP §5.3).
     {
       const { data: secretRow } = await supabase
         .from("clients")
@@ -100,18 +108,17 @@ Deno.serve(async (req) => {
         .eq("id", client_id)
         .maybeSingle();
       const secret = (secretRow?.ghl_webhook_secret as string | null) ?? null;
-      const sigHeader = req.headers.get("x-wh-signature");
-      if (secret && sigHeader) {
-        const sigOk = await verifyGhlSignature(rawBody, sigHeader, secret);
+      if (secret) {
+        const tokenOk = ctEqual(req.headers.get("x-wh-token") ?? "", secret);
+        const sigOk = tokenOk ||
+          await verifyGhlSignature(rawBody, req.headers.get("x-wh-signature"), secret);
         if (!sigOk) {
-          console.warn("workflow-inbound-webhook: signature mismatch", { client_id });
+          console.warn("workflow-inbound-webhook: webhook auth failed", { client_id });
           return new Response(
             JSON.stringify({ error: "Forbidden" }),
             { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
           );
         }
-      } else if (secret && !sigHeader) {
-        console.warn("workflow-inbound-webhook: ghl_webhook_secret set but no x-wh-signature header; accepting (non-GHL caller?)", { client_id });
       }
     }
 

@@ -1,10 +1,18 @@
-import { createClient } from "npm:@supabase/supabase-js@2";
+import { createClient } from "npm:@supabase/supabase-js@2.101.0";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-wh-signature",
+    "authorization, x-client-info, apikey, content-type, x-wh-signature, x-wh-token",
 };
+
+// Constant-time string compare for the static-token webhook proof.
+function ctEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let mismatch = 0;
+  for (let i = 0; i < a.length; i++) mismatch |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return mismatch === 0;
+}
 
 // Phase 8a — GHL Webhook V2 signature verification (HMAC-SHA256 over raw
 // body, hex-encoded). Verification only kicks in when the calling
@@ -374,27 +382,29 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Phase 8a — verify GHL Webhook V2 signature when the client has the
-    // secret configured. Backwards-compatible: if no secret, skip
-    // verification (V1 query-string posts still work).
-    const sigHeader = req.headers.get("x-wh-signature");
-    if (client.ghl_webhook_secret && sigHeader) {
-      // V2 sends a JSON body that's actually signed; clone request to read it
-      const rawBody = await req.clone().text().catch(() => "");
-      const sigOk = await verifyGhlSignature(rawBody, sigHeader, client.ghl_webhook_secret);
+    // Verify-if-present webhook auth. Two accepted proofs (mirrors
+    // sync-ghl-contact): a static `x-wh-token` header equal to the secret
+    // (GHL Workflow Custom-Webhook custom header, SOP §5.3) or an HMAC-SHA256
+    // `x-wh-signature` over the raw body. No secret => skip (backwards-compat,
+    // V1 query-string posts still work). GHL *native* Webhook V2 signs with
+    // RSA and is NOT supported.
+    if (client.ghl_webhook_secret) {
+      const secret = client.ghl_webhook_secret as string;
+      const tokenOk = ctEqual(req.headers.get("x-wh-token") ?? "", secret);
+      let sigOk = tokenOk;
+      const sigHeader = req.headers.get("x-wh-signature");
+      if (!sigOk && sigHeader) {
+        // V2-style signed JSON body; clone request to read it
+        const rawBody = await req.clone().text().catch(() => "");
+        sigOk = await verifyGhlSignature(rawBody, sigHeader, secret);
+      }
       if (!sigOk) {
-        console.warn("receive-dm-webhook: GHL signature mismatch", { clientId: client.id, ghlAccountId });
+        console.warn("receive-dm-webhook: webhook auth failed", { clientId: client.id, ghlAccountId });
         return new Response(JSON.stringify({ error: "Forbidden" }), {
           status: 403,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-    } else if (client.ghl_webhook_secret && !sigHeader) {
-      console.warn("receive-dm-webhook: secret configured but no x-wh-signature header", { clientId: client.id });
-      return new Response(JSON.stringify({ error: "Missing x-wh-signature" }), {
-        status: 403,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
     }
 
     if (!client.dm_enabled) {

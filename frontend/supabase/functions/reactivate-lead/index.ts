@@ -17,7 +17,7 @@
 // some interval. For now, the failure mode is a stuck row with a clear
 // error column for manual inspection.
 
-import { createClient } from "npm:@supabase/supabase-js@2.49.1";
+import { createClient } from "npm:@supabase/supabase-js@2.101.0";
 import { assertClientAccess, AssertAccessError } from "../_shared/assert-client-access.ts";
 
 const corsHeaders = {

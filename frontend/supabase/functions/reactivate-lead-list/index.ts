@@ -14,7 +14,7 @@
 // Per-lead failures are isolated: one bad row does not abort the batch. The
 // response reports enrolled / failed / skipped with per-lead detail.
 
-import { createClient } from "npm:@supabase/supabase-js@2.49.1";
+import { createClient } from "npm:@supabase/supabase-js@2.101.0";
 import { assertClientAccess, AssertAccessError } from "../_shared/assert-client-access.ts";
 import { normalizeLeadRow, chunk, type NormalizedLead } from "../_shared/reactivate-list.ts";
 

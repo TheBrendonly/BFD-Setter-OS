@@ -240,10 +240,13 @@ Brendan, in GHL:
 4. Payload: include `appointmentId`, `contactId`, `calendarId`, `startTime`, `endTime`, `status`
 5. Save + activate
 
-### Enabling Webhook V2 for sig verification (Phase 8a)
-Brendan, in GHL:
-1. **Settings** → **Marketplace** → **Webhooks v2** → **Enable**
-2. Note the webhook secret shown — paste into `clients.ghl_webhook_secret` for each client location
+### Arming GHL webhook auth (static x-wh-token — audit WI-1, replaces the old Webhook V2 instructions)
+> **Do NOT enable GHL native Webhook V2 for this.** Native V2 signs with an RSA public key, not a shared secret; pasting its secret into `clients.ghl_webhook_secret` would 403 all real traffic.
+
+Brendan:
+1. Generate a random secret (`openssl rand -hex 24`) and save it in the app: **API Management → Webhook Security → GHL Webhook Secret (x-wh-token)**.
+2. Add a custom header `x-wh-token: <secret>` to every GHL **Workflow → Custom Webhook** action that POSTs to a BFD endpoint for that client.
+3. All six GHL handlers (sync-ghl-contact, sync-ghl-booking, workflow-inbound-webhook, bookings-webhook, receive-dm-webhook, ghl-tag-webhook) then require a matching `x-wh-token` (or HMAC `x-wh-signature`) and 403 anything else. No secret set = unsigned accepted (backwards-compat).
 
 ### Tag-based auto-enrolment via `ghl-tag-webhook` (Phase 11e)
 
@@ -256,7 +259,7 @@ For tag-driven cadence enrolment, the operator picks ONE workflow per client to 
 
 When a contact gets the tag (manually or via any GHL workflow), the webhook fires, the matching workflow is found, the lead is upserted into `leads`, and an `engagement_executions` row is created in `pending` then dispatched via Trigger.dev. The cadence runs to completion; runEngagement removes the tag at every terminal `stop_reason` (`sequence_complete`, `inbound_reply`, `booking_created`, `opt_out`, `cancelled`, `error`).
 
-Sig verification: when `clients.ghl_webhook_secret` is set, an HMAC-SHA256 hex `x-wh-signature` header is required (computed over the raw body). Backwards-compat: skipped when no secret is configured.
+Sig verification: when `clients.ghl_webhook_secret` is set, the request must carry a matching static `x-wh-token` header (constant-time compare) or an HMAC-SHA256 hex `x-wh-signature` over the raw body. Backwards-compat: skipped when no secret is configured.
 
 Smoke-test (BFD): `curl -i -X POST https://bjgrgbgykvjrsuwwruoh.supabase.co/functions/v1/ghl-tag-webhook -H 'Content-Type: application/json' -d '{"contactId":"<bfd-contact-id>","locationId":"xo0XjmenBBJxJgSnAdyM","addedTags":["bfd_setter-new_lead"]}'` → expect `{"ok":true,"enrolled":"<execution-id>"}`.
 

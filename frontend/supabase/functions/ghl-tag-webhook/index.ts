@@ -13,12 +13,12 @@
 // is set, mirroring receive-dm-webhook (phase-8a). Backwards-compat: skipped
 // when no secret is configured.
 
-import { createClient } from "npm:@supabase/supabase-js@2";
+import { createClient } from "npm:@supabase/supabase-js@2.101.0";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-wh-signature",
+    "authorization, x-client-info, apikey, content-type, x-wh-signature, x-wh-token",
 };
 
 const GHL_BASE = "https://services.leadconnectorhq.com";
@@ -28,6 +28,14 @@ function jsonResponse(body: Record<string, unknown>, status = 200): Response {
     status,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
+}
+
+// Constant-time string compare for the static-token webhook proof.
+function ctEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let mismatch = 0;
+  for (let i = 0; i < a.length; i++) mismatch |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return mismatch === 0;
 }
 
 async function verifyGhlSignature(
@@ -550,15 +558,18 @@ Deno.serve(async (req) => {
     return jsonResponse({ ok: true, enrolled: null, reason: "client_not_found" }, 404);
   }
 
-  // Phase 8a-style sig verification when configured.
+  // Verify-if-present webhook auth. Two accepted proofs (mirrors
+  // sync-ghl-contact): a static `x-wh-token` header equal to the secret
+  // (GHL Workflow Custom-Webhook custom header, SOP §5.3) or an HMAC-SHA256
+  // `x-wh-signature` over the raw body. GHL *native* Webhook V2 signs with
+  // RSA and is NOT supported.
   if (client.ghl_webhook_secret) {
-    const sigHeader = req.headers.get("x-wh-signature");
-    if (!sigHeader) {
-      return jsonResponse({ ok: false, reason: "sig_missing" }, 403);
-    }
-    const valid = await verifyGhlSignature(rawBody, sigHeader, client.ghl_webhook_secret as string);
+    const secret = client.ghl_webhook_secret as string;
+    const tokenOk = ctEqual(req.headers.get("x-wh-token") ?? "", secret);
+    const valid = tokenOk ||
+      await verifyGhlSignature(rawBody, req.headers.get("x-wh-signature"), secret);
     if (!valid) {
-      return jsonResponse({ ok: false, reason: "sig_invalid" }, 403);
+      return jsonResponse({ ok: false, reason: "auth_failed" }, 403);
     }
   }
 

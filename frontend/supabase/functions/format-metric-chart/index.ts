@@ -432,7 +432,7 @@ Deno.serve(async (req) => {
     }
 
     // ── STEP 3: Fall back to AI for custom/semantic metrics ──
-    const { createClient } = await import("npm:@supabase/supabase-js@2");
+    const { createClient } = await import("npm:@supabase/supabase-js@2.101.0");
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);

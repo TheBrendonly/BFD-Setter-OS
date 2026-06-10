@@ -1,4 +1,4 @@
-import { createClient } from "npm:@supabase/supabase-js@2";
+import { createClient } from "npm:@supabase/supabase-js@2.101.0";
 import { z } from "npm:zod@3.25.76";
 import { authorizeClientRequest, AssertAccessError } from "../_shared/authorize-client-request.ts";
 

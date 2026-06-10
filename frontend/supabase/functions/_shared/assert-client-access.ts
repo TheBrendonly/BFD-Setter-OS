@@ -14,7 +14,7 @@
 //     throw e;
 //   }
 
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.101.0";
 
 export class AssertAccessError extends Error {
   status: number;

@@ -326,9 +326,9 @@ Mirror BFD's. In the client's GHL → Workflows → New → Inbound:
 > **IMPORTANT (audit 2026-06-10):** GHL *native* Webhook V2 signs payloads with an **RSA public key**, NOT an HMAC shared secret. Do **not** enable native Webhook V2 and paste its secret here expecting the HMAC `x-wh-signature` check to validate — it would 403 all real traffic. BFD's canonical ingress is the GHL **Workflow → Custom Webhook** action, which does not sign; the supported proof is a **static token custom header**.
 
 1. Generate a random secret (e.g. `openssl rand -hex 24`).
-2. `UPDATE clients SET ghl_webhook_secret = '<secret>' WHERE id = '<client-uuid>';`
+2. Set it in the app: **API Management → Webhook Security → "GHL Webhook Secret (x-wh-token)"** (or raw SQL: `UPDATE clients SET ghl_webhook_secret = '<secret>' WHERE id = '<client-uuid>';`).
 3. In each GHL **Workflow → Custom Webhook** action that POSTs to a BFD endpoint, add a **custom header** `x-wh-token: <secret>`.
-4. Once the secret is set, `sync-ghl-contact` (the canonical lead ingress) verifies the request: it accepts a matching `x-wh-token` static header (constant-time compare) OR an HMAC `x-wh-signature`. Until the secret is set it accepts unsigned POSTs (backwards-compat). The same static-token pattern still needs to be extended to `sync-ghl-booking`, `workflow-inbound-webhook`, `bookings-webhook`, `receive-dm-webhook`, and `ghl-tag-webhook` (those currently still verify HMAC only — inert until a secret is set; see audit WI-1).
+4. Once the secret is set, ALL six GHL handlers (`sync-ghl-contact`, `sync-ghl-booking`, `workflow-inbound-webhook`, `bookings-webhook`, `receive-dm-webhook`, `ghl-tag-webhook`) verify the request: each accepts a matching `x-wh-token` static header (constant-time compare) OR an HMAC `x-wh-signature`, and 403s anything else. Until the secret is set they accept unsigned POSTs (backwards-compat). (Audit WI-1 rollout completed 2026-06-10.)
 
 ### 5.4 Retell custom-tool URLs
 
