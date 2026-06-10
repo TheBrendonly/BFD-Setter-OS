@@ -203,6 +203,9 @@ interface ApiSettings {
   database_reactivation_inbound_webhook_url?: string | null;
   lead_score_webhook_url?: string | null;
   update_pipeline_webhook_url?: string | null;
+  ghl_webhook_secret?: string | null;
+  retell_webhook_secret?: string | null;
+  unipile_webhook_secret?: string | null;
 }
 const ApiManagement = () => {
   const {
@@ -273,7 +276,10 @@ const ApiManagement = () => {
     user_details_webhook_url: '',
     database_reactivation_inbound_webhook_url: '',
     lead_score_webhook_url: '',
-    update_pipeline_webhook_url: ''
+    update_pipeline_webhook_url: '',
+    ghl_webhook_secret: '',
+    retell_webhook_secret: '',
+    unipile_webhook_secret: ''
   });
 
   // Track original values from database
@@ -311,7 +317,10 @@ const ApiManagement = () => {
     retell_phone_3: '',
     retell_phone_3_country_code: '+1',
     lead_score_webhook_url: '',
-    update_pipeline_webhook_url: ''
+    update_pipeline_webhook_url: '',
+    ghl_webhook_secret: '',
+    retell_webhook_secret: '',
+    unipile_webhook_secret: ''
   });
   const [systemDefaultsOpen, setSystemDefaultsOpen] = useState(false);
   const isDirty = useRef(false);
@@ -335,7 +344,7 @@ const ApiManagement = () => {
       const {
         data,
         error
-      } = await (supabase.from('clients').select('name, ghl_api_key, ghl_assignee_id, ghl_calendar_id, ghl_location_id, api_webhook_url, openai_api_key, openrouter_api_key, supabase_service_key, supabase_table_name, supabase_url, campaign_webhook_url, knowledge_base_webhook_url:knowledge_base_add_webhook_url, prompt_webhook_url, analytics_webhook_url, ai_chat_webhook_url, chat_analytics_webhook_url, simulation_webhook, outbound_caller_webhook_1_url, outbound_caller_webhook_2_url, outbound_caller_webhook_3_url, retell_api_key, retell_inbound_agent_id, retell_outbound_agent_id, retell_outbound_followup_agent_id, retell_agent_id_4, retell_phone_1, retell_phone_1_country_code, retell_phone_2, retell_phone_2_country_code, retell_phone_3, retell_phone_3_country_code, transfer_to_human_webhook_url, save_reply_webhook_url, user_details_webhook_url, database_reactivation_inbound_webhook_url, lead_score_webhook_url, update_pipeline_webhook_url, setup_guide_completed_steps' as any).eq('id', clientId).maybeSingle() as any);
+      } = await (supabase.from('clients').select('name, ghl_api_key, ghl_assignee_id, ghl_calendar_id, ghl_location_id, api_webhook_url, openai_api_key, openrouter_api_key, supabase_service_key, supabase_table_name, supabase_url, campaign_webhook_url, knowledge_base_webhook_url:knowledge_base_add_webhook_url, prompt_webhook_url, analytics_webhook_url, ai_chat_webhook_url, chat_analytics_webhook_url, simulation_webhook, outbound_caller_webhook_1_url, outbound_caller_webhook_2_url, outbound_caller_webhook_3_url, retell_api_key, retell_inbound_agent_id, retell_outbound_agent_id, retell_outbound_followup_agent_id, retell_agent_id_4, retell_phone_1, retell_phone_1_country_code, retell_phone_2, retell_phone_2_country_code, retell_phone_3, retell_phone_3_country_code, transfer_to_human_webhook_url, save_reply_webhook_url, user_details_webhook_url, database_reactivation_inbound_webhook_url, lead_score_webhook_url, update_pipeline_webhook_url, ghl_webhook_secret, retell_webhook_secret, unipile_webhook_secret, setup_guide_completed_steps' as any).eq('id', clientId).maybeSingle() as any);
       if (error) throw error;
       setClientName(data.name);
 
@@ -380,7 +389,10 @@ const ApiManagement = () => {
         user_details_webhook_url: data.user_details_webhook_url || '',
         database_reactivation_inbound_webhook_url: data.database_reactivation_inbound_webhook_url || '',
         lead_score_webhook_url: data.lead_score_webhook_url || '',
-        update_pipeline_webhook_url: data.update_pipeline_webhook_url || ''
+        update_pipeline_webhook_url: data.update_pipeline_webhook_url || '',
+        ghl_webhook_secret: data.ghl_webhook_secret || '',
+        retell_webhook_secret: data.retell_webhook_secret || '',
+        unipile_webhook_secret: data.unipile_webhook_secret || ''
       };
       setSettings(settingsData);
       setOriginalSettings(settingsData);
@@ -620,7 +632,11 @@ const ApiManagement = () => {
     ai_chat_webhook_url: 'AI Chat Webhook',
     chat_analytics_webhook_url: 'Chat Analytics Webhook',
     api_webhook_url: 'API Webhook',
-    system_prompt: 'System Prompt'
+    system_prompt: 'System Prompt',
+    // Webhook signing secrets
+    ghl_webhook_secret: 'GHL Webhook Secret (x-wh-token)',
+    retell_webhook_secret: 'Retell Webhook Secret',
+    unipile_webhook_secret: 'Unipile Webhook Secret'
   };
 
   // Get friendly label for a field name
@@ -666,6 +682,10 @@ const ApiManagement = () => {
         ghl_assignee_id: settings.ghl_assignee_id || null,
         ghl_calendar_id: settings.ghl_calendar_id || null,
         ghl_location_id: settings.ghl_location_id || null,
+        // Webhook signing secrets (BR3 — arms the verify-if-present handlers)
+        ghl_webhook_secret: settings.ghl_webhook_secret || null,
+        retell_webhook_secret: settings.retell_webhook_secret || null,
+        unipile_webhook_secret: settings.unipile_webhook_secret || null,
         // LLM fields
         openai_api_key: settings.openai_api_key || null,
         openrouter_api_key: settings.openrouter_api_key || null,
@@ -1303,6 +1323,79 @@ const ApiManagement = () => {
                 </Card>;
           })}
           </div>
+
+          {/* Webhook Security — per-client inbound webhook signing secrets.
+              Arms the verify-if-present auth on the GHL/Retell/Unipile inbound
+              handlers; until a secret is set the handlers accept unsigned
+              traffic (backwards-compat). */}
+          <Card className="material-surface mt-6">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-lg">Webhook Security</CardTitle>
+              <CardDescription>
+                Optional signing secrets for inbound webhooks. Once set, unsigned requests to this
+                client's webhook endpoints are rejected (403).
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <ApiCredentialField
+                  id="ghl_webhook_secret"
+                  label="GHL Webhook Secret (x-wh-token)"
+                  value={settings.ghl_webhook_secret || ''}
+                  onChange={value => setSettings(prev => ({ ...prev, ghl_webhook_secret: value }))}
+                  onSave={() => handleSaveField('ghl_webhook_secret')}
+                  isSaving={savingField === 'ghl_webhook_secret'}
+                  disabled={loading}
+                  isSavedConfigured={!!originalSettings.ghl_webhook_secret}
+                  isPassword
+                  isOptional
+                  placeholder="Paste a strong random token"
+                />
+                <p className="text-xs text-muted-foreground mt-1 px-1">
+                  Add this exact value as an <code className="font-mono">x-wh-token</code> custom header in every GHL
+                  Workflow Custom-Webhook action that posts to this client. Do NOT use GHL's native
+                  Webhook V2 signing (RSA, unsupported).
+                </p>
+              </div>
+              <div>
+                <ApiCredentialField
+                  id="retell_webhook_secret"
+                  label="Retell Webhook Secret"
+                  value={settings.retell_webhook_secret || ''}
+                  onChange={value => setSettings(prev => ({ ...prev, retell_webhook_secret: value }))}
+                  onSave={() => handleSaveField('retell_webhook_secret')}
+                  isSaving={savingField === 'retell_webhook_secret'}
+                  disabled={loading}
+                  isSavedConfigured={!!originalSettings.retell_webhook_secret}
+                  isPassword
+                  isOptional
+                  placeholder="Retell webhook signing key"
+                />
+                <p className="text-xs text-muted-foreground mt-1 px-1">
+                  Must match the webhook signing key for this client's Retell workspace so call
+                  webhooks can be signature-verified.
+                </p>
+              </div>
+              <div>
+                <ApiCredentialField
+                  id="unipile_webhook_secret"
+                  label="Unipile Webhook Secret"
+                  value={settings.unipile_webhook_secret || ''}
+                  onChange={value => setSettings(prev => ({ ...prev, unipile_webhook_secret: value }))}
+                  onSave={() => handleSaveField('unipile_webhook_secret')}
+                  isSaving={savingField === 'unipile_webhook_secret'}
+                  disabled={loading}
+                  isSavedConfigured={!!originalSettings.unipile_webhook_secret}
+                  isPassword
+                  isOptional
+                  placeholder="Unipile webhook secret"
+                />
+                <p className="text-xs text-muted-foreground mt-1 px-1">
+                  Shared secret for Unipile (LinkedIn/IG DM) webhook verification.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
       </div>
