@@ -457,6 +457,14 @@ export const AgentConfigBuilder: React.FC<AgentConfigBuilderProps> = ({
   const [showFullPromptDialog, setShowFullPromptDialog] = useState(false);
   const [isSavingVersion, setIsSavingVersion] = useState(false);
   const [editedFullPrompt, setEditedFullPrompt] = useState('');
+  // When non-null, this verbatim text is the source of truth for the full setter prompt
+  // (a manual edit made in the "Verify Setter Prompt" box) until the user clicks Reset.
+  // It is pushed live exactly as typed; the individual fields are best-effort updated alongside it.
+  // The ref mirrors the state so a Save fired in the same click handler reads the new value
+  // synchronously (handleSavePrompt calls the imperative getFullPromptRef getter, which re-derives
+  // before React has re-rendered, so reading state there would be stale).
+  const [manualFullPromptOverride, setManualFullPromptOverride] = useState<string | null>(null);
+  const manualFullPromptOverrideRef = useRef<string | null>(null);
   const [showConversationExamplesDialog, setShowConversationExamplesDialog] = useState(false);
   // showAIChat removed — AI chat is always visible in 3-column layout
   // Version system for AI prompt editing (DB-backed)
@@ -1990,8 +1998,12 @@ export const AgentConfigBuilder: React.FC<AgentConfigBuilderProps> = ({
     }
   }, [clientId, slotId, loadVersions]);
 
-  // Helper: apply prompt to configs and save (shared between APPROVE PROMPT and APPROVE ALL)
-  const applyPromptAndSave = useCallback((resolvedPrompt: string) => {
+  // Helper: apply prompt to configs and save (shared between APPROVE PROMPT and APPROVE ALL).
+  // When opts.verbatimOverride is set (a manual edit of the full prompt), the individual fields
+  // are still best-effort updated, but that exact text is also carried as __full_prompt__ so the
+  // saved/pushed prompt equals what the user typed, and persisted under __full_prompt_manual_override__
+  // so it survives a reload.
+  const applyPromptAndSave = useCallback((resolvedPrompt: string, opts?: { verbatimOverride?: string }) => {
     setPromptApproved(true);
     const parsed = parseFullPromptToConfigs(resolvedPrompt);
     const parsedConfigs = parsed.configs;
@@ -2022,6 +2034,10 @@ export const AgentConfigBuilder: React.FC<AgentConfigBuilderProps> = ({
     }
     output['_deploy_examples'] = { selectedOption: examplesApproved ? 'approved' : '', customContent: '' };
     output['_deploy_prompt'] = { selectedOption: 'approved', customContent: '' };
+    if (opts?.verbatimOverride !== undefined) {
+      output['__full_prompt__'] = { selectedOption: '', customContent: opts.verbatimOverride };
+      output['__full_prompt_manual_override__'] = { selectedOption: 'active', customContent: opts.verbatimOverride };
+    }
     onConfigsChange(output);
   }, [localConfigs, conversationExamples, examplesApproved, onConfigsChange]);
 
@@ -2206,6 +2222,12 @@ export const AgentConfigBuilder: React.FC<AgentConfigBuilderProps> = ({
     if (savedDeployPrompt?.selected_option === 'approved') {
       setPromptApproved(true);
     }
+
+    // Load a durable manual full-prompt override (set via the "Verify Setter Prompt" editor)
+    const savedManualOverride = configs['__full_prompt_manual_override__'];
+    const loadedOverride = savedManualOverride?.custom_content?.trim() ? savedManualOverride.custom_content : null;
+    manualFullPromptOverrideRef.current = loadedOverride;
+    setManualFullPromptOverride(loadedOverride);
   }, [configs]);
 
   // Track the active layer from scroll position — instant for manual scroll, locked for programmatic
@@ -3021,13 +3043,21 @@ export const AgentConfigBuilder: React.FC<AgentConfigBuilderProps> = ({
 
     output['_deploy_examples'] = { selectedOption: overrides?.deployExamplesSelected ?? (examplesApproved ? 'approved' : ''), customContent: '' };
     output['_deploy_prompt'] = { selectedOption: overrides?.deployPromptSelected ?? (promptApproved ? 'approved' : ''), customContent: '' };
+    // A manual full-prompt override (if active) is authoritative for the live/pushed prompt
+    // until the user clicks Reset. Otherwise the prompt is assembled from the individual fields.
+    // Read the ref (not state) so a Save in the same click handler sees the fresh value.
+    const activeOverride = manualFullPromptOverrideRef.current;
     output['__full_prompt__'] = {
       selectedOption: '',
-      customContent: buildFullPrompt({
+      customContent: activeOverride ?? buildFullPrompt({
         paramStateMap: activeParamStates,
         configMap: activeLocalConfigs,
         conversationExamplesText: activeConversationExamples,
       }),
+    };
+    output['__full_prompt_manual_override__'] = {
+      selectedOption: activeOverride ? 'active' : '',
+      customContent: activeOverride ?? '',
     };
 
     return output;
@@ -3086,8 +3116,9 @@ export const AgentConfigBuilder: React.FC<AgentConfigBuilderProps> = ({
 
   useEffect(() => {
     if (!showFullPromptDialog) return;
-    setEditedFullPrompt(buildFullPrompt());
-  }, [showFullPromptDialog, localConfigs, paramStates, conversationExamples, examplesApproved, promptApproved]);
+    // A manual override (if active) wins so the editor shows exactly what will be pushed.
+    setEditedFullPrompt(manualFullPromptOverride ?? buildFullPrompt());
+  }, [showFullPromptDialog, manualFullPromptOverride, localConfigs, paramStates, conversationExamples, examplesApproved, promptApproved]);
 
   useEffect(() => {
     if (!pendingMiniPromptAI || expandedPromptKey !== null) return;
@@ -4350,18 +4381,30 @@ export const AgentConfigBuilder: React.FC<AgentConfigBuilderProps> = ({
 
                   <div className="border-t border-dashed border-border" />
                   <div className="space-y-2">
-                    <Label style={{ fontFamily: "'VT323', monospace", fontSize: '18px', letterSpacing: '0.5px', textTransform: 'capitalize' }}>
-                      Verify Setter Prompt
-                    </Label>
+                    <div className="flex items-center gap-2">
+                      <Label style={{ fontFamily: "'VT323', monospace", fontSize: '18px', letterSpacing: '0.5px', textTransform: 'capitalize' }}>
+                        Verify Setter Prompt
+                      </Label>
+                      {manualFullPromptOverride !== null && (
+                        <span
+                          className="px-2 py-0.5 rounded bg-amber-500/15 text-amber-600 border border-amber-500/30"
+                          style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '11px', letterSpacing: '0.3px' }}
+                        >
+                          Manually edited
+                        </span>
+                      )}
+                    </div>
                     <p
                       className="text-muted-foreground"
                       style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '13px', lineHeight: '1.5' }}
                     >
-                      This is the final prompt assembled from all your mini-prompts. To make changes, go back to each parameter and modify it there — changes will sync here automatically.
+                      {manualFullPromptOverride !== null
+                        ? 'This setter is using a manually edited prompt — it is pushed live exactly as written. Click the expand icon to edit it, or use Reset there to go back to the auto-assembled version.'
+                        : 'This is the final prompt assembled from all your mini-prompts. Click the expand icon to edit the whole prompt directly, or change a parameter above and it will sync here automatically.'}
                     </p>
                     <div className="relative">
                       <Textarea
-                        value={buildFullPrompt()}
+                        value={manualFullPromptOverride ?? buildFullPrompt()}
                         readOnly
                         className="w-full leading-relaxed"
                         style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '13px', minHeight: '400px', height: '400px' }}
@@ -4372,7 +4415,7 @@ export const AgentConfigBuilder: React.FC<AgentConfigBuilderProps> = ({
                         type="button"
                         variant="default"
                         size="icon"
-                        onClick={() => { const p = buildFullPrompt(); setEditedFullPrompt(p); setShowFullPromptDialog(true); }}
+                        onClick={() => { const p = manualFullPromptOverride ?? buildFullPrompt(); setEditedFullPrompt(p); setShowFullPromptDialog(true); }}
                         className="absolute bottom-2 right-2 h-8 w-8"
                       >
                         <Maximize2 className="w-4 h-4" />
@@ -4694,7 +4737,7 @@ export const AgentConfigBuilder: React.FC<AgentConfigBuilderProps> = ({
                   activeLayer={activeLayer}
                   onLayerClick={handleLayerClick}
                   onSubsectionClick={handleSubsectionClick}
-                  onExpandPrompt={() => { const p = buildFullPrompt(); setEditedFullPrompt(p); setShowFullPromptDialog(true); }}
+                  onExpandPrompt={() => { const p = manualFullPromptOverride ?? buildFullPrompt(); setEditedFullPrompt(p); setShowFullPromptDialog(true); }}
                   disabled={disabled}
                   paramStates={paramStates}
                   activeSubsection={activeSubsection}
@@ -4736,7 +4779,7 @@ export const AgentConfigBuilder: React.FC<AgentConfigBuilderProps> = ({
         </div>
       </div>
 
-      {/* Full Prompt Dialog — Read-only verification */}
+      {/* Full Prompt Dialog — editable; Save pushes the edit live verbatim and best-effort updates fields */}
       <Dialog open={showFullPromptDialog} onOpenChange={(open) => {
         if (!open) setShowFullPromptDialog(false);
       }}>
@@ -4754,30 +4797,61 @@ export const AgentConfigBuilder: React.FC<AgentConfigBuilderProps> = ({
               VERIFY SETTER PROMPT
             </DialogTitle>
             <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '13px' }} className="text-muted-foreground mt-1">
-              This is the complete prompt assembled from all your mini-prompts. To make changes, go back to each parameter and modify it there — changes will sync here automatically.
+              Edit the whole setter prompt here, then click SAVE SETTER to push it live exactly as written. The individual parameter fields are best-effort updated to match. Keep the ── ── divider lines between sections so the fields map back correctly. To return to the auto-assembled version, click Reset.
             </p>
           </DialogHeader>
 
           <div className="flex-1 min-h-0 px-6 pb-2" style={{ paddingTop: '24px' }}>
             <Textarea
               value={editedFullPrompt}
-              readOnly
+              onChange={(e) => setEditedFullPrompt(e.target.value)}
               className="h-full w-full leading-relaxed !resize-none"
               style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '13px', height: '100%' }}
+              disabled={disabled}
             />
           </div>
-          <div className="px-6 pb-6">
+          <div className="px-6 pb-6 flex gap-2">
+            {(manualFullPromptOverride !== null || editedFullPrompt.trim() !== buildFullPrompt().trim()) && (
+              <Button
+                type="button"
+                variant="default"
+                onClick={() => {
+                  // Discard the manual edit and return to the field-assembled prompt.
+                  // Persisting the revert happens when the user then clicks SAVE SETTER.
+                  manualFullPromptOverrideRef.current = null;
+                  setManualFullPromptOverride(null);
+                  setEditedFullPrompt(buildFullPrompt());
+                }}
+                className="flex-1 h-10 font-medium groove-btn"
+                style={{ fontFamily: "'VT323', monospace", fontSize: '18px', letterSpacing: '0.5px' }}
+                disabled={disabled}
+              >
+                <RotateCcw className="w-4 h-4 mr-1.5" />
+                RESET TO AUTO-ASSEMBLED
+              </Button>
+            )}
             <Button
               type="button"
               variant="default"
               onClick={async () => {
-                saveMiniPromptToParent();
+                const edited = editedFullPrompt;
+                const assembled = buildFullPrompt();
+                if (edited.trim() !== assembled.trim()) {
+                  // Manual edit: push verbatim live AND best-effort parse back into the fields.
+                  // Set the ref first so the imperative save getter reads the override this same tick.
+                  manualFullPromptOverrideRef.current = edited;
+                  setManualFullPromptOverride(edited);
+                  applyPromptAndSave(edited, { verbatimOverride: edited });
+                } else {
+                  // No manual change (or reverted): save the field-assembled prompt as usual.
+                  saveMiniPromptToParent();
+                }
                 setShowFullPromptDialog(false);
                 if (onFullSave) {
                   await onFullSave();
                 }
               }}
-              className="w-full h-10 font-medium groove-btn-pulse groove-btn-positive"
+              className="flex-1 h-10 font-medium groove-btn-pulse groove-btn-positive"
               style={{ fontFamily: "'VT323', monospace", fontSize: '18px', letterSpacing: '0.5px' }}
               disabled={disabled}
             >
