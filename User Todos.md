@@ -8,6 +8,35 @@ Effort: S = under 30 min, M = 30 min - 2 hr, L = half day+.
 
 ---
 
+## 🛡️ FULL SYSTEM AUDIT + FIXES — SHIPPED & DEPLOYED LIVE (2026-06-10) — HEAD `06425c3`
+
+Multi-agent full audit (80 raised → **62 confirmed**) + the CA1-CA8 onboarding gaps. **All deployed live**: 17 edge functions, Trigger.dev **v20260610.1**, 3 migrations (RLS + constraint + ghl_channel_field_id), frontend pushed → Railway. Report: `Docs/AUDIT_2026-06-10_full-system-audit.md`. Handoff: `Operations/handoffs/2026-06-10-audit-fixes-and-deploy.md`.
+
+**Done + deployed:**
+- ✅ Security/IDOR: `authorizeClientRequest` on compute-analytics (+ stops trusting body creds), trigger-engagement, workflow-execute, push-engagement-now (+ filter-injection), retry-dm-execution, push-followup-now; service-role gate on refresh-usage-cache.
+- ✅ RLS: prompt_versions + setter_ai_reports tenant-scoped (was `USING(true)`).
+- ✅ Data-integrity: sync_ghl_booking_enabled removed; leads lead_id fixes; unipile 3-col onConflict; dead message_queue.status removed; workflow_execution_steps unique constraint; schedule-callback error handling.
+- ✅ Cadence/reliability: booking-created reliably stops cadence; wait_for_reply excludes outbound; nudgeColdReply opt-out recheck; receive-twilio-sms error_logs.
+- ✅ GHL auth (WI-1): static `x-wh-token` on sync-ghl-contact + SOP §5.3 corrected (native Webhook V2 is RSA, unsupported — use static token header).
+- ✅ Deps/tooling: dompurify ^3.4.8; node engines; `scripts/check-schema-drift.mjs` guard (found 11 missing tables).
+
+**Remaining — Claude (next session #1):**
+- [ ] (M) Build `process-lead-file` schema (5 tables + `leads` cols + RLS).
+- [ ] (M) Webhook-secret UI in ApiManagement (unblocks BR3).
+- [ ] (M) Finish dep sweep: GHL static-token → other 5 handlers; supabase-js pins; `npm audit fix`.
+- [ ] (L) More error_logs + idempotency/retry-storm on the paid call path (CAD-01/02, REL-01/04).
+
+**Remaining — Brendan (next session #2):**
+- [ ] (S) **Smoke-test the live deploy** — prompt/Save-Setter UI (RLS) + Trigger Engagement / Push Now / Run Analytics (auth). Flag any 401/empty.
+- [ ] (S) Save Voice-Setter-1 (3 dirs) + Bug 29 booking prompt (slot 2) + $1 publish smoke.
+- [ ] (S, per client) BR3: set webhook secret in UI + add `x-wh-token: <secret>` header in each GHL Custom Webhook action (after the UI ships). Do NOT enable native GHL Webhook V2 (RSA).
+- [ ] (S) Rotate the expired `GITHUB_PAT` (mint in GitHub; Claude stores it).
+- [ ] (M/L) AU SMS A2P / registered Messaging Service (V2).
+- [ ] (S) Synthetic probe env (V1): `PROBE_CLIENT_ID`/`PROBE_INTAKE_SECRET`/`PROBE_TEST_PHONE` in Trigger.dev prod + probe-client from-number.
+- [ ] (decision) Stripe billing in scope? If yes Claude builds it. **HubSpot parked.**
+
+---
+
 ## 🎚️ VOICE SETTER: CURRENT MODELS + FAST TIER + LIVE VOICE PICKER (2026-06-09) — shipped `41113a5`, deployed
 
 Refreshed the Voice Setter model + voice selectors. Commit `41113a5`; retell-proxy **v31** on `bjgrgbgykvjrsuwwruoh`.
