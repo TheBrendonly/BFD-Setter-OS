@@ -539,16 +539,14 @@ function DmExecutionDetail({
         return;
       }
 
-      const res = await fetch(`${SUPABASE_URL}/functions/v1/push-followup-now`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ timer_id: timer.id }),
+      // Use supabase.functions.invoke (not a raw fetch) so the logged-in user's
+      // JWT is forwarded — push-followup-now now enforces authorizeClientRequest
+      // (2026-06-10) — and so the call targets the live project (the bare fetch
+      // hardcoded the stale qfbhcixkxzivpmxlciot ref). Mirrors push-engagement-now.
+      const { error } = await supabase.functions.invoke('push-followup-now', {
+        body: { timer_id: timer.id },
       });
-      const data = await res.json().catch(() => null);
-      if (!res.ok) {
-        toast.error(data?.error || 'Failed to push follow-up');
-        return;
-      }
+      if (error) throw error;
 
       await waitForFollowupTerminalState(timer.id);
       await refreshFollowupTimers();
