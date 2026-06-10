@@ -52,10 +52,16 @@ export const scheduleCallback = task({
       // Standalone callback — not tied to a cadence execution. make-retell-outbound-call
       // logs against this id; the (non-existent) engagement_executions update no-ops.
       execution_id: cb.id,
+      // CAD-02 — one callback row must never dial twice across task retries.
+      idempotency_key: `callback:${cb.id}`,
       custom_instructions: cb.custom_instructions
         || `You are calling ${firstName || "the contact"} back as they asked earlier. Briefly re-introduce yourself, confirm it's a better time to talk, and pick up where you left off toward booking.`,
       contact_fields: { phone: cb.contact_phone || "", first_name: firstName },
       treat_pickup_as_reply: false,
+    }, {
+      // CAD-02 — a scheduleCallback retry that crashed between trigger() and
+      // the status update must re-attach to the same child run, not dial again.
+      idempotencyKey: `place:callback:${cb.id}`,
     });
 
     await supabase.from("scheduled_callbacks")

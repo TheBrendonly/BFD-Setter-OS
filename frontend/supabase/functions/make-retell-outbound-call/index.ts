@@ -400,6 +400,7 @@ Deno.serve(async (req) => {
       ghl_contact_id,
       ghl_account_id,
       execution_id,
+      idempotency_key,
       custom_instructions,
       contact_fields,
       treat_pickup_as_reply,
@@ -439,6 +440,50 @@ Deno.serve(async (req) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, serviceKey);
+
+    // CAD-02 idempotency guard: placeOutboundCall retries (lost response,
+    // maxDuration ceiling) must not dial the lead twice. The cadence passes a
+    // deterministic key (`${execution_id}:${node_index}:${channel_index}`);
+    // if a call_history row already carries it, a call was ALREADY placed for
+    // this exact cadence step — return it instead of placing another. Checked
+    // again right before the dial (checkIdempotencyGuard) to shrink the
+    // check-then-act window while this invocation runs its slow enrichment.
+    const checkIdempotencyGuard = async (): Promise<Response | null> => {
+      if (!idempotency_key) return null;
+      const { data: priorCall, error: guardErr } = await supabase
+        .from("call_history")
+        .select("call_id, call_status")
+        .eq("client_id", client_id)
+        .eq("idempotency_key", idempotency_key)
+        .maybeSingle();
+      if (guardErr) {
+        // Fail CLOSED: placing a possibly-duplicate paid call on a blind
+        // guard is worse than letting the caller retry with backoff.
+        console.error(`Idempotency guard read failed for key ${idempotency_key}: ${guardErr.message}`);
+        return ok({
+          error: `idempotency check failed: ${guardErr.message}`,
+          call_failed: true,
+          retryable: true,
+          steps,
+        }, 200);
+      }
+      if (priorCall?.call_id) {
+        console.log(`♻️ Idempotent replay for key ${idempotency_key} — returning existing call ${priorCall.call_id}, no new dial`);
+        addStep("ocp-dedup", "Idempotency Guard", "condition", "completed",
+          `Call already placed for this cadence step (call_id=${priorCall.call_id})`);
+        return ok({
+          success: true,
+          call_id: priorCall.call_id,
+          already_placed: true,
+          steps,
+        }, 200);
+      }
+      return null;
+    };
+    {
+      const guardResponse = await checkIdempotencyGuard();
+      if (guardResponse) return guardResponse;
+    }
 
     // 1. Get client config
     const { data: client, error: clientErr } = await supabase
@@ -728,6 +773,13 @@ Deno.serve(async (req) => {
     }
 
     // 7. Make the Retell API call with full debug capture
+    // Re-check the idempotency guard right before spending: a duplicate
+    // invocation may have dialed + stamped the key while this one was busy
+    // with the GHL enrichment / agent PATCH above.
+    {
+      const guardResponse = await checkIdempotencyGuard();
+      if (guardResponse) return guardResponse;
+    }
     console.log(`📞 Making outbound call via Retell. Agent: ${agentId}, To: ${phone}, From: ${fromNumber}`);
 
     const retellPayload: Record<string, unknown> = {
@@ -790,6 +842,11 @@ Deno.serve(async (req) => {
       console.error("Retell API error:", retellResp.status, retellData);
       retellDebug.error = errMsg;
 
+      // REL-01: classify the failure so the caller doesn't retry-storm the
+      // paid API. 5xx/429 are transient; any other 4xx (bad number, missing
+      // agent, account/credit) is permanent and a retry can never succeed.
+      const retryable = retellResp.status >= 500 || retellResp.status === 429;
+
       addStep("ocp-call", "Make Voice Setter Call", "action", "failed", errMsg, undefined, retellDebug);
 
       await supabase.from("error_logs").insert({
@@ -803,13 +860,15 @@ Deno.serve(async (req) => {
           to_number: phone,
           from_number: fromNumber,
           execution_id,
+          idempotency_key: idempotency_key || null,
           retell_status: retellResp.status,
           retell_response: retellData,
+          retryable,
           steps,
         },
       });
 
-      return ok({ error: errMsg, call_failed: true, steps }, 200);
+      return ok({ error: errMsg, call_failed: true, retryable, steps }, 200);
     }
 
     const callId = retellData?.call_id || retellData?.id;
@@ -818,10 +877,14 @@ Deno.serve(async (req) => {
     addStep("ocp-call", "Make Voice Setter Call", "action", "completed",
       `call_id=${callId} (${retellDuration}ms)`, undefined, retellDebug);
 
-    // Persist initial call_history record with full debug steps
+    // Persist initial call_history record with full debug steps. This row is
+    // also the CAD-02 idempotency marker, so a failed stamp degrades the
+    // dedup guarantee for this key — make that loud, and treat a 23505 on
+    // call_history_idempotency_key_uidx as the smoking gun of a concurrent
+    // double-dial (two invocations raced past the guard).
     if (callId) {
       try {
-        await supabase.from("call_history").upsert(
+        const { error: chErr } = await supabase.from("call_history").upsert(
           {
             call_id: callId,
             client_id: client_id,
@@ -834,10 +897,27 @@ Deno.serve(async (req) => {
             call_status: "initiated",
             ghl_account_id: locationId || null,
             pre_call_context: { steps },
+            idempotency_key: idempotency_key || null,
           },
           { onConflict: "call_id" },
         );
-        console.log(`📦 Initial call_history record created for ${callId}`);
+        if (chErr) {
+          const isDupKey = (chErr as { code?: string }).code === "23505";
+          console.error(
+            `${isDupKey ? "🚨 DOUBLE-DIAL detected (idempotency_key already stamped by a concurrent invocation)" : "Failed to persist initial call_history"}: ${chErr.message}`,
+          );
+          const { error: logErr } = await supabase.from("error_logs").insert({
+            client_id,
+            severity: "error",
+            source: "make-retell-outbound-call",
+            error_type: isDupKey ? "duplicate_dial_detected" : "call_history_stamp_failed",
+            error_message: chErr.message,
+            context: { call_id: callId, idempotency_key: idempotency_key || null, execution_id },
+          });
+          if (logErr) console.error(`error_logs insert also failed: ${logErr.message}`);
+        } else {
+          console.log(`📦 Initial call_history record created for ${callId}`);
+        }
       } catch (e) {
         console.warn("Failed to persist initial call_history:", e);
       }

@@ -1,4 +1,4 @@
-import { task, queue } from "@trigger.dev/sdk";
+import { task, queue, AbortTaskRunError } from "@trigger.dev/sdk";
 
 // Global queue for outbound Retell calls. concurrencyLimit caps how many
 // place-outbound-call runs may execute simultaneously across the whole project.
@@ -29,6 +29,10 @@ export const placeOutboundCall = task({
     ghl_contact_id: string;          // lead_id
     ghl_account_id: string;
     execution_id: string;
+    // CAD-02 — deterministic dedup key (`${execution_id}:${node_index}:${channel_index}`).
+    // make-retell-outbound-call refuses to place a second Retell call for the
+    // same key, so task retries cannot double-dial the lead.
+    idempotency_key?: string;
     custom_instructions: string;
     contact_fields: Record<string, string>;
     treat_pickup_as_reply: boolean;
@@ -50,6 +54,7 @@ export const placeOutboundCall = task({
         ghl_contact_id: payload.ghl_contact_id,
         ghl_account_id: payload.ghl_account_id,
         execution_id: payload.execution_id,
+        idempotency_key: payload.idempotency_key ?? null,
         custom_instructions: payload.custom_instructions,
         contact_fields: payload.contact_fields,
         treat_pickup_as_reply: payload.treat_pickup_as_reply,
@@ -62,6 +67,13 @@ export const placeOutboundCall = task({
 
     if (!resp.ok || data?.call_failed) {
       const errMsg = data?.error || `make-retell-outbound-call returned ${resp.status}`;
+      // REL-01: the edge fn classifies Retell failures. retryable === false
+      // means a permanent 4xx (bad number, missing agent, account issue) —
+      // retrying re-bills the paid create-phone-call endpoint and can never
+      // succeed, so abort instead of throwing into the retry policy.
+      if (data?.call_failed && data?.retryable === false) {
+        throw new AbortTaskRunError(`Phone call failed permanently (no retry): ${errMsg}`);
+      }
       throw new Error(`Phone call failed: ${errMsg}`);
     }
 
@@ -70,6 +82,9 @@ export const placeOutboundCall = task({
       agent_id: data?.agent_id,
       to_number: data?.to_number,
       from_number: data?.from_number,
+      // true when the edge fn deduped this attempt onto an existing call
+      // (no new dial) — callers skip double-counting metrics/events.
+      already_placed: data?.already_placed === true,
     };
   },
 });

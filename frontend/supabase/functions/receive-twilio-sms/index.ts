@@ -624,6 +624,18 @@ Deno.serve(async (req) => {
       contactEmail = c.email;
     } catch (e) {
       console.error("GHL contact resolve failed", e);
+      // REL-03: this drops the inbound reply (no contact, no execution) —
+      // record it so the operator can see the dead lead.
+      try {
+        await supabase.from("error_logs").insert({
+          client_id: client.id,
+          severity: "error",
+          source: "receive_twilio_sms",
+          error_type: "ghl_contact_resolve_failed",
+          error_message: e instanceof Error ? e.message : String(e),
+          context: { messageSid, fromPhone },
+        });
+      } catch (_logErr) { /* non-fatal */ }
       return new Response(TWIML_EMPTY, {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "text/xml" },
@@ -778,10 +790,12 @@ Deno.serve(async (req) => {
       try {
         await supabase.from("error_logs").insert({
           client_id: client.id,
+          lead_id: contactId,
+          severity: "error",
           source: "receive_twilio_sms",
           error_type: "inbound_sms_drop",
-          message: `message_queue insert failed: ${mqError.message ?? "unknown"}`,
-          raw_payload: { messageSid, contactId, fromPhone },
+          error_message: `message_queue insert failed: ${mqError.message ?? "unknown"}`,
+          context: { messageSid, contactId, fromPhone },
         });
       } catch (_logErr) { /* non-fatal */ }
     }
@@ -892,6 +906,18 @@ Deno.serve(async (req) => {
         .single();
       if (execError || !execution) {
         console.error("dm_executions insert failed", execError);
+        // REL-03: the reply is queued but no execution will process it.
+        try {
+          await supabase.from("error_logs").insert({
+            client_id: client.id,
+            lead_id: contactId,
+            severity: "error",
+            source: "receive_twilio_sms",
+            error_type: "dm_execution_insert_failed",
+            error_message: execError?.message ?? "no execution row returned",
+            context: { messageSid, contactId, fromPhone },
+          });
+        } catch (_logErr) { /* non-fatal */ }
         return new Response(TWIML_EMPTY, {
           status: 200,
           headers: { ...corsHeaders, "Content-Type": "text/xml" },
@@ -919,6 +945,20 @@ Deno.serve(async (req) => {
 
     if (!triggerResult.ok) {
       console.error("triggerProcessMessages failed", triggerResult.error);
+      // REL-03: execution exists but the processor never got enqueued — the
+      // lead's reply will sit unanswered unless someone sees this.
+      try {
+        await supabase.from("error_logs").insert({
+          client_id: client.id,
+          lead_id: contactId,
+          execution_id: executionId,
+          severity: "error",
+          source: "receive_twilio_sms",
+          error_type: "trigger_process_messages_failed",
+          error_message: String(triggerResult.error ?? "unknown"),
+          context: { messageSid, contactId, fromPhone },
+        });
+      } catch (_logErr) { /* non-fatal */ }
       return new Response(TWIML_EMPTY, {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "text/xml" },
@@ -963,6 +1003,22 @@ Deno.serve(async (req) => {
     });
   } catch (err) {
     console.error("receive-twilio-sms error", err);
+    // REL-03: a top-level failure silently drops the inbound reply — record
+    // it. client/supabase from the try block are out of scope here, so build
+    // a throwaway client; client_id is unknown at this point.
+    try {
+      const sb = createClient(
+        Deno.env.get("SUPABASE_URL")!,
+        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+      );
+      await sb.from("error_logs").insert({
+        severity: "error",
+        source: "receive_twilio_sms",
+        error_type: "inbound_sms_unhandled_error",
+        error_message: err instanceof Error ? err.message : String(err),
+        context: { stack: err instanceof Error ? (err.stack ?? null) : null },
+      });
+    } catch (_logErr) { /* non-fatal */ }
     // Never 500 to Twilio — they retry aggressively. Return empty TwiML.
     return new Response(TWIML_EMPTY, {
       status: 200,

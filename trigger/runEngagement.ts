@@ -457,6 +457,42 @@ export const runEngagement = task({
       }
     };
 
+    // CAD-01 — per-channel send markers. The campaign_events row written right
+    // after each send doubles as an idempotency marker: when a task retry
+    // replays a node (its last_completed_node_index was never written), any
+    // sms/whatsapp/email send already stamped 'message_sent' for this
+    // (execution, node) is skipped instead of re-sent. Returns counts per
+    // channel so a node with two channels of the same type stays correct.
+    // phone_call is intentionally NOT marker-skipped: the placement itself is
+    // deduped inside make-retell-outbound-call via idempotency_key, so a
+    // replay re-enters the normal wait/classify flow with the same call_id.
+    const getSentChannelCounts = async (nodeIndex: number): Promise<Map<string, number>> => {
+      const counts = new Map<string, number>();
+      try {
+        const { data, error } = await supabase
+          .from("campaign_events")
+          .select("channel")
+          .eq("execution_id", execution_id)
+          .eq("node_index", nodeIndex)
+          .eq("event_type", "message_sent");
+        if (error) {
+          // supabase-js returns PostgREST failures in-band (no throw) — log
+          // them here or a failed marker read would be completely silent.
+          console.warn(`getSentChannelCounts read failed (treating as none sent): ${error.message}`);
+          return counts;
+        }
+        for (const row of (data ?? []) as Array<{ channel: string | null }>) {
+          const ch = row.channel ?? "";
+          counts.set(ch, (counts.get(ch) ?? 0) + 1);
+        }
+      } catch (err) {
+        // Treat a marker-read failure as "nothing sent" — the worst case is
+        // one duplicate send, the same guarantee level as before this guard.
+        console.warn(`getSentChannelCounts failed (treating as none sent): ${(err as Error).message}`);
+      }
+      return counts;
+    };
+
     // Build a flat variable map for template substitution.
     // Any key in this map can be referenced as {{key}} in message templates.
     // Priority: GHL payload fields first, then any extra contact_fields from the edge function.
@@ -945,8 +981,26 @@ export const runEngagement = task({
 
           const enabledChannels = node.channels.filter((ch) => ch.enabled);
 
+          // CAD-01 — on a retry that replays this node, skip channels whose
+          // send already went out in a prior attempt (campaign_events marker).
+          // phone_call is excluded: its placement is deduped downstream via
+          // idempotency_key so the wait/classify flow must still run.
+          const sentCounts = await getSentChannelCounts(i);
+          const seenByType = new Map<string, number>();
+
           for (let ci = 0; ci < enabledChannels.length; ci++) {
             const ch = enabledChannels[ci];
+
+            if (ch.type !== "phone_call") {
+              const typePos = seenByType.get(ch.type) ?? 0;
+              seenByType.set(ch.type, typePos + 1);
+              if (typePos < (sentCounts.get(ch.type) ?? 0)) {
+                console.log(
+                  `Engage node ${i}: skipping ${ch.type} channel ${ci} — already sent in a prior attempt (CAD-01 marker)`
+                );
+                continue;
+              }
+            }
 
             // Wait the inter-channel delay (skip for the first channel)
             if (ci > 0 && ch.delay_seconds > 0) {
@@ -992,35 +1046,48 @@ export const runEngagement = task({
                 ghl_contact_id: lead_id,
                 ghl_account_id,
                 execution_id,
+                // CAD-02 — dedup key: a retry of this exact cadence step must
+                // not dial the lead a second time.
+                idempotency_key: `${execution_id}:${i}:${ci}`,
                 custom_instructions: interpolate(ch.instructions || ""),
                 contact_fields: payload.contact_fields || {},
                 treat_pickup_as_reply: ch.treat_pickup_as_reply ?? false,
                 voicemail_config: voicemailConfig,
+              }, {
+                // CAD-02 — a parent retry must re-attach to the SAME child run
+                // instead of spawning a concurrent sibling that races the
+                // edge-fn dedup guard (both dialing before either stamps).
+                idempotencyKey: `place:${execution_id}:${i}:${ci}`,
               });
               if (callRun.ok !== true) {
                 const failure = callRun as { error?: unknown };
                 throw new Error(`place-outbound-call failed: ${String(failure.error ?? "unknown")}`);
               }
               const callId = callRun.output?.call_id;
-              console.log(`Engage phone_call placed for ${lead_id}: call_id=${callId}`);
-              // Cadence v2 — bump leads.last_outbound_at for cold-reply nudge accounting.
-              try {
-                await supabase
-                  .from("leads")
-                  .update({ last_outbound_at: new Date().toISOString() })
-                  .eq("client_id", client_id)
-                  .eq("lead_id", lead_id);
-              } catch (tsErr) {
-                console.warn("runEngagement: last_outbound_at bump (engage call) failed (non-fatal)", tsErr);
+              const callWasDeduped = callRun.output?.already_placed === true;
+              console.log(
+                `Engage phone_call ${callWasDeduped ? "replayed (deduped, no new dial)" : "placed"} for ${lead_id}: call_id=${callId}`
+              );
+              if (!callWasDeduped) {
+                // Cadence v2 — bump leads.last_outbound_at for cold-reply nudge accounting.
+                try {
+                  await supabase
+                    .from("leads")
+                    .update({ last_outbound_at: new Date().toISOString() })
+                    .eq("client_id", client_id)
+                    .eq("lead_id", lead_id);
+                } catch (tsErr) {
+                  console.warn("runEngagement: last_outbound_at bump (engage call) failed (non-fatal)", tsErr);
+                }
+                metricsBuffer.calls_attempted++;
+                await logCampaignEvent({
+                  event_type: "message_sent",
+                  channel: "phone_call",
+                  node_index: i,
+                  node_id: node.id,
+                  metadata: { call_id: callId, voice_setter_id: effectiveVoiceSetterId },
+                });
               }
-              metricsBuffer.calls_attempted++;
-              await logCampaignEvent({
-                event_type: "message_sent",
-                channel: "phone_call",
-                node_index: i,
-                node_id: node.id,
-                metadata: { call_id: callId, voice_setter_id: effectiveVoiceSetterId },
-              });
 
               // Bug 1 — wait for call_ended before advancing.
               if (callId) {
@@ -1058,6 +1125,7 @@ export const runEngagement = task({
                       stage_description: "Call answered by human — engagement complete.",
                       completed_at: new Date().toISOString(),
                       last_completed_node_index: i,
+                      active_call_id: null,
                     });
                     await writeCadenceMetrics("call_engaged");
                     return { status: "completed", stop_reason: "call_engaged" };
@@ -1065,7 +1133,14 @@ export const runEngagement = task({
                 }
               }
 
-              await updateExecution({ stage_description: "Phone call ended." });
+              // Clear the voice-call hold whenever we stop waiting on the
+              // call. Normally retell-call-webhook clears it on call_ended,
+              // but a deduped replay (already_placed) re-arms it AFTER that
+              // webhook fired, and the outcome-timeout path never clears it —
+              // a stale hold suppresses stop-on-reply and delays the text
+              // setter's replies by up to 15 minutes. Idempotent with the
+              // webhook's own clear.
+              await updateExecution({ stage_description: "Phone call ended.", active_call_id: null });
               continue;
             }
 
@@ -1153,21 +1228,27 @@ export const runEngagement = task({
                 );
               }
               console.log(`Engage SMS sent to lead ${lead_id}: ${redactBody(message)} (sid=${sendResult.sid})`);
-              await updateExecution({
-                last_sms_sent_at: new Date().toISOString(),
-                stage_description: "SMS sent.",
-              });
               metricsBuffer.sms_sent++;
-              await Promise.all([
-                logCampaignEvent({
-                  event_type: "message_sent",
-                  channel: "sms",
-                  node_index: i,
-                  node_id: node.id,
-                  metadata: { message_body: message, twilio_message_sid: sendResult.sid },
-                }),
-                writeToChatHistory(message),
-              ]);
+              // REL-04 — the spend already happened; a failed post-send write
+              // must not throw the task into a retry that replays the node.
+              try {
+                await updateExecution({
+                  last_sms_sent_at: new Date().toISOString(),
+                  stage_description: "SMS sent.",
+                });
+                await Promise.all([
+                  logCampaignEvent({
+                    event_type: "message_sent",
+                    channel: "sms",
+                    node_index: i,
+                    node_id: node.id,
+                    metadata: { message_body: message, twilio_message_sid: sendResult.sid },
+                  }),
+                  writeToChatHistory(message),
+                ]);
+              } catch (postErr) {
+                console.warn(`Engage SMS post-send writes failed (non-fatal): ${(postErr as Error).message}`);
+              }
             } else if (ch.type === "whatsapp") {
               if (!client.send_engagement_webhook_url) {
                 throw new Error("WhatsApp requires client.send_engagement_webhook_url");
@@ -1193,22 +1274,27 @@ export const runEngagement = task({
                 throw new Error(`Engagement webhook (whatsapp) failed ${resp.status}: ${errText.slice(0, 200)}`);
               }
               console.log(`Engage whatsapp sent to lead ${lead_id}: ${redactBody(message)}`);
-              await updateExecution({ stage_description: "WhatsApp sent." });
               metricsBuffer.whatsapp_sent++;
               const isWaTemplate = waType === "template" && !!ch.template_name;
               const eventMessageBody = isWaTemplate
                 ? `WhatsApp Template from GoHighLevel:\n\n"${ch.template_name}"`
                 : message;
-              await Promise.all([
-                logCampaignEvent({
-                  event_type: "message_sent",
-                  channel: "whatsapp",
-                  node_index: i,
-                  node_id: node.id,
-                  metadata: { message_body: eventMessageBody },
-                }),
-                writeToChatHistory(message),
-              ]);
+              // REL-04 — post-send writes are non-fatal after the spend.
+              try {
+                await updateExecution({ stage_description: "WhatsApp sent." });
+                await Promise.all([
+                  logCampaignEvent({
+                    event_type: "message_sent",
+                    channel: "whatsapp",
+                    node_index: i,
+                    node_id: node.id,
+                    metadata: { message_body: eventMessageBody },
+                  }),
+                  writeToChatHistory(message),
+                ]);
+              } catch (postErr) {
+                console.warn(`Engage WhatsApp post-send writes failed (non-fatal): ${(postErr as Error).message}`);
+              }
             } else if (ch.type === "email") {
               // Cadence v2 — email via GHL Conversations API. Send + log
               // happen in one call when the location has email infra
@@ -1244,18 +1330,23 @@ export const runEngagement = task({
               console.log(
                 `Engage email sent to lead ${lead_id} via ${emailResult.via} (subject="${subject.slice(0, 60)}", body=${redactBody(message)})`,
               );
-              await updateExecution({ stage_description: emailResult.via === "conversations" ? "Email sent." : "Email logged to Notes (no email channel configured)." });
               metricsBuffer.emails_sent++;
-              await Promise.all([
-                logCampaignEvent({
-                  event_type: "message_sent",
-                  channel: "email",
-                  node_index: i,
-                  node_id: node.id,
-                  metadata: { subject, body_preview: message.slice(0, 400), via: emailResult.via, ghl_message_id: emailResult.emailMessageId ?? null },
-                }),
-                writeToChatHistory(`[Email] ${subject}\n\n${message}`),
-              ]);
+              // REL-04 — post-send writes are non-fatal after the spend.
+              try {
+                await updateExecution({ stage_description: emailResult.via === "conversations" ? "Email sent." : "Email logged to Notes (no email channel configured)." });
+                await Promise.all([
+                  logCampaignEvent({
+                    event_type: "message_sent",
+                    channel: "email",
+                    node_index: i,
+                    node_id: node.id,
+                    metadata: { subject, body_preview: message.slice(0, 400), via: emailResult.via, ghl_message_id: emailResult.emailMessageId ?? null },
+                  }),
+                  writeToChatHistory(`[Email] ${subject}\n\n${message}`),
+                ]);
+              } catch (postErr) {
+                console.warn(`Engage email post-send writes failed (non-fatal): ${(postErr as Error).message}`);
+              }
             }
           }
 
@@ -1266,52 +1357,63 @@ export const runEngagement = task({
           const message = interpolate(node.message);
           await updateExecution({ stage_description: "Sending SMS..." });
 
-          const twilioSid = client.twilio_account_sid as string | null;
-          const twilioAuth = client.twilio_auth_token as string | null;
-          const twilioFrom =
-            (client.twilio_default_phone as string | null) ??
-            (client.retell_phone_1 as string | null);
-          const toNumber = payload.Phone;
-          if (!twilioSid || !twilioAuth || !twilioFrom) {
-            throw new Error("send_sms requires twilio_account_sid + twilio_auth_token + (twilio_default_phone || retell_phone_1)");
-          }
-          if (!toNumber) {
-            throw new Error(`send_sms node ${node.id} has no phone number on the lead`);
-          }
-          const sendResult = await sendTwilioSmsAndStamp({
-            supabase,
-            twilioSid,
-            twilioAuth,
-            fromNumber: twilioFrom,
-            toNumber,
-            body: message,
-            clientId: client_id,
-            leadId: lead_id,
-            ghlAccountId: ghl_account_id,
-            contactName: contact_name ?? null,
-            contactEmail: payload.Email ?? null,
-            ghlApiKey: (client.ghl_api_key as string | null) ?? null,
-            ghlLocationId: (client.ghl_location_id as string | null) ?? null,
-            ghlContactId: lead_id,
-            ghlConversationProviderId:
-              (client.ghl_conversation_provider_id as string | null) ?? null,
-          });
-          if (!sendResult.ok) {
-            throw new Error(
-              `Twilio SMS failed: ${sendResult.errorCode ?? "?"} ${sendResult.errorMessage ?? "unknown"}`,
-            );
-          }
+          // CAD-01 — on a retry that replays this node, skip the re-send if a
+          // prior attempt already delivered it (campaign_events marker).
+          if (((await getSentChannelCounts(i)).get("sms") ?? 0) > 0) {
+            console.log(`send_sms node ${i}: already sent in a prior attempt — skipping re-send (CAD-01 marker)`);
+          } else {
+            const twilioSid = client.twilio_account_sid as string | null;
+            const twilioAuth = client.twilio_auth_token as string | null;
+            const twilioFrom =
+              (client.twilio_default_phone as string | null) ??
+              (client.retell_phone_1 as string | null);
+            const toNumber = payload.Phone;
+            if (!twilioSid || !twilioAuth || !twilioFrom) {
+              throw new Error("send_sms requires twilio_account_sid + twilio_auth_token + (twilio_default_phone || retell_phone_1)");
+            }
+            if (!toNumber) {
+              throw new Error(`send_sms node ${node.id} has no phone number on the lead`);
+            }
+            const sendResult = await sendTwilioSmsAndStamp({
+              supabase,
+              twilioSid,
+              twilioAuth,
+              fromNumber: twilioFrom,
+              toNumber,
+              body: message,
+              clientId: client_id,
+              leadId: lead_id,
+              ghlAccountId: ghl_account_id,
+              contactName: contact_name ?? null,
+              contactEmail: payload.Email ?? null,
+              ghlApiKey: (client.ghl_api_key as string | null) ?? null,
+              ghlLocationId: (client.ghl_location_id as string | null) ?? null,
+              ghlContactId: lead_id,
+              ghlConversationProviderId:
+                (client.ghl_conversation_provider_id as string | null) ?? null,
+            });
+            if (!sendResult.ok) {
+              throw new Error(
+                `Twilio SMS failed: ${sendResult.errorCode ?? "?"} ${sendResult.errorMessage ?? "unknown"}`,
+              );
+            }
 
-          console.log(`SMS sent to lead ${lead_id}: ${redactBody(message)} (sid=${sendResult.sid})`);
-          await updateExecution({
-            last_sms_sent_at: new Date().toISOString(),
-            stage_description: "SMS sent.",
-          });
-          metricsBuffer.sms_sent++;
-          await Promise.all([
-            logCampaignEvent({ event_type: "message_sent", channel: "sms", node_index: i, node_id: node.id, metadata: { message_body: message, twilio_message_sid: sendResult.sid } }),
-            writeToChatHistory(message),
-          ]);
+            console.log(`SMS sent to lead ${lead_id}: ${redactBody(message)} (sid=${sendResult.sid})`);
+            metricsBuffer.sms_sent++;
+            // REL-04 — post-send writes are non-fatal after the spend.
+            try {
+              await updateExecution({
+                last_sms_sent_at: new Date().toISOString(),
+                stage_description: "SMS sent.",
+              });
+              await Promise.all([
+                logCampaignEvent({ event_type: "message_sent", channel: "sms", node_index: i, node_id: node.id, metadata: { message_body: message, twilio_message_sid: sendResult.sid } }),
+                writeToChatHistory(message),
+              ]);
+            } catch (postErr) {
+              console.warn(`send_sms post-send writes failed (non-fatal): ${(postErr as Error).message}`);
+            }
+          }
 
         // ── SEND WHATSAPP node ──────────────────────────────────────────────
         } else if (node.type === "send_whatsapp") {
@@ -1320,29 +1422,40 @@ export const runEngagement = task({
           const message = interpolate(node.message);
           await updateExecution({ stage_description: "Sending WhatsApp..." });
 
-          const waResponse = await fetch(client.send_engagement_webhook_url as string, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              Lead_ID: lead_id,
-              Message: message,
-              Channel: "WhatsApp",
-              Setter_Number: String(textSetterNumber),
-            }),
-          });
+          // CAD-01 — on a retry that replays this node, skip the re-send if a
+          // prior attempt already delivered it (campaign_events marker).
+          if (((await getSentChannelCounts(i)).get("whatsapp") ?? 0) > 0) {
+            console.log(`send_whatsapp node ${i}: already sent in a prior attempt — skipping re-send (CAD-01 marker)`);
+          } else {
+            const waResponse = await fetch(client.send_engagement_webhook_url as string, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                Lead_ID: lead_id,
+                Message: message,
+                Channel: "WhatsApp",
+                Setter_Number: String(textSetterNumber),
+              }),
+            });
 
-          if (!waResponse.ok) {
-            const errText = await waResponse.text();
-            throw new Error(`Engagement webhook (WhatsApp) failed ${waResponse.status}: ${errText.slice(0, 200)}`);
+            if (!waResponse.ok) {
+              const errText = await waResponse.text();
+              throw new Error(`Engagement webhook (WhatsApp) failed ${waResponse.status}: ${errText.slice(0, 200)}`);
+            }
+
+            console.log(`WhatsApp sent to lead ${lead_id}: ${redactBody(message)}`);
+            metricsBuffer.whatsapp_sent++;
+            // REL-04 — post-send writes are non-fatal after the spend.
+            try {
+              await updateExecution({ stage_description: "WhatsApp sent." });
+              await Promise.all([
+                logCampaignEvent({ event_type: "message_sent", channel: "whatsapp", node_index: i, node_id: node.id, metadata: { message_body: message } }),
+                writeToChatHistory(message),
+              ]);
+            } catch (postErr) {
+              console.warn(`send_whatsapp post-send writes failed (non-fatal): ${(postErr as Error).message}`);
+            }
           }
-
-          console.log(`WhatsApp sent to lead ${lead_id}: ${redactBody(message)}`);
-          await updateExecution({ stage_description: "WhatsApp sent." });
-          metricsBuffer.whatsapp_sent++;
-          await Promise.all([
-            logCampaignEvent({ event_type: "message_sent", channel: "whatsapp", node_index: i, node_id: node.id, metadata: { message_body: message } }),
-            writeToChatHistory(message),
-          ]);
 
         // ── PHONE CALL node (legacy flat) ───────────────────────────────────
         } else if (node.type === "phone_call") {
@@ -1370,34 +1483,44 @@ export const runEngagement = task({
             ghl_contact_id: lead_id,
             ghl_account_id,
             execution_id,
+            // CAD-02 — dedup key (single channel per legacy node, so ci=0).
+            idempotency_key: `${execution_id}:${i}:0`,
             custom_instructions: interpolate(node.instructions || ""),
             contact_fields: payload.contact_fields || {},
             treat_pickup_as_reply: legacyTreatPickupAsReply ?? false,
+          }, {
+            // CAD-02 — parent retries re-attach to the same child run.
+            idempotencyKey: `place:${execution_id}:${i}:0`,
           });
           if (legacyCallRun.ok !== true) {
             const legacyFailure = legacyCallRun as { error?: unknown };
             throw new Error(`place-outbound-call failed: ${String(legacyFailure.error ?? "unknown")}`);
           }
           const legacyCallId = legacyCallRun.output?.call_id;
-          console.log(`Phone call placed for ${lead_id}: call_id=${legacyCallId}`);
-          // Cadence v2 — bump leads.last_outbound_at for cold-reply nudge accounting.
-          try {
-            await supabase
-              .from("leads")
-              .update({ last_outbound_at: new Date().toISOString() })
-              .eq("client_id", client_id)
-              .eq("lead_id", lead_id);
-          } catch (tsErr) {
-            console.warn("runEngagement: last_outbound_at bump (legacy call) failed (non-fatal)", tsErr);
+          const legacyCallWasDeduped = legacyCallRun.output?.already_placed === true;
+          console.log(
+            `Phone call ${legacyCallWasDeduped ? "replayed (deduped, no new dial)" : "placed"} for ${lead_id}: call_id=${legacyCallId}`
+          );
+          if (!legacyCallWasDeduped) {
+            // Cadence v2 — bump leads.last_outbound_at for cold-reply nudge accounting.
+            try {
+              await supabase
+                .from("leads")
+                .update({ last_outbound_at: new Date().toISOString() })
+                .eq("client_id", client_id)
+                .eq("lead_id", lead_id);
+            } catch (tsErr) {
+              console.warn("runEngagement: last_outbound_at bump (legacy call) failed (non-fatal)", tsErr);
+            }
+            metricsBuffer.calls_attempted++;
+            await logCampaignEvent({
+              event_type: "message_sent",
+              channel: "phone_call",
+              node_index: i,
+              node_id: node.id,
+              metadata: { call_id: legacyCallId, voice_setter_id: effectiveLegacyVoiceSetter },
+            });
           }
-          metricsBuffer.calls_attempted++;
-          await logCampaignEvent({
-            event_type: "message_sent",
-            channel: "phone_call",
-            node_index: i,
-            node_id: node.id,
-            metadata: { call_id: legacyCallId, voice_setter_id: effectiveLegacyVoiceSetter },
-          });
 
           // Bug 1 — wait for call_ended before advancing.
           if (legacyCallId) {
@@ -1433,6 +1556,7 @@ export const runEngagement = task({
                   stage_description: "Call answered by human — engagement complete.",
                   completed_at: new Date().toISOString(),
                   last_completed_node_index: i,
+                  active_call_id: null,
                 });
                 await writeCadenceMetrics("call_engaged");
                 return { status: "completed", stop_reason: "call_engaged" };
@@ -1440,7 +1564,10 @@ export const runEngagement = task({
             }
           }
 
-          await updateExecution({ stage_description: "Phone call ended." });
+          // Clear the voice-call hold whenever we stop waiting on the call
+          // (deduped replays re-arm it after the webhook's clear; the timeout
+          // path never cleared it). Idempotent with the webhook's clear.
+          await updateExecution({ stage_description: "Phone call ended.", active_call_id: null });
 
         // ── WAIT FOR REPLY node ─────────────────────────────────────────────
         } else if (node.type === "wait_for_reply") {

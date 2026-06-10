@@ -169,6 +169,19 @@ Deno.serve(async (req) => {
         .upsert(upsertRow, { onConflict: "client_id,lead_id" });
       if (leadUpsertErr) {
         console.warn(`⚠️ leads upsert failed for ${contactId}: ${leadUpsertErr.message}`);
+        // REL-06: record the lost voice-activity bump so it's visible to the
+        // operator instead of dying as console noise.
+        try {
+          await internalSupabase.from("error_logs").insert({
+            client_id: client.id,
+            lead_id: contactId,
+            severity: "warning",
+            source: "retell_call_webhook",
+            error_type: "leads_upsert_failed",
+            error_message: leadUpsertErr.message,
+            context: { call_id: call.call_id || call.id || null, event: payload.event },
+          });
+        } catch (_logErr) { /* non-fatal */ }
       }
     }
 
@@ -177,6 +190,9 @@ Deno.serve(async (req) => {
     // break its poll loop and decide whether to advance (missed → next
     // channel sends the missed-call SMS) or terminate (human pickup +
     // treat_pickup_as_reply → stop_reason='call_engaged').
+    // Whether the cadence-critical write (last_call_outcome) happened in this
+    // request — drives the status code on a terminal external-sync failure.
+    let outcomePersisted = false;
     if (payload.event === "call_ended") {
       const executionId: string | null = (dynamicVars.execution_id as string | undefined) || null;
       if (executionId) {
@@ -203,11 +219,26 @@ Deno.serve(async (req) => {
           console.error(
             `retell-call-webhook: CRITICAL last_call_outcome write failed for exec ${executionId}: ${execErr.message}`
           );
+          // REL-06: this is the failure that hangs/mis-classifies the cadence
+          // wait loop — make it visible to alerting before asking Retell to retry.
+          try {
+            await internalSupabase.from("error_logs").insert({
+              client_id: client.id,
+              lead_id: contactId || null,
+              execution_id: executionId,
+              severity: "error",
+              source: "retell_call_webhook",
+              error_type: "last_call_outcome_write_failed",
+              error_message: execErr.message,
+              context: { call_id: callId, event: payload.event },
+            });
+          } catch (_logErr) { /* non-fatal */ }
           return new Response(
             JSON.stringify({ error: "Failed to persist call outcome", retry: true }),
             { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
           );
         } else {
+          outcomePersisted = true;
           console.log(
             `📞 last_call_outcome stamped on exec ${executionId} (call_id=${callId}, reason=${call.disconnection_reason || "?"})`
           );
@@ -317,9 +348,27 @@ Deno.serve(async (req) => {
     }
 
     console.error(`❌ Failed to sync call to call_history: ${lastError}`);
+    // REL-06: record the terminal sync miss. Status code depends on what this
+    // request already accomplished: when the cadence-critical write
+    // (last_call_outcome) was persisted, return 200 so Retell does NOT retry
+    // the whole webhook (re-running the leads upsert + outcome stamp) for a
+    // non-critical external mirror. For call_analyzed (and call_ended without
+    // an execution_id) the external sync is the ONLY persistence of the
+    // transcript/analysis, so keep the 500 and let Retell redeliver.
+    try {
+      await internalSupabase.from("error_logs").insert({
+        client_id: client.id,
+        lead_id: contactId || null,
+        severity: "error",
+        source: "retell_call_webhook",
+        error_type: "external_call_history_sync_failed",
+        error_message: lastError ?? "unknown",
+        context: { call_id: record.call_id ?? null, event: payload.event, outcome_persisted: outcomePersisted },
+      });
+    } catch (_logErr) { /* non-fatal */ }
     return new Response(
       JSON.stringify({ ok: false, error: lastError }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { status: outcomePersisted ? 200 : 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err) {
     console.error("Retell call webhook error:", err);
