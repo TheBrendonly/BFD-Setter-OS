@@ -46,7 +46,7 @@ Deno.serve(async (req) => {
     }
 
     const twilioAuth = btoa(`${account_sid}:${auth_token}`);
-    const inboundWebhookUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/twilio-inbound-sms`;
+    const inboundWebhookUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/receive-twilio-sms`;
 
     // Step 1: List incoming phone numbers to find the SID for the given number
     const listUrl = `https://api.twilio.com/2010-04-01/Accounts/${account_sid}/IncomingPhoneNumbers.json?PhoneNumber=${encodeURIComponent(phone_number)}`;

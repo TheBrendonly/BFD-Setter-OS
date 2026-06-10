@@ -1,4 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2.49.1";
+import { authorizeClientRequest, AssertAccessError } from "../_shared/authorize-client-request.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -109,6 +110,21 @@ Deno.serve(async (req) => {
       send_engagement_webhook_url = client?.send_engagement_webhook_url || null;
     }
 
+    // Tenant guard (after client_id is resolved from ghl_account_id if needed):
+    // internal callers (Trigger tasks / other edge fns) present the service-role
+    // bearer and pass; UI callers present a user JWT and must own client_id.
+    // Without this any anon-key holder could enrol/cancel another tenant's leads
+    // and fire billable SMS / Retell calls.
+    try {
+      await authorizeClientRequest(req.headers.get("Authorization"), client_id);
+    } catch (e) {
+      if (e instanceof AssertAccessError) {
+        return new Response(JSON.stringify({ error: e.message }),
+          { status: e.status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+      throw e;
+    }
+
     // Cancel any active engagement executions for the same contact.
     // NOTE: engagement_executions keys the contact on `ghl_contact_id` on this
     // platform DB (the ghl_contact_id→lead_id rename migration was never applied);
@@ -171,7 +187,7 @@ Deno.serve(async (req) => {
     if (!lead && isUuid(String(lead_id))) {
       const { data: uuidLead } = await supabase
         .from("leads")
-        .select("first_name, last_name, phone, email, business_name, custom_fields")
+        .select("first_name, last_name, phone, email")
         .eq("id", lead_id)
         .limit(1)
         .maybeSingle();

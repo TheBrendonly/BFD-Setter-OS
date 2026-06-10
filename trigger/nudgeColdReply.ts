@@ -184,6 +184,21 @@ export const nudgeColdReply = schedules.task({
         continue;
       }
 
+      // Opt-out recheck: the candidate query filtered setter_stopped=false, but
+      // this loop + AI generation take time, so a lead can text STOP before we
+      // reach the send. Re-read immediately before spending to avoid messaging
+      // an opted-out lead (compliance).
+      const { data: freshLead } = await supabase
+        .from("leads")
+        .select("setter_stopped")
+        .eq("client_id", lead.client_id!)
+        .eq("lead_id", lead.lead_id!)
+        .maybeSingle();
+      if (freshLead?.setter_stopped) {
+        stats.skipped++;
+        continue;
+      }
+
       // Send via direct Twilio. Mirrors sendTwilioSmsAndStamp's shape so
       // the same StatusCallback path runs.
       const statusCb = `${process.env.SUPABASE_URL}/functions/v1/twilio-status-webhook`;

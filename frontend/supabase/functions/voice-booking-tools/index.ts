@@ -673,7 +673,7 @@ async function toolLookupContact(args: {
       .from("leads")
       .select("last_message_preview")
       .eq("client_id", client.id)
-      .eq("ghl_contact_id", contactId)
+      .eq("lead_id", contactId)
       .order("updated_at", { ascending: false })
       .limit(1)
       .maybeSingle();
@@ -794,21 +794,30 @@ async function toolScheduleCallback(args: { client: ClientRow; body: Record<stri
   if (!voiceSetterId) throw new ToolError(409, "No voice setter available to call back with.");
 
   const parsed = parseCallbackTime(when, new Date(), client.timezone || "Australia/Brisbane");
-  const { data: cbRow } = await supabase.from("scheduled_callbacks").insert({
+  const { data: cbRow, error: cbErr } = await supabase.from("scheduled_callbacks").insert({
     client_id: client.id, ghl_contact_id: contactId, ghl_account_id: client.ghl_location_id,
     voice_setter_id: voiceSetterId, call_id: (typeof body.source_call_id === "string" ? body.source_call_id : null),
     contact_phone: (typeof body.phone === "string" ? body.phone : null),
     scheduled_for: parsed.scheduledFor, callback_reason: parsed.reason, status: "pending",
   }).select("id").single();
 
-  if (cbRow?.id) {
-    const triggerKey = Deno.env.get("TRIGGER_SECRET_KEY");
-    if (triggerKey) {
-      await fetch("https://api.trigger.dev/api/v1/tasks/schedule-callback/trigger", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${triggerKey}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ payload: { scheduled_callback_id: cbRow.id } }),
-      });
+  // Don't falsely confirm: if the row didn't persist, surface a tool error so the
+  // agent re-tries / tells the caller, rather than promising a callback we lost.
+  if (cbErr || !cbRow?.id) {
+    console.error("voice-booking-tools schedule-callback insert failed", cbErr);
+    throw new ToolError(502, "Could not schedule the callback right now.");
+  }
+
+  const triggerKey = Deno.env.get("TRIGGER_SECRET_KEY");
+  if (triggerKey) {
+    const tr = await fetch("https://api.trigger.dev/api/v1/tasks/schedule-callback/trigger", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${triggerKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ payload: { scheduled_callback_id: cbRow.id } }),
+    });
+    if (!tr.ok) {
+      console.error("voice-booking-tools schedule-callback trigger failed", tr.status, await tr.text().catch(() => ""));
+      throw new ToolError(502, "Could not schedule the callback right now.");
     }
   }
   return { scheduled: true, scheduled_for: parsed.scheduledFor, when: parsed.reason };

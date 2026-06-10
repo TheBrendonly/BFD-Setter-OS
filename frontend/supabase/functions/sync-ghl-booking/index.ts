@@ -4,8 +4,39 @@ import { createClient } from "npm:@supabase/supabase-js@2.49.1";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+    "authorization, x-client-info, apikey, content-type, x-wh-signature, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
+
+// Optional GHL Webhook V2 signature verification (HMAC-SHA256 hex over the raw
+// body, keyed by clients.ghl_webhook_secret). Mirrors bookings-webhook. Only
+// enforced once the resolved client has the secret set; otherwise accept.
+async function verifyGhlSignature(
+  rawBody: string,
+  signatureHeader: string | null,
+  secret: string,
+): Promise<boolean> {
+  if (!signatureHeader) return false;
+  const enc = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    "raw",
+    enc.encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const sigBuf = await crypto.subtle.sign("HMAC", key, enc.encode(rawBody));
+  const sigBytes = new Uint8Array(sigBuf);
+  let hex = "";
+  for (const b of sigBytes) hex += b.toString(16).padStart(2, "0");
+  const expectedHex = hex.toLowerCase();
+  const presented = signatureHeader.replace(/^sha256=/i, "").toLowerCase();
+  if (expectedHex.length !== presented.length) return false;
+  let mismatch = 0;
+  for (let i = 0; i < expectedHex.length; i++) {
+    mismatch |= expectedHex.charCodeAt(i) ^ presented.charCodeAt(i);
+  }
+  return mismatch === 0;
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -42,7 +73,7 @@ interface ClientRecord {
   ghl_api_key: string | null;
   ghl_calendar_id: string | null;
   ghl_location_id: string | null;
-  sync_ghl_booking_enabled: boolean | null;
+  ghl_webhook_secret: string | null;
 }
 
 interface GhlAppointmentLookupResult {
@@ -95,7 +126,7 @@ async function resolveClientFromBooking(params: {
 }): Promise<{ client: ClientRecord | null; appointment: Record<string, unknown> | null; errorDetail: string | null; }> {
   const { data, error } = await params.supabase
     .from("clients")
-    .select("id, name, ghl_api_key, ghl_calendar_id, ghl_location_id, sync_ghl_booking_enabled")
+    .select("id, name, ghl_api_key, ghl_calendar_id, ghl_location_id, ghl_webhook_secret")
     .not("ghl_api_key", "is", null);
 
   if (error) {
@@ -119,7 +150,6 @@ async function resolveClientFromBooking(params: {
 
   const scoreClient = (client: ClientRecord) => {
     let score = 0;
-    if (client.sync_ghl_booking_enabled) score += 8;
     if (params.preferredLocationId && client.ghl_location_id === params.preferredLocationId) score += 12;
     if (params.preferredCalendarId && client.ghl_calendar_id === params.preferredCalendarId) score += 6;
     return score;
@@ -185,7 +215,7 @@ async function resolveClientForBooking(params: {
   if (params.preferredLocationId) {
     const { data, error } = await params.supabase
       .from("clients")
-      .select("id, name, ghl_api_key, ghl_calendar_id, ghl_location_id, sync_ghl_booking_enabled")
+      .select("id, name, ghl_api_key, ghl_calendar_id, ghl_location_id, ghl_webhook_secret")
       .eq("ghl_location_id", params.preferredLocationId)
       .maybeSingle();
 
@@ -314,6 +344,7 @@ Deno.serve(async (req) => {
     const supabase = createClient(supabaseUrl, serviceKey);
 
     const url = new URL(req.url);
+    const rawBody = await req.clone().text();
     const body = await parseRequestBody(req);
     const nestedBody = pickFirstRecord(body.body);
     const payload = pickFirstRecord(body.payload, nestedBody.payload);
@@ -489,6 +520,26 @@ Deno.serve(async (req) => {
     }
 
     const clientId = clientRow.id;
+
+    // Optional GHL Webhook V2 signature check. Inert until the client stamps
+    // ghl_webhook_secret AND the upstream GHL webhook is configured to sign
+    // (onboarding BR3). Canonical verified booking ingress is bookings-webhook;
+    // this path mirrors its verify-if-present behaviour.
+    if (clientRow.ghl_webhook_secret) {
+      const sigOk = await verifyGhlSignature(
+        rawBody,
+        req.headers.get("x-wh-signature"),
+        clientRow.ghl_webhook_secret,
+      );
+      if (!sigOk) {
+        console.warn("[sync-ghl-booking] GHL signature mismatch", { clientId, bookingId });
+        return new Response(
+          JSON.stringify({ error: "Forbidden" }),
+          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    }
+
     resolvedGhlAccountId = firstNonEmptyString(
       clientResolution.appointment?.locationId,
       clientResolution.appointment?.location_id,

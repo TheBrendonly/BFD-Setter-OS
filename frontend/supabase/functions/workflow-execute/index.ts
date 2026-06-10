@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.49.1";
+import { authorizeClientRequest, AssertAccessError } from "../_shared/authorize-client-request.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -32,6 +33,19 @@ Deno.serve(async (req) => {
         JSON.stringify({ error: "trigger_type and client_id are required" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
+    }
+
+    // Tenant guard: internal callers present the service-role bearer (pass);
+    // UI callers present a user JWT and must own client_id. Without this any
+    // anon-key holder could trigger another tenant's workflows.
+    try {
+      await authorizeClientRequest(req.headers.get("Authorization"), client_id);
+    } catch (e) {
+      if (e instanceof AssertAccessError) {
+        return new Response(JSON.stringify({ error: e.message }),
+          { status: e.status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+      throw e;
     }
 
     if (!triggerSecretKey) {

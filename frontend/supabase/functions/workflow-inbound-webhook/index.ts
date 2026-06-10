@@ -4,8 +4,41 @@ import { createClient } from "npm:@supabase/supabase-js@2.49.1";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+    "authorization, x-client-info, apikey, content-type, x-wh-signature, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
+
+// Optional GHL Webhook V2 signature verification (HMAC-SHA256 hex over the raw
+// body, keyed by clients.ghl_webhook_secret). Best-effort: this endpoint also
+// serves non-GHL callers that pass client_id directly and may not sign, so we
+// only reject on an actual mismatch when both a secret and a signature header
+// are present (see the gate below).
+async function verifyGhlSignature(
+  rawBody: string,
+  signatureHeader: string | null,
+  secret: string,
+): Promise<boolean> {
+  if (!signatureHeader) return false;
+  const enc = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    "raw",
+    enc.encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const sigBuf = await crypto.subtle.sign("HMAC", key, enc.encode(rawBody));
+  const sigBytes = new Uint8Array(sigBuf);
+  let hex = "";
+  for (const b of sigBytes) hex += b.toString(16).padStart(2, "0");
+  const expectedHex = hex.toLowerCase();
+  const presented = signatureHeader.replace(/^sha256=/i, "").toLowerCase();
+  if (expectedHex.length !== presented.length) return false;
+  let mismatch = 0;
+  for (let i = 0; i < expectedHex.length; i++) {
+    mismatch |= expectedHex.charCodeAt(i) ^ presented.charCodeAt(i);
+  }
+  return mismatch === 0;
+}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -14,6 +47,7 @@ Deno.serve(async (req) => {
 
   try {
     const url = new URL(req.url);
+    const rawBody = await req.text();
     let client_id = url.searchParams.get("client_id");
     const workflow_id = url.searchParams.get("workflow_id");
     const ghl_account_id = url.searchParams.get("GHL_Account_ID");
@@ -53,6 +87,34 @@ Deno.serve(async (req) => {
       );
     }
 
+    // Optional signature verification (best-effort). This endpoint also serves
+    // non-GHL callers that pass client_id directly and may not sign, so we only
+    // reject on an actual mismatch when the client has ghl_webhook_secret set AND
+    // an x-wh-signature header is present. Secret set but no header => accept and
+    // log (a non-GHL caller). NOTE for Brendan: if you want this strict (require
+    // a signature whenever the secret is set), change the warn branch to a 403.
+    {
+      const { data: secretRow } = await supabase
+        .from("clients")
+        .select("ghl_webhook_secret")
+        .eq("id", client_id)
+        .maybeSingle();
+      const secret = (secretRow?.ghl_webhook_secret as string | null) ?? null;
+      const sigHeader = req.headers.get("x-wh-signature");
+      if (secret && sigHeader) {
+        const sigOk = await verifyGhlSignature(rawBody, sigHeader, secret);
+        if (!sigOk) {
+          console.warn("workflow-inbound-webhook: signature mismatch", { client_id });
+          return new Response(
+            JSON.stringify({ error: "Forbidden" }),
+            { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+      } else if (secret && !sigHeader) {
+        console.warn("workflow-inbound-webhook: ghl_webhook_secret set but no x-wh-signature header; accepting (non-GHL caller?)", { client_id });
+      }
+    }
+
     const triggerSecretKey = Deno.env.get("TRIGGER_SECRET_KEY");
 
     // Verify workflow exists
@@ -75,7 +137,7 @@ Deno.serve(async (req) => {
     // Collect trigger_data from the incoming request
     let requestBody = {};
     try {
-      requestBody = await req.json();
+      requestBody = rawBody ? JSON.parse(rawBody) : {};
     } catch {
       // Body may not be JSON — that's fine
     }

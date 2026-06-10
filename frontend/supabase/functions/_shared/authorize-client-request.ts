@@ -43,7 +43,7 @@ function timingSafeEqual(a: string, b: string): boolean {
 // a fallback so internal callers (Trigger tasks, self-enqueue) keep working even
 // if their configured service key differs byte-for-byte from this function's env
 // copy. An anon key or user JWT fails the admin call; only the service role passes.
-async function grantsServiceRole(token: string): Promise<boolean> {
+export async function grantsServiceRole(token: string): Promise<boolean> {
   try {
     const admin = createClient(Deno.env.get("SUPABASE_URL")!, token, {
       auth: { autoRefreshToken: false, persistSession: false },

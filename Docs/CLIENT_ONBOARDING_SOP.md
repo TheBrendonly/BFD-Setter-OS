@@ -73,7 +73,7 @@ Goal: collect every value you'll paste into SQL. Use a shared doc so the client 
 | 14 | `retell_outbound_followup_agent_id` | Follow-up | `clients.retell_outbound_followup_agent_id` |
 | 15 | `retell_agent_id_4..10` | Voice setter slots | same |
 | 16 | `openrouter_api_key` | LLM spend isolated per client | `clients.openrouter_api_key` |
-| 17 | `llm_model` | Model choice (default: `openai/gpt-4.1-nano`) | `clients.llm_model` |
+| 17 | `llm_model` | Model choice (intended default: `openai/gpt-4.1-nano`, set by `onboard-client.mjs`). Note: `clients.llm_model` is nullable with NO DB default, and is distinct from the prompt-config slot default `google/gemini-2.5-pro` (a different table). | `clients.llm_model` |
 | 18 | External Supabase project URL + service key + publishable key | Client's own setter-live mirror | `clients.supabase_url`, `_service_key`, `_anon_key` |
 | 19 | Quiet hours JSON (start/end/tz/days) | Phase 4b guard | `clients.cadence_quiet_hours` |
 | 20 | Voicemail audio URLs per setter | Twilio AMD voicemail-drop (interim before Retell-native) | `clients.voicemail_audio_url` jsonb |
@@ -302,6 +302,8 @@ DO NOT yet `UPDATE clients SET auto_engagement_workflow_id = ...` — copy revie
 
 ## 5. External wiring (click-paths)
 
+> **Code locations:** the webhook handlers referenced below (Supabase edge functions) live under `frontend/supabase/functions/<slug>/index.ts`. The cadence/queue tasks (`runEngagement`, `processMessages`, `sendFollowup`, etc.) live under `trigger/` and run on Trigger.dev (`proj_fdozaybvhgxnzopabtse`).
+
 ### 5.1 GHL "Send Setter Reply" workflow
 
 Mirror BFD's. In the client's GHL → Workflows → New → Inbound:
@@ -317,12 +319,16 @@ Mirror BFD's. In the client's GHL → Workflows → New → Inbound:
 4. Payload: `appointmentId`, `contactId`, `calendarId`, `startTime`, `endTime`, `status`, `locationId`.
 5. Save + activate.
 
-### 5.3 GHL Webhook V2 secret → `clients.ghl_webhook_secret`
+> **Canonical booking ingress:** wire GHL Calendar to `bookings-webhook` (it verifies the GHL signature when `ghl_webhook_secret` is set). `sync-ghl-booking` is an alternate booking path that resolves the client from the booking and now also verifies-if-present, but `bookings-webhook` is the preferred, simpler ingress.
 
-1. Settings → Marketplace → **Webhooks v2** → Enable.
-2. Copy the secret.
-3. `UPDATE clients SET ghl_webhook_secret = '<secret>' WHERE id = '<client-uuid>';`
-4. Once set, `receive-dm-webhook` enforces HMAC-SHA256 on `x-wh-signature`.
+### 5.3 GHL webhook secret → `clients.ghl_webhook_secret` (static token)
+
+> **IMPORTANT (audit 2026-06-10):** GHL *native* Webhook V2 signs payloads with an **RSA public key**, NOT an HMAC shared secret. Do **not** enable native Webhook V2 and paste its secret here expecting the HMAC `x-wh-signature` check to validate — it would 403 all real traffic. BFD's canonical ingress is the GHL **Workflow → Custom Webhook** action, which does not sign; the supported proof is a **static token custom header**.
+
+1. Generate a random secret (e.g. `openssl rand -hex 24`).
+2. `UPDATE clients SET ghl_webhook_secret = '<secret>' WHERE id = '<client-uuid>';`
+3. In each GHL **Workflow → Custom Webhook** action that POSTs to a BFD endpoint, add a **custom header** `x-wh-token: <secret>`.
+4. Once the secret is set, `sync-ghl-contact` (the canonical lead ingress) verifies the request: it accepts a matching `x-wh-token` static header (constant-time compare) OR an HMAC `x-wh-signature`. Until the secret is set it accepts unsigned POSTs (backwards-compat). The same static-token pattern still needs to be extended to `sync-ghl-booking`, `workflow-inbound-webhook`, `bookings-webhook`, `receive-dm-webhook`, and `ghl-tag-webhook` (those currently still verify HMAC only — inert until a secret is set; see audit WI-1).
 
 ### 5.4 Retell custom-tool URLs
 
@@ -554,7 +560,7 @@ Once §5.13.1-3 are done and the cadence is published (§6), run a real form sub
 
 | # | Where to check | Pass criteria |
 |---|---|---|
-| 1 | GHL UI · Contacts | New contact created with submitted fields, tagged `1prompt - new lead` |
+| 1 | GHL UI · Contacts | New contact created with submitted fields, tagged `bfd_setter-new_lead` (the convention used in §5.13.1-3; the real tag is per-client `engagement_workflows.new_leads_tag` — code hardcodes neither) |
 | 2 | GHL UI · Workflows → Form-to-tag workflow → History | Run shows "Completed" within ~10s |
 | 3 | GHL UI · Workflows → `Add Lead to 1Prompt OS` → History | Run shows "Completed" within ~5s of the form-to-tag run, no failed actions |
 | 4 | `SELECT * FROM leads WHERE lead_id='<ghl-contact-id>'` | New row, fields populated from the form |
@@ -927,7 +933,7 @@ In the platform UI:
 - [ ] Sign-off = first name only.
 - [ ] Set `delay_seconds` per channel (defaults: SMS T+0, voice T+2m, follow-up SMS T+30m, voicemail-drop T+24h).
 - [ ] Cadence Settings → quiet hours + voicemail config either inherits client default or has workflow-level override.
-- [ ] NEW LEADS toggle ON + GHL tag name entered (e.g. `new-lead` or `1prompt - new lead` for Pattern B).
+- [ ] NEW LEADS toggle ON + GHL tag name entered (e.g. `bfd_setter-new_lead` for Pattern B). This value becomes the workflow's `engagement_workflows.new_leads_tag` — the inbound routing tag must match it exactly.
 
 ### Synthetic dry-run (§7)
 

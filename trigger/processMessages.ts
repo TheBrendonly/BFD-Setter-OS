@@ -180,6 +180,31 @@ export const processMessages = task({
         }
       }
 
+      // ── STEP 1.5: Opt-out recheck ────────────────────────────────────────────
+      // A lead can text STOP during the debounce wait or the voice-call hold
+      // above. receive-twilio-sms sets leads.setter_stopped (atomically with the
+      // lead_optouts insert) and cancels the cadence, but a reply generated in
+      // this run would otherwise still be sent. Re-read setter_stopped here and
+      // bail before generating/sending any reply. Mirrors runEngagement's
+      // setter_stopped guard; also closes the lead_optouts resume gap (VC2).
+      const { data: optOutCheck } = await supabase
+        .from("leads")
+        .select("setter_stopped")
+        .eq("client_id", client.id)
+        .eq("lead_id", lead_id)
+        .maybeSingle();
+      if (optOutCheck?.setter_stopped) {
+        console.log(`Lead ${lead_id} opted out (setter_stopped) during the wait — cancelling before send.`);
+        await updateExecution({
+          status: "cancelled",
+          stage_description: "Lead opted out (STOP) — cadence cancelled before reply.",
+          completed_at: new Date().toISOString(),
+          resume_at: null,
+        });
+        await cleanup(supabase, lead_id, ghl_account_id, triggerRunId);
+        return { status: "opted_out" };
+      }
+
       // ── STEP 2: Fetch all unprocessed messages ──────────────────────────────
       await updateExecution({
         status: "grouping",

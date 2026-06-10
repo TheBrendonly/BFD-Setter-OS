@@ -405,7 +405,12 @@ export const runEngagement = task({
       if (
         execData.status === "cancelled" ||
         execData.status === "stopped" ||
-        execData.status === "replied"
+        execData.status === "replied" ||
+        // Any terminal status set by another actor (e.g. bookings-webhook marks
+        // the exec completed with stop_reason='booking_created') must stop this
+        // run, even if the external Trigger.dev run-cancel call never landed.
+        execData.status === "completed" ||
+        execData.status === "failed"
       ) {
         return true;
       }
@@ -1450,13 +1455,17 @@ export const runEngagement = task({
 
           await wait.until({ date: resumeAt });
 
-          // Check message_queue for any inbound message since we sent the SMS
+          // Check message_queue for any INBOUND message since we sent the SMS.
+          // Exclude our own outbound stamps (channel 'sms_outbound', written by
+          // the send paths) — without this filter the node's own outbound row,
+          // created right around waitStartedAt, can be misread as a lead reply.
           const { data: replies } = await supabase
             .from("message_queue")
             .select("id")
             .eq("lead_id", lead_id)
             .eq("ghl_account_id", ghl_account_id)
             .gte("created_at", waitStartedAt.toISOString())
+            .or("channel.is.null,channel.neq.sms_outbound")
             .limit(1);
 
           await updateExecution({

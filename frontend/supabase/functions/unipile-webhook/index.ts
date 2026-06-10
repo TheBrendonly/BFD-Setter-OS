@@ -108,7 +108,7 @@ Deno.serve(async (req) => {
           provider: body.account_type || "UNKNOWN",
           status: "connected",
         },
-        { onConflict: "client_id,unipile_account_id" }
+        { onConflict: "client_id,provider,unipile_account_id" }
       );
 
       if (error) {

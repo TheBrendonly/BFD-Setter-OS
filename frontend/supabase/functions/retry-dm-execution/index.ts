@@ -1,4 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { authorizeClientRequest, AssertAccessError } from "../_shared/authorize-client-request.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -64,6 +65,31 @@ Deno.serve(async (req) => {
       );
     }
 
+    // Resolve the owning client from the execution's ghl_account_id, then
+    // tenant-guard before any write/trigger. Internal callers present the
+    // service-role bearer (pass); UI callers a user JWT that must own it.
+    const { data: ownerClient } = await supabase
+      .from("clients")
+      .select("id")
+      .eq("ghl_location_id", execution.ghl_account_id)
+      .limit(1)
+      .maybeSingle();
+    if (!ownerClient) {
+      return new Response(
+        JSON.stringify({ error: "No client found for this execution" }),
+        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    try {
+      await authorizeClientRequest(req.headers.get("Authorization"), ownerClient.id);
+    } catch (e) {
+      if (e instanceof AssertAccessError) {
+        return new Response(JSON.stringify({ error: e.message }),
+          { status: e.status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+      throw e;
+    }
+
     const payload = execution.trigger_payload && typeof execution.trigger_payload === "object"
       ? execution.trigger_payload as Record<string, string>
       : {};
@@ -81,14 +107,6 @@ Deno.serve(async (req) => {
       Phone: contactPhone,
       Setter_Number: setterNumber,
     };
-
-    // 2. Get client_id from clients table using ghl_account_id
-    const { data: client } = await supabase
-      .from("clients")
-      .select("id")
-      .eq("ghl_location_id", execution.ghl_account_id)
-      .limit(1)
-      .single();
 
     // 3. Check message_queue for unprocessed rows
     const { data: existingQueue } = await supabase

@@ -14,8 +14,48 @@ import { fetchActiveNewLeadsWorkflows, resolveWorkflow } from "../_shared/resolv
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+    "authorization, x-client-info, apikey, content-type, x-wh-signature, x-wh-token, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
+
+// Constant-time string compare for the static-token webhook proof.
+function ctEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let mismatch = 0;
+  for (let i = 0; i < a.length; i++) mismatch |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return mismatch === 0;
+}
+
+// Optional GHL Webhook V2 signature verification (HMAC-SHA256 hex over the raw
+// body, keyed by clients.ghl_webhook_secret). Mirrors bookings-webhook. Only
+// enforced when the resolved client has the secret set; otherwise accept (the
+// prior behaviour) so existing unsigned lead ingress keeps working.
+async function verifyGhlSignature(
+  rawBody: string,
+  signatureHeader: string | null,
+  secret: string,
+): Promise<boolean> {
+  if (!signatureHeader) return false;
+  const enc = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    "raw",
+    enc.encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const sigBuf = await crypto.subtle.sign("HMAC", key, enc.encode(rawBody));
+  const sigBytes = new Uint8Array(sigBuf);
+  let hex = "";
+  for (const b of sigBytes) hex += b.toString(16).padStart(2, "0");
+  const expectedHex = hex.toLowerCase();
+  const presented = signatureHeader.replace(/^sha256=/i, "").toLowerCase();
+  if (expectedHex.length !== presented.length) return false;
+  let mismatch = 0;
+  for (let i = 0; i < expectedHex.length; i++) {
+    mismatch |= expectedHex.charCodeAt(i) ^ presented.charCodeAt(i);
+  }
+  return mismatch === 0;
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -179,6 +219,7 @@ Deno.serve(async (req) => {
     const supabase = createClient(supabaseUrl, serviceKey);
 
     const url = new URL(req.url);
+    const rawBody = await req.clone().text();
     const body = await parseRequestBody(req);
     const contact = isRecord(body.contact) ? body.contact : isRecord(body.Contact) ? body.Contact : {};
     const location = isRecord(body.location) ? body.location : isRecord(body.Location) ? body.Location : {};
@@ -277,7 +318,7 @@ Deno.serve(async (req) => {
 
     const { data: clientRow, error: clientErr } = await supabase
       .from("clients")
-      .select("id, sync_ghl_enabled, auto_engagement_workflow_id, ghl_last_synced_from_field_id, ghl_last_synced_from_field_value")
+      .select("id, sync_ghl_enabled, auto_engagement_workflow_id, ghl_last_synced_from_field_id, ghl_last_synced_from_field_value, ghl_webhook_secret")
       .eq("ghl_location_id", ghlAccountId)
       .single();
 
@@ -288,6 +329,28 @@ Deno.serve(async (req) => {
         JSON.stringify({ error: "No client found for the provided GHL_Account_ID" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
+    }
+
+    // Optional GHL webhook auth (verify-if-present). Inert until the client
+    // stamps ghl_webhook_secret. Two accepted proofs:
+    //   (1) a static `x-wh-token` header equal to the secret — the mechanism for
+    //       the GHL Workflow "Custom Webhook" action (add the secret as a custom
+    //       header in the workflow). This is BFD's canonical Pattern-B ingress.
+    //   (2) an HMAC-SHA256 `x-wh-signature` over the raw body.
+    // NOTE: GHL *native* Webhook V2 signs with RSA (not HMAC), which is NOT
+    // supported here — provision the secret as a static token (SOP §5.3), not
+    // as a native Webhook V2 secret, or real traffic would 403.
+    if (clientRow.ghl_webhook_secret) {
+      const secret = clientRow.ghl_webhook_secret as string;
+      const tokenOk = ctEqual(req.headers.get("x-wh-token") ?? "", secret);
+      const sigOk = tokenOk || await verifyGhlSignature(rawBody, req.headers.get("x-wh-signature"), secret);
+      if (!sigOk) {
+        console.warn("[sync-ghl-contact] GHL webhook auth failed", { clientId: clientRow.id, ghlAccountId });
+        return new Response(
+          JSON.stringify({ error: "Forbidden" }),
+          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
     }
 
     const clientId = clientRow.id;

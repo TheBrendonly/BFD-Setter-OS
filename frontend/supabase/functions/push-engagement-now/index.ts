@@ -1,4 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { authorizeClientRequest, AssertAccessError } from "../_shared/authorize-client-request.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -49,6 +50,18 @@ Deno.serve(async (req) => {
       );
     }
 
+    // Tenant guard: only the owning agency (JWT) or an internal service-role
+    // caller may act on this execution. Checked AFTER load so we have client_id.
+    try {
+      await authorizeClientRequest(req.headers.get("Authorization"), execution.client_id);
+    } catch (e) {
+      if (e instanceof AssertAccessError) {
+        return new Response(JSON.stringify({ error: e.message }),
+          { status: e.status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+      throw e;
+    }
+
     if (!["running", "pending"].includes(execution.status)) {
       return new Response(
         JSON.stringify({ error: "Execution is not in a pushable state", status: execution.status }),
@@ -93,14 +106,21 @@ Deno.serve(async (req) => {
 
     const send_engagement_webhook_url = client?.send_engagement_webhook_url || "";
 
-    // 4. Fetch lead data
+    // 4. Fetch lead data. ghl_contact_id is interpolated into a PostgREST .or()
+    // filter string, so guard its shape to prevent filter injection; ids are
+    // always UUIDs or GHL alnum tokens.
     let leadData: Record<string, string> = {};
-    const { data: lead } = await supabase
+    const contactKey = String(execution.ghl_contact_id ?? "");
+    const safeContactKey = /^[A-Za-z0-9_-]+$/.test(contactKey);
+    const leadQuery = supabase
       .from("leads")
       .select("first_name, last_name, phone, email")
-      .or(`id.eq.${execution.ghl_contact_id},lead_id.eq.${execution.ghl_contact_id}`)
-      .limit(1)
-      .maybeSingle();
+      .limit(1);
+    const { data: lead } = await (
+      safeContactKey
+        ? leadQuery.or(`id.eq.${contactKey},lead_id.eq.${contactKey}`)
+        : leadQuery.eq("lead_id", contactKey)
+    ).maybeSingle();
 
     if (lead) {
       leadData = {

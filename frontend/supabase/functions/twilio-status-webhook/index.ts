@@ -162,13 +162,9 @@ Deno.serve(async (req) => {
       console.error("twilio-status-webhook: sms_delivery_events upsert failed", insertErr);
     }
 
-    // Mirror terminal status to message_queue for the inbox UI
-    if (TERMINAL_STATUSES.has(status)) {
-      await supabase
-        .from("message_queue")
-        .update({ status })
-        .eq("twilio_message_sid", messageSid);
-    }
+    // (Removed) Mirror to message_queue.status — that column does not exist on
+    // the platform DB, so the update silently no-op'd. sms_delivery_events above
+    // is the canonical terminal-status record (twilio_message_sid, status).
 
     return new Response("ok", {
       status: 200,

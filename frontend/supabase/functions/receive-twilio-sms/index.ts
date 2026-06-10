@@ -773,6 +773,17 @@ Deno.serve(async (req) => {
         });
       }
       console.error("message_queue insert failed", mqError);
+      // REL-03: don't drop inbound replies silently — record so the operator
+      // (and any alerter) can see dropped inbound SMS. TwiML stays 200 below.
+      try {
+        await supabase.from("error_logs").insert({
+          client_id: client.id,
+          source: "receive_twilio_sms",
+          error_type: "inbound_sms_drop",
+          message: `message_queue insert failed: ${mqError.message ?? "unknown"}`,
+          raw_payload: { messageSid, contactId, fromPhone },
+        });
+      } catch (_logErr) { /* non-fatal */ }
     }
 
     const nameParts = (contactName || "").split(" ").filter(Boolean);

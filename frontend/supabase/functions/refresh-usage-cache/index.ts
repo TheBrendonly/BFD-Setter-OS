@@ -1,4 +1,5 @@
 import { createClient } from 'npm:@supabase/supabase-js@2'
+import { grantsServiceRole } from '../_shared/authorize-client-request.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -231,6 +232,17 @@ Deno.serve(async (req) => {
   }
 
   try {
+    // Service-role / cron only: this reads EVERY client's provider keys and
+    // calls external billing APIs, so it must never be reachable with the anon
+    // key or a user JWT. The cron invoker presents the service role.
+    const bearer = (req.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '').trim()
+    if (!bearer || !(await grantsServiceRole(bearer))) {
+      return new Response(JSON.stringify({ error: 'Forbidden — service role required' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
     // Use service role to access all clients
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,

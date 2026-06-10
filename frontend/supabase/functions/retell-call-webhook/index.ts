@@ -3,8 +3,40 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
+    "authorization, x-client-info, apikey, content-type, x-retell-signature",
 };
+
+// Optional Retell webhook signature verification (HMAC-SHA256 hex over the raw
+// body, keyed by clients.retell_webhook_secret). Mirrors
+// retell-call-analysis-webhook. Only enforced when the resolved client has the
+// secret set; otherwise accept (the prior behaviour).
+async function verifyRetellSignature(
+  rawBody: string,
+  signatureHeader: string | null,
+  secret: string,
+): Promise<boolean> {
+  if (!signatureHeader) return false;
+  const enc = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    "raw",
+    enc.encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const sigBuf = await crypto.subtle.sign("HMAC", key, enc.encode(rawBody));
+  const sigBytes = new Uint8Array(sigBuf);
+  let hex = "";
+  for (const b of sigBytes) hex += b.toString(16).padStart(2, "0");
+  const expected = hex.toLowerCase();
+  const presented = signatureHeader.replace(/^sha256=/i, "").toLowerCase();
+  if (expected.length !== presented.length) return false;
+  let mismatch = 0;
+  for (let i = 0; i < expected.length; i++) {
+    mismatch |= expected.charCodeAt(i) ^ presented.charCodeAt(i);
+  }
+  return mismatch === 0;
+}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -12,7 +44,15 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const payload = await req.json();
+    const rawBody = await req.text();
+    let payload: any;
+    try {
+      payload = JSON.parse(rawBody);
+    } catch {
+      return new Response(JSON.stringify({ ok: true, skipped: true, reason: "invalid_json" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
     console.log(`📞 Retell call webhook received, event: ${payload.event}`);
 
     // Retell sends various events; we only care about call completion
@@ -51,7 +91,7 @@ Deno.serve(async (req) => {
     // Find client by matching the agent_id across all 10 agent slots
     const { data: clients, error: clientErr } = await internalSupabase
       .from("clients")
-      .select("id, supabase_url, supabase_service_key")
+      .select("id, supabase_url, supabase_service_key, retell_webhook_secret")
       .or(
         `retell_inbound_agent_id.eq.${agentId},retell_outbound_agent_id.eq.${agentId},retell_outbound_followup_agent_id.eq.${agentId},retell_agent_id_4.eq.${agentId},retell_agent_id_5.eq.${agentId},retell_agent_id_6.eq.${agentId},retell_agent_id_7.eq.${agentId},retell_agent_id_8.eq.${agentId},retell_agent_id_9.eq.${agentId},retell_agent_id_10.eq.${agentId}`
       );
@@ -64,6 +104,25 @@ Deno.serve(async (req) => {
     }
 
     const client = clients[0];
+
+    // Optional Retell signature verification. Inert until the client stamps
+    // retell_webhook_secret AND Retell is configured to sign (onboarding BR3).
+    if (client.retell_webhook_secret) {
+      const sigHeader = req.headers.get("x-retell-signature");
+      if (!sigHeader) {
+        console.warn("retell-call-webhook: secret configured but x-retell-signature missing", { clientId: client.id });
+        return new Response(JSON.stringify({ error: "Forbidden" }), {
+          status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      const sigOk = await verifyRetellSignature(rawBody, sigHeader, client.retell_webhook_secret as string);
+      if (!sigOk) {
+        console.warn("retell-call-webhook: Retell signature mismatch", { clientId: client.id });
+        return new Response(JSON.stringify({ error: "Forbidden" }), {
+          status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
 
     // Extract dynamic vars early so we can use contactId for the leads upsert
     // even when an external Supabase isn't configured.

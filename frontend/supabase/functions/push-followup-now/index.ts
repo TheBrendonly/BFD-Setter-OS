@@ -1,4 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { authorizeClientRequest, AssertAccessError } from "../_shared/authorize-client-request.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -46,6 +47,18 @@ Deno.serve(async (req) => {
         JSON.stringify({ error: "Timer not found" }),
         { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
+    }
+
+    // Tenant guard: only the owning agency (JWT) or an internal service-role
+    // caller may act on this timer. Checked after load so we have client_id.
+    try {
+      await authorizeClientRequest(req.headers.get("Authorization"), timer.client_id);
+    } catch (e) {
+      if (e instanceof AssertAccessError) {
+        return new Response(JSON.stringify({ error: e.message }),
+          { status: e.status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+      throw e;
     }
 
     if (timer.status !== "pending") {

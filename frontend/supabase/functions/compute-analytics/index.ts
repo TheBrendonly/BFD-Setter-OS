@@ -1,5 +1,6 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { loggedFetch } from "../_shared/request-logger.ts";
+import { authorizeClientRequest, AssertAccessError } from "../_shared/authorize-client-request.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -585,11 +586,37 @@ Deno.serve(async (req) => {
       );
     }
 
+    // Tenant guard: this is an internal callee (run-analytics presents the
+    // service-role bearer). Without it, an anon-key holder could (a) write
+    // analytics_results under any client_id and (b) use the body-supplied
+    // external creds below as an outbound-fetch/SSRF relay.
+    try {
+      await authorizeClientRequest(req.headers.get("Authorization"), client_id);
+    } catch (e) {
+      if (e instanceof AssertAccessError) {
+        return new Response(JSON.stringify({ error: e.message }),
+          { status: e.status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+      throw e;
+    }
+
+    // SECURITY: never trust caller-supplied external DB creds — resolve them
+    // from the verified client's own row (mirrors fetch-thread-previews). The
+    // body-supplied client_supabase_* values are ignored.
+    const { data: clientRow } = await supabase
+      .from("clients")
+      .select("supabase_url, supabase_service_key, supabase_table_name")
+      .eq("id", client_id)
+      .maybeSingle();
+    const extUrl = (clientRow?.supabase_url as string | null) || null;
+    const extKey = (clientRow?.supabase_service_key as string | null) || null;
+    const extTable = (clientRow?.supabase_table_name as string | null) || "";
+
     // Mark as running
     await updateStage(supabase, execution_id, "Fetching chat history...", "running");
 
     // Step 1: Fetch conversations
-    if (!client_supabase_url || !client_supabase_service_key) {
+    if (!extUrl || !extKey) {
       await supabase.from("analytics_executions").update({
         status: "failed",
         error_message: "Client Supabase credentials not configured",
@@ -607,9 +634,9 @@ Deno.serve(async (req) => {
 
     try {
       conversations = await fetchConversations(
-        client_supabase_url,
-        client_supabase_service_key,
-        client_supabase_table_name || "",
+        extUrl,
+        extKey,
+        extTable,
         dateFilter
       );
     } catch (fetchErr: any) {

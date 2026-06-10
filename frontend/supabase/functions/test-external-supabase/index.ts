@@ -79,11 +79,17 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Validate service key format (basic check)
-    if (!supabaseConfig.serviceKey.startsWith('eyJ') || supabaseConfig.serviceKey.split('.').length !== 3) {
-      return new Response(JSON.stringify({ 
+    // Validate service key format (basic check). Accept the modern key formats
+    // (sb_secret_* service key, sb_publishable_* anon key) as well as the legacy
+    // JWT shape (eyJ... with 3 dot-separated parts). Without the modern shapes a
+    // valid sb_secret_* service key is wrongly rejected during onboarding.
+    const serviceKey = String(supabaseConfig.serviceKey || '');
+    const isLegacyJwt = serviceKey.startsWith('eyJ') && serviceKey.split('.').length === 3;
+    const isModernKey = serviceKey.startsWith('sb_secret_') || serviceKey.startsWith('sb_publishable_');
+    if (!isLegacyJwt && !isModernKey) {
+      return new Response(JSON.stringify({
         success: false,
-        error: 'Invalid service key format. Please ensure you are using the service role key (not the anon key) from your Supabase project settings.' 
+        error: 'Invalid service key format. Please ensure you are using the service role key (not the anon key) from your Supabase project settings.'
       }), {
         status: 200,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

@@ -18,11 +18,23 @@
 //     --default-tz "Australia/Brisbane" \
 //     [--retell-api-key <key>] \
 //     [--openrouter-key <key>] \
+//     [--llm-model <model>]            (default openai/gpt-4.1-nano) \
+//     [--subscription-status <status>] (default active) \
+//     [--source-workflow-id <uuid>]    (default BFD canonical default) \
+//     [--ghl-calendar-id <id>] [--ghl-assignee-id <id>] \
+//     [--retell-inbound-agent-id <id>] [--retell-outbound-agent-id <id>] \
+//     [--retell-outbound-followup-agent-id <id>] \
+//     [--external-supabase-url <url>] [--external-supabase-service-key <key>] \
+//     [--external-supabase-table <name>] \
 //     [--dry-run]
 //
 // Env vars (from .env):
 //   SUPABASE_PAT          — Supabase Management API token (sbp_*)
 //   SUPABASE_PROJECT_REF  — defaults to bjgrgbgykvjrsuwwruoh (BFD platform)
+//
+// The script sets subscription_status='active' and llm_model (so the scaffold is
+// immediately usable) and will set any optional column passed as a flag above.
+// It prints a "REQUIRED MANUAL" checklist of every gating column still unset.
 //
 // The script does NOT:
 //   - Repoint Retell custom-tool URLs (use REST API per memory; click-path
@@ -176,6 +188,36 @@ async function main() {
   });
   const retellApiKey = args["retell-api-key"] || null;
   const openrouterKey = args["openrouter-key"] || null;
+  // llm_model is nullable with no DB default; match the SOP default unless overridden.
+  const llmModel = (typeof args["llm-model"] === "string" && args["llm-model"].trim())
+    ? args["llm-model"].trim()
+    : "openai/gpt-4.1-nano";
+  // CRITICAL: without subscription_status the DB default is 'free', which gates
+  // the client OUT of every feature. Default to 'active' so the scaffold is usable.
+  const subscriptionStatus = (typeof args["subscription-status"] === "string" && args["subscription-status"].trim())
+    ? args["subscription-status"].trim()
+    : "active";
+  const sourceWorkflowId = (typeof args["source-workflow-id"] === "string" && args["source-workflow-id"].trim())
+    ? args["source-workflow-id"].trim()
+    : BFD_DEFAULT_WORKFLOW_ID;
+
+  // Optional columns — included in the INSERT only when supplied via a flag.
+  // Anything left unset must be filled in afterwards (see the REQUIRED MANUAL
+  // block printed at the end).
+  const optionalCols = [
+    ["ghl_calendar_id", args["ghl-calendar-id"]],
+    ["ghl_assignee_id", args["ghl-assignee-id"]],
+    ["retell_api_key", retellApiKey],
+    ["openrouter_api_key", openrouterKey],
+    ["retell_inbound_agent_id", args["retell-inbound-agent-id"]],
+    ["retell_outbound_agent_id", args["retell-outbound-agent-id"]],
+    ["retell_outbound_followup_agent_id", args["retell-outbound-followup-agent-id"]],
+    ["supabase_url", args["external-supabase-url"]],
+    ["supabase_service_key", args["external-supabase-service-key"]],
+    ["supabase_table_name", args["external-supabase-table"]],
+  ].filter(([, v]) => typeof v === "string" && v.trim());
+  const optionalColSql = optionalCols.map(([c]) => `  ${c},`).join("\n");
+  const optionalValSql = optionalCols.map(([, v]) => `  ${sqlEscapeString(v)},`).join("\n");
 
   // 1. INSERT clients row.
   const insertSql = `
@@ -183,9 +225,9 @@ INSERT INTO public.clients (
   id, agency_id, name,
   ghl_location_id, ghl_api_key,
   twilio_account_sid, twilio_auth_token, twilio_default_phone, retell_phone_1,
-  ${retellApiKey ? "retell_api_key," : ""}
-  ${openrouterKey ? "openrouter_api_key," : ""}
+${optionalColSql}
   llm_model,
+  subscription_status,
   cadence_quiet_hours,
   intake_lead_secret,
   use_native_text_engine,
@@ -202,9 +244,9 @@ VALUES (
   ${sqlEscapeString(args["twilio-token"])},
   ${sqlEscapeString(args["twilio-phone"])},
   ${sqlEscapeString(args["twilio-phone"])},
-  ${retellApiKey ? sqlEscapeString(retellApiKey) + "," : ""}
-  ${openrouterKey ? sqlEscapeString(openrouterKey) + "," : ""}
-  'openai/gpt-4.1-nano',
+${optionalValSql}
+  ${sqlEscapeString(llmModel)},
+  ${sqlEscapeString(subscriptionStatus)},
   ${sqlEscapeString(cadenceQH)}::jsonb,
   ${sqlEscapeString(intakeSecret)},
   true,
@@ -252,7 +294,7 @@ SELECT
   false,
   now()
 FROM public.engagement_workflows
-WHERE id = ${sqlEscapeString(BFD_DEFAULT_WORKFLOW_ID)}
+WHERE id = ${sqlEscapeString(sourceWorkflowId)}
 RETURNING id;
 `.trim();
   console.log(`▶ Cloning BFD default workflow...`);
@@ -273,6 +315,32 @@ RETURNING id;
   console.log(`  cloned_workflow_id: ${newWorkflowId}`);
   console.log(`  ghl_last_synced_from_field_id: ${fieldId}`);
   console.log("");
+
+  // REQUIRED MANUAL — columns that gate features and are NOT (or only partially)
+  // set by this scaffold. Anything still [TODO] must be filled in before go-live.
+  const providedCols = new Set(optionalCols.map(([c]) => c));
+  const gatingCols = [
+    "ghl_calendar_id", "ghl_assignee_id",
+    "supabase_url", "supabase_service_key", "supabase_table_name",
+    "retell_inbound_agent_id", "retell_outbound_agent_id", "retell_outbound_followup_agent_id",
+    "retell_agent_id_4..10 (voice setter slots, as needed)",
+    "voicemail_config (set via Sub-Account Settings UI)",
+    "ghl_channel_field_id",
+    "ghl_webhook_secret", "retell_webhook_secret", "unipile_webhook_secret",
+    "auto_engagement_workflow_id (set at go-live, §8.1)",
+  ];
+  console.log("!".repeat(72));
+  console.log("REQUIRED MANUAL — set these before go-live (UPDATE public.clients ...):");
+  console.log("!".repeat(72));
+  console.log(`  [set]  subscription_status = '${subscriptionStatus}'  (this scaffold)`);
+  console.log(`  [set]  llm_model           = '${llmModel}'  (this scaffold)`);
+  for (const col of gatingCols) {
+    const baseName = col.split(" ")[0].split("..")[0];
+    const done = providedCols.has(baseName);
+    console.log(`  ${done ? "[set] " : "[TODO]"} ${col}`);
+  }
+  console.log("");
+
   console.log("Click-path follow-ups (see Docs/CLIENT_ONBOARDING_SOP.md):");
   console.log("");
   console.log("§3.1  Provision external Supabase project + run seed SQL.");
