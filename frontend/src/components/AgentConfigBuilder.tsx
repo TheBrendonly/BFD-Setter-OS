@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useGenerationGuard } from '@/hooks/useGenerationGuard';
 import { DEFAULT_BOOKING_PROMPT, DEFAULT_VOICE_BOOKING_PROMPT } from '@/data/defaultBookingPrompt';
 import RetroLoader from '@/components/RetroLoader';
@@ -38,7 +38,7 @@ import {
   TONE_STYLE_SUBSECTIONS, STRATEGY_SUBSECTIONS, GUARDRAILS_SUBSECTIONS,
   IDENTITY_SUBSECTIONS, COMPANY_SUBSECTIONS, COMPANY_LEAD_CONTEXT_SUBSECTIONS, COMPANY_INFO_SUBSECTIONS,
   ALL_SUBSECTIONS, buildPromptFromParams, buildMiniPromptParts, getSelectPrompt,
-  LAYER_SEPARATOR, SUBSECTION_SEPARATOR, MINI_PROMPT_SEPARATOR,
+  SUBSECTION_SEPARATOR,
   AI_PERSONALIZABLE_LAYERS,
   type SetterParam,
 } from '@/data/setterConfigParameters';
@@ -47,6 +47,9 @@ import {
   VOICE_IDENTITY_SUBSECTIONS, VOICE_COMPANY_SUBSECTIONS, VOICE_COMPANY_LEAD_CONTEXT_SUBSECTIONS, VOICE_COMPANY_INFO_SUBSECTIONS,
   VOICE_ALL_SUBSECTIONS, VOICE_AI_PERSONALIZABLE_LAYERS,
 } from '@/data/voiceSetterConfigParameters';
+import { segmentsToText, SEGMENT_JOIN, SUB_SEGMENT_JOIN, type PromptSegment, type PromptSubSegment, type SegmentTarget } from '@/lib/promptSegments';
+import { buildDynamicVarsBlock } from '@/data/retellDynamicVarsBlock';
+import { FullPromptXRay } from '@/components/FullPromptXRay';
 
 // ── LLM Options ──
 const LLM_OPTIONS = [
@@ -455,16 +458,10 @@ export const AgentConfigBuilder: React.FC<AgentConfigBuilderProps> = ({
   const [activeLayer, setActiveLayer] = useState<CoreLayerId | null>('settings');
   const [activeSubsection, setActiveSubsection] = useState<string | null>(null);
   const [showFullPromptDialog, setShowFullPromptDialog] = useState(false);
+  // Client timezone for the read-only DYNAMIC VARIABLES x-ray segment (voice only) —
+  // same source + default as retell-proxy (clients.timezone, Australia/Sydney).
+  const [clientTimezone, setClientTimezone] = useState('Australia/Sydney');
   const [isSavingVersion, setIsSavingVersion] = useState(false);
-  const [editedFullPrompt, setEditedFullPrompt] = useState('');
-  // When non-null, this verbatim text is the source of truth for the full setter prompt
-  // (a manual edit made in the "Verify Setter Prompt" box) until the user clicks Reset.
-  // It is pushed live exactly as typed; the individual fields are best-effort updated alongside it.
-  // The ref mirrors the state so a Save fired in the same click handler reads the new value
-  // synchronously (handleSavePrompt calls the imperative getFullPromptRef getter, which re-derives
-  // before React has re-rendered, so reading state there would be stale).
-  const [manualFullPromptOverride, setManualFullPromptOverride] = useState<string | null>(null);
-  const manualFullPromptOverrideRef = useRef<string | null>(null);
   const [showConversationExamplesDialog, setShowConversationExamplesDialog] = useState(false);
   // showAIChat removed — AI chat is always visible in 3-column layout
   // Version system for AI prompt editing (DB-backed)
@@ -1998,49 +1995,6 @@ export const AgentConfigBuilder: React.FC<AgentConfigBuilderProps> = ({
     }
   }, [clientId, slotId, loadVersions]);
 
-  // Helper: apply prompt to configs and save (shared between APPROVE PROMPT and APPROVE ALL).
-  // When opts.verbatimOverride is set (a manual edit of the full prompt), the individual fields
-  // are still best-effort updated, but that exact text is also carried as __full_prompt__ so the
-  // saved/pushed prompt equals what the user typed, and persisted under __full_prompt_manual_override__
-  // so it survives a reload.
-  const applyPromptAndSave = useCallback((resolvedPrompt: string, opts?: { verbatimOverride?: string }) => {
-    setPromptApproved(true);
-    const parsed = parseFullPromptToConfigs(resolvedPrompt);
-    const parsedConfigs = parsed.configs;
-    if (parsed.conversationExamples !== null) {
-      setConversationExamples(parsed.conversationExamples);
-    }
-    const updatedLocal: Record<string, LocalConfig> = {};
-    for (const [k, v] of Object.entries(parsedConfigs)) {
-      updatedLocal[k] = {
-        selectedOption: v.selectedOption,
-        customContent: v.customContent,
-        expanded: localConfigs[k]?.expanded || false,
-      };
-    }
-    for (const [k, v] of Object.entries(localConfigs)) {
-      if (!updatedLocal[k]) {
-        updatedLocal[k] = v;
-      }
-    }
-    setLocalConfigs(updatedLocal);
-    const output: Record<string, { selectedOption: string; customContent: string }> = {};
-    for (const [k, v] of Object.entries(updatedLocal)) {
-      output[k] = { selectedOption: v.selectedOption, customContent: v.customContent };
-    }
-    const exToSave = parsed.conversationExamples !== null ? parsed.conversationExamples : conversationExamples;
-    if (exToSave?.trim()) {
-      output['conversation_examples'] = { selectedOption: 'custom', customContent: exToSave };
-    }
-    output['_deploy_examples'] = { selectedOption: examplesApproved ? 'approved' : '', customContent: '' };
-    output['_deploy_prompt'] = { selectedOption: 'approved', customContent: '' };
-    if (opts?.verbatimOverride !== undefined) {
-      output['__full_prompt__'] = { selectedOption: '', customContent: opts.verbatimOverride };
-      output['__full_prompt_manual_override__'] = { selectedOption: 'active', customContent: opts.verbatimOverride };
-    }
-    onConfigsChange(output);
-  }, [localConfigs, conversationExamples, examplesApproved, onConfigsChange]);
-
   // Refs for infinite scroll
   const layerRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const activeLayerRef = useRef<CoreLayerId | null>('identity');
@@ -2222,13 +2176,26 @@ export const AgentConfigBuilder: React.FC<AgentConfigBuilderProps> = ({
     if (savedDeployPrompt?.selected_option === 'approved') {
       setPromptApproved(true);
     }
-
-    // Load a durable manual full-prompt override (set via the "Verify Setter Prompt" editor)
-    const savedManualOverride = configs['__full_prompt_manual_override__'];
-    const loadedOverride = savedManualOverride?.custom_content?.trim() ? savedManualOverride.custom_content : null;
-    manualFullPromptOverrideRef.current = loadedOverride;
-    setManualFullPromptOverride(loadedOverride);
   }, [configs]);
+
+  // Fetch the client's timezone for the x-ray's call-time DYNAMIC VARIABLES segment (voice only)
+  useEffect(() => {
+    if (mode !== 'voice' || !clientId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data } = await supabase
+          .from('clients')
+          .select('timezone')
+          .eq('id', clientId)
+          .maybeSingle();
+        if (!cancelled && data?.timezone) setClientTimezone(data.timezone);
+      } catch {
+        // keep the Australia/Sydney default — display-only
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [mode, clientId]);
 
   // Track the active layer from scroll position — instant for manual scroll, locked for programmatic
   useEffect(() => {
@@ -2530,7 +2497,7 @@ export const AgentConfigBuilder: React.FC<AgentConfigBuilderProps> = ({
 
     return (
       <React.Fragment key={section.key}>
-        <div className="space-y-2.5 py-1">
+        <div className="space-y-2.5 py-1" data-anchor-key={`section-${section.key}`}>
           {/* Section Header - matches parameter field style */}
           {section.label && (
             <div>
@@ -2905,31 +2872,19 @@ export const AgentConfigBuilder: React.FC<AgentConfigBuilderProps> = ({
 
   const SECTION_MARKER_SUFFIX = ' -->';
 
-  // Track section order for marker-free display/parse round-trip
-  const buildSectionOrder = (): string[] => {
-    const order: string[] = [];
-    for (const section of allSections) {
-      const local = localConfigs[section.key];
-      if (!local?.customContent?.trim()) continue;
-      order.push(section.key);
-    }
-    if (conversationExamples?.trim()) {
-      order.push('conversation_examples');
-    }
-    return order;
-  };
-
-  // Build full prompt for dialog — flat structure: # LAYER → ## PARAMETER (no subsection grouping)
-  function buildFullPrompt(overrides?: {
+  // Build the full prompt as an ORDERED list of navigable segments — flat structure:
+  // # LAYER → ## PARAMETER (no subsection grouping in the text). Each segment carries the
+  // editor target that produces it so the x-ray view can deep-link. segmentsToText() must
+  // reproduce the legacy buildFullPrompt() output byte-for-byte (persisted as __full_prompt__).
+  function buildFullPromptSegments(overrides?: {
     paramStateMap?: Record<string, ParamState>;
     configMap?: Record<string, LocalConfig>;
     conversationExamplesText?: string;
-  }) {
+  }): PromptSegment[] {
     const activeParamStates = overrides?.paramStateMap ?? latestParamStatesRef.current;
     const activeLocalConfigs = overrides?.configMap ?? localConfigs;
     const activeConversationExamples = overrides?.conversationExamplesText ?? conversationExamples;
-    const layerParts: string[] = [];
-    
+    const segments: PromptSegment[] = [];
 
     // Preserve edited first-line titles from mini-prompts while still preventing nested headings.
     const parseMiniPromptBlock = (text: string, fallbackTitle: string): { title: string; body: string } => {
@@ -2946,11 +2901,13 @@ export const AgentConfigBuilder: React.FC<AgentConfigBuilderProps> = ({
       };
     };
 
-    // Helper to build a layer — flat list of ## PARAM_TITLE entries (no subsection grouping)
-    const buildLayerBlock = (layerHeader: string, subsections: typeof R_IDENTITY) => {
-      const paramBlocks: string[] = [];
+    // Helper to build a layer — flat list of ## PARAM_TITLE entries, grouped per subsection
+    // so each subsection's slice of text is individually clickable in the x-ray view.
+    const buildLayerBlock = (layerHeader: string, subsections: typeof R_IDENTITY, layerId: CoreLayerId) => {
+      const subSegments: PromptSubSegment[] = [];
       for (const sub of subsections) {
-          const miniParts = buildMiniPromptParts(activeParamStates, sub.params);
+        const miniParts = buildMiniPromptParts(activeParamStates, sub.params);
+        const paramBlocks: string[] = [];
         for (const mp of miniParts) {
           const { title, body } = parseMiniPromptBlock(mp.prompt, mp.title);
           if (body) {
@@ -2959,9 +2916,25 @@ export const AgentConfigBuilder: React.FC<AgentConfigBuilderProps> = ({
             paramBlocks.push(`## ${title}`);
           }
         }
+        if (paramBlocks.length > 0) {
+          subSegments.push({
+            id: `sub:${sub.key}`,
+            title: sub.label,
+            text: paramBlocks.join(SUB_SEGMENT_JOIN),
+            target: { kind: 'subsection', key: sub.key },
+          });
+        }
       }
-      if (paramBlocks.length > 0) {
-        layerParts.push(`${layerHeader}\n\n${paramBlocks.join(`\n\n${MINI_PROMPT_SEPARATOR}\n\n`)}`);
+      if (subSegments.length > 0) {
+        segments.push({
+          id: `layer:${layerHeader}`,
+          title: layerHeader.replace(/^#\s*/, ''),
+          text: `${layerHeader}\n\n${subSegments.map(s => s.text).join(SUB_SEGMENT_JOIN)}`,
+          source: 'params',
+          target: { kind: 'layer', key: layerId },
+          headerText: layerHeader,
+          subSegments,
+        });
       }
     };
 
@@ -2976,49 +2949,87 @@ export const AgentConfigBuilder: React.FC<AgentConfigBuilderProps> = ({
       } else if (section.key === 'agent_goal') {
         goalParts.push(local.customContent.trim());
       } else {
-        layerParts.push(local.customContent.trim());
+        segments.push({
+          id: `section:${section.key}`,
+          title: section.label || section.key,
+          text: local.customContent.trim(),
+          source: 'config-section',
+          target: { kind: 'anchor', key: `section-${section.key}` },
+        });
       }
     }
 
     // ── Identity ──
-    buildLayerBlock('# IDENTITY', R_IDENTITY);
+    buildLayerBlock('# IDENTITY', R_IDENTITY, 'identity');
 
     // ── Lead Context (lead source, lead awareness, prior comms) — stays near top ──
-    buildLayerBlock('# LEAD CONTEXT', R_COMPANY_LEAD_CONTEXT);
+    buildLayerBlock('# LEAD CONTEXT', R_COMPANY_LEAD_CONTEXT, 'company');
 
     // ── Agent Goal ──
     if (goalParts.length > 0) {
-      layerParts.push(goalParts.join('\n\n'));
+      segments.push({
+        id: 'section:agent_goal',
+        title: 'Agent Goal',
+        text: goalParts.join('\n\n'),
+        source: 'config-section',
+        target: { kind: 'anchor', key: 'section-agent_goal' },
+      });
     }
 
     // ── Personality & Style (persona behavior + tone + emojis + formatting + language) ──
-    buildLayerBlock('# PERSONALITY & STYLE', R_TONE_STYLE);
+    buildLayerBlock('# PERSONALITY & STYLE', R_TONE_STYLE, 'tone_style');
 
     // ── Strategy ──
-    buildLayerBlock('# CONVERSATION STRATEGY', R_STRATEGY);
+    buildLayerBlock('# CONVERSATION STRATEGY', R_STRATEGY, 'strategy');
 
     // ── Guardrails ──
-    buildLayerBlock('# GUARDRAILS', R_GUARDRAILS);
+    buildLayerBlock('# GUARDRAILS', R_GUARDRAILS, 'guardrails');
 
     // ── Conversation Examples ──
     if (activeConversationExamples?.trim()) {
-      layerParts.push(`# CONVERSATION EXAMPLES\n\n${activeConversationExamples.trim()}`);
+      segments.push({
+        id: 'examples',
+        title: 'Conversation Examples',
+        text: `# CONVERSATION EXAMPLES\n\n${activeConversationExamples.trim()}`,
+        source: 'examples',
+        target: { kind: 'anchor', key: 'conversation-examples' },
+      });
     }
 
     // ── Custom Instructions ──
     if (customInstructionParts.length > 0) {
-      layerParts.push(`# ADDITIONAL CUSTOM INSTRUCTIONS\n\n${customInstructionParts.join('\n\n')}`);
+      segments.push({
+        id: 'custom',
+        title: 'Additional Custom Instructions',
+        text: `# ADDITIONAL CUSTOM INSTRUCTIONS\n\n${customInstructionParts.join('\n\n')}`,
+        source: 'custom',
+        target: { kind: 'anchor', key: 'custom-instructions' },
+      });
     }
 
     // ── Booking Prompt (if enabled) ──
     if (agentSettings?.booking_function_enabled && agentSettings?.booking_prompt?.trim()) {
-      layerParts.push(`# BOOKING FUNCTION\n\n${agentSettings.booking_prompt.trim()}`);
+      segments.push({
+        id: 'booking',
+        title: 'Booking Function',
+        text: `# BOOKING FUNCTION\n\n${agentSettings.booking_prompt.trim()}`,
+        source: 'booking',
+        target: { kind: 'anchor', key: 'booking-prompt' },
+      });
     }
 
     // ── Company Info at the very bottom (company name, ICP, knowledge base) ──
-    buildLayerBlock('# COMPANY', R_COMPANY_INFO);
+    buildLayerBlock('# COMPANY', R_COMPANY_INFO, 'company');
 
-    return layerParts.join(`\n\n${LAYER_SEPARATOR}\n\n`);
+    return segments;
+  }
+
+  function buildFullPrompt(overrides?: {
+    paramStateMap?: Record<string, ParamState>;
+    configMap?: Record<string, LocalConfig>;
+    conversationExamplesText?: string;
+  }) {
+    return segmentsToText(buildFullPromptSegments(overrides));
   }
 
   function buildParentConfigOutput(overrides?: {
@@ -3043,21 +3054,20 @@ export const AgentConfigBuilder: React.FC<AgentConfigBuilderProps> = ({
 
     output['_deploy_examples'] = { selectedOption: overrides?.deployExamplesSelected ?? (examplesApproved ? 'approved' : ''), customContent: '' };
     output['_deploy_prompt'] = { selectedOption: overrides?.deployPromptSelected ?? (promptApproved ? 'approved' : ''), customContent: '' };
-    // A manual full-prompt override (if active) is authoritative for the live/pushed prompt
-    // until the user clicks Reset. Otherwise the prompt is assembled from the individual fields.
-    // Read the ref (not state) so a Save in the same click handler sees the fresh value.
-    const activeOverride = manualFullPromptOverrideRef.current;
     output['__full_prompt__'] = {
       selectedOption: '',
-      customContent: activeOverride ?? buildFullPrompt({
+      customContent: buildFullPrompt({
         paramStateMap: activeParamStates,
         configMap: activeLocalConfigs,
         conversationExamplesText: activeConversationExamples,
       }),
     };
+    // The manual full-prompt override feature was removed (the Verify Setter Prompt view is
+    // read-only). Always emit this key cleared so stale 'active' rows persisted by older
+    // builds self-heal in prompt_configurations on the next save.
     output['__full_prompt_manual_override__'] = {
-      selectedOption: activeOverride ? 'active' : '',
-      customContent: activeOverride ?? '',
+      selectedOption: '',
+      customContent: '',
     };
 
     return output;
@@ -3069,13 +3079,6 @@ export const AgentConfigBuilder: React.FC<AgentConfigBuilderProps> = ({
       getFullPromptRef.current = () => {
         const output = buildParentConfigOutput();
         const fullPrompt = output['__full_prompt__']?.customContent || '';
-        // When a manual override is active, the override IS the entire prompt (it was edited in the
-        // Verify Setter Prompt box, which shows the whole assembled prompt incl. identity). Return an
-        // empty persona so the parent pushes it VERBATIM instead of prepending a rebuilt persona block
-        // (which would duplicate the identity section in the live prompt).
-        if (manualFullPromptOverrideRef.current) {
-          return { persona: '', content: fullPrompt };
-        }
         // Build persona from the config sections (same logic as buildPromptFromConfigs in parent)
         const personaKeys = ['agent_name', 'agent_goal', 'identity_behavior', 'personality', 'communication_tone', 'grammar_style'];
         const SECTION_SEPARATOR = '\n\n── ── ── ── ── ── ── ── ── ── ── ── ── ──\n\n';
@@ -3122,64 +3125,11 @@ export const AgentConfigBuilder: React.FC<AgentConfigBuilderProps> = ({
   }, [localConfigs, paramStates, conversationExamples, examplesApproved, promptApproved, onConfigsChange]);
 
   useEffect(() => {
-    // Seed the editor ONLY when the dialog opens. Re-seeding while it is open (e.g. when a
-    // background autosave/AI-notes timer mutates localConfigs/paramStates) would clobber the
-    // user's in-progress typing, which silently discarded manual edits. A manual override (if
-    // active) wins so the editor shows exactly what will be pushed.
-    if (!showFullPromptDialog) return;
-    setEditedFullPrompt(manualFullPromptOverrideRef.current ?? buildFullPrompt());
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showFullPromptDialog]);
-
-  useEffect(() => {
     if (!pendingMiniPromptAI || expandedPromptKey !== null) return;
     setMiniPromptAITitle(pendingMiniPromptAI.title);
     setMiniPromptAIKey(pendingMiniPromptAI.key);
     setPendingMiniPromptAI(null);
   }, [pendingMiniPromptAI, expandedPromptKey]);
-
-  // Parse a full prompt back into mini-prompt sections using positional order
-  const parseFullPromptToConfigs = (fullPrompt: string): { configs: Record<string, { selectedOption: string; customContent: string }>; conversationExamples: string | null } => {
-    const newConfigs: Record<string, { selectedOption: string; customContent: string }> = {};
-    for (const [k, v] of Object.entries(localConfigs)) {
-      newConfigs[k] = { selectedOption: v.selectedOption, customContent: v.customContent };
-    }
-
-    let parsedConversationExamples: string | null = null;
-
-    // Strip any leftover markers (backwards compat)
-    const cleaned = fullPrompt.replace(/<!-- section:\S+ -->\n?/g, '');
-
-    const parts = cleaned.split(/\n*── ── ── ── ── ── ── ── ── ── ── ── ── ──\n*/).map(p => p.trim()).filter(Boolean);
-    const sectionOrder = buildSectionOrder();
-
-    for (let i = 0; i < parts.length; i++) {
-      const sectionKey = sectionOrder[i];
-      if (!sectionKey) continue;
-
-      let partContent = parts[i].trim();
-
-      if (sectionKey === 'conversation_examples') {
-        parsedConversationExamples = partContent;
-        continue;
-      }
-
-      if (sectionKey === 'custom_prompt') {
-        partContent = partContent.replace(/^## ADDITIONAL CUSTOM INSTRUCTIONS\n\n/, '');
-        newConfigs[sectionKey] = {
-          selectedOption: newConfigs[sectionKey]?.selectedOption || 'custom',
-          customContent: partContent,
-        };
-      } else {
-        newConfigs[sectionKey] = {
-          selectedOption: newConfigs[sectionKey]?.selectedOption || '',
-          customContent: partContent,
-        };
-      }
-    }
-
-    return { configs: newConfigs, conversationExamples: parsedConversationExamples };
-  };
 
   const startProgrammaticScrollLock = useCallback(() => {
     if (scrollLockTimerRef.current) clearTimeout(scrollLockTimerRef.current);
@@ -3230,6 +3180,19 @@ export const AgentConfigBuilder: React.FC<AgentConfigBuilderProps> = ({
     startProgrammaticScrollLock();
   };
 
+  // Container-aware scroll shared by subsection clicks and x-ray segment navigation
+  const scrollToElement = (el: Element) => {
+    const scrollContainer = document.querySelector('[data-client-scroll-container]') as HTMLElement | null;
+    if (scrollContainer) {
+      const containerRect = scrollContainer.getBoundingClientRect();
+      const elRect = el.getBoundingClientRect();
+      const scrollTop = scrollContainer.scrollTop + (elRect.top - containerRect.top);
+      scrollContainer.scrollTo({ top: scrollTop, behavior: 'smooth' });
+    } else {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  };
+
   const handleSubsectionClick = (subsectionKey: string) => {
     const el = document.querySelector(`[data-subsection-key="${subsectionKey}"]`);
     if (!el) return;
@@ -3247,16 +3210,132 @@ export const AgentConfigBuilder: React.FC<AgentConfigBuilderProps> = ({
     setActiveSubsectionIfChanged(subsectionKey);
 
     // Use the scroll container for reliable scrolling
-    const scrollContainer = document.querySelector('[data-client-scroll-container]') as HTMLElement | null;
-    if (scrollContainer) {
-      const containerRect = scrollContainer.getBoundingClientRect();
-      const elRect = el.getBoundingClientRect();
-      const scrollTop = scrollContainer.scrollTop + (elRect.top - containerRect.top);
-      scrollContainer.scrollTo({ top: scrollTop, behavior: 'smooth' });
-    } else {
-      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
+    scrollToElement(el);
     startProgrammaticScrollLock();
+  };
+
+  // ── Setter Prompt X-Ray: memoized segment registry + click-to-navigate ──
+  const fullPromptSegments = useMemo(
+    () => buildFullPromptSegments({ paramStateMap: paramStates }),
+    // buildFullPromptSegments reads localConfigs/conversationExamples/agentSettings from closure;
+    // mode is included because the R_* subsection sets are derived from it
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [paramStates, localConfigs, conversationExamples, agentSettings?.booking_function_enabled, agentSettings?.booking_prompt, mode]
+  );
+
+  // Lookup maps for the inline "View rendered prompt text" previews
+  const segmentsByLayer = useMemo(() => {
+    const map = new Map<string, PromptSegment[]>();
+    for (const seg of fullPromptSegments) {
+      if (seg.target.kind === 'layer') {
+        const arr = map.get(seg.target.key) || [];
+        arr.push(seg);
+        map.set(seg.target.key, arr);
+      }
+    }
+    return map;
+  }, [fullPromptSegments]);
+
+  const segmentById = useMemo(() => {
+    const map = new Map<string, PromptSegment>();
+    for (const seg of fullPromptSegments) map.set(seg.id, seg);
+    return map;
+  }, [fullPromptSegments]);
+
+  // Segments appended at push/call time (voice only) — shown read-only in the x-ray so the
+  // TRUE final prompt that hits the LLM is visible. Mirrors PromptManagement handleSavePrompt
+  // (booking append, truthiness check not trim) + retell-proxy's DYNAMIC_VARS_BLOCK.
+  const callTimeSegments = useMemo<PromptSegment[]>(() => {
+    if (mode !== 'voice') return [];
+    const segs: PromptSegment[] = [];
+    if (agentSettings?.booking_function_enabled && agentSettings?.booking_prompt) {
+      segs.push({
+        id: 'push:booking',
+        title: 'Booking Instructions (appended at push)',
+        text: `\n## BOOKING INSTRUCTIONS\n${agentSettings.booking_prompt}`,
+        source: 'push-append',
+        target: { kind: 'readonly', label: 'Added at call time' },
+      });
+    }
+    segs.push({
+      id: 'push:dynamic-vars',
+      title: 'Dynamic Variables (auto-injected at push)',
+      text: buildDynamicVarsBlock(clientTimezone),
+      source: 'push-append',
+      target: { kind: 'readonly', label: 'Added at call time' },
+    });
+    return segs;
+  }, [mode, agentSettings?.booking_function_enabled, agentSettings?.booking_prompt, clientTimezone]);
+
+  // ── Inline "View rendered prompt text" previews: x-ray slices under each editing area ──
+  const [expandedPreviews, setExpandedPreviews] = useState<Set<string>>(new Set());
+  const togglePreview = (key: string) => {
+    setExpandedPreviews(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  };
+  const renderSegmentPreview = (previewKey: string, segs: PromptSegment[]) => {
+    const isOpen = expandedPreviews.has(previewKey);
+    const text = segs.map(s => s.text).join(SEGMENT_JOIN);
+    return (
+      <div className="space-y-2 mt-2">
+        <Button
+          type="button"
+          variant="default"
+          size="sm"
+          onClick={() => togglePreview(previewKey)}
+          className="h-8 font-medium"
+        >
+          {isOpen ? <ChevronUp className="w-4 h-4 mr-1.5" /> : <ChevronDown className="w-4 h-4 mr-1.5" />}
+          {isOpen ? 'Hide' : 'View'} Rendered Prompt Text
+        </Button>
+        {isOpen && (
+          <div className="groove-border bg-card p-3">
+            {text.trim() ? (
+              <pre className="whitespace-pre-wrap break-words m-0" style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '13px', lineHeight: '1.6' }}>{text}</pre>
+            ) : (
+              <p className="text-muted-foreground m-0" style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '13px' }}>(nothing rendered into the prompt yet)</p>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // Click a segment in the x-ray → jump the editor to the control that produces it.
+  // Retry loop covers the dialog close animation and the booking-prompt expansion render.
+  const navigateToSegment = (target: SegmentTarget) => {
+    if (target.kind === 'readonly') return;
+    if (showFullPromptDialog) setShowFullPromptDialog(false);
+    if (target.kind === 'anchor' && target.key === 'booking-prompt') setBookingPromptExpanded(true);
+    const selector =
+      target.kind === 'layer' ? `[data-layer-id="${target.key}"]`
+      : target.kind === 'subsection' ? `[data-subsection-key="${target.key}"]`
+      : target.key === 'booking-prompt' ? '#field-booking_function'
+      : `[data-anchor-key="${target.key}"]`;
+    let attempts = 0;
+    const tryScroll = () => {
+      const el = document.querySelector(selector);
+      if (el) {
+        if (target.kind === 'layer') {
+          handleLayerClick(target.key as CoreLayerId);
+          return;
+        }
+        if (target.kind === 'subsection') {
+          handleSubsectionClick(target.key);
+          return;
+        }
+        if (scrollLockTimerRef.current) clearTimeout(scrollLockTimerRef.current);
+        isScrollingRef.current = true;
+        scrollToElement(el);
+        startProgrammaticScrollLock();
+      } else if (++attempts < 20) {
+        setTimeout(tryScroll, 50);
+      }
+    };
+    requestAnimationFrame(tryScroll);
   };
 
   // Gate rendering behind loading state to prevent flicker
@@ -3956,6 +4035,8 @@ export const AgentConfigBuilder: React.FC<AgentConfigBuilderProps> = ({
                                 </div>
                               </>
                             )}
+                            {/* X-ray slice: rendered booking segment */}
+                            {renderSegmentPreview('booking', segmentById.get('booking') ? [segmentById.get('booking')!] : [])}
                           </div>
                         )}
                       </div>
@@ -4141,6 +4222,8 @@ export const AgentConfigBuilder: React.FC<AgentConfigBuilderProps> = ({
                                 </div>
                               </>
                             )}
+                            {/* X-ray slice: rendered booking segment */}
+                            {renderSegmentPreview('booking', segmentById.get('booking') ? [segmentById.get('booking')!] : [])}
 
                             {/* General Tools moved to advanced config */}
                           </div>
@@ -4187,7 +4270,7 @@ export const AgentConfigBuilder: React.FC<AgentConfigBuilderProps> = ({
 
                 <div className="space-y-6">
                   {/* Conversation Examples */}
-                  <div className="space-y-2">
+                  <div className="space-y-2" data-anchor-key="conversation-examples">
                     <Label style={{ fontFamily: "'VT323', monospace", fontSize: '18px', letterSpacing: '0.5px', textTransform: 'capitalize' }}>
                       Conversation Examples
                     </Label>
@@ -4305,12 +4388,14 @@ export const AgentConfigBuilder: React.FC<AgentConfigBuilderProps> = ({
                         </div>
                       </>
                     )}
+                    {/* X-ray slice: rendered conversation examples segment */}
+                    {renderSegmentPreview('examples', segmentById.get('examples') ? [segmentById.get('examples')!] : [])}
                   </div>
 
                   <div className="border-t border-dashed border-border" />
 
                   {/* Custom Instructions */}
-                  <div className="space-y-2">
+                  <div className="space-y-2" data-anchor-key="custom-instructions">
                     <Label style={{ fontFamily: "'VT323', monospace", fontSize: '18px', letterSpacing: '0.5px', textTransform: 'capitalize' }}>
                       Custom Instructions
                     </Label>
@@ -4388,6 +4473,8 @@ export const AgentConfigBuilder: React.FC<AgentConfigBuilderProps> = ({
                         Save Mini Prompt
                       </Button>
                     </div>
+                    {/* X-ray slice: rendered custom instructions segment */}
+                    {renderSegmentPreview('custom', segmentById.get('custom') ? [segmentById.get('custom')!] : [])}
                   </div>
 
                   <div className="border-t border-dashed border-border" />
@@ -4396,37 +4483,25 @@ export const AgentConfigBuilder: React.FC<AgentConfigBuilderProps> = ({
                       <Label style={{ fontFamily: "'VT323', monospace", fontSize: '18px', letterSpacing: '0.5px', textTransform: 'capitalize' }}>
                         Verify Setter Prompt
                       </Label>
-                      {manualFullPromptOverride !== null && (
-                        <span
-                          className="px-2 py-0.5 rounded bg-amber-500/15 text-amber-600 border border-amber-500/30"
-                          style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '11px', letterSpacing: '0.3px' }}
-                        >
-                          Manually edited
-                        </span>
-                      )}
                     </div>
                     <p
                       className="text-muted-foreground"
                       style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '13px', lineHeight: '1.5' }}
                     >
-                      {manualFullPromptOverride !== null
-                        ? 'This setter is using a manually edited prompt — it is pushed live exactly as written. Click the expand icon to edit it, or use Reset there to go back to the auto-assembled version.'
-                        : 'This is the final prompt assembled from all your mini-prompts. Click the expand icon to edit the whole prompt directly, or change a parameter above and it will sync here automatically.'}
+                      This is the final prompt assembled from all your sections. It is read-only: click any section to jump to the control that edits it. Dashed sections are appended automatically at call time.
                     </p>
                     <div className="relative">
-                      <Textarea
-                        value={manualFullPromptOverride ?? buildFullPrompt()}
-                        readOnly
-                        className="w-full leading-relaxed"
-                        style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '13px', minHeight: '400px', height: '400px' }}
-                        placeholder="No prompt content yet. Configure your mini-prompts above to build the full setter prompt..."
-                        disabled={disabled}
+                      <FullPromptXRay
+                        segments={fullPromptSegments}
+                        callTimeSegments={callTimeSegments}
+                        onNavigate={navigateToSegment}
+                        maxHeight="400px"
                       />
                       <Button
                         type="button"
                         variant="default"
                         size="icon"
-                        onClick={() => { const p = manualFullPromptOverride ?? buildFullPrompt(); setEditedFullPrompt(p); setShowFullPromptDialog(true); }}
+                        onClick={() => setShowFullPromptDialog(true)}
                         className="absolute bottom-2 right-2 h-8 w-8"
                       >
                         <Maximize2 className="w-4 h-4" />
@@ -4557,6 +4632,9 @@ export const AgentConfigBuilder: React.FC<AgentConfigBuilderProps> = ({
                         isParamDirty={(paramKey) => dirtyParamKeys.has(paramKey)}
                       />
                     )}
+
+                    {/* X-ray slice: this layer's rendered prompt text */}
+                    {renderSegmentPreview(`layer:${layer.id}`, segmentsByLayer.get(layer.id) ?? [])}
                   </div>
 
                 {/* AI Configuration Generator — visible on company layer only when config not yet generated */}
@@ -4748,7 +4826,7 @@ export const AgentConfigBuilder: React.FC<AgentConfigBuilderProps> = ({
                   activeLayer={activeLayer}
                   onLayerClick={handleLayerClick}
                   onSubsectionClick={handleSubsectionClick}
-                  onExpandPrompt={() => { const p = manualFullPromptOverride ?? buildFullPrompt(); setEditedFullPrompt(p); setShowFullPromptDialog(true); }}
+                  onExpandPrompt={() => setShowFullPromptDialog(true)}
                   disabled={disabled}
                   paramStates={paramStates}
                   activeSubsection={activeSubsection}
@@ -4790,7 +4868,7 @@ export const AgentConfigBuilder: React.FC<AgentConfigBuilderProps> = ({
         </div>
       </div>
 
-      {/* Full Prompt Dialog — editable; Save pushes the edit live verbatim and best-effort updates fields */}
+      {/* Full Prompt Dialog — read-only x-ray; click a section to jump to its editor */}
       <Dialog open={showFullPromptDialog} onOpenChange={(open) => {
         if (!open) setShowFullPromptDialog(false);
       }}>
@@ -4808,66 +4886,27 @@ export const AgentConfigBuilder: React.FC<AgentConfigBuilderProps> = ({
               VERIFY SETTER PROMPT
             </DialogTitle>
             <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '13px' }} className="text-muted-foreground mt-1">
-              Edit the whole setter prompt here, then click SAVE SETTER to push it live exactly as written. The individual parameter fields are best-effort updated to match. Keep the ── ── divider lines between sections so the fields map back correctly. To return to the auto-assembled version, click Reset.
+              Read-only view of the assembled setter prompt. Click any section to jump to the control that edits it. Sections marked ADDED AT CALL TIME are appended automatically when the prompt is pushed, so this is the true final prompt the AI receives.
             </p>
           </DialogHeader>
 
-          <div className="flex-1 min-h-0 px-6 pb-2" style={{ paddingTop: '24px' }}>
-            <Textarea
-              value={editedFullPrompt}
-              onChange={(e) => setEditedFullPrompt(e.target.value)}
-              className="h-full w-full leading-relaxed !resize-none"
-              style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '13px', height: '100%' }}
-              disabled={disabled}
+          <div className="flex-1 min-h-0 px-6 pb-2 flex flex-col" style={{ paddingTop: '24px' }}>
+            <FullPromptXRay
+              segments={fullPromptSegments}
+              callTimeSegments={callTimeSegments}
+              onNavigate={navigateToSegment}
+              maxHeight="100%"
             />
           </div>
           <div className="px-6 pb-6 flex gap-2">
-            {(manualFullPromptOverride !== null || editedFullPrompt.trim() !== buildFullPrompt().trim()) && (
-              <Button
-                type="button"
-                variant="default"
-                onClick={() => {
-                  // Discard the manual edit and return to the field-assembled prompt.
-                  // Persisting the revert happens when the user then clicks SAVE SETTER.
-                  manualFullPromptOverrideRef.current = null;
-                  setManualFullPromptOverride(null);
-                  setEditedFullPrompt(buildFullPrompt());
-                }}
-                className="flex-1 h-10 font-medium groove-btn"
-                style={{ fontFamily: "'VT323', monospace", fontSize: '18px', letterSpacing: '0.5px' }}
-                disabled={disabled}
-              >
-                <RotateCcw className="w-4 h-4 mr-1.5" />
-                RESET TO AUTO-ASSEMBLED
-              </Button>
-            )}
             <Button
               type="button"
               variant="default"
-              onClick={async () => {
-                const edited = editedFullPrompt;
-                const assembled = buildFullPrompt();
-                if (edited.trim() !== assembled.trim()) {
-                  // Manual edit: push verbatim live AND best-effort parse back into the fields.
-                  // Set the ref first so the imperative save getter reads the override this same tick.
-                  manualFullPromptOverrideRef.current = edited;
-                  setManualFullPromptOverride(edited);
-                  applyPromptAndSave(edited, { verbatimOverride: edited });
-                } else {
-                  // No manual change (or reverted): save the field-assembled prompt as usual.
-                  saveMiniPromptToParent();
-                }
-                setShowFullPromptDialog(false);
-                if (onFullSave) {
-                  await onFullSave();
-                }
-              }}
-              className="flex-1 h-10 font-medium groove-btn-pulse groove-btn-positive"
+              onClick={() => setShowFullPromptDialog(false)}
+              className="flex-1 h-10 font-medium groove-btn"
               style={{ fontFamily: "'VT323', monospace", fontSize: '18px', letterSpacing: '0.5px' }}
-              disabled={disabled}
             >
-              <Save className="w-4 h-4 mr-1.5" />
-              SAVE SETTER
+              CLOSE
             </Button>
           </div>
         </DialogContent>
@@ -4941,25 +4980,23 @@ export const AgentConfigBuilder: React.FC<AgentConfigBuilderProps> = ({
         <DialogContent
           className="flex flex-col"
           style={{
-            width: expandedPromptKey === '__full_setter_prompt__' ? '95vw' : '90vw',
-            maxWidth: expandedPromptKey === '__full_setter_prompt__' ? '1600px' : '64rem',
-            height: expandedPromptKey === '__full_setter_prompt__' ? '92vh' : '90vh',
-            maxHeight: expandedPromptKey === '__full_setter_prompt__' ? '92vh' : '90vh',
+            width: '90vw',
+            maxWidth: '64rem',
+            height: '90vh',
+            maxHeight: '90vh',
           }}
         >
           <DialogHeader>
             <DialogTitle style={{ fontFamily: "'VT323', monospace", fontSize: '22px', letterSpacing: '1px' }}>
-              {expandedPromptKey === '__full_setter_prompt__' ? 'FULL SETTER PROMPT' : (expandedSection?.label?.toUpperCase() || 'PROMPT')}
+              {expandedSection?.label?.toUpperCase() || 'PROMPT'}
             </DialogTitle>
           </DialogHeader>
           <div className="flex-1 min-h-0 px-6 pt-4 pb-2">
             <Textarea
-              value={expandedPromptKey === '__full_setter_prompt__' ? editedFullPrompt : (expandedLocal?.customContent || '')}
+              value={expandedLocal?.customContent || ''}
               onChange={(e) => {
                 if (!disabled && expandedPromptKey) {
-                  if (expandedPromptKey === '__full_setter_prompt__') {
-                    setEditedFullPrompt(e.target.value);
-                  } else if (expandedSection?.type === 'custom_prompt') {
+                  if (expandedSection?.type === 'custom_prompt') {
                     updateConfig(expandedPromptKey, 'custom', e.target.value, true);
                   } else {
                     handleContentEdit(expandedPromptKey, e.target.value);
@@ -4973,64 +5010,56 @@ export const AgentConfigBuilder: React.FC<AgentConfigBuilderProps> = ({
           </div>
           <div className="px-6 pb-6">
             <div className="flex w-full gap-2">
-              {expandedPromptKey !== '__full_setter_prompt__' && (
-                <Button
-                  type="button"
-                  variant="default"
-                  onClick={() => {
-                      if (!expandedPromptKey) return;
-                      setPendingMiniPromptAI({
-                        key: expandedPromptKey,
-                        title: expandedSection?.label || expandedPromptKey,
-                      });
-                      setExpandedPromptKey(null);
-                  }}
-                  className="flex-1 h-10 font-medium groove-btn-blue"
-                  style={{ fontFamily: "'VT323', monospace", fontSize: '18px', letterSpacing: '0.5px' }}
-                  disabled={disabled || !expandedLocal?.customContent?.trim()}
-                >
-                  <Sparkles className="w-4 h-4 mr-1.5" />
-                  MODIFY WITH AI
-                </Button>
-              )}
-              {expandedPromptKey !== '__full_setter_prompt__' && (
-                <Button
-                  type="button"
-                  variant="default"
-                  onClick={() => {
-                    if (!expandedPromptKey || !expandedSection) return;
-                    const defaultContent = getDefaultContent(
-                      expandedSection,
-                      expandedLocal?.selectedOption || expandedSection.defaultOption
-                    );
-                    if (expandedSection.type === 'custom_prompt') {
-                      updateConfig(expandedPromptKey, 'custom', defaultContent);
-                    } else {
-                      handleContentEdit(expandedPromptKey, defaultContent);
-                    }
-                  }}
-                  className="flex-1 h-10 font-medium"
-                  style={{ fontFamily: "'VT323', monospace", fontSize: '18px', letterSpacing: '0.5px' }}
-                  disabled={disabled || !expandedSection}
-                >
-                  <RotateCcw className="w-4 h-4 mr-1.5" />
-                  RETURN TO DEFAULT
-                </Button>
-              )}
               <Button
                 type="button"
                 variant="default"
                 onClick={() => {
-                  if (expandedPromptKey === '__full_setter_prompt__') {
+                    if (!expandedPromptKey) return;
+                    setPendingMiniPromptAI({
+                      key: expandedPromptKey,
+                      title: expandedSection?.label || expandedPromptKey,
+                    });
                     setExpandedPromptKey(null);
+                }}
+                className="flex-1 h-10 font-medium groove-btn-blue"
+                style={{ fontFamily: "'VT323', monospace", fontSize: '18px', letterSpacing: '0.5px' }}
+                disabled={disabled || !expandedLocal?.customContent?.trim()}
+              >
+                <Sparkles className="w-4 h-4 mr-1.5" />
+                MODIFY WITH AI
+              </Button>
+              <Button
+                type="button"
+                variant="default"
+                onClick={() => {
+                  if (!expandedPromptKey || !expandedSection) return;
+                  const defaultContent = getDefaultContent(
+                    expandedSection,
+                    expandedLocal?.selectedOption || expandedSection.defaultOption
+                  );
+                  if (expandedSection.type === 'custom_prompt') {
+                    updateConfig(expandedPromptKey, 'custom', defaultContent);
                   } else {
-                    saveMiniPromptToParent();
-                    setExpandedPromptKey(null);
+                    handleContentEdit(expandedPromptKey, defaultContent);
                   }
+                }}
+                className="flex-1 h-10 font-medium"
+                style={{ fontFamily: "'VT323', monospace", fontSize: '18px', letterSpacing: '0.5px' }}
+                disabled={disabled || !expandedSection}
+              >
+                <RotateCcw className="w-4 h-4 mr-1.5" />
+                RETURN TO DEFAULT
+              </Button>
+              <Button
+                type="button"
+                variant="default"
+                onClick={() => {
+                  saveMiniPromptToParent();
+                  setExpandedPromptKey(null);
                 }}
                 className="flex-1 h-10 font-medium groove-btn-pulse"
                 style={{ fontFamily: "'VT323', monospace", fontSize: '18px', letterSpacing: '0.5px' }}
-                disabled={disabled || (!hasDirtyKeys && expandedPromptKey !== '__full_setter_prompt__')}
+                disabled={disabled || !hasDirtyKeys}
               >
                 <Save className="w-4 h-4 mr-1.5" />
                 SAVE MINI PROMPT

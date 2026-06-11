@@ -4738,8 +4738,8 @@ const PromptManagement = () => {
   const pendingNavigationRef = useRef<(() => void) | null>(null);
   const latestBuilderSnapshotRef = useRef<{ persona: string; content: string }>({ persona: '', content: '' });
   // Mirrors localConfigData synchronously so a save fired in the same click tick as a config change
-  // (e.g. the modal "SAVE SETTER" after a manual full-prompt edit) persists the fresh configs —
-  // incl. __full_prompt_manual_override__ — instead of the stale React state.
+  // persists the fresh configs instead of the stale React state. (The manual full-prompt override
+  // this originally served was removed 2026-06-11; the sync mirror still protects same-tick saves.)
   const latestLocalConfigDataRef = useRef<Record<string, { selectedOption: string; customContent: string }>>({});
   const getFullPromptRef = useRef<(() => { persona: string; content: string }) | null>(null);
   const pendingAgentSettingsRef = useRef<(() => Partial<import('@/hooks/useAgentSettings').AgentSettings>) | null>(null);
