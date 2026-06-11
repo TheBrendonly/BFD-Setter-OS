@@ -3069,6 +3069,13 @@ export const AgentConfigBuilder: React.FC<AgentConfigBuilderProps> = ({
       getFullPromptRef.current = () => {
         const output = buildParentConfigOutput();
         const fullPrompt = output['__full_prompt__']?.customContent || '';
+        // When a manual override is active, the override IS the entire prompt (it was edited in the
+        // Verify Setter Prompt box, which shows the whole assembled prompt incl. identity). Return an
+        // empty persona so the parent pushes it VERBATIM instead of prepending a rebuilt persona block
+        // (which would duplicate the identity section in the live prompt).
+        if (manualFullPromptOverrideRef.current) {
+          return { persona: '', content: fullPrompt };
+        }
         // Build persona from the config sections (same logic as buildPromptFromConfigs in parent)
         const personaKeys = ['agent_name', 'agent_goal', 'identity_behavior', 'personality', 'communication_tone', 'grammar_style'];
         const SECTION_SEPARATOR = '\n\n── ── ── ── ── ── ── ── ── ── ── ── ── ──\n\n';
@@ -3115,10 +3122,14 @@ export const AgentConfigBuilder: React.FC<AgentConfigBuilderProps> = ({
   }, [localConfigs, paramStates, conversationExamples, examplesApproved, promptApproved, onConfigsChange]);
 
   useEffect(() => {
+    // Seed the editor ONLY when the dialog opens. Re-seeding while it is open (e.g. when a
+    // background autosave/AI-notes timer mutates localConfigs/paramStates) would clobber the
+    // user's in-progress typing, which silently discarded manual edits. A manual override (if
+    // active) wins so the editor shows exactly what will be pushed.
     if (!showFullPromptDialog) return;
-    // A manual override (if active) wins so the editor shows exactly what will be pushed.
-    setEditedFullPrompt(manualFullPromptOverride ?? buildFullPrompt());
-  }, [showFullPromptDialog, manualFullPromptOverride, localConfigs, paramStates, conversationExamples, examplesApproved, promptApproved]);
+    setEditedFullPrompt(manualFullPromptOverrideRef.current ?? buildFullPrompt());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showFullPromptDialog]);
 
   useEffect(() => {
     if (!pendingMiniPromptAI || expandedPromptKey !== null) return;

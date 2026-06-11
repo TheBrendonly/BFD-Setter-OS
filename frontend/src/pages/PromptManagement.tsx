@@ -4737,12 +4737,17 @@ const PromptManagement = () => {
   const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
   const pendingNavigationRef = useRef<(() => void) | null>(null);
   const latestBuilderSnapshotRef = useRef<{ persona: string; content: string }>({ persona: '', content: '' });
+  // Mirrors localConfigData synchronously so a save fired in the same click tick as a config change
+  // (e.g. the modal "SAVE SETTER" after a manual full-prompt edit) persists the fresh configs —
+  // incl. __full_prompt_manual_override__ — instead of the stale React state.
+  const latestLocalConfigDataRef = useRef<Record<string, { selectedOption: string; customContent: string }>>({});
   const getFullPromptRef = useRef<(() => { persona: string; content: string }) | null>(null);
   const pendingAgentSettingsRef = useRef<(() => Partial<import('@/hooks/useAgentSettings').AgentSettings>) | null>(null);
   const [builderSnapshot, setBuilderSnapshot] = useState<{ persona: string; content: string } | null>(null);
 
   useEffect(() => {
     latestBuilderSnapshotRef.current = { persona: '', content: '' };
+    latestLocalConfigDataRef.current = {};
     setBuilderSnapshot(null);
   }, [clientId, editingSlotId]);
 
@@ -4791,6 +4796,9 @@ const PromptManagement = () => {
   const [expandedAgentSettings, setExpandedAgentSettings] = useState<string | null>(null);
   const [retellCostPerMinute, setRetellCostPerMinute] = useState<number | null>(null);
   const [retellAgentDetails, setRetellAgentDetails] = useState<any>(null);
+  // Live Retell agent_id this voice-setter slot points at (its primary direction column), shown under
+  // the setter name so it can be cross-checked against the Retell dashboard.
+  const [slotAgentId, setSlotAgentId] = useState<string | null>(null);
   const {
     webhooks,
     loading: webhooksLoading,
@@ -4976,6 +4984,7 @@ const PromptManagement = () => {
   useEffect(() => {
     setRetellCostPerMinute(null);
     setRetellAgentDetails(null);
+    setSlotAgentId(null);
     if (!editingSlotId?.startsWith('Voice-Setter-') || !clientId) return;
     const slotNum = parseInt(editingSlotId.replace('Voice-Setter-', ''), 10);
     const col = SLOT_TO_AGENT_COLUMN[slotNum];
@@ -4983,6 +4992,7 @@ const PromptManagement = () => {
     (async () => {
       const { data } = await supabase.from('clients').select(col).eq('id', clientId).single();
       const agentId = (data as any)?.[col];
+      setSlotAgentId(agentId ?? null);
       if (agentId) fetchRetellCost(agentId);
     })();
   }, [editingSlotId, clientId, fetchRetellCost]);
@@ -5208,6 +5218,7 @@ const PromptManagement = () => {
 
   const applyBuilderConfigsToState = useCallback((configs: Record<string, { selectedOption: string; customContent: string }>) => {
     const { __full_prompt__, ...persistableConfigs } = configs;
+    latestLocalConfigDataRef.current = persistableConfigs;
     setLocalConfigData(persistableConfigs);
 
     const conversationEx = persistableConfigs['conversation_examples']?.customContent || '';
@@ -5938,8 +5949,13 @@ const PromptManagement = () => {
 
       const saveInternalTasks: Promise<any>[] = [];
 
-      if (editingSlotId && Object.keys(localConfigData).length > 0) {
-        const entries = Object.entries(localConfigData).map(([configKey, val]) => ({
+      // Read from the ref (kept in sync by applyBuilderConfigsToState) so configs changed in the same
+      // click tick as this save — e.g. a manual full-prompt override — are persisted, not the stale state.
+      const configDataForSave = Object.keys(latestLocalConfigDataRef.current).length > 0
+        ? latestLocalConfigDataRef.current
+        : localConfigData;
+      if (editingSlotId && Object.keys(configDataForSave).length > 0) {
+        const entries = Object.entries(configDataForSave).map(([configKey, val]) => ({
           configKey,
           selectedOption: val.selectedOption,
           customContent: val.customContent,
@@ -7054,6 +7070,29 @@ const PromptManagement = () => {
                           style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '16px' }}
                         />
                       </div>
+                      {isVoice && (
+                        <div
+                          className="flex items-center flex-wrap gap-x-2 gap-y-0.5 text-muted-foreground"
+                          style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '11px', letterSpacing: '0.2px' }}
+                        >
+                          <span className="opacity-70">Retell agent:</span>
+                          {slotAgentId ? (
+                            <>
+                              <code
+                                className="px-1 py-0.5 rounded bg-muted text-foreground select-all"
+                                title="Live Retell agent_id this setter points at — cross-check in the Retell dashboard"
+                              >
+                                {slotAgentId}
+                              </code>
+                              {retellAgentDetails?.agent_name && (
+                                <span className="opacity-70">— {retellAgentDetails.agent_name}</span>
+                              )}
+                            </>
+                          ) : (
+                            <span className="opacity-70 italic">none yet (save this setter to create/link one)</span>
+                          )}
+                        </div>
+                      )}
                       <p className="text-muted-foreground mt-1" style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '12px' }}>
                         Click the name above to rename. Saves on enter or blur.
                         {isVoice ? ' For voice setters, the new name is also pushed to Retell as the agent_name (visible in the Retell dashboard).' : ''}
