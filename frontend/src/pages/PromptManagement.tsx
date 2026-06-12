@@ -35,6 +35,16 @@ import { SetterPromptAIDialog } from '@/components/SetterPromptAIDialog';
 import { CopySetterDialog } from '@/components/CopySetterDialog';
 import { DuplicateSetterDialog } from '@/components/DuplicateSetterDialog';
 import { CreateSetterDialog } from '@/components/CreateSetterDialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import TestCallDialog from '@/components/TestCallDialog';
 import { PromptChatInterface } from '@/components/PromptChatInterface';
 import { EmbeddedPromptChat } from '@/components/EmbeddedPromptChat';
@@ -4645,6 +4655,9 @@ const PromptManagement = () => {
   // Re-run Setup: section editor opened as a one-shot wizard that compiles back
   // into the prompt document instead of being the permanent editing surface.
   const [setupModeActive, setSetupModeActive] = useState(false);
+  // Doc page dirty state (lifted up so the page-header breadcrumb back can guard it).
+  const [docDirty, setDocDirty] = useState(false);
+  const [showDocLeaveConfirm, setShowDocLeaveConfirm] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
   const location = useLocation();
   const [highlightResponseDelay, setHighlightResponseDelay] = useState(false);
@@ -5327,7 +5340,7 @@ const PromptManagement = () => {
     if (!clientId) return;
     // ai_meta_prompt (2026-06-12): the Modify-with-AI meta prompt has its own column.
     // clients.system_prompt is overwritten with the full setter prompt on every save,
-    // so reading it here clobber-cycled the meta prompt. Fallback covers pre-migration rows.
+    // so reading it here clobber-cycled the meta prompt.
     const cacheKey = `ai_meta_prompt_${clientId}`;
     const cached = getCached<string>(cacheKey);
     if (cached !== null) {
@@ -5338,9 +5351,14 @@ const PromptManagement = () => {
       const { data, error } = await (supabase as any).from('clients').select('ai_meta_prompt, system_prompt').eq('id', clientId).maybeSingle();
       if (error) throw error;
       if (data) {
-        const val = data.ai_meta_prompt || data.system_prompt || '';
-        setCache(cacheKey, val);
-        setSystemPrompt(val);
+        // If ai_meta_prompt equals system_prompt it is the pre-split backfill artifact
+        // (the setter prompt copied in), NOT a real meta prompt — treat as unset so the
+        // editor opens clean and Modify-with-AI uses its built-in default.
+        const meta = data.ai_meta_prompt && data.ai_meta_prompt !== data.system_prompt
+          ? data.ai_meta_prompt
+          : '';
+        setCache(cacheKey, meta);
+        setSystemPrompt(meta);
       }
     } catch (error) {
       console.error('Error fetching system prompt:', error);
@@ -6323,6 +6341,19 @@ const PromptManagement = () => {
     }
   };
 
+  const backToListFromDoc = () => {
+    setCurrentView('list');
+    setEditingPrompt(null);
+    setEditingSlotId(null);
+    setDocRecord(null);
+    setDocDirty(false);
+  };
+  // Page-header breadcrumb back + in-body back share this guard.
+  const handleDocBack = () => {
+    if (docDirty) setShowDocLeaveConfirm(true);
+    else backToListFromDoc();
+  };
+
   // Complete Setup (wizard mode): compile the section editor's output into the
   // canonical prompt document as a DRAFT (no Retell push) and return to the doc page.
   const handleCompleteSetup = async () => {
@@ -6938,7 +6969,13 @@ const PromptManagement = () => {
   })();
 
   usePageHeader(
-    currentView === 'editor' ? {
+    currentView === 'doc' ? {
+      title: activeTab === 'voice' ? 'Voice Setter' : 'Text Setter',
+      breadcrumbs: [
+        { label: activeTab === 'voice' ? 'Voice Setter' : 'Text Setter', onClick: handleDocBack },
+        { label: editorBreadcrumbLabel },
+      ],
+    } : currentView === 'editor' ? {
       title: activeTab === 'voice' ? 'Voice Setter' : 'Text Setter',
       breadcrumbs: [
         { label: activeTab === 'voice' ? 'Voice Setter' : 'Text Setter', onClick: resetEditor },
@@ -7012,6 +7049,15 @@ const PromptManagement = () => {
           onClick: () => navigate(activeTab === 'voice'
             ? `/client/${clientId}/voice-ai-rep/setup`
             : `/client/${clientId}/text-ai-rep/setup`),
+          variant: 'outline' as const,
+          disabled: !clientId,
+        },
+        {
+          // Edit the system prompt used by "Modify with AI" (clients.ai_meta_prompt).
+          // Same value for voice + text setters today.
+          label: 'AI MODIFY INSTRUCTIONS',
+          icon: <Wand2 className="w-4 h-4" />,
+          onClick: () => setCurrentView('settings'),
           variant: 'outline' as const,
           disabled: !clientId,
         },
@@ -7362,12 +7408,8 @@ const PromptManagement = () => {
           saving={saving}
           onSaveDraft={handleSaveDocDraft}
           onPush={handlePushDoc}
-          onBack={() => {
-            setCurrentView('list');
-            setEditingPrompt(null);
-            setEditingSlotId(null);
-            setDocRecord(null);
-          }}
+          onBack={handleDocBack}
+          onDirtyChange={setDocDirty}
           onOpenModifyWithAI={(content, apply) => {
             setDocAIContent(content);
             docAIApplyRef.current = apply;
@@ -7393,6 +7435,22 @@ const PromptManagement = () => {
             toast({ title: 'Prompt updated', description: 'AI changes applied to the document. Save Draft to keep them.' });
           }}
         />
+        <AlertDialog open={showDocLeaveConfirm} onOpenChange={setShowDocLeaveConfirm}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Leave without saving?</AlertDialogTitle>
+              <AlertDialogDescription>
+                The prompt document has unsaved edits. Leaving now discards them.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Stay</AlertDialogCancel>
+              <AlertDialogAction onClick={() => { setShowDocLeaveConfirm(false); backToListFromDoc(); }}>
+                Discard &amp; leave
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     );
   }
@@ -7869,11 +7927,11 @@ const PromptManagement = () => {
               <Card className="material-surface">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
-                    <MessageSquare className="w-5 h-5" />
-                    AI Prompt Generation System Prompt
+                    <Wand2 className="w-5 h-5" />
+                    "Modify with AI" Instructions
                   </CardTitle>
                   <CardDescription>
-                    Configure the system prompt that will be used when generating and modifying AI prompts in Prompt Management.
+                    The system prompt sent to the AI whenever you use "Modify with AI" on a setter. This governs the base style, structure, tools/functions and conventions the AI applies. Edit it as your Retell setup evolves. Leave empty to use the built-in default. (Currently shared by voice and text setters.)
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">

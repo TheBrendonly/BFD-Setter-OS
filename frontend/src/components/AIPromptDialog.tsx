@@ -161,7 +161,12 @@ export const AIPromptDialog: React.FC<AIPromptDialogProps> = ({
 
         if (error) throw error;
         if (data) {
-          setFetchedSystemPrompt(data.ai_meta_prompt || data.system_prompt || '');
+          // ai_meta_prompt === system_prompt is the pre-split backfill artifact (the
+          // setter prompt copied in), not a real meta prompt — treat as unset.
+          const meta = data.ai_meta_prompt && data.ai_meta_prompt !== data.system_prompt
+            ? data.ai_meta_prompt
+            : '';
+          setFetchedSystemPrompt(meta);
         }
       } catch (error) {
         console.error('Error fetching system prompt:', error);

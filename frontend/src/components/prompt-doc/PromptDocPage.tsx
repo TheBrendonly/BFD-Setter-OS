@@ -14,13 +14,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { ArrowLeft, Bot, ChevronDown, ChevronUp, History, Info, Rocket, Save, Settings2, Wand2 } from 'lucide-react';
+import { Bot, ChevronDown, ChevronUp, History, Rocket, Save, Settings2, Wand2 } from 'lucide-react';
 import { VoiceRetellSettings, type RetellVoiceSettings as RetellVoiceSettingsType } from '@/components/VoiceRetellSettings';
 import { RetellModelSelector } from '@/components/RetellModelSelector';
+import { InlineSetterNameEditor } from '@/components/setters/InlineSetterNameEditor';
 import { usePromptVersions } from '@/hooks/usePromptVersions';
 import { buildDynamicVarsBlock } from '@/data/retellDynamicVarsBlock';
 import { CallTimeAppendBlock, type CallTimeAppend } from './CallTimeAppendBlock';
-import { MetaPromptRevealDialog } from './MetaPromptRevealDialog';
 import { ConversationFlowOutlineEditor } from './ConversationFlowOutlineEditor';
 import { outlineToText, type FlowOutline } from '@/lib/conversationFlowOutline';
 
@@ -60,6 +60,7 @@ interface PromptDocPageProps {
   onSaveDraft: (content: string) => Promise<void>;
   onPush: (content: string) => Promise<void>;
   onBack: () => void;
+  onDirtyChange?: (dirty: boolean) => void;
   onOpenModifyWithAI: (content: string, apply: (next: string) => void) => void;
   onOpenSettings: () => void;
   onRerunSetup?: () => void;
@@ -92,6 +93,7 @@ export const PromptDocPage: React.FC<PromptDocPageProps> = ({
   onSaveDraft,
   onPush,
   onBack,
+  onDirtyChange,
   onOpenModifyWithAI,
   onOpenSettings,
   onRerunSetup,
@@ -106,11 +108,12 @@ export const PromptDocPage: React.FC<PromptDocPageProps> = ({
   const [showAppends, setShowAppends] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showVersions, setShowVersions] = useState(false);
-  const [showMetaPrompt, setShowMetaPrompt] = useState(false);
   const [showRerunConfirm, setShowRerunConfirm] = useState(false);
-  const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
   const [expandedVersionId, setExpandedVersionId] = useState<string | null>(null);
   const { versions, saveVersion } = usePromptVersions(clientId, slotId);
+
+  // Voice-Setter-N → slot number for the inline name editor (doc page is voice-only).
+  const slotNumber = Number.parseInt(slotId.replace('Voice-Setter-', ''), 10);
 
   // Re-seed the editor whenever a different doc row loads (slot switch / promotion).
   useEffect(() => {
@@ -139,6 +142,11 @@ export const PromptDocPage: React.FC<PromptDocPageProps> = ({
   const isDirtyVsDeployed = doc ? docText !== (doc.deployed_doc_content ?? '') : false;
   const isDirtyVsDraft = doc ? docText !== doc.doc_content : false;
 
+  // Surface dirty state up so the page-header breadcrumb back can guard it.
+  useEffect(() => {
+    onDirtyChange?.(isFlowEngine ? false : isDirtyVsDraft);
+  }, [isDirtyVsDraft, isFlowEngine, onDirtyChange]);
+
   const callTimeAppends = useMemo<CallTimeAppend[]>(() => {
     const appends: CallTimeAppend[] = [];
     // Booking instructions are a single-prompt append; in a conversation flow the
@@ -161,15 +169,25 @@ export const PromptDocPage: React.FC<PromptDocPageProps> = ({
     return appends;
   }, [isFlowEngine, bookingEnabled, bookingPrompt, clientTimezone]);
 
+  // Snapshot the content as it was BEFORE this save/push, so Versions always holds
+  // the prior state and Restore rolls back if the new content turns out wrong.
+  const snapshotPrior = async (label: string) => {
+    if (isFlowEngine) {
+      if (doc?.flow_outline) await saveVersion(outlineToText(doc.flow_outline as FlowOutline), label);
+      return;
+    }
+    if (doc?.doc_content && doc.doc_content !== docText) await saveVersion(doc.doc_content, label);
+  };
+
   const handleSaveDraft = async () => {
     if (!doc) return;
     if (isFlowEngine) {
       if (!flowOutline || !onSaveFlowDraft) return;
-      await saveVersion(outlineToText(flowOutline), 'Flow edit');
+      await snapshotPrior(`Before save · ${new Date().toLocaleString()}`);
       await onSaveFlowDraft(flowOutline);
       return;
     }
-    await saveVersion(docText, 'Doc edit');
+    await snapshotPrior(`Before save · ${new Date().toLocaleString()}`);
     await onSaveDraft(docText);
   };
 
@@ -177,11 +195,11 @@ export const PromptDocPage: React.FC<PromptDocPageProps> = ({
     if (!doc) return;
     if (isFlowEngine) {
       if (!flowOutline || !onPushFlow) return;
-      await saveVersion(outlineToText(flowOutline), 'Flow edit (pre-push)');
+      await snapshotPrior(`Before push · ${new Date().toLocaleString()}`);
       await onPushFlow(flowOutline);
       return;
     }
-    if (isDirtyVsDraft) await saveVersion(docText, 'Doc edit (pre-push)');
+    await snapshotPrior(`Before push · ${new Date().toLocaleString()}`);
     await onPush(docText);
   };
 
@@ -195,36 +213,40 @@ export const PromptDocPage: React.FC<PromptDocPageProps> = ({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-2">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => {
-            // The global unsaved-changes guard only covers the section editor;
-            // protect doc edits here so Back never silently discards them.
-            if (!isFlowEngine && isDirtyVsDraft) setShowLeaveConfirm(true);
-            else onBack();
-          }}
-        >
-          <ArrowLeft className="w-4 h-4 mr-1" /> Back
-        </Button>
-        <h2 className="text-lg font-semibold mr-2">{setterName || slotId}</h2>
-        <Badge variant="outline" className="uppercase">
-          {doc.engine_type === 'conversation-flow' ? 'Conversation Flow' : 'Single Prompt'}
-        </Badge>
-        {retellAgentId && (
-          <span className="text-muted-foreground" style={{ ...MONO_STYLE, fontSize: '11px' }}>
-            agent: {retellAgentId}
-          </span>
-        )}
-        {isFlowEngine ? (
-          <Badge variant={doc.status === 'deployed' ? 'secondary' : 'destructive'}>
-            {doc.status === 'deployed' ? 'Deployed' : 'Draft'}
+      {/* Editable setter name. Click to rename; for voice setters the new name is
+          also pushed to Retell as the agent_name (via InlineSetterNameEditor). The
+          page-header breadcrumb above provides the back-to-list navigation. */}
+      <div className="space-y-1.5 p-3" style={{ border: '3px groove hsl(var(--border-groove))' }}>
+        <div className="flex flex-wrap items-center gap-2">
+          {Number.isFinite(slotNumber) ? (
+            <InlineSetterNameEditor
+              clientId={clientId}
+              kind="voice"
+              slot={slotNumber}
+              fallback={setterName || slotId}
+              className="text-foreground font-semibold text-lg"
+            />
+          ) : (
+            <h2 className="text-lg font-semibold">{setterName || slotId}</h2>
+          )}
+          <Badge variant="outline" className="uppercase">
+            {doc.engine_type === 'conversation-flow' ? 'Conversation Flow' : 'Single Prompt'}
           </Badge>
-        ) : isDirtyVsDeployed ? (
-          <Badge variant="destructive">Unpushed changes</Badge>
-        ) : (
-          <Badge variant="secondary">In sync with Retell</Badge>
+          {isFlowEngine ? (
+            <Badge variant={doc.status === 'deployed' ? 'secondary' : 'destructive'}>
+              {doc.status === 'deployed' ? 'Deployed' : 'Draft'}
+            </Badge>
+          ) : isDirtyVsDeployed ? (
+            <Badge variant="destructive">Unpushed changes</Badge>
+          ) : (
+            <Badge variant="secondary">In sync with Retell</Badge>
+          )}
+        </div>
+        {retellAgentId && (
+          <div className="text-muted-foreground" style={{ ...MONO_STYLE, fontSize: '11px' }}>
+            Retell agent: <code className="px-1 py-0.5 rounded bg-muted text-foreground select-all">{retellAgentId}</code>
+            {' '}— click the name to rename (also pushed to Retell as the agent name).
+          </div>
         )}
       </div>
 
@@ -244,14 +266,6 @@ export const PromptDocPage: React.FC<PromptDocPageProps> = ({
               variant="outline"
             >
               <Wand2 className="w-4 h-4 mr-1.5" /> Modify with AI
-            </Button>
-            <Button
-              onClick={() => setShowMetaPrompt(true)}
-              size="sm"
-              variant="ghost"
-              title="View the system prompt Modify with AI uses"
-            >
-              <Info className="w-4 h-4 mr-1.5" /> AI instructions
             </Button>
             {onRerunSetup && (
               <Button onClick={() => setShowRerunConfirm(true)} disabled={saving} size="sm" variant="ghost">
@@ -376,30 +390,6 @@ export const PromptDocPage: React.FC<PromptDocPageProps> = ({
           </Button>
         </CollapsibleContent>
       </Collapsible>
-
-      <MetaPromptRevealDialog
-        open={showMetaPrompt}
-        onOpenChange={setShowMetaPrompt}
-        clientId={clientId}
-        onEditInSettings={onOpenSettings}
-      />
-
-      <AlertDialog open={showLeaveConfirm} onOpenChange={setShowLeaveConfirm}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Leave without saving?</AlertDialogTitle>
-            <AlertDialogDescription>
-              The prompt document has unsaved edits. Leaving now discards them.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Stay</AlertDialogCancel>
-            <AlertDialogAction onClick={() => { setShowLeaveConfirm(false); onBack(); }}>
-              Discard &amp; leave
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
 
       <AlertDialog open={showRerunConfirm} onOpenChange={setShowRerunConfirm}>
         <AlertDialogContent>
