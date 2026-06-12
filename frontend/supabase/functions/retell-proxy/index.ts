@@ -851,6 +851,17 @@ async function syncVoiceSetter(
   if (existingAgentId) {
     console.log(`[sync-voice-setter] Updating existing agent ${existingAgentId} for slot ${slotNumber}`);
     const agent = await retellFetch(apiKey, "GET", `get-agent/${existingAgentId}`) as any;
+    // Engine guard (2026-06-12): a conversation-flow agent has no llm_id, so the
+    // else-branch below would otherwise create a NEW retell-llm and PATCH the
+    // agent's response_engine in place — silently destroying the flow. Refuse.
+    if (agent?.response_engine?.type === "conversation-flow") {
+      return {
+        success: false,
+        code: "cf_engine_mismatch",
+        error: `Slot ${slotNumber} agent ${existingAgentId} is a conversation-flow agent; ` +
+          `the single-prompt save path cannot update it. Use the conversation-flow editor instead.`,
+      };
+    }
     const llmId = agent?.response_engine?.llm_id;
 
     if (llmId) {

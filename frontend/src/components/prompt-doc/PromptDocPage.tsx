@@ -108,6 +108,7 @@ export const PromptDocPage: React.FC<PromptDocPageProps> = ({
   const [showVersions, setShowVersions] = useState(false);
   const [showMetaPrompt, setShowMetaPrompt] = useState(false);
   const [showRerunConfirm, setShowRerunConfirm] = useState(false);
+  const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
   const [expandedVersionId, setExpandedVersionId] = useState<string | null>(null);
   const { versions, saveVersion } = usePromptVersions(clientId, slotId);
 
@@ -195,7 +196,16 @@ export const PromptDocPage: React.FC<PromptDocPageProps> = ({
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
-        <Button variant="ghost" size="sm" onClick={onBack}>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => {
+            // The global unsaved-changes guard only covers the section editor;
+            // protect doc edits here so Back never silently discards them.
+            if (!isFlowEngine && isDirtyVsDraft) setShowLeaveConfirm(true);
+            else onBack();
+          }}
+        >
           <ArrowLeft className="w-4 h-4 mr-1" /> Back
         </Button>
         <h2 className="text-lg font-semibold mr-2">{setterName || slotId}</h2>
@@ -373,6 +383,23 @@ export const PromptDocPage: React.FC<PromptDocPageProps> = ({
         clientId={clientId}
         onEditInSettings={onOpenSettings}
       />
+
+      <AlertDialog open={showLeaveConfirm} onOpenChange={setShowLeaveConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Leave without saving?</AlertDialogTitle>
+            <AlertDialogDescription>
+              The prompt document has unsaved edits. Leaving now discards them.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Stay</AlertDialogCancel>
+            <AlertDialogAction onClick={() => { setShowLeaveConfirm(false); onBack(); }}>
+              Discard &amp; leave
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog open={showRerunConfirm} onOpenChange={setShowRerunConfirm}>
         <AlertDialogContent>

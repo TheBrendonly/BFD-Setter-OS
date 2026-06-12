@@ -6114,8 +6114,8 @@ const PromptManagement = () => {
     }
   };
 
-  const handleSaveFlowDraft = async (outline: FlowOutline) => {
-    if (!docRecord) return;
+  const handleSaveFlowDraft = async (outline: FlowOutline): Promise<boolean> => {
+    if (!docRecord) return false;
     setSaving(true);
     try {
       const { data: updated, error } = await (supabase as any)
@@ -6127,9 +6127,11 @@ const PromptManagement = () => {
       if (error) throw error;
       setDocRecord(updated as PromptDocRecord);
       toast({ title: 'Draft saved', description: 'Flow outline saved. Push to Retell to go live.' });
+      return true;
     } catch (err: any) {
       console.error('Error saving flow outline:', err);
       toast({ title: 'Error', description: err?.message || 'Failed to save the flow outline', variant: 'destructive' });
+      return false;
     } finally {
       setSaving(false);
     }
@@ -6137,7 +6139,8 @@ const PromptManagement = () => {
 
   const handlePushFlow = async (outline: FlowOutline) => {
     if (!clientId || !editingSlotId || !docRecord) return;
-    await handleSaveFlowDraft(outline);
+    const draftSaved = await handleSaveFlowDraft(outline);
+    if (!draftSaved) return;
     setSaving(true);
     try {
       const currentAgentSettings = getAgentSettings(editingSlotId);
@@ -6236,8 +6239,8 @@ const PromptManagement = () => {
   // Save the doc as the canonical prompt and keep the legacy stores in sync
   // (prompts row, clients.system_prompt, external voice_prompts) so a frontend
   // rollback lands on a consistent legacy editor.
-  const handleSaveDocDraft = async (content: string) => {
-    if (!clientId || !editingSlotId || !docRecord) return;
+  const handleSaveDocDraft = async (content: string): Promise<boolean> => {
+    if (!clientId || !editingSlotId || !docRecord) return false;
     setSaving(true);
     try {
       const { data: updated, error } = await (supabase as any)
@@ -6271,6 +6274,7 @@ const PromptManagement = () => {
         },
       });
       toast({ title: 'Draft saved', description: 'Prompt document saved. Push to Retell to go live.' });
+      return true;
     } catch (err: any) {
       console.error('Error saving prompt doc:', err);
       toast({
@@ -6278,6 +6282,7 @@ const PromptManagement = () => {
         description: err?.message || 'Failed to save the prompt document',
         variant: 'destructive',
       });
+      return false;
     } finally {
       setSaving(false);
     }
@@ -6285,7 +6290,10 @@ const PromptManagement = () => {
 
   const handlePushDoc = async (content: string) => {
     if (!clientId || !editingSlotId || !docRecord) return;
-    await handleSaveDocDraft(content);
+    // Abort the push if the draft save failed, so Retell never gets content the
+    // doc record does not hold.
+    const draftSaved = await handleSaveDocDraft(content);
+    if (!draftSaved) return;
     setSaving(true);
     try {
       const currentAgentSettings = getAgentSettings(editingSlotId);
