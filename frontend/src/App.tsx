@@ -27,14 +27,11 @@ function lazyRetry(importFn: () => Promise<any>) {
   );
 }
 
-// Home is eagerly loaded — it's the landing page
-import Home from "./pages/Home";
 import RetroLoader from "./components/RetroLoader";
 
 // Everything else is lazy-loaded
 const Dashboard = lazyRetry(() => import("./pages/Dashboard"));
 const Auth = lazyRetry(() => import("./pages/Auth"));
-const Register = lazyRetry(() => import("./pages/Register"));
 const VerifyEmail = lazyRetry(() => import("./pages/VerifyEmail"));
 const ForgotPassword = lazyRetry(() => import("./pages/ForgotPassword"));
 const ResetPassword = lazyRetry(() => import("./pages/ResetPassword"));
@@ -172,7 +169,8 @@ const IndexRoute = () => {
   
   if (loading) return <RetroLoader />;
   
-  return user ? <Suspense fallback={<RetroLoader />}><RedirectToFirstClient /></Suspense> : <Home />;
+  // Login-only: logged-out users land on the sign-in page (no public waitlist/signup).
+  return user ? <Suspense fallback={<RetroLoader />}><RedirectToFirstClient /></Suspense> : <Suspense fallback={<RetroLoader />}><Auth /></Suspense>;
 };
 
 const ConditionalSupportChat = () => {
@@ -200,7 +198,7 @@ const ConditionalSupportChat = () => {
     checkPresentationMode();
   }, [clientId]);
   
-  if (location.pathname.startsWith('/demo/') || location.pathname === '/home') {
+  if (location.pathname.startsWith('/demo/')) {
     return null;
   }
   
@@ -224,10 +222,10 @@ const App = () => {
           <NavigationGuardProvider>
           <Suspense fallback={<RetroLoader />}>
           <Routes>
-            {/* Home is NOT lazy — renders instantly */}
-            <Route path="/home" element={<Home />} />
             <Route path="/auth" element={<Auth />} />
-            <Route path="/register" element={<Register />} />
+            {/* Public signup retired (login-only). /register + the waitlist Home page
+                are unrouted; signup is also disabled at the GoTrue API. /verify kept
+                for any in-flight email confirmation links. */}
             <Route path="/verify" element={<VerifyEmail />} />
             <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/reset-password" element={<ResetPassword />} />
@@ -345,13 +343,16 @@ const App = () => {
                 </ProtectedRoute>
               } 
             />
-            <Route 
-              path="/settings" 
+            {/* /settings (profile + logo upload + change password), reached via the
+                AppHeader gear. Change-password is ALSO surfaced in the sidebar's
+                Account Settings so it is reachable both ways. */}
+            <Route
+              path="/settings"
               element={
                 <ProtectedRoute>
                   <Settings />
                 </ProtectedRoute>
-              } 
+              }
             />
             <Route path="*" element={<NotFound />} />
           </Routes>

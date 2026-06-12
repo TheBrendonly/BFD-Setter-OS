@@ -4,7 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
-import { Navigate, Link, useLocation, useNavigate } from 'react-router-dom';
+import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import logoImg from '@/assets/bfd-logo.png';
 
@@ -147,11 +147,6 @@ const VerifyEmail = () => {
               >
                 Resend code
               </button>
-            </p>
-            <p className="text-on-surface-variant field-text">
-              <Link to="/register" className="font-bold text-primary hover:text-primary/80 transition-colors underline">
-                Back to registration
-              </Link>
             </p>
           </div>
         </div>

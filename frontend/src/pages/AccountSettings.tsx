@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
 import { usePageHeader } from '@/contexts/PageHeaderContext';
-import { Save, LogOut, User, CreditCard, Eye, EyeOff, Users, CheckCircle2, DollarSign } from "@/components/icons";
+import { Save, LogOut, User, CreditCard, Eye, EyeOff, Users, CheckCircle2, DollarSign, Lock } from "@/components/icons";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useCreatorMode } from "@/hooks/useCreatorMode";
 import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
@@ -29,6 +29,9 @@ export default function AccountSettings() {
     full_name: "",
     email: "",
   });
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [changingPassword, setChangingPassword] = useState(false);
 
   usePageHeader({
     title: isAgency ? 'Agency Settings' : 'Account Settings',
@@ -102,6 +105,37 @@ export default function AccountSettings() {
       toast.error("Failed to update account settings");
     } finally {
       setUpdating(false);
+    }
+  };
+
+  // Change the logged-in user's OWN password (both agency and client roles). This
+  // is distinct from ClientSettings' "Update Client Login Password", which is the
+  // agency setting a sub-account user's password via the update-client-password fn.
+  const handleChangePassword = async () => {
+    if (!newPassword || !confirmPassword) {
+      toast.error("Please fill in both password fields");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      toast.error("New passwords don't match");
+      return;
+    }
+    if (newPassword.length < 12) {
+      toast.error("Password must be at least 12 characters");
+      return;
+    }
+    setChangingPassword(true);
+    try {
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      if (error) throw error;
+      toast.success("Password updated successfully");
+      setNewPassword("");
+      setConfirmPassword("");
+    } catch (error: any) {
+      console.error("Error updating password:", error);
+      toast.error(error?.message || "Failed to update password");
+    } finally {
+      setChangingPassword(false);
     }
   };
 
@@ -181,6 +215,46 @@ export default function AccountSettings() {
                   {signingOut ? "Signing Out..." : "Sign Out"}
                 </Button>
               </div>
+            </CardContent>
+          </Card>
+
+          {/* Change Password (the logged-in user's own login) */}
+          <Card className="material-surface">
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Lock className="w-5 h-5" />
+                Change Password
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="new_password" className="field-text">New Password</Label>
+                <Input
+                  id="new_password"
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="At least 12 characters"
+                  autoComplete="new-password"
+                  className="field-text"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="confirm_password" className="field-text">Confirm New Password</Label>
+                <Input
+                  id="confirm_password"
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="Re-enter new password"
+                  autoComplete="new-password"
+                  className="field-text"
+                />
+              </div>
+              <Button onClick={handleChangePassword} disabled={changingPassword}>
+                <Lock className="h-4 w-4 mr-2" />
+                {changingPassword ? "Updating..." : "Update Password"}
+              </Button>
             </CardContent>
           </Card>
 

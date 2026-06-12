@@ -1,6 +1,7 @@
 import React, { createContext, useEffect, useMemo, useState } from 'react';
 import type { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
 export type UserRole = 'agency' | 'client' | null;
 
@@ -35,11 +36,29 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         .maybeSingle();
 
       if (roleError) {
+        // Transient/query error. Do NOT assume a privileged role — previously this
+        // silently defaulted to 'agency', so any read hiccup granted full access.
+        // Leave the role null; the user can retry.
         console.error('Error fetching role:', roleError);
-        setRole('agency'); // fallback
-      } else {
-        setRole((roleData?.role as UserRole) || 'agency');
+        setRole(null);
+        setUserClientId(null);
+        return;
       }
+
+      if (!roleData) {
+        // No role row exists. Every real account is assigned 'agency' or 'client'
+        // at creation, so a missing row means an unprovisioned/invalid account.
+        // Least privilege: do NOT grant a default role — sign the user out.
+        console.warn('No role assigned to user; signing out.');
+        setRole(null);
+        setUserClientId(null);
+        toast.error('Your account has no role assigned. Please contact support.');
+        await supabase.auth.signOut({ scope: 'global' });
+        return;
+      }
+
+      const resolvedRole = roleData.role as UserRole;
+      setRole(resolvedRole);
 
       // Fetch client_id from profiles
       const { data: profileData, error: profileError } = await supabase
@@ -48,15 +67,21 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         .eq('id', userId)
         .single();
 
-      if (profileError) {
-        console.error('Error fetching profile:', profileError);
-        setUserClientId(null);
-      } else {
-        setUserClientId(profileData?.client_id || null);
+      if (profileError) console.error('Error fetching profile:', profileError);
+      const clientId = profileError ? null : (profileData?.client_id || null);
+      setUserClientId(clientId);
+
+      // A 'client' user with no client_id cannot be routed to a workspace and must
+      // not fall through to agency-level surfaces. Treat as unprovisioned. (An
+      // 'agency' user legitimately has a null client_id, so this only gates clients.)
+      if (resolvedRole === 'client' && !clientId) {
+        console.warn('Client user has no client_id; signing out.');
+        toast.error('Your account is not fully set up. Please contact support.');
+        await supabase.auth.signOut({ scope: 'global' });
       }
     } catch (err) {
       console.error('Unexpected error fetching role:', err);
-      setRole('agency');
+      setRole(null);
       setUserClientId(null);
     }
   };
@@ -142,7 +167,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const signOut = async () => {
     try {
+      // Clear any stale auth tokens left behind by dead/old Supabase projects.
       localStorage.removeItem('sb-qfbhcixkxzivpmxlciot-auth-token');
+      localStorage.removeItem('sb-awzlcmdomhtyqjabzvnn-auth-token');
       await supabase.auth.signOut({ scope: 'global' }).catch(() => {});
       setSession(null);
       setUser(null);
