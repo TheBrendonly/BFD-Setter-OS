@@ -22,7 +22,6 @@ import { WebhookSetupDialog } from '@/components/WebhookSetupDialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ClientWebhookSettings } from '@/components/ClientWebhookSettings';
 import { useClientWebhooks } from '@/hooks/useClientWebhooks';
@@ -30,6 +29,7 @@ import PromptCard from '@/components/PromptCard';
 import { Textarea } from '@/components/ui/textarea';
 import { AIPromptDialog } from '@/components/AIPromptDialog';
 import { PromptDocPage, type PromptDocRecord } from '@/components/prompt-doc/PromptDocPage';
+import { DirectionsToggle } from '@/components/prompt-doc/DirectionsToggle';
 import { hydrateOutlineFromRetellFlow, type FlowOutline } from '@/lib/conversationFlowOutline';
 import { SetterPromptAIDialog } from '@/components/SetterPromptAIDialog';
 import { CopySetterDialog } from '@/components/CopySetterDialog';
@@ -7437,6 +7437,9 @@ const PromptManagement = () => {
           onHydrateFlow={handleHydrateFlow}
           onSaveFlowDraft={handleSaveFlowDraft}
           onPushFlow={handlePushFlow}
+          directions={voiceSetterDirections}
+          onDirectionsChange={handleVoiceSetterDirectionsChange}
+          otherSlotDirections={otherSlotDirections}
         />
         <AIPromptDialog
           open={docAIDialogOpen}
@@ -7604,75 +7607,11 @@ const PromptManagement = () => {
                     pointed at this slot's agent on next "Push to Retell".
                     Only shown for Voice-Setter-N slots. */}
                 {editingSlotId?.startsWith('Voice-Setter-') && (
-                  <div
-                    className="space-y-3 p-4"
-                    style={{ border: '3px groove hsl(var(--border-groove))' }}
-                  >
-                    <div>
-                      <Label style={{ fontFamily: "'VT323', monospace", fontSize: '16px', letterSpacing: '1px', textTransform: 'uppercase' }}>
-                        DIRECTIONS — WHICH CALLS USE THIS SETTER?
-                      </Label>
-                      <p className="text-muted-foreground mt-1" style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '12px' }}>
-                        Pick any combination. Inbound = calls landing on your number. Outbound (initial) = first-touch outbound dial. Outbound (follow-up) = subsequent callbacks. Saving one direction does NOT touch the others.
-                      </p>
-                    </div>
-                    <ToggleGroup
-                      type="multiple"
-                      value={voiceSetterDirections}
-                      onValueChange={handleVoiceSetterDirectionsChange}
-                      className="!justify-start gap-2"
-                    >
-                      <ToggleGroupItem
-                        value="inbound"
-                        aria-label="Inbound"
-                        className="data-[state=on]:!bg-green-500 data-[state=on]:!text-white data-[state=on]:!border-green-600 data-[state=on]:hover:!bg-green-600 border-2 border-border"
-                        style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '13px' }}
-                      >
-                        Inbound
-                      </ToggleGroupItem>
-                      <ToggleGroupItem
-                        value="outbound_initial"
-                        aria-label="Outbound initial"
-                        className="data-[state=on]:!bg-green-500 data-[state=on]:!text-white data-[state=on]:!border-green-600 data-[state=on]:hover:!bg-green-600 border-2 border-border"
-                        style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '13px' }}
-                      >
-                        Outbound (initial)
-                      </ToggleGroupItem>
-                      <ToggleGroupItem
-                        value="outbound_followup"
-                        aria-label="Outbound follow-up"
-                        className="data-[state=on]:!bg-green-500 data-[state=on]:!text-white data-[state=on]:!border-green-600 data-[state=on]:hover:!bg-green-600 border-2 border-border"
-                        style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '13px' }}
-                      >
-                        Outbound (follow-up)
-                      </ToggleGroupItem>
-                    </ToggleGroup>
-                    {/* Cross-slot conflict warnings */}
-                    {(() => {
-                      const conflicts = voiceSetterDirections
-                        .map(dir => {
-                          const owner = Object.entries(otherSlotDirections).find(([, dirs]) => dirs.includes(dir));
-                          return owner ? { dir, slot: owner[0] } : null;
-                        })
-                        .filter(Boolean) as Array<{ dir: string; slot: string }>;
-                      if (conflicts.length === 0) {
-                        return voiceSetterDirections.length === 0 ? (
-                          <div className="text-amber-500" style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '12px' }}>
-                            No direction selected — this setter is not routed to any phone. Pick at least one direction before pushing.
-                          </div>
-                        ) : null;
-                      }
-                      return (
-                        <div className="text-amber-500" style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '12px' }}>
-                          {conflicts.map(c => (
-                            <div key={c.dir}>
-                              Heads up — {c.dir.replace('_', ' ')} is currently owned by {c.slot}. Pushing will move it to this slot.
-                            </div>
-                          ))}
-                        </div>
-                      );
-                    })()}
-                  </div>
+                  <DirectionsToggle
+                    value={voiceSetterDirections}
+                    onChange={handleVoiceSetterDirectionsChange}
+                    otherSlotDirections={otherSlotDirections}
+                  />
                 )}
                 {/* Agent Config Builder - includes Settings + all config layers */}
                 <AgentConfigBuilder
@@ -8202,6 +8141,22 @@ const PromptManagement = () => {
                                 );
                               })()}
                               <StatusTag variant="neutral">VOICE CHANNEL</StatusTag>
+                              {(() => {
+                                const dirs = prompts.find(p => p.slot_id === slot.id && p.category === 'voice_setter')?.directions;
+                                const dirList = Array.isArray(dirs) ? dirs : [];
+                                const DIR_LABELS: Record<string, string> = { inbound: 'Inbound', outbound_initial: 'Out (initial)', outbound_followup: 'Out (follow-up)' };
+                                return (
+                                  <div className="flex flex-wrap gap-1">
+                                    {dirList.length === 0 ? (
+                                      <StatusTag variant="negative">No direction</StatusTag>
+                                    ) : (
+                                      dirList.map((d: string) => (
+                                        <StatusTag key={d} variant="positive">{DIR_LABELS[d] || d}</StatusTag>
+                                      ))
+                                    )}
+                                  </div>
+                                );
+                              })()}
                             </div>
                             <div className="flex flex-col items-end gap-1.5 shrink-0">
                               {processingSlots.has(slot.id) ? (

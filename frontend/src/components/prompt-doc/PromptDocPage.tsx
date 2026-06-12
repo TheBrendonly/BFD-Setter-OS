@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { DirectionsToggle } from './DirectionsToggle';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -68,6 +69,11 @@ interface PromptDocPageProps {
   onHydrateFlow?: () => Promise<FlowOutline | null>;
   onSaveFlowDraft?: (outline: FlowOutline) => Promise<void>;
   onPushFlow?: (outline: FlowOutline) => Promise<void>;
+  // EE1 direction routing (voice setters): which calls use this setter. Optional
+  // so non-voice/legacy callers can omit. State lives in PromptManagement.
+  directions?: string[];
+  onDirectionsChange?: (next: string[]) => void;
+  otherSlotDirections?: Record<string, string[]>;
 }
 
 const MONO_STYLE: React.CSSProperties = {
@@ -100,6 +106,9 @@ export const PromptDocPage: React.FC<PromptDocPageProps> = ({
   onHydrateFlow,
   onSaveFlowDraft,
   onPushFlow,
+  directions,
+  onDirectionsChange,
+  otherSlotDirections,
 }) => {
   const [docText, setDocText] = useState('');
   const isFlowEngine = doc?.engine_type === 'conversation-flow';
@@ -378,6 +387,13 @@ export const PromptDocPage: React.FC<PromptDocPageProps> = ({
             Voice, model and call settings. Changes here are included on the next Push to Retell.
             Booking prompt and delays live in the full settings view.
           </p>
+          {onDirectionsChange && (
+            <DirectionsToggle
+              value={directions ?? []}
+              onChange={onDirectionsChange}
+              otherSlotDirections={otherSlotDirections ?? {}}
+            />
+          )}
           <RetellModelSelector value={model} onChange={onModelChange} />
           <VoiceRetellSettings
             clientId={clientId}
