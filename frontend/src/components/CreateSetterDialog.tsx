@@ -47,6 +47,34 @@ export const CreateSetterDialog: React.FC<CreateSetterDialogProps> = ({
             Creates a new blank {channelLabel} setter. A free slot is assigned automatically — you identify it by name.
           </div>
 
+          {channel === 'voice' && (
+            <div className="space-y-1.5">
+              <span style={FONT} className="text-foreground block">Engine</span>
+              <div className="flex gap-2">
+                <div
+                  className="flex-1 p-3 border-2 border-primary bg-primary/5"
+                  style={FONT}
+                  aria-pressed="true"
+                >
+                  <p className="font-semibold">Single Prompt</p>
+                  <p className="text-muted-foreground" style={{ fontSize: '11px' }}>
+                    One full prompt document; set up via the section wizard.
+                  </p>
+                </div>
+                <div
+                  className="flex-1 p-3 border border-dashed border-border opacity-60 cursor-not-allowed"
+                  style={FONT}
+                  title="Conversation Flow setters are coming soon"
+                >
+                  <p className="font-semibold">Conversation Flow</p>
+                  <p className="text-muted-foreground" style={{ fontSize: '11px' }}>
+                    Node-based flow (rigid mode). Coming soon.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="space-y-1.5">
             <label htmlFor="new-setter-name" style={FONT} className="text-foreground block">Name</label>
             <Input

@@ -4,6 +4,16 @@ import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { ArrowLeft, Bot, ChevronDown, ChevronUp, History, Info, Rocket, Save, Settings2, Wand2 } from 'lucide-react';
 import { VoiceRetellSettings, type RetellVoiceSettings as RetellVoiceSettingsType } from '@/components/VoiceRetellSettings';
 import { RetellModelSelector } from '@/components/RetellModelSelector';
@@ -85,6 +95,7 @@ export const PromptDocPage: React.FC<PromptDocPageProps> = ({
   const [showSettings, setShowSettings] = useState(false);
   const [showVersions, setShowVersions] = useState(false);
   const [showMetaPrompt, setShowMetaPrompt] = useState(false);
+  const [showRerunConfirm, setShowRerunConfirm] = useState(false);
   const [expandedVersionId, setExpandedVersionId] = useState<string | null>(null);
   const { versions, saveVersion } = usePromptVersions(clientId, slotId);
 
@@ -179,7 +190,7 @@ export const PromptDocPage: React.FC<PromptDocPageProps> = ({
           <Info className="w-4 h-4 mr-1.5" /> AI instructions
         </Button>
         {onRerunSetup && (
-          <Button onClick={onRerunSetup} disabled={saving} size="sm" variant="ghost">
+          <Button onClick={() => setShowRerunConfirm(true)} disabled={saving} size="sm" variant="ghost">
             <Bot className="w-4 h-4 mr-1.5" /> Re-run Setup
           </Button>
         )}
@@ -286,6 +297,31 @@ export const PromptDocPage: React.FC<PromptDocPageProps> = ({
         clientId={clientId}
         onEditInSettings={onOpenSettings}
       />
+
+      <AlertDialog open={showRerunConfirm} onOpenChange={setShowRerunConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Re-run setup for this setter?</AlertDialogTitle>
+            <AlertDialogDescription>
+              The section-based setup will open, and completing it REPLACES this prompt
+              document with a freshly compiled one. The current document is backed up to
+              Versions first, so nothing is lost.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={async () => {
+                await saveVersion(docText, 'Pre-setup backup');
+                setShowRerunConfirm(false);
+                onRerunSetup?.();
+              }}
+            >
+              Back up &amp; open setup
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

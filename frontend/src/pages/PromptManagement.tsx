@@ -4641,6 +4641,9 @@ const PromptManagement = () => {
   const [docAIDialogOpen, setDocAIDialogOpen] = useState(false);
   const [docAIContent, setDocAIContent] = useState('');
   const docAIApplyRef = useRef<((next: string) => void) | null>(null);
+  // Re-run Setup: section editor opened as a one-shot wizard that compiles back
+  // into the prompt document instead of being the permanent editing surface.
+  const [setupModeActive, setSetupModeActive] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
   const location = useLocation();
   const [highlightResponseDelay, setHighlightResponseDelay] = useState(false);
@@ -6120,11 +6123,15 @@ const PromptManagement = () => {
         .eq('slot_id', slotId)
         .eq('config_key', '__full_prompt__')
         .maybeSingle();
-      const SAVE_SEPARATOR = '\n\n── ── ── ── ── ── ── ── ── ── ── ── ── ──\n\n';
-      const fallback = [(prompt as any).persona, prompt.content].filter(Boolean).join(SAVE_SEPARATOR);
-      const promotedContent = (fullPromptRow?.custom_content as string | null)?.trim()
+      // Replicate the legacy push form EXACTLY: [persona, content].join('\n\n'),
+      // where content is the compiled __full_prompt__ (which already embeds the
+      // persona sections — the known push-time duplication). Promoting anything
+      // else would change the live prompt on the first doc push.
+      const compiledContent = (fullPromptRow?.custom_content as string | null)?.trim()
         ? (fullPromptRow.custom_content as string)
-        : fallback;
+        : (prompt.content || '');
+      const personaPart = ((prompt as any).persona as string | null)?.trim() || '';
+      const promotedContent = [personaPart, compiledContent].filter(Boolean).join('\n\n');
       const { data: inserted, error: insertError } = await (supabase as any)
         .from('prompt_docs')
         .insert({
@@ -6228,6 +6235,62 @@ const PromptManagement = () => {
         await setAgentDeployedPrompt(editingSlotId, buildDeployedPromptString('', content));
         await markNeedsSync(editingSlotId, false);
       }
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Complete Setup (wizard mode): compile the section editor's output into the
+  // canonical prompt document as a DRAFT (no Retell push) and return to the doc page.
+  const handleCompleteSetup = async () => {
+    if (!clientId || !editingSlotId || !docRecord) return;
+    const snap = getFullPromptRef.current?.();
+    if (!snap || !(snap.persona?.trim() || snap.content?.trim())) {
+      toast({
+        title: 'Nothing to compile',
+        description: 'Configure the setup sections first, then complete setup.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    setSaving(true);
+    try {
+      // Same form the push pipeline uses: [persona, content].join('\n\n').
+      const compiled = [snap.persona?.trim(), snap.content?.trim()].filter(Boolean).join('\n\n');
+      // Persist the section configs exactly like Save Setter does so future
+      // re-runs of the wizard re-hydrate from where this one left off.
+      const configDataForSave = Object.keys(latestLocalConfigDataRef.current).length > 0
+        ? latestLocalConfigDataRef.current
+        : localConfigData;
+      if (Object.keys(configDataForSave).length > 0) {
+        await savePromptConfigs(Object.entries(configDataForSave).map(([configKey, val]) => ({
+          configKey,
+          selectedOption: val.selectedOption,
+          customContent: val.customContent,
+        })));
+      }
+      const { data: updated, error } = await (supabase as any)
+        .from('prompt_docs')
+        .update({
+          doc_content: compiled,
+          status: 'draft',
+          setup_completed_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', docRecord.id)
+        .select()
+        .single();
+      if (error) throw error;
+      setDocRecord(updated as PromptDocRecord);
+      setSetupModeActive(false);
+      setCurrentView('doc');
+      toast({
+        title: 'Setup compiled',
+        description: 'The prompt document was regenerated from setup (draft). Review it, then Push to Retell.',
+      });
+    } catch (err: any) {
+      console.error('Complete Setup failed:', err);
+      toast({ title: 'Error', description: err?.message || 'Failed to compile setup into the document', variant: 'destructive' });
     } finally {
       setSaving(false);
     }
@@ -6472,11 +6535,28 @@ const PromptManagement = () => {
         if (currentAgentSettings?.booking_function_enabled && currentAgentSettings?.booking_prompt) {
           promptParts.push(`\n## BOOKING INSTRUCTIONS\n${currentAgentSettings.booking_prompt}`);
         }
-        await pushVoiceSetterToRetell({
+        const pushResult = await pushVoiceSetterToRetell({
           promptText: promptParts.join('\n\n'),
           agentSettings: currentAgentSettings,
           agentTitle: effectivePromptTitle,
         });
+        // Doc model: any legacy-editor push on a doc-model setter re-syncs the
+        // canonical document so the doc page never shows stale content.
+        if (pushResult.ok && docRecord && docRecord.slot_id === editingSlotId) {
+          const docText = [personaForSave, contentForSave].filter(Boolean).join('\n\n');
+          const { data: syncedDoc } = await (supabase as any)
+            .from('prompt_docs')
+            .update({
+              doc_content: docText,
+              deployed_doc_content: docText,
+              status: 'deployed',
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', docRecord.id)
+            .select()
+            .single();
+          if (syncedDoc) setDocRecord(syncedDoc as PromptDocRecord);
+        }
       }
 
       // Persist the last successfully deployed full prompt to agent_settings.last_deployed_prompt
@@ -7211,6 +7291,10 @@ const PromptManagement = () => {
             setDocAIDialogOpen(true);
           }}
           onOpenSettings={() => setCurrentView('settings')}
+          onRerunSetup={() => {
+            setSetupModeActive(true);
+            setCurrentView('editor');
+          }}
         />
         <AIPromptDialog
           open={docAIDialogOpen}
@@ -7270,6 +7354,27 @@ const PromptManagement = () => {
         <div className="container mx-auto max-w-7xl">
           <div className="space-y-6">
 
+              {/* Setup wizard mode (doc model): the section editor is a one-shot
+                  setup surface that compiles back into the prompt document. */}
+              {setupModeActive && docRecord && (
+                <div className="border border-dashed border-primary/50 bg-primary/5 p-4 flex flex-wrap items-center justify-between gap-3 sticky top-0 z-20">
+                  <div>
+                    <p className="font-semibold">Setup mode</p>
+                    <p className="text-sm text-muted-foreground">
+                      Configure the sections below, then compile them into the prompt document.
+                      The previous document was backed up to Versions. Completing setup does NOT push to Retell.
+                    </p>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" disabled={saving} onClick={() => { setSetupModeActive(false); setCurrentView('doc'); }}>
+                      Cancel
+                    </Button>
+                    <Button size="sm" disabled={saving} onClick={handleCompleteSetup}>
+                      Complete Setup → Generate Prompt
+                    </Button>
+                  </div>
+                </div>
+              )}
 
               {/* Guided Agent Configuration */}
               <div className="space-y-6">
