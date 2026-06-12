@@ -181,6 +181,33 @@ interface AvailabilityFetchResult {
   debug?: DebugInfo;
 }
 
+// Compact the raw GHL free-slots payload to shrink the {{available_time_slots}}
+// dynamic variable (substituted into the prompt every conversational turn). GHL
+// returns { "YYYY-MM-DD": { slots: ["<ISO>", ...] }, "traceId": ... } over a
+// 30-day window (~11k chars). We collapse it to { "YYYY-MM-DD": ["HH:MM", ...] }
+// — the date is the key and the timezone is already given at top level — which
+// cuts the per-turn substitution ~5x while staying truthful. Any unexpected shape
+// falls back to the raw payload so live calls can never break on a format change.
+function compactSlots(raw: unknown): unknown {
+  try {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) return raw;
+    const out: Record<string, string[]> = {};
+    for (const [key, val] of Object.entries(raw as Record<string, unknown>)) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(key)) continue; // skip traceId and other noise
+      const slots = (val as { slots?: unknown } | null)?.slots;
+      if (!Array.isArray(slots)) continue;
+      out[key] = slots.map((s) => {
+        if (typeof s !== "string") return String(s);
+        const m = s.match(/T(\d{2}:\d{2})/); // local HH:MM from the ISO timestamp
+        return m ? m[1] : s;
+      });
+    }
+    return Object.keys(out).length > 0 ? out : raw;
+  } catch {
+    return raw;
+  }
+}
+
 function buildAvailabilityDynamicVariable(result: AvailabilityFetchResult): string {
   return JSON.stringify({
     source: "ghl_free_slots",
@@ -189,7 +216,7 @@ function buildAvailabilityDynamicVariable(result: AvailabilityFetchResult): stri
     window_start: result.windowStartIso,
     window_end: result.windowEndIso,
     status: result.fetchStatus,
-    slots: result.slots,
+    slots: compactSlots(result.slots),
     error: result.error ?? null,
   });
 }

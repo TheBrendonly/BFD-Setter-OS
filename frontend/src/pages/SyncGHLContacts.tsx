@@ -12,8 +12,7 @@ import RetroLoader from '@/components/RetroLoader';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 import WorkflowCanvas, { type CanvasNode } from '@/components/workflow/WorkflowCanvas';
 import { format } from 'date-fns';
-
-const SUPABASE_URL = 'https://qfbhcixkxzivpmxlciot.supabase.co';
+import { edgeFunctionUrl } from '@/integrations/supabase/functionsBase';
 
 const fieldStyle = { fontFamily: "'IBM Plex Mono', monospace", fontSize: '13px' } as const;
 const tabStyle = { fontFamily: "'VT323', monospace", fontSize: '16px', letterSpacing: '0.06em' } as const;
@@ -47,7 +46,7 @@ function SyncNodeConfig({
   nodeId: string;
   onClose: () => void;
 }) {
-  const ghlWebhookUrl = `${SUPABASE_URL}/functions/v1/sync-ghl-contact`;
+  const ghlWebhookUrl = edgeFunctionUrl('sync-ghl-contact');
 
   const renderContent = () => {
     switch (nodeId) {

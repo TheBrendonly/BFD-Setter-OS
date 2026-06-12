@@ -11,6 +11,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
+import { edgeFunctionUrl } from '@/integrations/supabase/functionsBase';
 import { fetchTwilioPhoneNumbers } from '@/lib/twilioNumbers';
 
 const PixelRefreshIcon = () => (
@@ -240,7 +241,7 @@ export const RetellPhoneNumberSelector: React.FC<RetellPhoneNumberSelectorProps>
       await importPhoneNumber({
         phone_number: importPhone.trim(),
         phone_number_type: 'twilio',
-        termination_uri: `https://qfbhcixkxzivpmxlciot.supabase.co/functions/v1/retell-call-webhook`,
+        termination_uri: edgeFunctionUrl('retell-call-webhook'),
         ...(importNickname.trim() ? { nickname: importNickname.trim() } : {}),
       });
       toast.success(`Phone number ${importPhone} imported to Retell`);

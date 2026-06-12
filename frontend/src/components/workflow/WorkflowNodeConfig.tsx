@@ -13,6 +13,7 @@ import VariablePicker from './VariablePicker';
 import WebhookRequestsPanel from './WebhookRequestsPanel';
 import { TRIGGER_FIELD_LABELS, FIND_CONTACT_FIELD_LABELS, getAvailableFields } from '@/utils/workflowFieldUtils';
 import { toast } from 'sonner';
+import { edgeFunctionUrl } from '@/integrations/supabase/functionsBase';
 
 interface WorkflowNodeConfigProps {
   nodeId: string;
@@ -82,10 +83,10 @@ export default function WorkflowNodeConfig({ nodeId, nodeType, data, allNodes, o
     const d = data as TriggerNodeData;
     const triggerDef = TRIGGER_DEFINITIONS.find((t) => t.type === d.triggerType);
     const webhookUrl = clientId && workflowId
-      ? `https://qfbhcixkxzivpmxlciot.supabase.co/functions/v1/workflow-inbound-webhook?workflow_id=${workflowId}&client_id=${clientId}`
+      ? `${edgeFunctionUrl('workflow-inbound-webhook')}?workflow_id=${workflowId}&client_id=${clientId}`
       : '';
     const ghlWebhookUrl = workflowId
-      ? `https://qfbhcixkxzivpmxlciot.supabase.co/functions/v1/workflow-inbound-webhook?workflow_id=${workflowId}&GHL_Account_ID={{contact.ghl_account_id}}&Contact_ID={{contact.id}}&Name={{contact.name}}&Email={{contact.email}}&Phone={{contact.phone_raw}}`
+      ? `${edgeFunctionUrl('workflow-inbound-webhook')}?workflow_id=${workflowId}&GHL_Account_ID={{contact.ghl_account_id}}&Contact_ID={{contact.id}}&Name={{contact.name}}&Email={{contact.email}}&Phone={{contact.phone_raw}}`
       : '';
 
     return (

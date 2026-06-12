@@ -808,6 +808,21 @@ async function syncVoiceSetter(
   // (full rationale on buildDynamicVarsBlock above; shared with the CF path).
   const enrichedPrompt = generalPrompt + buildDynamicVarsBlock(clientTimezone);
 
+  // Latency guard (durable prevention). The auto-injected dynamic-vars block adds
+  // exactly ONE {{available_time_slots}}. More than one means the prompt body /
+  // booking instructions carry duplicates, which Retell re-substitutes with the
+  // full availability JSON on EVERY turn — the 2026-06-12 blowup (21 refs ->
+  // ~291k chars/turn -> first-token timeouts). We never edit prompt content
+  // (report-only rule); we surface a non-fatal warning so the UI can flag it.
+  const slotRefCount = (enrichedPrompt.match(/\{\{available_time_slots\}\}/g) || []).length;
+  const slotSubstitutionWarning = slotRefCount > 1
+    ? `Prompt contains ${slotRefCount} {{available_time_slots}} references (expected 1). ` +
+      `Each is re-substituted with the full availability JSON every turn, inflating ` +
+      `latency and token cost. Remove the extra references from the prompt body and ` +
+      `Booking Instructions; rely on the auto-injected dynamic-variables block only.`
+    : null;
+  if (slotSubstitutionWarning) console.warn(`[sync-voice-setter] ${slotSubstitutionWarning}`);
+
   const llmPayload: Record<string, unknown> = {
     model: retellModel,
     general_prompt: enrichedPrompt,
@@ -905,7 +920,7 @@ async function syncVoiceSetter(
         await fanOutDirections(supabase, clientId, `Voice-Setter-${slotNumber}`, existingAgentId, effectiveDirections);
       }
       await dualWriteVoiceSetter(supabase, clientId, slotNumber, agentName, existingAgentId, llmId);
-      return { success: true, action: "updated_and_published", agent_id: existingAgentId, llm_id: llmId, llm: updatedLlm, publish_warning: publishWarning, direction_warning: directionWarning, conflicting_agent_id: directionFanOutBlocked ? existingAgentId : null, shared_columns: directionFanOutBlocked ? directionConflictColumns : null };
+      return { success: true, action: "updated_and_published", agent_id: existingAgentId, llm_id: llmId, llm: updatedLlm, publish_warning: publishWarning, slot_substitution_warning: slotSubstitutionWarning, direction_warning: directionWarning, conflicting_agent_id: directionFanOutBlocked ? existingAgentId : null, shared_columns: directionFanOutBlocked ? directionConflictColumns : null };
     } else {
       const newLlm = await retellFetch(apiKey, "POST", "create-retell-llm", llmPayload) as any;
       await retellFetch(apiKey, "PATCH", `update-agent/${existingAgentId}`, {
@@ -935,7 +950,7 @@ async function syncVoiceSetter(
         await fanOutDirections(supabase, clientId, `Voice-Setter-${slotNumber}`, existingAgentId, effectiveDirections);
       }
       await dualWriteVoiceSetter(supabase, clientId, slotNumber, agentName, existingAgentId, newLlm.llm_id);
-      return { success: true, action: "updated_with_new_llm_and_published", agent_id: existingAgentId, llm_id: newLlm.llm_id, publish_warning: publishWarning, direction_warning: directionWarning, conflicting_agent_id: directionFanOutBlocked ? existingAgentId : null, shared_columns: directionFanOutBlocked ? directionConflictColumns : null };
+      return { success: true, action: "updated_with_new_llm_and_published", agent_id: existingAgentId, llm_id: newLlm.llm_id, publish_warning: publishWarning, slot_substitution_warning: slotSubstitutionWarning, direction_warning: directionWarning, conflicting_agent_id: directionFanOutBlocked ? existingAgentId : null, shared_columns: directionFanOutBlocked ? directionConflictColumns : null };
     }
   } else {
     console.log(`[sync-voice-setter] Creating new agent for slot ${slotNumber}`);
@@ -985,7 +1000,7 @@ async function syncVoiceSetter(
     // EE1: fan out direction selection across clients columns + sibling slots.
     await fanOutDirections(supabase, clientId, `Voice-Setter-${slotNumber}`, newAgent.agent_id, effectiveDirections);
     await dualWriteVoiceSetter(supabase, clientId, slotNumber, agentName, newAgent.agent_id, newLlm.llm_id);
-    return { success: true, action: "created_and_published", agent_id: newAgent.agent_id, llm_id: newLlm.llm_id, publish_warning: publishWarning };
+    return { success: true, action: "created_and_published", agent_id: newAgent.agent_id, llm_id: newLlm.llm_id, publish_warning: publishWarning, slot_substitution_warning: slotSubstitutionWarning };
   }
 }
 

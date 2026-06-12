@@ -1,4 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2.101.0";
+import { authorizeClientRequest, AssertAccessError } from "../_shared/authorize-client-request.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -30,7 +31,7 @@ Deno.serve(async (req) => {
     // Read execution to get trigger_run_id
     const { data: execution, error: readError } = await supabase
       .from("engagement_executions")
-      .select("trigger_run_id, status")
+      .select("trigger_run_id, status, client_id")
       .eq("id", execution_id)
       .single();
 
@@ -41,7 +42,21 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Update status to cancelled
+    // Tenant guard: only the owning agency (verified JWT) or an internal
+    // service-role caller may cancel this execution.
+    try {
+      await authorizeClientRequest(req.headers.get("Authorization"), execution.client_id);
+    } catch (e) {
+      if (e instanceof AssertAccessError) {
+        return new Response(JSON.stringify({ error: e.message }),
+          { status: e.status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+      throw e;
+    }
+
+    // Update status to cancelled. Clear active_call_id: it is the text-setter hold
+    // signal (processMessages waits while it is set), so a cancel mid-call would
+    // otherwise leave it dangling and stall replies for up to ~15 min.
     await supabase
       .from("engagement_executions")
       .update({
@@ -49,6 +64,7 @@ Deno.serve(async (req) => {
         completed_at: new Date().toISOString(),
         stop_reason: "manual_stop",
         stage_description: "Cancelled — manually stopped from UI.",
+        active_call_id: null,
       })
       .eq("id", execution_id);
 

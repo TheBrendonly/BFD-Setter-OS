@@ -6052,6 +6052,20 @@ const PromptManagement = () => {
           // exactly the situation BFD's agent_5ec5eb was in on 2026-05-20
           // (v43 draft, v37 last published — 6 unpublished drafts).
           // Added 2026-05-20 in phase-night-surface-publish-warning.
+          // Latency guard (2026-06-13): retell-proxy counts {{available_time_slots}}
+          // in the assembled prompt and warns if there is more than one (the
+          // duplicate-substitution latency blowup). Orthogonal to publish/direction.
+          const slotWarning = (retellResult as { slot_substitution_warning?: string } | null)?.slot_substitution_warning;
+          if (slotWarning) {
+            console.warn('⚠️ Slot-substitution latency warning:', slotWarning);
+            toast({
+              title: '⚠️ Prompt may cause slow voice responses',
+              description: slotWarning,
+              variant: 'destructive',
+              duration: 15000,
+            });
+          }
+
           const publishWarning = (retellResult as { publish_warning?: string } | null)?.publish_warning;
           if (publishWarning) {
             console.warn('⚠️ Retell auto-publish failed (PATCH succeeded):', publishWarning);

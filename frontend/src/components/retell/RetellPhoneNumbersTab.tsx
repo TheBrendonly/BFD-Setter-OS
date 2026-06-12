@@ -10,6 +10,7 @@ import { toast } from 'sonner';
 import { Plus, Trash2, RefreshCw, Loader2, Phone } from 'lucide-react';
 import { useRetellApi, RetellPhoneNumber, RetellAgent, getInboundAgentId, getOutboundAgentId } from '@/hooks/useRetellApi';
 import { supabase } from '@/integrations/supabase/client';
+import { edgeFunctionUrl } from '@/integrations/supabase/functionsBase';
 import { fetchTwilioPhoneNumbers } from '@/lib/twilioNumbers';
 
 interface RetellPhoneNumbersTabProps {
@@ -95,7 +96,7 @@ const RetellPhoneNumbersTab: React.FC<RetellPhoneNumbersTabProps> = ({ clientId 
       const phoneData: Record<string, unknown> = {
         phone_number: numberToImport,
         phone_number_type: 'twilio',
-        termination_uri: `https://qfbhcixkxzivpmxlciot.supabase.co/functions/v1/retell-call-webhook`,
+        termination_uri: edgeFunctionUrl('retell-call-webhook'),
       };
 
       // If manual SID/token provided, use those; otherwise Retell uses the client's stored creds

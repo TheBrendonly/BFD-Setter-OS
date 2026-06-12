@@ -2,6 +2,7 @@ import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useCreatorMode } from '@/hooks/useCreatorMode';
 import { supabase } from '@/integrations/supabase/client';
+import { edgeFunctionUrl } from '@/integrations/supabase/functionsBase';
 import { getCached, setCache } from '@/lib/queryCache';
 import { cn } from '@/lib/utils';
 import { insertDefaultCampaignWidgets } from '@/lib/campaignWidgets';
@@ -1292,9 +1293,8 @@ function EngagementNodeConfig({
     const isExistingLeadNode = selectedNodeId === 'eng-existing-lead';
     const isVisualOnlyNode = isFindLeadNode || isLeadExistsNode || isCreateLeadNode || isExistingLeadNode;
 
-    const SUPABASE_URL = 'https://qfbhcixkxzivpmxlciot.supabase.co';
     const webhookUrl = enrollWebhookToken
-      ? `${SUPABASE_URL}/functions/v1/campaign-enroll-webhook?token=${enrollWebhookToken}`
+      ? `${edgeFunctionUrl('campaign-enroll-webhook')}?token=${enrollWebhookToken}`
       : '';
 
     const copyWebhookUrl = () => {
