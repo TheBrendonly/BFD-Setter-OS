@@ -1,4 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2.101.0";
+import { authorizeClientRequest, AssertAccessError } from "../_shared/authorize-client-request.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -46,6 +47,32 @@ Deno.serve(async (req) => {
         JSON.stringify({ error: "Execution not found" }),
         { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
+    }
+
+    // Tenant guard: dm_executions has no client_id; it is keyed by ghl_account_id
+    // (= clients.ghl_location_id). Resolve the owning client, then require the
+    // caller to own it (verified JWT) or be an internal service-role caller.
+    const { data: ownerClient, error: ownerErr } = await supabase
+      .from("clients")
+      .select("id")
+      .eq("ghl_location_id", execution.ghl_account_id)
+      .maybeSingle();
+
+    if (ownerErr || !ownerClient?.id) {
+      return new Response(
+        JSON.stringify({ error: "Owning client not found for execution" }),
+        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    try {
+      await authorizeClientRequest(req.headers.get("Authorization"), ownerClient.id);
+    } catch (e) {
+      if (e instanceof AssertAccessError) {
+        return new Response(JSON.stringify({ error: e.message }),
+          { status: e.status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+      throw e;
     }
 
     if (execution.status !== "waiting") {

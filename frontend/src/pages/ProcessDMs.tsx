@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useCreatorMode } from '@/hooks/useCreatorMode';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
+import { edgeFunctionUrl } from '@/integrations/supabase/functionsBase';
 import { getCached, setCache } from '@/lib/queryCache';
 import { usePageHeader } from '@/contexts/PageHeaderContext';
 import { Input } from '@/components/ui/input';
@@ -18,8 +19,10 @@ import SavingOverlay from '@/components/SavingOverlay';
 import WorkflowCanvas, { type CanvasNode } from '@/components/workflow/WorkflowCanvas';
 import { format } from 'date-fns';
 
-const SUPABASE_URL = 'https://qfbhcixkxzivpmxlciot.supabase.co';
-const WEBHOOK_URL = `${SUPABASE_URL}/functions/v1/receive-dm-webhook`;
+// Derived from VITE_SUPABASE_URL (live project) — this URL is shown to users to
+// paste into their DM provider, so it MUST target the live project, not a dead
+// hardcoded ref. Actual calls below use supabase.functions.invoke().
+const WEBHOOK_URL = edgeFunctionUrl('receive-dm-webhook');
 
 const fieldStyle = { fontFamily: "'IBM Plex Mono', monospace", fontSize: '13px' } as const;
 const tabStyle = { fontFamily: "'VT323', monospace", fontSize: '16px', letterSpacing: '0.06em' } as const;
@@ -499,16 +502,13 @@ function DmExecutionDetail({
   const handlePushNow = async () => {
     setPushing(true);
     try {
-      const res = await fetch(`${SUPABASE_URL}/functions/v1/push-dm-now`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ execution_id: execution.id }),
+      // invoke (not raw fetch) forwards the logged-in user's JWT — push-dm-now now
+      // enforces authorizeClientRequest — and targets the live project (the bare
+      // fetch hardcoded the dead qfbhcixkxzivpmxlciot ref). Mirrors push-followup-now.
+      const { error } = await supabase.functions.invoke('push-dm-now', {
+        body: { execution_id: execution.id },
       });
-      const data = await res.json().catch(() => null);
-      if (!res.ok) {
-        toast.error(data?.error || 'Failed to push');
-        return;
-      }
+      if (error) throw error;
 
       await waitForExecutionToLeaveWaiting();
       await onReload();
@@ -573,25 +573,19 @@ function DmExecutionDetail({
         }
         if (!timer?.id) { toast.error('No pending follow-up timer found'); return; }
 
-        const res = await fetch(`${SUPABASE_URL}/functions/v1/stop-dm-execution`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ mode: 'followup', timer_id: timer.id }),
+        const { error } = await supabase.functions.invoke('stop-dm-execution', {
+          body: { mode: 'followup', timer_id: timer.id },
         });
-        const data = await res.json().catch(() => null);
-        if (!res.ok) { toast.error(data?.error || 'Failed to stop'); return; }
+        if (error) { toast.error('Failed to stop'); return; }
 
         await refreshFollowupTimers();
         await onReload();
         toast.success('Follow-up cancelled');
       } else if (isDelay) {
-        const res = await fetch(`${SUPABASE_URL}/functions/v1/stop-dm-execution`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ mode: 'delay', execution_id: execution.id }),
+        const { error } = await supabase.functions.invoke('stop-dm-execution', {
+          body: { mode: 'delay', execution_id: execution.id },
         });
-        const data = await res.json().catch(() => null);
-        if (!res.ok) { toast.error(data?.error || 'Failed to stop'); return; }
+        if (error) { toast.error('Failed to stop'); return; }
 
         await onReload();
         toast.success('Execution cancelled');
