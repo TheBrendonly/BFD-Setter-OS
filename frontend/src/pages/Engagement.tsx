@@ -264,6 +264,13 @@ function validateEngageNodes(nodes: WorkflowNode[]): string | null {
         if (!ch.voice_setter_id || !ch.voice_setter_id.trim()) {
           return `${label} — Phone call: voice setter is required`;
         }
+      } else if (ch.type === 'email') {
+        if (!ch.subject || !ch.subject.trim()) {
+          return `${label} — Email: subject is required`;
+        }
+        if (!ch.message || !ch.message.trim()) {
+          return `${label} — Email: message is required`;
+        }
       }
     }
   }

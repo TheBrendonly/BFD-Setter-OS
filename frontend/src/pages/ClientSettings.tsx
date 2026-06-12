@@ -44,6 +44,7 @@ export default function ClientSettings() {
     email: "",
     description: "",
     image_url: "",
+    brand_voice: "",
     timezone: "Australia/Sydney",
   });
   const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
@@ -72,14 +73,14 @@ export default function ClientSettings() {
     try {
       const { data, error } = await supabase
         .from("clients")
-        .select("name, email, description, image_url, timezone")
+        .select("name, email, description, image_url, timezone, brand_voice")
         .eq("id", clientId)
         .single();
 
       if (error) throw error;
       if (data) {
         // Default timezone fallback for clients provisioned before the column was added.
-        const merged = { ...data, timezone: data.timezone || "Australia/Sydney" };
+        const merged = { ...data, timezone: data.timezone || "Australia/Sydney", brand_voice: (data as { brand_voice?: string | null }).brand_voice ?? "" };
         setClientData(merged);
         savedSnapshotRef.current = JSON.stringify(merged);
       }
@@ -136,6 +137,7 @@ export default function ClientSettings() {
           email: clientData.email || null,
           description: clientData.description || null,
           image_url: imageUrl || null,
+          brand_voice: clientData.brand_voice || null,
           timezone: clientData.timezone || "Australia/Sydney",
         })
         .eq("id", clientId);
@@ -232,6 +234,18 @@ export default function ClientSettings() {
                 value={clientData.description || ""}
                 onChange={(e) => setClientData({ ...clientData, description: e.target.value })}
                 rows={3}
+                className={`resize-none field-text ${cb}`}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="brand_voice" className="field-text">Brand Voice</Label>
+              <Textarea
+                id="brand_voice"
+                value={clientData.brand_voice || ""}
+                onChange={(e) => setClientData({ ...clientData, brand_voice: e.target.value })}
+                rows={3}
+                placeholder="Tone and style notes the AI uses when generating engagement copy (e.g. warm and concise, Aussie, no jargon, never pushy)."
                 className={`resize-none field-text ${cb}`}
               />
             </div>

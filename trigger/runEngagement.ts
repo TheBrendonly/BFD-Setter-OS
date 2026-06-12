@@ -728,7 +728,7 @@ export const runEngagement = task({
       // ── Load client config ────────────────────────────────────────────────
       const { data: client } = await supabase
         .from("clients")
-        .select("send_engagement_webhook_url, supabase_url, supabase_service_key, cadence_quiet_hours, twilio_account_sid, twilio_auth_token, twilio_default_phone, retell_phone_1, ghl_api_key, ghl_location_id, ghl_conversation_provider_id, openrouter_api_key, llm_model, timezone")
+        .select("send_engagement_webhook_url, supabase_url, supabase_service_key, cadence_quiet_hours, twilio_account_sid, twilio_auth_token, twilio_default_phone, retell_phone_1, ghl_api_key, ghl_location_id, ghl_conversation_provider_id, openrouter_api_key, llm_model, timezone, brand_voice")
         .eq("id", client_id)
         .single();
 
@@ -1173,6 +1173,7 @@ export const runEngagement = task({
                     customFields: payload.contact_fields,
                     channelType: ch.type as "sms" | "email",
                     nodeIntent: interpolate(ch.ai_prompt || ch.message || ""),
+                    brandVoice: (client as any).brand_voice as string | null,
                   });
                   message = ai.body;
                   aiSubject = ai.subject;

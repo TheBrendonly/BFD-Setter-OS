@@ -15,6 +15,7 @@ import { ArrowLeft, Save, Key, Calendar, User, MapPin, Webhook, AlertCircle, Bra
 import { ConfigStatusBar } from '@/components/ConfigStatusBar';
 import { Textarea } from '@/components/ui/textarea';
 import SetupGuideDialog, { areAllPhasesComplete, SETUP_PHASES, PHASE_IDS, isPhaseComplete } from '@/components/SetupGuideDialog';
+import { CredentialVerifyCard } from '@/components/CredentialVerifyCard';
 import { cn } from '@/lib/utils';
 
 // API Setup phase definitions for the cards grid
@@ -1234,6 +1235,8 @@ const ApiManagement = () => {
               <Progress value={overallProgress.percentage} className="h-2" />
             </CardContent>
           </Card>
+
+          <CredentialVerifyCard clientId={clientId} />
 
           {/* Alert for missing required credentials */}
           {!areRequiredFieldsFilled() && (

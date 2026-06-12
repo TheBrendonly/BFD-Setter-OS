@@ -1263,6 +1263,7 @@ export type Database = {
           analytics_webhook_url: string | null
           api_webhook_url: string | null
           auto_engagement_workflow_id: string | null
+          brand_voice: string | null
           cadence_quiet_hours: Json | null
           campaign_webhook_url: string | null
           chat_analytics_webhook_url: string | null
@@ -1377,6 +1378,7 @@ export type Database = {
           analytics_webhook_url?: string | null
           api_webhook_url?: string | null
           auto_engagement_workflow_id?: string | null
+          brand_voice?: string | null
           cadence_quiet_hours?: Json | null
           campaign_webhook_url?: string | null
           chat_analytics_webhook_url?: string | null
@@ -1491,6 +1493,7 @@ export type Database = {
           analytics_webhook_url?: string | null
           api_webhook_url?: string | null
           auto_engagement_workflow_id?: string | null
+          brand_voice?: string | null
           cadence_quiet_hours?: Json | null
           campaign_webhook_url?: string | null
           chat_analytics_webhook_url?: string | null
