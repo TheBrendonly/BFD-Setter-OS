@@ -8,6 +8,17 @@ Effort: S = under 30 min, M = 30 min - 2 hr, L = half day+.
 
 ---
 
+## 🔐 AUTH + HOMEPAGE — TOP PRIORITY (raised 2026-06-12, during doc-model branch review)
+
+Raised while reviewing `feat/voice-setter-doc-model` on the local dev server. Sequenced first per Brendan.
+
+- [ ] **(M) Replace the public waitlist homepage with a standard login/signup page.** The root route currently renders the "Open-Source Appointment Setter" waitlist/countdown page. Reuse the existing login page (the LOGIN button's target) and reorganise routing so auth is the home page; retire or relocate the waitlist page.
+- [ ] **(M) Set up the "forgot password" system, including email.** There is currently NO email provider wired up, so Supabase recovery emails have nowhere to go. Needs: SMTP provider choice + Supabase Auth SMTP config + a working in-app reset-password route. Note: the auth Site URL is `http://localhost:3000` (recovery links redirect there), so fix the Site URL + redirect allow-list at the same time.
+- [ ] **(S) No reachable "change my password" UI — wire it up.** The change-your-own-password form already exists in `frontend/src/pages/Settings.tsx` (route `/settings`, uses `supabase.auth.updateUser({ password })`) but `/settings` is **not linked anywhere in the nav** — orphaned. The sidebar "Account Settings" page (`AccountSettings.tsx`, `/client/:clientId/account-settings`) has a header comment promising "email, password, theme" but renders only Full Name + Email — the password section is missing. Fix: add the change-password section to `AccountSettings.tsx` (or link `/settings` from the sidebar and retire the duplicate). NB `ClientSettings.tsx` "Sub-Account Settings" sets a *sub-account client's* password via the `update-client-password` edge fn — that is a different thing, not the logged-in user's own password.
+- [ ] **(L) Auth security review.** Triggered by the lost-credentials moment (no sign-in since 2026-05-09): review login/auth end-to-end — password policy, recovery flow, redirect allow-list, session length, whether signup should even be open, MFA for the agency account, and rate limiting. One agency account exists (`brendan@buildingflowdigital.com`); a temporary password was set via the admin API on 2026-06-12 and **must be changed by Brendan after first login**.
+
+---
+
 ## 🛡️ FULL SYSTEM AUDIT + FIXES — SHIPPED & DEPLOYED LIVE (2026-06-10) — HEAD `06425c3`
 
 Multi-agent full audit (80 raised → **62 confirmed**) + the CA1-CA8 onboarding gaps. **All deployed live**: 17 edge functions, Trigger.dev **v20260610.1**, 3 migrations (RLS + constraint + ghl_channel_field_id), frontend pushed → Railway. Report: `Docs/AUDIT_2026-06-10_full-system-audit.md`. Handoff: `Operations/handoffs/2026-06-10-audit-fixes-and-deploy.md`.

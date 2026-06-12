@@ -150,15 +150,23 @@ export const AIPromptDialog: React.FC<AIPromptDialogProps> = ({
       
       try {
         const clientId = window.location.pathname.split('/')[2];
-        const { data, error } = await supabase
+        // ai_meta_prompt (2026-06-12): clients.system_prompt is overwritten with the
+        // full setter prompt on every save, so the meta prompt lives in its own column.
+        // system_prompt fallback covers rows created before the split migration.
+        const { data, error } = await (supabase as any)
           .from('clients')
-          .select('system_prompt')
+          .select('ai_meta_prompt, system_prompt')
           .eq('id', clientId)
           .maybeSingle();
-        
+
         if (error) throw error;
         if (data) {
-          setFetchedSystemPrompt(data.system_prompt || '');
+          // ai_meta_prompt === system_prompt is the pre-split backfill artifact (the
+          // setter prompt copied in), not a real meta prompt — treat as unset.
+          const meta = data.ai_meta_prompt && data.ai_meta_prompt !== data.system_prompt
+            ? data.ai_meta_prompt
+            : '';
+          setFetchedSystemPrompt(meta);
         }
       } catch (error) {
         console.error('Error fetching system prompt:', error);

@@ -434,49 +434,16 @@ async function fanOutDirections(
   }
 }
 
-async function syncVoiceSetter(
-  apiKey: string,
+// BFD voice-tool URL authority + default-tool injection, shared by the retell-llm
+// and conversation-flow sync paths (CustomTool schema is identical for both).
+// Extracted VERBATIM from syncVoiceSetter (2026-06-12); output must stay
+// byte-identical for the legacy path.
+function prepareGeneralTools(
+  llmSettings: Record<string, unknown> | undefined,
   clientId: string,
-  slotNumber: number,
-  generalPrompt: string,
-  beginMessage: string,
-  model: string,
-  agentName: string,
-  voiceSettings?: Record<string, unknown>,
-  llmSettings?: Record<string, unknown>,
-  directions: string[] = [],
-): Promise<unknown> {
-  const retellModel = mapToRetellModel(model);
-  const supabase = getSupabaseAdmin();
-  const agentColumn = SLOT_TO_AGENT_COLUMN[slotNumber];
-  if (!agentColumn) throw new Error(`Invalid voice setter slot number: ${slotNumber}`);
-
-  // Multi-tenant: fetch this client's intake_lead_secret + timezone. Secret feeds
-  // booking-tool URL rewrites with per-tenant auth; timezone feeds the DYNAMIC_VARS
-  // block so the agent gets the correct TZ label (instead of the legacy hardcoded
-  // "(ET)" that confused Gary in the 2026-05-18 inbound booking call).
-  const { data: clientRow, error: clientErr } = await supabase
-    .from("clients")
-    .select("id, intake_lead_secret, timezone")
-    .eq("id", clientId)
-    .single();
-  if (clientErr || !clientRow) {
-    throw new Error(`[sync-voice-setter] Failed to fetch client ${clientId}: ${clientErr?.message ?? "not found"}`);
-  }
-  const clientTimezone = (clientRow as { timezone: string | null }).timezone || "Australia/Sydney";
-  let intakeSecret = (clientRow as { intake_lead_secret: string | null }).intake_lead_secret;
-  if (!intakeSecret) {
-    const bytes = new Uint8Array(24);
-    crypto.getRandomValues(bytes);
-    intakeSecret = btoa(String.fromCharCode(...bytes));
-    console.log(`[sync-voice-setter] Auto-minting intake_lead_secret for client ${clientId}`);
-    const { error: mintErr } = await supabase
-      .from("clients")
-      .update({ intake_lead_secret: intakeSecret })
-      .eq("id", clientId);
-    if (mintErr) console.warn(`[sync-voice-setter] intake_lead_secret persist failed: ${mintErr.message}`);
-  }
-
+  intakeSecret: string | null,
+  logTag: string,
+): Array<Record<string, unknown>> {
   const DEPRECATED_TOOLS = ['create-contact', 'get_contact', 'get-contact'];
   const isValidUrl = (u: unknown): boolean => {
     if (typeof u !== 'string' || !u.trim()) return false;
@@ -547,34 +514,38 @@ async function syncVoiceSetter(
   const validatedTools = substitutedTools.filter((t) => {
     if (t.type === 'end_call' || t.type === 'transfer_call') return true;
     if (t.url !== undefined && !isValidUrl(t.url)) {
-      console.warn(`[sync-voice-setter] Skipping tool "${t.name}" — invalid URL: "${t.url}"`);
+      console.warn(`[${logTag}] Skipping tool "${t.name}" — invalid URL: "${t.url}"`);
       return false;
     }
     return true;
   });
   const generalTools = validatedTools.length > 0 ? validatedTools : [{ type: "end_call", name: "end_call" }];
-  console.log(`[sync-voice-setter] Tools received (${rawTools.length}):`, JSON.stringify(rawTools.map((t: any) => t.name || t.type)));
-  console.log(`[sync-voice-setter] Tools to sync (${generalTools.length}):`, JSON.stringify(generalTools.map((t: any) => t.name || t.type)));
+  console.log(`[${logTag}] Tools received (${rawTools.length}):`, JSON.stringify(rawTools.map((t: any) => t.name || t.type)));
+  console.log(`[${logTag}] Tools to sync (${generalTools.length}):`, JSON.stringify(generalTools.map((t: any) => t.name || t.type)));
   const forcedCount = generalTools.filter((t: any) => t.url === VOICE_BOOKING_TOOLS_URL).length;
   if (forcedCount > 0) {
-    console.log(`[sync-voice-setter] Forced ${forcedCount} BFD tool URL(s) to voice-booking-tools for client ${clientId}`);
+    console.log(`[${logTag}] Forced ${forcedCount} BFD tool URL(s) to voice-booking-tools for client ${clientId}`);
   }
-  const knowledgeBaseIds = Array.isArray(llmSettings?.knowledge_base_ids)
-    ? (llmSettings.knowledge_base_ids as unknown[]).filter(
-      (value): value is string => typeof value === "string" && value.trim().length > 0,
-    )
-    : [];
-  // Auto-append dynamic variables reference block so Retell can substitute them.
-  // Per-client timezone label drives the "Current Date & Time" line so the agent
-  // anchors to the caller's local TZ instead of the legacy hardcoded (ET) which
-  // confused Gary in the 2026-05-18 inbound booking ("Monday May 18" when it was
-  // tomorrow Tuesday in Sydney).
-  //
-  // CRITICAL on inbound BYO Twilio calls: dynamic variables arrive EMPTY (Retell
-  // limitation). The instructional note below tells the agent how to behave when
-  // {{current_time}} or other vars are blank — defer to the get-available-slots
-  // tool to discover today's date, never guess the day-of-week.
-  const DYNAMIC_VARS_BLOCK = `
+  return generalTools as Array<Record<string, unknown>>;
+}
+
+// Dynamic-variables reference block appended to every voice prompt at push time.
+// Extracted VERBATIM from syncVoiceSetter (2026-06-12); shared by the retell-llm
+// path (appended to general_prompt) and the conversation-flow path (appended to
+// global_prompt). KEEP IN SYNC with the client-side replica at
+// frontend/src/data/retellDynamicVarsBlock.ts.
+//
+// Per-client timezone label drives the "Current Date & Time" line so the agent
+// anchors to the caller's local TZ instead of the legacy hardcoded (ET) which
+// confused Gary in the 2026-05-18 inbound booking ("Monday May 18" when it was
+// tomorrow Tuesday in Sydney).
+//
+// CRITICAL on inbound BYO Twilio calls: dynamic variables arrive EMPTY (Retell
+// limitation). The instructional note below tells the agent how to behave when
+// {{current_time}} or other vars are blank — defer to the get-available-slots
+// tool to discover today's date, never guess the day-of-week.
+function buildDynamicVarsBlock(clientTimezone: string): string {
+  return `
 
 ── ── ── ── ── ── ── ── ── ── ── ── ── ──
 
@@ -601,24 +572,108 @@ On inbound calls to a BYO Twilio number, Retell does NOT inject dynamic variable
 2. **To discover today's date**, call \`get-available-slots\` with no \`startDateTime\` — the response is anchored to today in ${clientTimezone}. The first returned slot's date IS today (or the next business hour).
 3. **For caller identity** ({{first_name}}, {{email}}), use \`call.from_number\` (auto-injected into tool bodies as \`phone\`) to look up the contact via the contact-lookup tool BEFORE asking the caller their details.
 4. **For timezone**, default to ${clientTimezone}. Say "${clientTimezone.split('/').pop()?.replace('_', ' ') || 'local'} time" when confirming bookings.`;
+}
 
-  const enrichedPrompt = generalPrompt + DYNAMIC_VARS_BLOCK;
+// EE1 direction-ownership resolution (Layer 1 empty-set expansion + Layer 2
+// shared-agent fan-out guard), extracted VERBATIM from syncVoiceSetter
+// (2026-06-12) so the conversation-flow path gets identical wipe protection.
+async function resolveDirectionOwnership(
+  supabase: ReturnType<typeof getSupabaseAdmin>,
+  clientId: string,
+  slotNumber: number,
+  existingAgentId: string | null,
+  directions: string[],
+  clientRowAgents: Record<string, string | null>,
+  allAgentColumns: string[],
+  logTag: string,
+): Promise<{
+  effectiveDirections: string[];
+  directionFanOutBlocked: boolean;
+  directionWarning: string | null;
+  directionConflictColumns: string[];
+}> {
+  // Hardening (2026-06-09): a content-only Save with NO directions selected
+  // (stale/empty toggles) would otherwise make fanOutDirections RELEASE every
+  // direction column this agent occupies — unbinding a single master agent that
+  // legitimately serves all directions, and tripping the EE1 guard below. When
+  // the slot's existing agent already owns one or more direction columns and the
+  // push selects none, interpret empty as "preserve current ownership" instead of
+  // "release all". This only ever EXPANDS the claim to columns the SAME agent
+  // already holds, so it can never claim a column held by a different agent and
+  // cannot cause a cross-slot wipe. Explicit partial saves (a non-empty subset)
+  // are untouched and still hit the guard.
+  let effectiveDirections = directions;
+  if (existingAgentId && directions.length === 0) {
+    const ownedDirections = Object.entries(DIRECTION_TO_AGENT_COLUMN)
+      .filter(([, col]) => clientRowAgents[col] === existingAgentId)
+      .map(([dir]) => dir);
+    if (ownedDirections.length > 0) {
+      effectiveDirections = ownedDirections;
+      console.log(
+        `[${logTag}] Empty directions on save; preserving current ownership for agent ${existingAgentId}: ${JSON.stringify(ownedDirections)}`,
+      );
+      // Best-effort self-heal: write the expanded set back to this slot's prompts
+      // row so the UI toggles reflect reality on next load. Non-blocking.
+      const { error: healErr } = await supabase
+        .from("prompts")
+        .update({ directions: effectiveDirections })
+        .eq("client_id", clientId)
+        .eq("slot_id", `Voice-Setter-${slotNumber}`)
+        .eq("category", "voice_setter");
+      if (healErr) {
+        console.warn(`[${logTag}] directions self-heal failed (non-blocking): ${healErr.message}`);
+      }
+    }
+  }
 
-  const llmPayload: Record<string, unknown> = {
-    model: retellModel,
-    general_prompt: enrichedPrompt,
-    begin_message: beginMessage || null,
-    general_tools: generalTools,
-    model_high_priority: llmSettings?.model_high_priority ?? true,
-    start_speaker:
-      typeof llmSettings?.start_speaker === "string" && llmSettings.start_speaker.trim().length > 0
-        ? llmSettings.start_speaker
-        : "agent",
-    knowledge_base_ids: knowledgeBaseIds,
-  };
+  // EE1 safety (Layer 2, 2026-06-09): the agent PUSH + publish is always safe and
+  // idempotent, so a Save NEVER aborts here anymore — the agent always updates and
+  // publishes. What stays gated is the DIRECTION-COLUMN FAN-OUT. If `existingAgentId`
+  // is referenced by MULTIPLE slot anchor columns and this push's directions do NOT
+  // claim every one of them, running fanOutDirections would CLEAR the unclaimed shared
+  // column(s) — wiping the agent another slot, or a legacy "Voice-Setter-N" cadence
+  // that reads those columns, is serving (the 2026-05-18 incident). In that case we
+  // SKIP the fan-out and return a non-fatal warning so the user can resolve ownership
+  // via Fork / Delete, WITHOUT losing the agent push. (Layer 1 above already expands an
+  // empty selection to the agent's currently-owned columns, so a routine content-only
+  // Save is never flagged here.)
+  let directionFanOutBlocked = false;
+  let directionWarning: string | null = null;
+  let directionConflictColumns: string[] = [];
+  if (existingAgentId) {
+    const columnsPointingAtThisAgent = allAgentColumns.filter(
+      (col) => clientRowAgents[col] === existingAgentId,
+    );
+    if (columnsPointingAtThisAgent.length > 1) {
+      const claimedColumns = new Set(
+        effectiveDirections.map((d) => DIRECTION_TO_AGENT_COLUMN[d]).filter(Boolean),
+      );
+      const unclaimedSharedColumns = columnsPointingAtThisAgent.filter(
+        (col) => !claimedColumns.has(col),
+      );
+      if (unclaimedSharedColumns.length > 0) {
+        directionFanOutBlocked = true;
+        directionConflictColumns = columnsPointingAtThisAgent;
+        directionWarning =
+          `Agent updated and published, but direction ownership was left unchanged: agent ${existingAgentId} ` +
+          `is shared across column(s) ${columnsPointingAtThisAgent.join(", ")} and this Save only claims ` +
+          `direction(s) ${directions.length > 0 ? directions.join(", ") : "(none selected)"}. ` +
+          `Applying it would have cleared the shared column(s) [${unclaimedSharedColumns.join(", ")}], which could ` +
+          `break another slot or a legacy "Voice-Setter-N" cadence that reads those columns. To change direction ` +
+          `ownership, Fork this direction onto its own agent, or delete + recreate this slot on a dedicated agent.`;
+        console.warn(`[${logTag}] DIRECTION FAN-OUT SKIPPED (non-fatal): ${directionWarning}`);
+      }
+    }
+  }
 
-  // Build agent-level update payload from voiceSettings
-  // Use explicit !== undefined checks so falsy values (0, false, null) are properly sent
+  return { effectiveDirections, directionFanOutBlocked, directionWarning, directionConflictColumns };
+}
+
+// Build agent-level update payload from voiceSettings. Engine-agnostic (the agent
+// object is the same for retell-llm and conversation-flow engines). Extracted
+// VERBATIM from syncVoiceSetter (2026-06-12).
+// Use explicit !== undefined checks so falsy values (0, false, null) are properly sent
+function buildAgentUpdatesFromVoiceSettings(voiceSettings?: Record<string, unknown>): Record<string, unknown> {
   const agentUpdates: Record<string, unknown> = {};
   if (voiceSettings) {
     if (typeof voiceSettings.voice_id === 'string' && voiceSettings.voice_id.trim().length > 0) {
@@ -684,6 +739,78 @@ On inbound calls to a BYO Twilio number, Retell does NOT inject dynamic variable
       agentUpdates.pii_config = voiceSettings.pii_config;
     }
   }
+  return agentUpdates;
+}
+
+async function syncVoiceSetter(
+  apiKey: string,
+  clientId: string,
+  slotNumber: number,
+  generalPrompt: string,
+  beginMessage: string,
+  model: string,
+  agentName: string,
+  voiceSettings?: Record<string, unknown>,
+  llmSettings?: Record<string, unknown>,
+  directions: string[] = [],
+): Promise<unknown> {
+  const retellModel = mapToRetellModel(model);
+  const supabase = getSupabaseAdmin();
+  const agentColumn = SLOT_TO_AGENT_COLUMN[slotNumber];
+  if (!agentColumn) throw new Error(`Invalid voice setter slot number: ${slotNumber}`);
+
+  // Multi-tenant: fetch this client's intake_lead_secret + timezone. Secret feeds
+  // booking-tool URL rewrites with per-tenant auth; timezone feeds the DYNAMIC_VARS
+  // block so the agent gets the correct TZ label (instead of the legacy hardcoded
+  // "(ET)" that confused Gary in the 2026-05-18 inbound booking call).
+  const { data: clientRow, error: clientErr } = await supabase
+    .from("clients")
+    .select("id, intake_lead_secret, timezone")
+    .eq("id", clientId)
+    .single();
+  if (clientErr || !clientRow) {
+    throw new Error(`[sync-voice-setter] Failed to fetch client ${clientId}: ${clientErr?.message ?? "not found"}`);
+  }
+  const clientTimezone = (clientRow as { timezone: string | null }).timezone || "Australia/Sydney";
+  let intakeSecret = (clientRow as { intake_lead_secret: string | null }).intake_lead_secret;
+  if (!intakeSecret) {
+    const bytes = new Uint8Array(24);
+    crypto.getRandomValues(bytes);
+    intakeSecret = btoa(String.fromCharCode(...bytes));
+    console.log(`[sync-voice-setter] Auto-minting intake_lead_secret for client ${clientId}`);
+    const { error: mintErr } = await supabase
+      .from("clients")
+      .update({ intake_lead_secret: intakeSecret })
+      .eq("id", clientId);
+    if (mintErr) console.warn(`[sync-voice-setter] intake_lead_secret persist failed: ${mintErr.message}`);
+  }
+
+  const generalTools = prepareGeneralTools(llmSettings, clientId, intakeSecret, "sync-voice-setter");
+  const knowledgeBaseIds = Array.isArray(llmSettings?.knowledge_base_ids)
+    ? (llmSettings.knowledge_base_ids as unknown[]).filter(
+      (value): value is string => typeof value === "string" && value.trim().length > 0,
+    )
+    : [];
+  // Auto-append dynamic variables reference block so Retell can substitute them
+  // (full rationale on buildDynamicVarsBlock above; shared with the CF path).
+  const enrichedPrompt = generalPrompt + buildDynamicVarsBlock(clientTimezone);
+
+  const llmPayload: Record<string, unknown> = {
+    model: retellModel,
+    general_prompt: enrichedPrompt,
+    begin_message: beginMessage || null,
+    general_tools: generalTools,
+    model_high_priority: llmSettings?.model_high_priority ?? true,
+    start_speaker:
+      typeof llmSettings?.start_speaker === "string" && llmSettings.start_speaker.trim().length > 0
+        ? llmSettings.start_speaker
+        : "agent",
+    knowledge_base_ids: knowledgeBaseIds,
+  };
+
+  // Build agent-level update payload from voiceSettings (engine-agnostic; shared
+  // with the conversation-flow path).
+  const agentUpdates = buildAgentUpdatesFromVoiceSettings(voiceSettings);
 
   // Fetch the current agent ID for this slot (plus all sibling slot anchor columns
   // for the EE1 safety guard immediately below).
@@ -698,79 +825,22 @@ On inbound calls to a BYO Twilio number, Retell does NOT inject dynamic variable
   const clientRowAgents = clientData as Record<string, string | null>;
   const existingAgentId = clientRowAgents[agentColumn];
 
-  // Hardening (2026-06-09): a content-only Save with NO directions selected
-  // (stale/empty toggles) would otherwise make fanOutDirections RELEASE every
-  // direction column this agent occupies — unbinding a single master agent that
-  // legitimately serves all directions, and tripping the EE1 guard below. When
-  // the slot's existing agent already owns one or more direction columns and the
-  // push selects none, interpret empty as "preserve current ownership" instead of
-  // "release all". This only ever EXPANDS the claim to columns the SAME agent
-  // already holds, so it can never claim a column held by a different agent and
-  // cannot cause a cross-slot wipe. Explicit partial saves (a non-empty subset)
-  // are untouched and still hit the guard.
-  let effectiveDirections = directions;
-  if (existingAgentId && directions.length === 0) {
-    const ownedDirections = Object.entries(DIRECTION_TO_AGENT_COLUMN)
-      .filter(([, col]) => clientRowAgents[col] === existingAgentId)
-      .map(([dir]) => dir);
-    if (ownedDirections.length > 0) {
-      effectiveDirections = ownedDirections;
-      console.log(
-        `[sync-voice-setter] Empty directions on save; preserving current ownership for agent ${existingAgentId}: ${JSON.stringify(ownedDirections)}`,
-      );
-      // Best-effort self-heal: write the expanded set back to this slot's prompts
-      // row so the UI toggles reflect reality on next load. Non-blocking.
-      const { error: healErr } = await supabase
-        .from("prompts")
-        .update({ directions: effectiveDirections })
-        .eq("client_id", clientId)
-        .eq("slot_id", `Voice-Setter-${slotNumber}`)
-        .eq("category", "voice_setter");
-      if (healErr) {
-        console.warn(`[sync-voice-setter] directions self-heal failed (non-blocking): ${healErr.message}`);
-      }
-    }
-  }
-
-  // EE1 safety (Layer 2, 2026-06-09): the agent PUSH + publish is always safe and
-  // idempotent, so a Save NEVER aborts here anymore — the agent always updates and
-  // publishes. What stays gated is the DIRECTION-COLUMN FAN-OUT. If `existingAgentId`
-  // is referenced by MULTIPLE slot anchor columns and this push's directions do NOT
-  // claim every one of them, running fanOutDirections would CLEAR the unclaimed shared
-  // column(s) — wiping the agent another slot, or a legacy "Voice-Setter-N" cadence
-  // that reads those columns, is serving (the 2026-05-18 incident). In that case we
-  // SKIP the fan-out and return a non-fatal warning so the user can resolve ownership
-  // via Fork / Delete, WITHOUT losing the agent push. (Layer 1 above already expands an
-  // empty selection to the agent's currently-owned columns, so a routine content-only
-  // Save is never flagged here.)
-  let directionFanOutBlocked = false;
-  let directionWarning: string | null = null;
-  let directionConflictColumns: string[] = [];
-  if (existingAgentId) {
-    const columnsPointingAtThisAgent = allAgentColumns.filter(
-      (col) => clientRowAgents[col] === existingAgentId,
-    );
-    if (columnsPointingAtThisAgent.length > 1) {
-      const claimedColumns = new Set(
-        effectiveDirections.map((d) => DIRECTION_TO_AGENT_COLUMN[d]).filter(Boolean),
-      );
-      const unclaimedSharedColumns = columnsPointingAtThisAgent.filter(
-        (col) => !claimedColumns.has(col),
-      );
-      if (unclaimedSharedColumns.length > 0) {
-        directionFanOutBlocked = true;
-        directionConflictColumns = columnsPointingAtThisAgent;
-        directionWarning =
-          `Agent updated and published, but direction ownership was left unchanged: agent ${existingAgentId} ` +
-          `is shared across column(s) ${columnsPointingAtThisAgent.join(", ")} and this Save only claims ` +
-          `direction(s) ${directions.length > 0 ? directions.join(", ") : "(none selected)"}. ` +
-          `Applying it would have cleared the shared column(s) [${unclaimedSharedColumns.join(", ")}], which could ` +
-          `break another slot or a legacy "Voice-Setter-N" cadence that reads those columns. To change direction ` +
-          `ownership, Fork this direction onto its own agent, or delete + recreate this slot on a dedicated agent.`;
-        console.warn(`[sync-voice-setter] DIRECTION FAN-OUT SKIPPED (non-fatal): ${directionWarning}`);
-      }
-    }
-  }
+  // EE1 Layer 1 + Layer 2 (extracted; see resolveDirectionOwnership above).
+  const {
+    effectiveDirections,
+    directionFanOutBlocked,
+    directionWarning,
+    directionConflictColumns,
+  } = await resolveDirectionOwnership(
+    supabase,
+    clientId,
+    slotNumber,
+    existingAgentId,
+    directions,
+    clientRowAgents,
+    allAgentColumns,
+    "sync-voice-setter",
+  );
 
   // Capture any non-blocking publish failure (was silently swallowed before
   // the 2026-05-18 incident — Brendan's UI Save Setter looked like a hard error
@@ -781,6 +851,17 @@ On inbound calls to a BYO Twilio number, Retell does NOT inject dynamic variable
   if (existingAgentId) {
     console.log(`[sync-voice-setter] Updating existing agent ${existingAgentId} for slot ${slotNumber}`);
     const agent = await retellFetch(apiKey, "GET", `get-agent/${existingAgentId}`) as any;
+    // Engine guard (2026-06-12): a conversation-flow agent has no llm_id, so the
+    // else-branch below would otherwise create a NEW retell-llm and PATCH the
+    // agent's response_engine in place — silently destroying the flow. Refuse.
+    if (agent?.response_engine?.type === "conversation-flow") {
+      return {
+        success: false,
+        code: "cf_engine_mismatch",
+        error: `Slot ${slotNumber} agent ${existingAgentId} is a conversation-flow agent; ` +
+          `the single-prompt save path cannot update it. Use the conversation-flow editor instead.`,
+      };
+    }
     const llmId = agent?.response_engine?.llm_id;
 
     if (llmId) {
@@ -893,6 +974,259 @@ On inbound calls to a BYO Twilio number, Retell does NOT inject dynamic variable
     await dualWriteVoiceSetter(supabase, clientId, slotNumber, agentName, newAgent.agent_id, newLlm.llm_id);
     return { success: true, action: "created_and_published", agent_id: newAgent.agent_id, llm_id: newLlm.llm_id, publish_warning: publishWarning };
   }
+}
+
+// ── Conversation Flow sync (doc model Phase 3, 2026-06-12) ───────────────────
+// Pushes a flow OUTLINE onto a conversation-flow agent. The outline carries each
+// node's full `raw` JSON round-tripped from get-conversation-flow; only
+// global_prompt, node instruction text and edge condition prompts are overlaid,
+// so graph surgery done in the Retell dashboard is never clobbered.
+// RIGID MODE ONLY: flex mode compiles every node into one prompt and triggers
+// Retell's 3,500-token billing scaler — never send any flex/compile flag.
+interface FlowOutlineNode {
+  id: string;
+  name?: string;
+  type?: string;
+  instruction?: { type: string; text: string };
+  edges?: Array<{ id?: string; destination_node_id?: string; condition?: string }>;
+  raw?: Record<string, unknown>;
+}
+interface FlowOutline {
+  global_prompt?: string;
+  start_node_id?: string;
+  start_speaker?: string;
+  nodes?: FlowOutlineNode[];
+}
+
+function outlineNodeToRetellNode(n: FlowOutlineNode): Record<string, unknown> {
+  const raw: Record<string, unknown> = (n.raw && typeof n.raw === "object")
+    ? { ...n.raw }
+    : { id: n.id, name: n.name, type: n.type || "conversation" };
+  // Overlay edited instruction text (prompt-type instructions only get text swapped;
+  // static_text keeps its own type from raw/outline).
+  if (n.instruction && typeof n.instruction.text === "string") {
+    const rawInstruction = (raw.instruction && typeof raw.instruction === "object")
+      ? raw.instruction as Record<string, unknown>
+      : { type: n.instruction.type || "prompt" };
+    raw.instruction = { ...rawInstruction, text: n.instruction.text };
+  }
+  // Overlay edited edge conditions by edge id; edges unknown to the outline pass
+  // through from raw untouched. Wizard-generated nodes (no raw) build edges fresh.
+  if (Array.isArray(n.edges)) {
+    const rawEdges = Array.isArray(raw.edges) ? raw.edges as Array<Record<string, unknown>> : null;
+    if (rawEdges) {
+      raw.edges = rawEdges.map((re) => {
+        const edited = n.edges!.find((e) => e.id && e.id === re.id);
+        if (!edited || typeof edited.condition !== "string") return re;
+        const rawCondition = (re.transition_condition && typeof re.transition_condition === "object")
+          ? re.transition_condition as Record<string, unknown>
+          : { type: "prompt" };
+        return {
+          ...re,
+          condition: edited.condition,
+          transition_condition: rawCondition.type === "prompt"
+            ? { ...rawCondition, prompt: edited.condition }
+            : rawCondition,
+        };
+      });
+    } else {
+      raw.edges = n.edges.map((e) => ({
+        id: e.id,
+        destination_node_id: e.destination_node_id,
+        condition: e.condition,
+        transition_condition: { type: "prompt", prompt: e.condition },
+      }));
+    }
+  }
+  return raw;
+}
+
+async function syncVoiceSetterConversationFlow(
+  apiKey: string,
+  clientId: string,
+  slotNumber: number,
+  flowOutline: FlowOutline,
+  model: string,
+  agentName: string,
+  voiceSettings?: Record<string, unknown>,
+  llmSettings?: Record<string, unknown>,
+  directions: string[] = [],
+): Promise<unknown> {
+  const supabase = getSupabaseAdmin();
+  const agentColumn = SLOT_TO_AGENT_COLUMN[slotNumber];
+  if (!agentColumn) throw new Error(`Invalid voice setter slot number: ${slotNumber}`);
+  if (!flowOutline || !Array.isArray(flowOutline.nodes) || flowOutline.nodes.length === 0) {
+    throw new Error("[sync-voice-setter-cf] flowOutline with at least one node is required");
+  }
+
+  const { data: clientRow, error: clientErr } = await supabase
+    .from("clients")
+    .select("id, intake_lead_secret, timezone")
+    .eq("id", clientId)
+    .single();
+  if (clientErr || !clientRow) {
+    throw new Error(`[sync-voice-setter-cf] Failed to fetch client ${clientId}: ${clientErr?.message ?? "not found"}`);
+  }
+  const clientTimezone = (clientRow as { timezone: string | null }).timezone || "Australia/Sydney";
+  let intakeSecret = (clientRow as { intake_lead_secret: string | null }).intake_lead_secret;
+  if (!intakeSecret) {
+    const bytes = new Uint8Array(24);
+    crypto.getRandomValues(bytes);
+    intakeSecret = btoa(String.fromCharCode(...bytes));
+    console.log(`[sync-voice-setter-cf] Auto-minting intake_lead_secret for client ${clientId}`);
+    const { error: mintErr } = await supabase
+      .from("clients")
+      .update({ intake_lead_secret: intakeSecret })
+      .eq("id", clientId);
+    if (mintErr) console.warn(`[sync-voice-setter-cf] intake_lead_secret persist failed: ${mintErr.message}`);
+  }
+
+  // Same custom tools as the retell-llm path (identical CustomTool schema), but
+  // flow-level: end_call / transfer_call have no place in the flow tools array
+  // (call ending is an End node in a conversation flow).
+  const generalTools = prepareGeneralTools(llmSettings, clientId, intakeSecret, "sync-voice-setter-cf");
+  const flowTools = generalTools.filter((t) => t.type !== "end_call" && t.type !== "transfer_call");
+
+  const flowPayload: Record<string, unknown> = {
+    global_prompt: (flowOutline.global_prompt || "") + buildDynamicVarsBlock(clientTimezone),
+    nodes: flowOutline.nodes.map(outlineNodeToRetellNode),
+    start_speaker: flowOutline.start_speaker === "user" ? "user" : "agent",
+    model_choice: {
+      type: "cascading",
+      model: mapToRetellModel(model),
+      high_priority: llmSettings?.model_high_priority ?? true,
+    },
+    tools: flowTools,
+  };
+  if (flowOutline.start_node_id) flowPayload.start_node_id = flowOutline.start_node_id;
+
+  // Agent-level updates: voice settings are engine-agnostic; reuse the same
+  // field mapping by patching the agent exactly like the retell-llm path does.
+  const agentUpdates = buildAgentUpdatesFromVoiceSettings(voiceSettings);
+
+  const allAgentColumns = Object.values(SLOT_TO_AGENT_COLUMN);
+  const { data: clientData, error: agentLookupErr } = await supabase
+    .from("clients")
+    .select(allAgentColumns.join(", "))
+    .eq("id", clientId)
+    .single();
+  if (agentLookupErr) throw new Error(`Failed to fetch client: ${agentLookupErr.message}`);
+  const clientRowAgents = clientData as Record<string, string | null>;
+  const existingAgentId = clientRowAgents[agentColumn];
+
+  const {
+    effectiveDirections,
+    directionFanOutBlocked,
+    directionWarning,
+    directionConflictColumns,
+  } = await resolveDirectionOwnership(
+    supabase,
+    clientId,
+    slotNumber,
+    existingAgentId,
+    directions,
+    clientRowAgents,
+    allAgentColumns,
+    "sync-voice-setter-cf",
+  );
+
+  let publishWarning: string | null = null;
+
+  if (existingAgentId) {
+    const agent = await retellFetch(apiKey, "GET", `get-agent/${existingAgentId}`) as any;
+    const engineType = agent?.response_engine?.type;
+    if (engineType !== "conversation-flow") {
+      // v1: conversation-flow is for NEW setters only; converting a live
+      // single-prompt slot in place is deliberately unsupported.
+      return {
+        success: false,
+        code: "cf_engine_mismatch",
+        error: `Slot ${slotNumber} already has a ${engineType ?? "unknown"} agent (${existingAgentId}). ` +
+          `Conversation Flow is only supported on newly created setters; duplicate into a fresh slot instead.`,
+      };
+    }
+    const flowId = agent?.response_engine?.conversation_flow_id;
+    if (!flowId) throw new Error(`[sync-voice-setter-cf] Agent ${existingAgentId} has no conversation_flow_id`);
+    console.log(`[sync-voice-setter-cf] Updating flow ${flowId} on agent ${existingAgentId} (slot ${slotNumber})`);
+    const updatedFlow = await retellFetch(apiKey, "PATCH", `update-conversation-flow/${flowId}`, flowPayload) as any;
+    const agentPatch: Record<string, unknown> = {
+      ...agentUpdates,
+      webhook_events: DEFAULT_RETELL_WEBHOOK_EVENTS,
+    };
+    if (agentName) agentPatch.agent_name = agentName;
+    if (!agentPatch.webhook_url) agentPatch.webhook_url = getAutoWebhookUrl();
+    await retellFetch(apiKey, "PATCH", `update-agent/${existingAgentId}`, agentPatch);
+    try {
+      const publishResp = await retellFetch(apiKey, "POST", `publish-agent/${existingAgentId}`) as { version?: number };
+      console.log(`[sync-voice-setter-cf] Auto-published agent ${existingAgentId} (v${publishResp?.version ?? "?"})`);
+      await repointPhoneVersionsAfterPublish(supabase, apiKey, clientId, slotNumber, existingAgentId, publishResp?.version);
+    } catch (pubErr) {
+      const message = pubErr instanceof Error ? pubErr.message : String(pubErr);
+      console.warn(`[sync-voice-setter-cf] Auto-publish failed (non-blocking):`, message);
+      publishWarning = message;
+    }
+    if (!directionFanOutBlocked) {
+      await fanOutDirections(supabase, clientId, `Voice-Setter-${slotNumber}`, existingAgentId, effectiveDirections);
+    }
+    return {
+      success: true,
+      action: "updated_and_published",
+      agent_id: existingAgentId,
+      conversation_flow_id: flowId,
+      flow_version: updatedFlow?.version ?? null,
+      publish_warning: publishWarning,
+      direction_warning: directionWarning,
+      conflicting_agent_id: directionFanOutBlocked ? existingAgentId : null,
+      shared_columns: directionFanOutBlocked ? directionConflictColumns : null,
+    };
+  }
+
+  console.log(`[sync-voice-setter-cf] Creating new conversation-flow agent for slot ${slotNumber}`);
+  let voiceId = voiceSettings?.voice_id as string | undefined;
+  if (!voiceId) {
+    const voices = await retellFetch(apiKey, "GET", "list-voices") as any[];
+    voiceId = voices?.[0]?.voice_id;
+    if (!voiceId) throw new Error("No voices available in your Retell account. Please add a voice first.");
+  }
+
+  const newFlow = await retellFetch(apiKey, "POST", "create-conversation-flow", flowPayload) as any;
+  const createAgentPayload = Object.fromEntries(
+    Object.entries({
+      agent_name: agentName || `Voice Setter ${slotNumber}`,
+      channel: "voice",
+      voice_id: voiceId,
+      response_engine: {
+        type: "conversation-flow",
+        conversation_flow_id: newFlow.conversation_flow_id,
+        ...(newFlow?.version !== undefined && newFlow?.version !== null ? { version: newFlow.version } : {}),
+      },
+      language: (voiceSettings?.language as string) || "en-US",
+      ...agentUpdates,
+      webhook_url: agentUpdates.webhook_url || getAutoWebhookUrl(),
+      webhook_events: DEFAULT_RETELL_WEBHOOK_EVENTS,
+    }).filter(([, value]) => value !== undefined && value !== null),
+  );
+  const newAgent = await retellFetch(apiKey, "POST", "create-agent", createAgentPayload) as any;
+
+  await supabase.from("clients").update({ [agentColumn]: newAgent.agent_id }).eq("id", clientId);
+  console.log(`[sync-voice-setter-cf] Created agent ${newAgent.agent_id} (flow ${newFlow.conversation_flow_id}) in ${agentColumn}`);
+  try {
+    const publishResp = await retellFetch(apiKey, "POST", `publish-agent/${newAgent.agent_id}`) as { version?: number };
+    console.log(`[sync-voice-setter-cf] Auto-published new agent ${newAgent.agent_id} (v${publishResp?.version ?? "?"})`);
+    await repointPhoneVersionsAfterPublish(supabase, apiKey, clientId, slotNumber, newAgent.agent_id, publishResp?.version);
+  } catch (pubErr) {
+    const message = pubErr instanceof Error ? pubErr.message : String(pubErr);
+    console.warn(`[sync-voice-setter-cf] Auto-publish of new agent failed (non-blocking):`, message);
+    publishWarning = message;
+  }
+  await fanOutDirections(supabase, clientId, `Voice-Setter-${slotNumber}`, newAgent.agent_id, effectiveDirections);
+  return {
+    success: true,
+    action: "created_and_published",
+    agent_id: newAgent.agent_id,
+    conversation_flow_id: newFlow.conversation_flow_id,
+    publish_warning: publishWarning,
+  };
 }
 
 async function retellFetch(
@@ -1281,16 +1615,27 @@ Deno.serve(async (req) => {
           try {
             const agent = await retellFetch(apiKey, "GET", `get-agent/${existingAgentId}`) as any;
             const llmId = agent?.response_engine?.llm_id;
+            const conversationFlowId = agent?.response_engine?.type === "conversation-flow"
+              ? agent?.response_engine?.conversation_flow_id
+              : null;
             // Delete agent first
             await retellFetch(apiKey, "DELETE", `delete-agent/${existingAgentId}`);
             console.log(`[delete-voice-setter] Deleted Retell agent ${existingAgentId}`);
-            // Delete LLM if exists
+            // Delete the response engine object (LLM or conversation flow) if it exists
             if (llmId) {
               try {
                 await retellFetch(apiKey, "DELETE", `delete-retell-llm/${llmId}`);
                 console.log(`[delete-voice-setter] Deleted Retell LLM ${llmId}`);
               } catch (llmErr) {
                 console.warn(`[delete-voice-setter] Failed to delete LLM ${llmId}:`, llmErr);
+              }
+            }
+            if (conversationFlowId) {
+              try {
+                await retellFetch(apiKey, "DELETE", `delete-conversation-flow/${conversationFlowId}`);
+                console.log(`[delete-voice-setter] Deleted conversation flow ${conversationFlowId}`);
+              } catch (flowErr) {
+                console.warn(`[delete-voice-setter] Failed to delete conversation flow ${conversationFlowId}:`, flowErr);
               }
             }
           } catch (agentErr) {
@@ -1335,6 +1680,61 @@ Deno.serve(async (req) => {
         }));
         result = await syncVoiceSetter(apiKey, clientId, slotNumber, generalPrompt, beginMessage, model, agentName, voiceSettings, llmSettings, directions);
         console.log(`[sync-voice-setter] Result:`, JSON.stringify(result));
+        break;
+      }
+
+      // ===== SYNC VOICE SETTER (CONVERSATION FLOW ENGINE) =====
+      // Doc model Phase 3 (2026-06-12). Pushes a flow outline onto a
+      // conversation-flow agent; rigid mode only (no flex/compile flag, ever).
+      case "sync-voice-setter-cf": {
+        const slotNumber = params.slotNumber as number;
+        if (!slotNumber) throw new Error("slotNumber is required");
+        const flowOutline = params.flowOutline as FlowOutline | undefined;
+        if (!flowOutline) throw new Error("flowOutline is required");
+        const model = (params.model as string) || "gpt-4.1-nano";
+        const agentName = (params.agentName as string) || "";
+        const voiceSettings = params.voiceSettings as Record<string, unknown> | undefined;
+        const llmSettings = params.llmSettings as Record<string, unknown> | undefined;
+        const ALLOWED_DIRECTIONS = ["inbound", "outbound_initial", "outbound_followup"];
+        const rawDirections = Array.isArray(params.directions) ? params.directions : [];
+        const directions = Array.from(new Set(
+          rawDirections.filter((d: unknown): d is string => typeof d === "string" && ALLOWED_DIRECTIONS.includes(d))
+        ));
+        console.log(`[sync-voice-setter-cf] Starting sync for slot ${slotNumber}, model: ${model}, nodes: ${Array.isArray(flowOutline.nodes) ? flowOutline.nodes.length : 0}`);
+        result = await syncVoiceSetterConversationFlow(apiKey, clientId, slotNumber, flowOutline, model, agentName, voiceSettings, llmSettings, directions);
+        console.log(`[sync-voice-setter-cf] Result:`, JSON.stringify(result));
+        break;
+      }
+
+      // ===== GET CONVERSATION FLOW (for the outline editor) =====
+      // Returns the LIVE flow JSON for a slot's conversation-flow agent so the
+      // frontend hydrates its outline from Retell on every editor open (dashboard
+      // edits are absorbed instead of clobbered).
+      case "get-conversation-flow": {
+        const slotNumber = params.slotNumber as number;
+        if (!slotNumber) throw new Error("slotNumber is required");
+        const agentColumn = SLOT_TO_AGENT_COLUMN[slotNumber];
+        if (!agentColumn) throw new Error(`Invalid voice setter slot number: ${slotNumber}`);
+        const supabaseAdmin = getSupabaseAdmin();
+        const { data: clientRow, error: clientFetchErr } = await supabaseAdmin
+          .from("clients")
+          .select(agentColumn)
+          .eq("id", clientId)
+          .single();
+        if (clientFetchErr) throw new Error(`Failed to fetch client: ${clientFetchErr.message}`);
+        const agentId = (clientRow as Record<string, string | null>)?.[agentColumn];
+        if (!agentId) {
+          result = { success: false, code: "no_agent", error: `No agent for slot ${slotNumber}` };
+          break;
+        }
+        const agent = await retellFetch(apiKey, "GET", `get-agent/${agentId}`) as any;
+        if (agent?.response_engine?.type !== "conversation-flow") {
+          result = { success: false, code: "cf_engine_mismatch", error: `Slot ${slotNumber} agent is not a conversation-flow agent` };
+          break;
+        }
+        const flowId = agent.response_engine.conversation_flow_id;
+        const flow = await retellFetch(apiKey, "GET", `get-conversation-flow/${flowId}`);
+        result = { success: true, agent_id: agentId, conversation_flow_id: flowId, flow };
         break;
       }
 
@@ -1489,6 +1889,16 @@ Deno.serve(async (req) => {
 
         // 2. GET source agent + source LLM from Retell.
         const sourceAgent = await retellFetch(apiKey, "GET", `get-agent/${sourceAgentId}`) as any;
+        // Conversation-flow agents are not fork-clonable in v1 (flow duplication
+        // is a later GET+POST clone); surface a clear code instead of the generic
+        // "no llm_id" error so the frontend can toast it properly.
+        if (sourceAgent?.response_engine?.type === "conversation-flow") {
+          const err = new Error(
+            `Source agent ${sourceAgentId} is a conversation-flow agent; forking is not yet supported for conversation flows.`,
+          );
+          (err as Error & { code?: string }).code = "cf_not_supported";
+          throw err;
+        }
         const sourceLlmId = sourceAgent?.response_engine?.llm_id;
         if (!sourceLlmId) {
           throw new Error(
