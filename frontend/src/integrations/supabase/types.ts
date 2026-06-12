@@ -1259,6 +1259,7 @@ export type Database = {
         Row: {
           agency_id: string | null
           ai_chat_webhook_url: string | null
+          ai_meta_prompt: string | null
           analytics_webhook_url: string | null
           api_webhook_url: string | null
           auto_engagement_workflow_id: string | null
@@ -1372,6 +1373,7 @@ export type Database = {
         Insert: {
           agency_id?: string | null
           ai_chat_webhook_url?: string | null
+          ai_meta_prompt?: string | null
           analytics_webhook_url?: string | null
           api_webhook_url?: string | null
           auto_engagement_workflow_id?: string | null
@@ -1485,6 +1487,7 @@ export type Database = {
         Update: {
           agency_id?: string | null
           ai_chat_webhook_url?: string | null
+          ai_meta_prompt?: string | null
           analytics_webhook_url?: string | null
           api_webhook_url?: string | null
           auto_engagement_workflow_id?: string | null
@@ -3393,6 +3396,62 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "prompt_configurations_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      prompt_docs: {
+        Row: {
+          client_id: string
+          conversation_flow_id: string | null
+          created_at: string
+          deployed_doc_content: string | null
+          doc_content: string
+          engine_type: string
+          flow_outline: Json | null
+          id: string
+          promoted_from_full_prompt: boolean
+          setup_completed_at: string | null
+          slot_id: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          client_id: string
+          conversation_flow_id?: string | null
+          created_at?: string
+          deployed_doc_content?: string | null
+          doc_content?: string
+          engine_type?: string
+          flow_outline?: Json | null
+          id?: string
+          promoted_from_full_prompt?: boolean
+          setup_completed_at?: string | null
+          slot_id: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          client_id?: string
+          conversation_flow_id?: string | null
+          created_at?: string
+          deployed_doc_content?: string | null
+          doc_content?: string
+          engine_type?: string
+          flow_outline?: Json | null
+          id?: string
+          promoted_from_full_prompt?: boolean
+          setup_completed_at?: string | null
+          slot_id?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "prompt_docs_client_id_fkey"
             columns: ["client_id"]
             isOneToOne: false
             referencedRelation: "clients"
