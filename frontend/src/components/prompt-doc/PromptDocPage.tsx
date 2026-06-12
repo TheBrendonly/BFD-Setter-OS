@@ -21,6 +21,8 @@ import { usePromptVersions } from '@/hooks/usePromptVersions';
 import { buildDynamicVarsBlock } from '@/data/retellDynamicVarsBlock';
 import { CallTimeAppendBlock, type CallTimeAppend } from './CallTimeAppendBlock';
 import { MetaPromptRevealDialog } from './MetaPromptRevealDialog';
+import { ConversationFlowOutlineEditor } from './ConversationFlowOutlineEditor';
+import { outlineToText, type FlowOutline } from '@/lib/conversationFlowOutline';
 
 // Canonical prompt-document page (doc model, 2026-06-12). After initial setup the
 // prompt lives HERE as one editable document; the section editor is setup-only.
@@ -61,6 +63,10 @@ interface PromptDocPageProps {
   onOpenModifyWithAI: (content: string, apply: (next: string) => void) => void;
   onOpenSettings: () => void;
   onRerunSetup?: () => void;
+  // Conversation-flow engine handlers (engine_type === 'conversation-flow').
+  onHydrateFlow?: () => Promise<FlowOutline | null>;
+  onSaveFlowDraft?: (outline: FlowOutline) => Promise<void>;
+  onPushFlow?: (outline: FlowOutline) => Promise<void>;
 }
 
 const MONO_STYLE: React.CSSProperties = {
@@ -89,8 +95,14 @@ export const PromptDocPage: React.FC<PromptDocPageProps> = ({
   onOpenModifyWithAI,
   onOpenSettings,
   onRerunSetup,
+  onHydrateFlow,
+  onSaveFlowDraft,
+  onPushFlow,
 }) => {
   const [docText, setDocText] = useState('');
+  const isFlowEngine = doc?.engine_type === 'conversation-flow';
+  const [flowOutline, setFlowOutline] = useState<FlowOutline | null>(null);
+  const [flowRefreshing, setFlowRefreshing] = useState(false);
   const [showAppends, setShowAppends] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showVersions, setShowVersions] = useState(false);
@@ -104,12 +116,34 @@ export const PromptDocPage: React.FC<PromptDocPageProps> = ({
     setDocText(doc?.doc_content ?? '');
   }, [doc?.id]);
 
+  // Conversation-flow: seed from the cached outline, then hydrate from the LIVE
+  // Retell flow (live wins, so dashboard edits are absorbed instead of clobbered).
+  const refreshFlow = async () => {
+    if (!onHydrateFlow) return;
+    setFlowRefreshing(true);
+    try {
+      const live = await onHydrateFlow();
+      if (live) setFlowOutline(live);
+    } finally {
+      setFlowRefreshing(false);
+    }
+  };
+  useEffect(() => {
+    if (!doc || doc.engine_type !== 'conversation-flow') return;
+    setFlowOutline((doc.flow_outline as FlowOutline | null) ?? null);
+    void refreshFlow();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [doc?.id]);
+
   const isDirtyVsDeployed = doc ? docText !== (doc.deployed_doc_content ?? '') : false;
   const isDirtyVsDraft = doc ? docText !== doc.doc_content : false;
 
   const callTimeAppends = useMemo<CallTimeAppend[]>(() => {
     const appends: CallTimeAppend[] = [];
-    if (bookingEnabled && bookingPrompt) {
+    // Booking instructions are a single-prompt append; in a conversation flow the
+    // booking stage lives in its own node. The dynamic-vars block applies to both
+    // (appended to general_prompt / global_prompt respectively).
+    if (!isFlowEngine && bookingEnabled && bookingPrompt) {
       appends.push({
         id: 'push:booking',
         title: 'Booking Instructions (appended at push)',
@@ -118,20 +152,34 @@ export const PromptDocPage: React.FC<PromptDocPageProps> = ({
     }
     appends.push({
       id: 'push:dynamic-vars',
-      title: 'Dynamic Variables (auto-injected at push)',
+      title: isFlowEngine
+        ? 'Dynamic Variables (auto-appended to the global prompt at push)'
+        : 'Dynamic Variables (auto-injected at push)',
       text: buildDynamicVarsBlock(clientTimezone),
     });
     return appends;
-  }, [bookingEnabled, bookingPrompt, clientTimezone]);
+  }, [isFlowEngine, bookingEnabled, bookingPrompt, clientTimezone]);
 
   const handleSaveDraft = async () => {
     if (!doc) return;
+    if (isFlowEngine) {
+      if (!flowOutline || !onSaveFlowDraft) return;
+      await saveVersion(outlineToText(flowOutline), 'Flow edit');
+      await onSaveFlowDraft(flowOutline);
+      return;
+    }
     await saveVersion(docText, 'Doc edit');
     await onSaveDraft(docText);
   };
 
   const handlePush = async () => {
     if (!doc) return;
+    if (isFlowEngine) {
+      if (!flowOutline || !onPushFlow) return;
+      await saveVersion(outlineToText(flowOutline), 'Flow edit (pre-push)');
+      await onPushFlow(flowOutline);
+      return;
+    }
     if (isDirtyVsDraft) await saveVersion(docText, 'Doc edit (pre-push)');
     await onPush(docText);
   };
@@ -159,7 +207,11 @@ export const PromptDocPage: React.FC<PromptDocPageProps> = ({
             agent: {retellAgentId}
           </span>
         )}
-        {isDirtyVsDeployed ? (
+        {isFlowEngine ? (
+          <Badge variant={doc.status === 'deployed' ? 'secondary' : 'destructive'}>
+            {doc.status === 'deployed' ? 'Deployed' : 'Draft'}
+          </Badge>
+        ) : isDirtyVsDeployed ? (
           <Badge variant="destructive">Unpushed changes</Badge>
         ) : (
           <Badge variant="secondary">In sync with Retell</Badge>
@@ -173,40 +225,62 @@ export const PromptDocPage: React.FC<PromptDocPageProps> = ({
         <Button onClick={handlePush} disabled={saving} size="sm">
           <Rocket className="w-4 h-4 mr-1.5" /> {saving ? 'Working…' : 'Push to Retell'}
         </Button>
-        <Button
-          onClick={() => onOpenModifyWithAI(docText, setDocText)}
-          disabled={saving}
-          size="sm"
-          variant="outline"
-        >
-          <Wand2 className="w-4 h-4 mr-1.5" /> Modify with AI
-        </Button>
-        <Button
-          onClick={() => setShowMetaPrompt(true)}
-          size="sm"
-          variant="ghost"
-          title="View the system prompt Modify with AI uses"
-        >
-          <Info className="w-4 h-4 mr-1.5" /> AI instructions
-        </Button>
-        {onRerunSetup && (
-          <Button onClick={() => setShowRerunConfirm(true)} disabled={saving} size="sm" variant="ghost">
-            <Bot className="w-4 h-4 mr-1.5" /> Re-run Setup
-          </Button>
+        {!isFlowEngine && (
+          <>
+            <Button
+              onClick={() => onOpenModifyWithAI(docText, setDocText)}
+              disabled={saving}
+              size="sm"
+              variant="outline"
+            >
+              <Wand2 className="w-4 h-4 mr-1.5" /> Modify with AI
+            </Button>
+            <Button
+              onClick={() => setShowMetaPrompt(true)}
+              size="sm"
+              variant="ghost"
+              title="View the system prompt Modify with AI uses"
+            >
+              <Info className="w-4 h-4 mr-1.5" /> AI instructions
+            </Button>
+            {onRerunSetup && (
+              <Button onClick={() => setShowRerunConfirm(true)} disabled={saving} size="sm" variant="ghost">
+                <Bot className="w-4 h-4 mr-1.5" /> Re-run Setup
+              </Button>
+            )}
+          </>
         )}
       </div>
 
-      <Textarea
-        value={docText}
-        onChange={(e) => setDocText(e.target.value)}
-        spellCheck={false}
-        className="min-h-[60vh] w-full"
-        style={MONO_STYLE}
-        placeholder="The full setter prompt lives here. Edit directly and Save Draft, then Push to Retell."
-      />
-      <div className="text-right text-muted-foreground" style={{ ...MONO_STYLE, fontSize: '11px' }}>
-        {docText.length.toLocaleString()} chars
-      </div>
+      {isFlowEngine ? (
+        flowOutline ? (
+          <ConversationFlowOutlineEditor
+            outline={flowOutline}
+            onChange={setFlowOutline}
+            onRefreshFromRetell={onHydrateFlow ? refreshFlow : undefined}
+            refreshing={flowRefreshing}
+            disabled={saving}
+          />
+        ) : (
+          <p className="text-muted-foreground" style={MONO_STYLE}>
+            {flowRefreshing ? 'Loading conversation flow from Retell…' : 'No conversation flow found for this setter yet.'}
+          </p>
+        )
+      ) : (
+        <>
+          <Textarea
+            value={docText}
+            onChange={(e) => setDocText(e.target.value)}
+            spellCheck={false}
+            className="min-h-[60vh] w-full"
+            style={MONO_STYLE}
+            placeholder="The full setter prompt lives here. Edit directly and Save Draft, then Push to Retell."
+          />
+          <div className="text-right text-muted-foreground" style={{ ...MONO_STYLE, fontSize: '11px' }}>
+            {docText.length.toLocaleString()} chars
+          </div>
+        </>
+      )}
 
       <Collapsible open={showAppends} onOpenChange={setShowAppends}>
         <CollapsibleTrigger asChild>
@@ -248,9 +322,11 @@ export const PromptDocPage: React.FC<PromptDocPageProps> = ({
                       >
                         {expandedVersionId === v.id ? 'Hide' : 'View'}
                       </Button>
-                      <Button size="sm" variant="outline" onClick={() => setDocText(v.prompt_content)}>
-                        Restore
-                      </Button>
+                      {!isFlowEngine && (
+                        <Button size="sm" variant="outline" onClick={() => setDocText(v.prompt_content)}>
+                          Restore
+                        </Button>
+                      )}
                     </div>
                   </div>
                 </CardHeader>

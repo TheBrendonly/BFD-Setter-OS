@@ -30,6 +30,7 @@ import PromptCard from '@/components/PromptCard';
 import { Textarea } from '@/components/ui/textarea';
 import { AIPromptDialog } from '@/components/AIPromptDialog';
 import { PromptDocPage, type PromptDocRecord } from '@/components/prompt-doc/PromptDocPage';
+import { hydrateOutlineFromRetellFlow, type FlowOutline } from '@/lib/conversationFlowOutline';
 import { SetterPromptAIDialog } from '@/components/SetterPromptAIDialog';
 import { CopySetterDialog } from '@/components/CopySetterDialog';
 import { DuplicateSetterDialog } from '@/components/DuplicateSetterDialog';
@@ -5830,10 +5831,14 @@ const PromptManagement = () => {
     promptText: string;
     agentSettings: { model?: string; booking_function_enabled?: boolean; booking_prompt?: string | null } | undefined;
     agentTitle: string;
-  }): Promise<{ ok: boolean }> => {
+    // Conversation-flow engine: when set, the push goes through sync-voice-setter-cf
+    // with this outline instead of generalPrompt (same EE1/publish handling applies).
+    flowOutline?: FlowOutline;
+  }): Promise<{ ok: boolean; conversationFlowId: string | null }> => {
     const { promptText, agentSettings: currentAgentSettings, agentTitle } = opts;
-    if (!editingSlotId?.startsWith('Voice-Setter-') || !clientId) return { ok: false };
+    if (!editingSlotId?.startsWith('Voice-Setter-') || !clientId) return { ok: false, conversationFlowId: null };
     let ok = false;
+    let conversationFlowId: string | null = null;
     try {
       const slotNumber = parseInt(editingSlotId.replace('Voice-Setter-', ''), 10);
       if (slotNumber >= 1 && slotNumber <= 10) {
@@ -5882,7 +5887,8 @@ const PromptManagement = () => {
         console.log('🔊 Syncing voice setter to Retell AI, slot:', slotNumber, 'directions:', voiceSetterDirections);
         const { data: retellResult, error: retellError } = await supabase.functions.invoke('retell-proxy', {
           body: {
-            action: 'sync-voice-setter',
+            action: opts.flowOutline ? 'sync-voice-setter-cf' : 'sync-voice-setter',
+            ...(opts.flowOutline ? { flowOutline: opts.flowOutline } : {}),
             clientId,
             slotNumber,
             // EE1: which clients.retell_*_agent_id columns to fan out to.
@@ -6021,6 +6027,7 @@ const PromptManagement = () => {
         } else {
           console.log('✅ Retell AI agent synced:', retellResult);
           ok = true;
+          conversationFlowId = (retellResult as { conversation_flow_id?: string } | null)?.conversation_flow_id ?? null;
           // Surface publish_warning if retell-proxy completed the PATCH but the
           // auto-publish step failed. Without this toast, drafts accumulate
           // unpublished and live calls keep using the OLD published version —
@@ -6088,7 +6095,75 @@ const PromptManagement = () => {
         variant: 'destructive',
       });
     }
-    return { ok };
+    return { ok, conversationFlowId };
+  };
+
+  // ── Conversation-flow engine handlers (doc model Phase 4) ──
+  const handleHydrateFlow = async (): Promise<FlowOutline | null> => {
+    if (!clientId || !editingSlotId?.startsWith('Voice-Setter-')) return null;
+    const slotNumber = parseInt(editingSlotId.replace('Voice-Setter-', ''), 10);
+    try {
+      const { data, error } = await supabase.functions.invoke('retell-proxy', {
+        body: { action: 'get-conversation-flow', clientId, slotNumber },
+      });
+      if (error || !data?.success || !data?.flow) return null;
+      return hydrateOutlineFromRetellFlow(data.flow as Record<string, unknown>);
+    } catch (err) {
+      console.warn('get-conversation-flow failed (using cached outline):', err);
+      return null;
+    }
+  };
+
+  const handleSaveFlowDraft = async (outline: FlowOutline) => {
+    if (!docRecord) return;
+    setSaving(true);
+    try {
+      const { data: updated, error } = await (supabase as any)
+        .from('prompt_docs')
+        .update({ flow_outline: outline, updated_at: new Date().toISOString() })
+        .eq('id', docRecord.id)
+        .select()
+        .single();
+      if (error) throw error;
+      setDocRecord(updated as PromptDocRecord);
+      toast({ title: 'Draft saved', description: 'Flow outline saved. Push to Retell to go live.' });
+    } catch (err: any) {
+      console.error('Error saving flow outline:', err);
+      toast({ title: 'Error', description: err?.message || 'Failed to save the flow outline', variant: 'destructive' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handlePushFlow = async (outline: FlowOutline) => {
+    if (!clientId || !editingSlotId || !docRecord) return;
+    await handleSaveFlowDraft(outline);
+    setSaving(true);
+    try {
+      const currentAgentSettings = getAgentSettings(editingSlotId);
+      const result = await pushVoiceSetterToRetell({
+        promptText: '',
+        flowOutline: outline,
+        agentSettings: currentAgentSettings,
+        agentTitle: (editingPrompt?.name || editingSlotId).trim(),
+      });
+      if (result.ok) {
+        const { data: updated } = await (supabase as any)
+          .from('prompt_docs')
+          .update({
+            status: 'deployed',
+            ...(result.conversationFlowId ? { conversation_flow_id: result.conversationFlowId } : {}),
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', docRecord.id)
+          .select()
+          .single();
+        if (updated) setDocRecord(updated as PromptDocRecord);
+        await markNeedsSync(editingSlotId, false);
+      }
+    } finally {
+      setSaving(false);
+    }
   };
 
   // Load the canonical prompt doc for a voice setter, auto-promoting the persisted
@@ -7295,6 +7370,9 @@ const PromptManagement = () => {
             setSetupModeActive(true);
             setCurrentView('editor');
           }}
+          onHydrateFlow={handleHydrateFlow}
+          onSaveFlowDraft={handleSaveFlowDraft}
+          onPushFlow={handlePushFlow}
         />
         <AIPromptDialog
           open={docAIDialogOpen}
