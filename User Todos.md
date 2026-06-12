@@ -8,14 +8,26 @@ Effort: S = under 30 min, M = 30 min - 2 hr, L = half day+.
 
 ---
 
-## 🔐 AUTH + HOMEPAGE — TOP PRIORITY (raised 2026-06-12, during doc-model branch review)
+## ✅ TIER 0-4 BUILD SHIPPED (2026-06-13) — HEAD `08b79f4`, all live
 
-Raised while reviewing `feat/voice-setter-doc-model` on the local dev server. Sequenced first per Brendan.
+Autonomous build of the approved plan. Full detail + Brendan UI-smoke checklist + deferred designs: **`Operations/handoffs/2026-06-13-tier0-4-build.md`**.
 
-- [ ] **(M) Replace the public waitlist homepage with a standard login/signup page.** The root route currently renders the "Open-Source Appointment Setter" waitlist/countdown page. Reuse the existing login page (the LOGIN button's target) and reorganise routing so auth is the home page; retire or relocate the waitlist page.
-- [ ] **(M) Set up the "forgot password" system, including email.** There is currently NO email provider wired up, so Supabase recovery emails have nowhere to go. Needs: SMTP provider choice + Supabase Auth SMTP config + a working in-app reset-password route. Note: the auth Site URL is `http://localhost:3000` (recovery links redirect there), so fix the Site URL + redirect allow-list at the same time.
-- [ ] **(S) No reachable "change my password" UI — wire it up.** The change-your-own-password form already exists in `frontend/src/pages/Settings.tsx` (route `/settings`, uses `supabase.auth.updateUser({ password })`) but `/settings` is **not linked anywhere in the nav** — orphaned. The sidebar "Account Settings" page (`AccountSettings.tsx`, `/client/:clientId/account-settings`) has a header comment promising "email, password, theme" but renders only Full Name + Email — the password section is missing. Fix: add the change-password section to `AccountSettings.tsx` (or link `/settings` from the sidebar and retire the duplicate). NB `ClientSettings.tsx` "Sub-Account Settings" sets a *sub-account client's* password via the `update-client-password` edge fn — that is a different thing, not the logged-in user's own password.
-- [ ] **(L) Auth security review.** Triggered by the lost-credentials moment (no sign-in since 2026-05-09): review login/auth end-to-end — password policy, recovery flow, redirect allow-list, session length, whether signup should even be open, MFA for the agency account, and rate limiting. One agency account exists (`brendan@buildingflowdigital.com`); a temporary password was set via the admin API on 2026-06-12 and **must be changed by Brendan after first login**.
+- **Tier 0** (`33f24a7`): phone re-pin fix (push bumps every direction the agent serves) + push-dm-now tenant guard. Verified anon→401.
+- **Tier 1** (`9a196a5`): login-only homepage (signup→422), reachable change-password, AuthProvider least-privilege hardening, auth config.
+- **Tier 2** (`94fe00e`): stale dead-project refs purged, stop-engagement IDOR guard + active_call_id clear, error_logs recreate migration, latency code guards. Voice analytics investigated (documented).
+- **Tier 3** (`618d5d2`): directions selector on the doc page + card badges. Inbound-only retirement BLOCKED (live workflow uses legacy outbound column).
+- **Tier 4** (`08b79f4`): credential Verify (BFD all-Connected), email validation, brand voice. DEFERRED w/ designs: 4.4 cost ceiling, 4.5 pause/resume.
+
+---
+
+## 🔐 AUTH + HOMEPAGE — ✅ DONE 2026-06-13 (Tier 1, `9a196a5`)
+
+Raised while reviewing `feat/voice-setter-doc-model`. Shipped in the Tier 1 build.
+
+- [x] **(M) Replace the public waitlist homepage with a login page.** ✅ Login-only: root route renders sign-in for logged-out users; `/register` + waitlist route removed; signup disabled at the GoTrue API (verified 422).
+- [~] **(M) Forgot-password system + email.** ✅ Site URL fixed (`app.buildingflowdigital.com`) + allow-list set, so reset works NOW via Supabase's built-in mailer for the agency account; the recovery pages already existed. **REMAINING (Brendan):** pick a custom SMTP provider from `Docs/EMAIL_PROVIDER_OPTIONS.md` for sub-account self-reset (recommendation: built-in now, Resend later).
+- [x] **(S) Reachable change-password UI.** ✅ Added a Change Password card to **Account Settings** (both roles, min 12). `/settings` kept (logo upload lives there too).
+- [x] **(L) Auth security review.** ✅ Hardened: role no longer defaults to 'agency' on missing/errored row (privilege bug fixed; sign-out on unprovisioned), `disable_signup=true`, `password_min_length=12`, legacy-token cleanup. MFA available (recommend enabling for the agency account). HIBP leaked-password protection needs a Pro plan (deferred). **Brendan: change the 2026-06-12 temp admin password after first login (via Account Settings).**
 
 ---
 
