@@ -29,6 +29,7 @@ import { useClientWebhooks } from '@/hooks/useClientWebhooks';
 import PromptCard from '@/components/PromptCard';
 import { Textarea } from '@/components/ui/textarea';
 import { AIPromptDialog } from '@/components/AIPromptDialog';
+import { PromptDocPage, type PromptDocRecord } from '@/components/prompt-doc/PromptDocPage';
 import { SetterPromptAIDialog } from '@/components/SetterPromptAIDialog';
 import { CopySetterDialog } from '@/components/CopySetterDialog';
 import { DuplicateSetterDialog } from '@/components/DuplicateSetterDialog';
@@ -4620,7 +4621,8 @@ const PromptManagement = () => {
     clientId: string;
   }>();
   const {
-    user
+    user,
+    role: userRole
   } = useAuth();
   const navigate = useNavigate();
   const {
@@ -4632,7 +4634,13 @@ const PromptManagement = () => {
   useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
   const [saving, setSaving] = useState(false);
   const [miniPromptSaving, setMiniPromptSaving] = useState(false);
-  const [currentView, setCurrentView] = useState<'list' | 'editor' | 'settings' | 'chat'>('list');
+  const [currentView, setCurrentView] = useState<'list' | 'editor' | 'settings' | 'chat' | 'doc'>('list');
+  // Doc model (2026-06-12): canonical prompt document for voice setters (agency-only view).
+  const [docRecord, setDocRecord] = useState<PromptDocRecord | null>(null);
+  const [docClientTimezone, setDocClientTimezone] = useState('Australia/Sydney');
+  const [docAIDialogOpen, setDocAIDialogOpen] = useState(false);
+  const [docAIContent, setDocAIContent] = useState('');
+  const docAIApplyRef = useRef<((next: string) => void) | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
   const location = useLocation();
   const [highlightResponseDelay, setHighlightResponseDelay] = useState(false);
@@ -5313,17 +5321,20 @@ const PromptManagement = () => {
   }, [currentView, scrollPromptManagementToTop]);
   const fetchSystemPrompt = async () => {
     if (!clientId) return;
-    const cacheKey = `system_prompt_${clientId}`;
+    // ai_meta_prompt (2026-06-12): the Modify-with-AI meta prompt has its own column.
+    // clients.system_prompt is overwritten with the full setter prompt on every save,
+    // so reading it here clobber-cycled the meta prompt. Fallback covers pre-migration rows.
+    const cacheKey = `ai_meta_prompt_${clientId}`;
     const cached = getCached<string>(cacheKey);
     if (cached !== null) {
       setSystemPrompt(cached);
       if (isFresh(cacheKey)) return;
     }
     try {
-      const { data, error } = await supabase.from('clients').select('system_prompt').eq('id', clientId).maybeSingle();
+      const { data, error } = await (supabase as any).from('clients').select('ai_meta_prompt, system_prompt').eq('id', clientId).maybeSingle();
       if (error) throw error;
       if (data) {
-        const val = data.system_prompt || '';
+        const val = data.ai_meta_prompt || data.system_prompt || '';
         setCache(cacheKey, val);
         setSystemPrompt(val);
       }
@@ -5806,6 +5817,422 @@ const PromptManagement = () => {
 
   // Removed validateAndTestWebhook - validation only happens inline now
 
+  // ── Doc model (2026-06-12) ──────────────────────────────────────────────────
+  // The Retell push routine, extracted verbatim from handleSavePrompt so the
+  // legacy Save Setter path and the prompt-doc page share ONE pipeline.
+  // `promptText` must already include the booking append; retell-proxy appends
+  // DYNAMIC_VARS_BLOCK server-side. Failures are surfaced via toasts here;
+  // callers get { ok } to decide whether to mark the doc deployed.
+  const pushVoiceSetterToRetell = async (opts: {
+    promptText: string;
+    agentSettings: { model?: string; booking_function_enabled?: boolean; booking_prompt?: string | null } | undefined;
+    agentTitle: string;
+  }): Promise<{ ok: boolean }> => {
+    const { promptText, agentSettings: currentAgentSettings, agentTitle } = opts;
+    if (!editingSlotId?.startsWith('Voice-Setter-') || !clientId) return { ok: false };
+    let ok = false;
+    try {
+      const slotNumber = parseInt(editingSlotId.replace('Voice-Setter-', ''), 10);
+      if (slotNumber >= 1 && slotNumber <= 10) {
+        const parsedKnowledgeBaseIds: string[] = []; // KB integration removed
+        // When booking function is disabled, strip all booking tools and keep only end_call
+        console.log('🔧 Booking function state for Retell sync:', { booking_enabled: currentAgentSettings?.booking_function_enabled, tools_raw: retellVoiceSettings.general_tools });
+        const BOOKING_TOOL_NAMES = ['update-appointment', 'get-available-slots', 'book-appointments', 'cancel-appointments', 'get-contact-appointments'];
+        let parsedGeneralTools: Array<Record<string, unknown>>;
+        if (currentAgentSettings?.booking_function_enabled) {
+          parsedGeneralTools = parseJsonConfig<Array<Record<string, unknown>>>(
+            retellVoiceSettings.general_tools,
+            [...DEFAULT_RETELL_GENERAL_TOOLS] as unknown as Array<Record<string, unknown>>,
+            'Retell tools'
+          );
+        } else {
+          // Only keep non-booking tools when booking is disabled
+          const allTools = parseJsonConfig<Array<Record<string, unknown>>>(
+            retellVoiceSettings.general_tools,
+            [...DEFAULT_RETELL_GENERAL_TOOLS] as unknown as Array<Record<string, unknown>>,
+            'Retell tools'
+          );
+          parsedGeneralTools = Array.isArray(allTools)
+            ? allTools.filter(t => !BOOKING_TOOL_NAMES.includes(t.name as string))
+            : [{ type: 'end_call', name: 'end_call' }];
+          // Ensure at least end_call exists
+          if (parsedGeneralTools.length === 0) {
+            parsedGeneralTools = [{ type: 'end_call', name: 'end_call' }];
+          }
+        }
+        console.log('🔧 Final tools for Retell sync:', parsedGeneralTools.map((t: any) => t.name || t.type));
+        const parsedPostCallAnalysisData = parseJsonConfig(
+          retellVoiceSettings.post_call_analysis_data,
+          DEFAULT_RETELL_POST_CALL_ANALYSIS_DATA,
+          'Post-call analysis fields'
+        );
+        const parsedVoicemailOption = parseJsonConfig(
+          retellVoiceSettings.voicemail_option,
+          DEFAULT_RETELL_VOICEMAIL_OPTION,
+          'Voicemail option'
+        );
+        const parsedUserDtmfOptions = parseJsonConfig(
+          retellVoiceSettings.user_dtmf_options,
+          DEFAULT_RETELL_USER_DTMF_OPTIONS,
+          'DTMF options'
+        );
+        console.log('🔊 Syncing voice setter to Retell AI, slot:', slotNumber, 'directions:', voiceSetterDirections);
+        const { data: retellResult, error: retellError } = await supabase.functions.invoke('retell-proxy', {
+          body: {
+            action: 'sync-voice-setter',
+            clientId,
+            slotNumber,
+            // EE1: which clients.retell_*_agent_id columns to fan out to.
+            directions: voiceSetterDirections,
+            generalPrompt: promptText,
+            beginMessage: retellVoiceSettings.begin_message || '',
+            model: currentAgentSettings?.model || 'gpt-4.1-nano',
+            agentName: agentTitle || `Voice Setter ${slotNumber}`,
+            llmSettings: {
+              model_high_priority: retellVoiceSettings.model_high_priority,
+              knowledge_base_ids: parsedKnowledgeBaseIds,
+              general_tools: parsedGeneralTools,
+              start_speaker: retellVoiceSettings.start_speaker || 'agent',
+            },
+            voiceSettings: {
+              voice_id: retellVoiceSettings.voice_id || undefined,
+              voice_model: 'eleven_turbo_v2_5',
+              voice_temperature: retellVoiceSettings.voice_temperature,
+              voice_speed: retellVoiceSettings.voice_speed,
+              volume: retellVoiceSettings.volume,
+              language: retellVoiceSettings.language || 'en-US',
+              ambient_sound: retellVoiceSettings.ambient_sound || 'none',
+              ambient_sound_volume: retellVoiceSettings.ambient_sound_volume,
+              responsiveness: retellVoiceSettings.responsiveness,
+              interruption_sensitivity: retellVoiceSettings.interruption_sensitivity,
+              end_call_after_silence_ms: retellVoiceSettings.end_call_after_silence_enabled
+                ? retellVoiceSettings.end_call_after_silence_ms
+                : null,
+              max_call_duration_ms: retellVoiceSettings.max_call_duration_ms,
+              boosted_keywords: retellVoiceSettings.boosted_keywords ? retellVoiceSettings.boosted_keywords.split(',').map((k: string) => k.trim()).filter(Boolean) : undefined,
+              begin_message_delay_ms: retellVoiceSettings.begin_message_delay_ms,
+              enable_backchannel: retellVoiceSettings.enable_backchannel,
+              reminder_trigger_ms: retellVoiceSettings.reminder_trigger_ms,
+              reminder_max_count: retellVoiceSettings.reminder_max_count,
+              normalize_for_speech: retellVoiceSettings.normalize_for_speech,
+              opt_out_sensitive_data_storage: retellVoiceSettings.opt_out_sensitive_data_storage,
+              webhook_timeout_ms: retellVoiceSettings.webhook_timeout_ms,
+              data_storage_setting: retellVoiceSettings.data_storage_setting?.trim() || 'everything',
+              post_call_analysis_model: retellVoiceSettings.post_call_analysis_model?.trim() || 'gpt-4.1',
+              analysis_successful_prompt: retellVoiceSettings.analysis_successful_prompt?.trim() || DEFAULT_RETELL_ANALYSIS_SUCCESSFUL_PROMPT,
+              analysis_summary_prompt: retellVoiceSettings.analysis_summary_prompt?.trim() || DEFAULT_RETELL_ANALYSIS_SUMMARY_PROMPT,
+              post_call_analysis_data: parsedPostCallAnalysisData,
+              voicemail_option: parsedVoicemailOption,
+              vocab_specialization: retellVoiceSettings.vocab_specialization?.trim() || 'general',
+              user_dtmf_options: parsedUserDtmfOptions,
+              backchannel_frequency: retellVoiceSettings.backchannel_frequency,
+              analysis_user_sentiment_prompt: retellVoiceSettings.analysis_user_sentiment_prompt?.trim() || "Evaluate user's sentiment, mood and satisfaction level.",
+              stt_mode: retellVoiceSettings.stt_mode?.trim() || 'accurate',
+              custom_stt_config: parseJsonConfig(retellVoiceSettings.custom_stt_config, { provider: 'deepgram', endpointing_ms: 1000 }, 'Custom STT config'),
+              pii_config: parseJsonConfig(retellVoiceSettings.pii_config, { mode: 'post_call', categories: [] }, 'PII config'),
+            },
+          },
+        });
+        // EE1 safety-guard surfacing (FALLBACK path): as of Layer 2 (2026-06-09)
+        // retell-proxy no longer aborts the push for a shared agent — it pushes,
+        // skips the fan-out, and returns a non-fatal direction_warning (handled in
+        // the success branch below). This 409 'agent_shared_across_slots' handler is
+        // retained only for a pre-Layer-2 (<= v28) proxy still in the rollout window.
+        // When triggered, the body returns {code: 'agent_shared_across_slots',
+        // shared_columns, conflicting_agent_id}. Show a longer, action-oriented toast
+        // so the user knows exactly how to recover instead of seeing a generic warning.
+        //
+        // Brendan-2026-05-20 fix: previously this read `retellError.context.body.code`
+        // but supabase-js FunctionsHttpError wraps the non-2xx response with `.context`
+        // as a raw Response object — body parsing required `await ctx.json()`. This
+        // mirrors the TestCallDialog fix from phase-e3-followup-test-call-error-ux.
+        // Without this, the safety guard would fire on the backend but the user would
+        // see the generic "Make sure your Retell API key is configured" toast.
+        let parsedErrorBody: { error?: string; code?: string; shared_columns?: string[]; conflicting_agent_id?: string } | null = null;
+        if (retellError) {
+          try {
+            const ctx: any = (retellError as any)?.context;
+            if (ctx?.json) parsedErrorBody = await ctx.json();
+            else if (ctx?.text) {
+              const txt = await ctx.text();
+              try { parsedErrorBody = JSON.parse(txt); } catch { /* not JSON */ }
+            }
+          } catch { /* fall back to retellError.message */ }
+        }
+        const safetyCode = (retellResult as { code?: string } | null)?.code
+          ?? parsedErrorBody?.code;
+        if (safetyCode === 'agent_shared_across_slots') {
+          const safetyMessage =
+            (retellResult as { error?: string } | null)?.error
+            ?? parsedErrorBody?.error
+            ?? retellError?.message
+            ?? 'Push blocked: this slot shares an agent with another slot.';
+          console.warn('🛡️ EE1 safety guard blocked push:', safetyMessage);
+          // Fork-button (phase-night-per-direction-agent-fork, 2026-05-20):
+          // when the user has selected exactly ONE direction, offer a Fork
+          // button. This is the legitimate "carve off this direction's agent
+          // so I can edit it independently" flow that the safety guard
+          // otherwise blocks. The button opens a confirmation modal which
+          // calls retell-proxy `fork-slot-direction`.
+          const conflictingAgentId = parsedErrorBody?.conflicting_agent_id ?? null;
+          const onlyOneDirection = voiceSetterDirections.length === 1
+            ? voiceSetterDirections[0]
+            : null;
+          const showForkButton = !!(onlyOneDirection && conflictingAgentId);
+          toast({
+            title: '🛡️ Push blocked — agent shared across slots',
+            description: safetyMessage,
+            variant: 'destructive',
+            duration: 20000,
+            action: showForkButton ? (
+              <ToastAction
+                altText="Fork to dedicated agent for this direction"
+                onClick={() => setForkModalState({
+                  open: true,
+                  direction: onlyOneDirection,
+                  sourceAgentId: conflictingAgentId,
+                })}
+              >
+                Fork
+              </ToastAction>
+            ) : undefined,
+          });
+        } else if (retellError) {
+          // Surface the parsed backend error if available (better than the generic
+          // "Edge Function returned a non-2xx status code" message).
+          const backendMsg = parsedErrorBody?.error ?? retellError.message;
+          console.warn('⚠️ Retell sync failed (non-blocking):', backendMsg);
+          toast({
+            title: 'Retell sync warning',
+            description: `Prompt saved but Retell agent sync failed: ${backendMsg}`,
+            variant: 'destructive',
+            duration: 12000,
+          });
+        } else if (retellResult?.error) {
+          console.warn('⚠️ Retell sync error:', retellResult.error);
+          toast({
+            title: 'Retell sync warning',
+            description: `Prompt saved but Retell agent sync failed: ${retellResult.error}`,
+            variant: 'destructive',
+          });
+        } else {
+          console.log('✅ Retell AI agent synced:', retellResult);
+          ok = true;
+          // Surface publish_warning if retell-proxy completed the PATCH but the
+          // auto-publish step failed. Without this toast, drafts accumulate
+          // unpublished and live calls keep using the OLD published version —
+          // exactly the situation BFD's agent_5ec5eb was in on 2026-05-20
+          // (v43 draft, v37 last published — 6 unpublished drafts).
+          // Added 2026-05-20 in phase-night-surface-publish-warning.
+          const publishWarning = (retellResult as { publish_warning?: string } | null)?.publish_warning;
+          if (publishWarning) {
+            console.warn('⚠️ Retell auto-publish failed (PATCH succeeded):', publishWarning);
+            toast({
+              title: '⚠️ Saved + patched, but NOT published to live agent',
+              description: `Your changes are saved as a draft, but Retell auto-publish failed: ${publishWarning}. Live calls will keep using the previously published version until publish succeeds. Try Save again; if it persists, check the Retell dashboard for the agent's publish state.`,
+              variant: 'destructive',
+              duration: 15000,
+            });
+          } else {
+            // Layer 2 (2026-06-09): the agent push always succeeds now. If the
+            // backend SKIPPED the direction-column fan-out because this slot's
+            // agent is shared across slots, it returns a non-fatal
+            // direction_warning (the push + publish still happened). Surface it
+            // with the same Fork opt-in the old hard-block path offered, instead
+            // of a plain success toast.
+            const directionWarning = (retellResult as { direction_warning?: string } | null)?.direction_warning;
+            if (directionWarning) {
+              const conflictingAgentId = (retellResult as { conflicting_agent_id?: string } | null)?.conflicting_agent_id ?? null;
+              const onlyOneDirection = voiceSetterDirections.length === 1 ? voiceSetterDirections[0] : null;
+              const showForkButton = !!(onlyOneDirection && conflictingAgentId);
+              toast({
+                title: '✅ Published — direction ownership unchanged',
+                description: directionWarning,
+                duration: 18000,
+                action: showForkButton ? (
+                  <ToastAction
+                    altText="Fork to dedicated agent for this direction"
+                    onClick={() => setForkModalState({
+                      open: true,
+                      direction: onlyOneDirection,
+                      sourceAgentId: conflictingAgentId,
+                    })}
+                  >
+                    Fork
+                  </ToastAction>
+                ) : undefined,
+              });
+            } else {
+              toast({
+                title: 'Retell AI Synced',
+                description: retellResult?.action === 'created'
+                  ? `New Retell agent created (ID: ${retellResult.agent_id})`
+                  : 'Retell agent prompt updated and published',
+              });
+            }
+          }
+          // Fetch cost after successful sync
+          if (retellResult?.agent_id) {
+            fetchRetellCost(retellResult.agent_id);
+          }
+        }
+      }
+    } catch (retellErr: any) {
+      console.warn('⚠️ Retell sync error (non-blocking):', retellErr);
+      toast({
+        title: 'Retell sync warning',
+        description: retellErr?.message || 'Prompt saved, but Retell sync failed.',
+        variant: 'destructive',
+      });
+    }
+    return { ok };
+  };
+
+  // Load the canonical prompt doc for a voice setter, auto-promoting the persisted
+  // __full_prompt__ row (byte-identical to what the section editor compiles) when no
+  // doc exists yet. Any failure (e.g. migration not applied) falls back to the
+  // legacy section editor so the setter is never uneditable.
+  const loadOrPromoteDoc = async (prompt: Prompt, slotId: string) => {
+    if (!clientId) return;
+    setDocRecord(null);
+    void (async () => {
+      // Client timezone for the call-time DYNAMIC VARIABLES preview — same source +
+      // default as retell-proxy (clients.timezone, Australia/Sydney).
+      const { data } = await supabase.from('clients').select('timezone').eq('id', clientId).maybeSingle();
+      setDocClientTimezone((data as { timezone?: string } | null)?.timezone || 'Australia/Sydney');
+    })();
+    try {
+      const { data: existing, error } = await (supabase as any)
+        .from('prompt_docs')
+        .select('*')
+        .eq('client_id', clientId)
+        .eq('slot_id', slotId)
+        .maybeSingle();
+      if (error) throw error;
+      if (existing) {
+        setDocRecord(existing as PromptDocRecord);
+        return;
+      }
+      const { data: fullPromptRow } = await (supabase as any)
+        .from('prompt_configurations')
+        .select('custom_content')
+        .eq('client_id', clientId)
+        .eq('slot_id', slotId)
+        .eq('config_key', '__full_prompt__')
+        .maybeSingle();
+      const SAVE_SEPARATOR = '\n\n── ── ── ── ── ── ── ── ── ── ── ── ── ──\n\n';
+      const fallback = [(prompt as any).persona, prompt.content].filter(Boolean).join(SAVE_SEPARATOR);
+      const promotedContent = (fullPromptRow?.custom_content as string | null)?.trim()
+        ? (fullPromptRow.custom_content as string)
+        : fallback;
+      const { data: inserted, error: insertError } = await (supabase as any)
+        .from('prompt_docs')
+        .insert({
+          client_id: clientId,
+          slot_id: slotId,
+          engine_type: 'retell-llm',
+          doc_content: promotedContent || '',
+          status: 'deployed',
+          deployed_doc_content: promotedContent || '',
+          setup_completed_at: new Date().toISOString(),
+          promoted_from_full_prompt: true,
+        })
+        .select()
+        .single();
+      if (insertError) throw insertError;
+      setDocRecord(inserted as PromptDocRecord);
+    } catch (err: any) {
+      console.error('Failed to load/promote prompt doc:', err);
+      toast({
+        title: 'Prompt doc unavailable',
+        description: 'Falling back to the legacy section editor.',
+      });
+      setCurrentView('editor');
+    }
+  };
+
+  // Save the doc as the canonical prompt and keep the legacy stores in sync
+  // (prompts row, clients.system_prompt, external voice_prompts) so a frontend
+  // rollback lands on a consistent legacy editor.
+  const handleSaveDocDraft = async (content: string) => {
+    if (!clientId || !editingSlotId || !docRecord) return;
+    setSaving(true);
+    try {
+      const { data: updated, error } = await (supabase as any)
+        .from('prompt_docs')
+        .update({ doc_content: content, updated_at: new Date().toISOString() })
+        .eq('id', docRecord.id)
+        .select()
+        .single();
+      if (error) throw error;
+      setDocRecord(updated as PromptDocRecord);
+      if (editingPrompt && editingPrompt.id && !editingPrompt.id.startsWith('temp-')) {
+        await (supabase as any).from('prompts').update({
+          content,
+          persona: null,
+        }).eq('id', editingPrompt.id);
+      }
+      await supabase.from('clients').update({ system_prompt: content }).eq('id', clientId);
+      const currentAgentSettings = getAgentSettings(editingSlotId);
+      void supabase.functions.invoke('save-external-prompt', {
+        body: {
+          client_id: clientId,
+          card_name: editingSlotId,
+          channel: 'voice',
+          content,
+          persona: '',
+          booking_function_enabled: currentAgentSettings?.booking_function_enabled ?? false,
+          agent_settings: currentAgentSettings ? {
+            model: currentAgentSettings.model,
+            booking_prompt: currentAgentSettings.booking_prompt,
+          } : undefined,
+        },
+      });
+      toast({ title: 'Draft saved', description: 'Prompt document saved. Push to Retell to go live.' });
+    } catch (err: any) {
+      console.error('Error saving prompt doc:', err);
+      toast({
+        title: 'Error',
+        description: err?.message || 'Failed to save the prompt document',
+        variant: 'destructive',
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handlePushDoc = async (content: string) => {
+    if (!clientId || !editingSlotId || !docRecord) return;
+    await handleSaveDocDraft(content);
+    setSaving(true);
+    try {
+      const currentAgentSettings = getAgentSettings(editingSlotId);
+      // Same booking append the legacy save path builds (byte-identical pipeline).
+      const promptParts = [content].filter(Boolean);
+      if (currentAgentSettings?.booking_function_enabled && currentAgentSettings?.booking_prompt) {
+        promptParts.push(`\n## BOOKING INSTRUCTIONS\n${currentAgentSettings.booking_prompt}`);
+      }
+      const result = await pushVoiceSetterToRetell({
+        promptText: promptParts.join('\n\n'),
+        agentSettings: currentAgentSettings,
+        agentTitle: (editingPrompt?.name || editingSlotId).trim(),
+      });
+      if (result.ok) {
+        const { data: updated } = await (supabase as any)
+          .from('prompt_docs')
+          .update({ status: 'deployed', deployed_doc_content: content, updated_at: new Date().toISOString() })
+          .eq('id', docRecord.id)
+          .select()
+          .single();
+        if (updated) setDocRecord(updated as PromptDocRecord);
+        await setAgentDeployedPrompt(editingSlotId, buildDeployedPromptString('', content));
+        await markNeedsSync(editingSlotId, false);
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleSavePrompt = async () => {
     if (!clientId || saving) return;
     console.log('💾 Starting save prompt process:', {
@@ -6038,267 +6465,18 @@ const PromptManagement = () => {
         }
       }
 
-      // Sync to Retell AI for voice setters
+      // Sync to Retell AI for voice setters (shared push routine; the doc page uses it too)
       if (editingSlotId?.startsWith('Voice-Setter-')) {
-        try {
-          const slotNumber = parseInt(editingSlotId.replace('Voice-Setter-', ''), 10);
-          if (slotNumber >= 1 && slotNumber <= 10) {
-            // Build full prompt including booking instructions when enabled
-            const promptParts = [personaForSave, contentForSave].filter(Boolean);
-            if (currentAgentSettings?.booking_function_enabled && currentAgentSettings?.booking_prompt) {
-              promptParts.push(`\n## BOOKING INSTRUCTIONS\n${currentAgentSettings.booking_prompt}`);
-            }
-            const fullPromptForRetell = promptParts.join('\n\n');
-            const parsedKnowledgeBaseIds: string[] = []; // KB integration removed
-            // When booking function is disabled, strip all booking tools and keep only end_call
-            console.log('🔧 Booking function state for Retell sync:', { booking_enabled: currentAgentSettings?.booking_function_enabled, tools_raw: retellVoiceSettings.general_tools });
-            const BOOKING_TOOL_NAMES = ['update-appointment', 'get-available-slots', 'book-appointments', 'cancel-appointments', 'get-contact-appointments'];
-            let parsedGeneralTools: Array<Record<string, unknown>>;
-            if (currentAgentSettings?.booking_function_enabled) {
-              parsedGeneralTools = parseJsonConfig<Array<Record<string, unknown>>>(
-                retellVoiceSettings.general_tools,
-                [...DEFAULT_RETELL_GENERAL_TOOLS] as unknown as Array<Record<string, unknown>>,
-                'Retell tools'
-              );
-            } else {
-              // Only keep non-booking tools when booking is disabled
-              const allTools = parseJsonConfig<Array<Record<string, unknown>>>(
-                retellVoiceSettings.general_tools,
-                [...DEFAULT_RETELL_GENERAL_TOOLS] as unknown as Array<Record<string, unknown>>,
-                'Retell tools'
-              );
-              parsedGeneralTools = Array.isArray(allTools)
-                ? allTools.filter(t => !BOOKING_TOOL_NAMES.includes(t.name as string))
-                : [{ type: 'end_call', name: 'end_call' }];
-              // Ensure at least end_call exists
-              if (parsedGeneralTools.length === 0) {
-                parsedGeneralTools = [{ type: 'end_call', name: 'end_call' }];
-              }
-            }
-            console.log('🔧 Final tools for Retell sync:', parsedGeneralTools.map((t: any) => t.name || t.type));
-            const parsedPostCallAnalysisData = parseJsonConfig(
-              retellVoiceSettings.post_call_analysis_data,
-              DEFAULT_RETELL_POST_CALL_ANALYSIS_DATA,
-              'Post-call analysis fields'
-            );
-            const parsedVoicemailOption = parseJsonConfig(
-              retellVoiceSettings.voicemail_option,
-              DEFAULT_RETELL_VOICEMAIL_OPTION,
-              'Voicemail option'
-            );
-            const parsedUserDtmfOptions = parseJsonConfig(
-              retellVoiceSettings.user_dtmf_options,
-              DEFAULT_RETELL_USER_DTMF_OPTIONS,
-              'DTMF options'
-            );
-            console.log('🔊 Syncing voice setter to Retell AI, slot:', slotNumber, 'directions:', voiceSetterDirections);
-            const { data: retellResult, error: retellError } = await supabase.functions.invoke('retell-proxy', {
-              body: {
-                action: 'sync-voice-setter',
-                clientId,
-                slotNumber,
-                // EE1: which clients.retell_*_agent_id columns to fan out to.
-                directions: voiceSetterDirections,
-                generalPrompt: fullPromptForRetell,
-                beginMessage: retellVoiceSettings.begin_message || '',
-                model: currentAgentSettings?.model || 'gpt-4.1-nano',
-                agentName: effectivePromptTitle || `Voice Setter ${slotNumber}`,
-                llmSettings: {
-                  model_high_priority: retellVoiceSettings.model_high_priority,
-                  knowledge_base_ids: parsedKnowledgeBaseIds,
-                  general_tools: parsedGeneralTools,
-                  start_speaker: retellVoiceSettings.start_speaker || 'agent',
-                },
-                voiceSettings: {
-                  voice_id: retellVoiceSettings.voice_id || undefined,
-                  voice_model: 'eleven_turbo_v2_5',
-                  voice_temperature: retellVoiceSettings.voice_temperature,
-                  voice_speed: retellVoiceSettings.voice_speed,
-                  volume: retellVoiceSettings.volume,
-                  language: retellVoiceSettings.language || 'en-US',
-                  ambient_sound: retellVoiceSettings.ambient_sound || 'none',
-                  ambient_sound_volume: retellVoiceSettings.ambient_sound_volume,
-                  responsiveness: retellVoiceSettings.responsiveness,
-                  interruption_sensitivity: retellVoiceSettings.interruption_sensitivity,
-                  end_call_after_silence_ms: retellVoiceSettings.end_call_after_silence_enabled
-                    ? retellVoiceSettings.end_call_after_silence_ms
-                    : null,
-                  max_call_duration_ms: retellVoiceSettings.max_call_duration_ms,
-                  boosted_keywords: retellVoiceSettings.boosted_keywords ? retellVoiceSettings.boosted_keywords.split(',').map((k: string) => k.trim()).filter(Boolean) : undefined,
-                  begin_message_delay_ms: retellVoiceSettings.begin_message_delay_ms,
-                  enable_backchannel: retellVoiceSettings.enable_backchannel,
-                  reminder_trigger_ms: retellVoiceSettings.reminder_trigger_ms,
-                  reminder_max_count: retellVoiceSettings.reminder_max_count,
-                  normalize_for_speech: retellVoiceSettings.normalize_for_speech,
-                  opt_out_sensitive_data_storage: retellVoiceSettings.opt_out_sensitive_data_storage,
-                  webhook_timeout_ms: retellVoiceSettings.webhook_timeout_ms,
-                  data_storage_setting: retellVoiceSettings.data_storage_setting?.trim() || 'everything',
-                  post_call_analysis_model: retellVoiceSettings.post_call_analysis_model?.trim() || 'gpt-4.1',
-                  analysis_successful_prompt: retellVoiceSettings.analysis_successful_prompt?.trim() || DEFAULT_RETELL_ANALYSIS_SUCCESSFUL_PROMPT,
-                  analysis_summary_prompt: retellVoiceSettings.analysis_summary_prompt?.trim() || DEFAULT_RETELL_ANALYSIS_SUMMARY_PROMPT,
-                  post_call_analysis_data: parsedPostCallAnalysisData,
-                  voicemail_option: parsedVoicemailOption,
-                  vocab_specialization: retellVoiceSettings.vocab_specialization?.trim() || 'general',
-                  user_dtmf_options: parsedUserDtmfOptions,
-                  backchannel_frequency: retellVoiceSettings.backchannel_frequency,
-                  analysis_user_sentiment_prompt: retellVoiceSettings.analysis_user_sentiment_prompt?.trim() || "Evaluate user's sentiment, mood and satisfaction level.",
-                  stt_mode: retellVoiceSettings.stt_mode?.trim() || 'accurate',
-                  custom_stt_config: parseJsonConfig(retellVoiceSettings.custom_stt_config, { provider: 'deepgram', endpointing_ms: 1000 }, 'Custom STT config'),
-                  pii_config: parseJsonConfig(retellVoiceSettings.pii_config, { mode: 'post_call', categories: [] }, 'PII config'),
-                },
-              },
-            });
-            // EE1 safety-guard surfacing (FALLBACK path): as of Layer 2 (2026-06-09)
-            // retell-proxy no longer aborts the push for a shared agent — it pushes,
-            // skips the fan-out, and returns a non-fatal direction_warning (handled in
-            // the success branch below). This 409 'agent_shared_across_slots' handler is
-            // retained only for a pre-Layer-2 (<= v28) proxy still in the rollout window.
-            // When triggered, the body returns {code: 'agent_shared_across_slots',
-            // shared_columns, conflicting_agent_id}. Show a longer, action-oriented toast
-            // so the user knows exactly how to recover instead of seeing a generic warning.
-            //
-            // Brendan-2026-05-20 fix: previously this read `retellError.context.body.code`
-            // but supabase-js FunctionsHttpError wraps the non-2xx response with `.context`
-            // as a raw Response object — body parsing required `await ctx.json()`. This
-            // mirrors the TestCallDialog fix from phase-e3-followup-test-call-error-ux.
-            // Without this, the safety guard would fire on the backend but the user would
-            // see the generic "Make sure your Retell API key is configured" toast.
-            let parsedErrorBody: { error?: string; code?: string; shared_columns?: string[]; conflicting_agent_id?: string } | null = null;
-            if (retellError) {
-              try {
-                const ctx: any = (retellError as any)?.context;
-                if (ctx?.json) parsedErrorBody = await ctx.json();
-                else if (ctx?.text) {
-                  const txt = await ctx.text();
-                  try { parsedErrorBody = JSON.parse(txt); } catch { /* not JSON */ }
-                }
-              } catch { /* fall back to retellError.message */ }
-            }
-            const safetyCode = (retellResult as { code?: string } | null)?.code
-              ?? parsedErrorBody?.code;
-            if (safetyCode === 'agent_shared_across_slots') {
-              const safetyMessage =
-                (retellResult as { error?: string } | null)?.error
-                ?? parsedErrorBody?.error
-                ?? retellError?.message
-                ?? 'Push blocked: this slot shares an agent with another slot.';
-              console.warn('🛡️ EE1 safety guard blocked push:', safetyMessage);
-              // Fork-button (phase-night-per-direction-agent-fork, 2026-05-20):
-              // when the user has selected exactly ONE direction, offer a Fork
-              // button. This is the legitimate "carve off this direction's agent
-              // so I can edit it independently" flow that the safety guard
-              // otherwise blocks. The button opens a confirmation modal which
-              // calls retell-proxy `fork-slot-direction`.
-              const conflictingAgentId = parsedErrorBody?.conflicting_agent_id ?? null;
-              const onlyOneDirection = voiceSetterDirections.length === 1
-                ? voiceSetterDirections[0]
-                : null;
-              const showForkButton = !!(onlyOneDirection && conflictingAgentId);
-              toast({
-                title: '🛡️ Push blocked — agent shared across slots',
-                description: safetyMessage,
-                variant: 'destructive',
-                duration: 20000,
-                action: showForkButton ? (
-                  <ToastAction
-                    altText="Fork to dedicated agent for this direction"
-                    onClick={() => setForkModalState({
-                      open: true,
-                      direction: onlyOneDirection,
-                      sourceAgentId: conflictingAgentId,
-                    })}
-                  >
-                    Fork
-                  </ToastAction>
-                ) : undefined,
-              });
-            } else if (retellError) {
-              // Surface the parsed backend error if available (better than the generic
-              // "Edge Function returned a non-2xx status code" message).
-              const backendMsg = parsedErrorBody?.error ?? retellError.message;
-              console.warn('⚠️ Retell sync failed (non-blocking):', backendMsg);
-              toast({
-                title: 'Retell sync warning',
-                description: `Prompt saved but Retell agent sync failed: ${backendMsg}`,
-                variant: 'destructive',
-                duration: 12000,
-              });
-            } else if (retellResult?.error) {
-              console.warn('⚠️ Retell sync error:', retellResult.error);
-              toast({
-                title: 'Retell sync warning',
-                description: `Prompt saved but Retell agent sync failed: ${retellResult.error}`,
-                variant: 'destructive',
-              });
-            } else {
-              console.log('✅ Retell AI agent synced:', retellResult);
-              // Surface publish_warning if retell-proxy completed the PATCH but the
-              // auto-publish step failed. Without this toast, drafts accumulate
-              // unpublished and live calls keep using the OLD published version —
-              // exactly the situation BFD's agent_5ec5eb was in on 2026-05-20
-              // (v43 draft, v37 last published — 6 unpublished drafts).
-              // Added 2026-05-20 in phase-night-surface-publish-warning.
-              const publishWarning = (retellResult as { publish_warning?: string } | null)?.publish_warning;
-              if (publishWarning) {
-                console.warn('⚠️ Retell auto-publish failed (PATCH succeeded):', publishWarning);
-                toast({
-                  title: '⚠️ Saved + patched, but NOT published to live agent',
-                  description: `Your changes are saved as a draft, but Retell auto-publish failed: ${publishWarning}. Live calls will keep using the previously published version until publish succeeds. Try Save again; if it persists, check the Retell dashboard for the agent's publish state.`,
-                  variant: 'destructive',
-                  duration: 15000,
-                });
-              } else {
-                // Layer 2 (2026-06-09): the agent push always succeeds now. If the
-                // backend SKIPPED the direction-column fan-out because this slot's
-                // agent is shared across slots, it returns a non-fatal
-                // direction_warning (the push + publish still happened). Surface it
-                // with the same Fork opt-in the old hard-block path offered, instead
-                // of a plain success toast.
-                const directionWarning = (retellResult as { direction_warning?: string } | null)?.direction_warning;
-                if (directionWarning) {
-                  const conflictingAgentId = (retellResult as { conflicting_agent_id?: string } | null)?.conflicting_agent_id ?? null;
-                  const onlyOneDirection = voiceSetterDirections.length === 1 ? voiceSetterDirections[0] : null;
-                  const showForkButton = !!(onlyOneDirection && conflictingAgentId);
-                  toast({
-                    title: '✅ Published — direction ownership unchanged',
-                    description: directionWarning,
-                    duration: 18000,
-                    action: showForkButton ? (
-                      <ToastAction
-                        altText="Fork to dedicated agent for this direction"
-                        onClick={() => setForkModalState({
-                          open: true,
-                          direction: onlyOneDirection,
-                          sourceAgentId: conflictingAgentId,
-                        })}
-                      >
-                        Fork
-                      </ToastAction>
-                    ) : undefined,
-                  });
-                } else {
-                  toast({
-                    title: 'Retell AI Synced',
-                    description: retellResult?.action === 'created'
-                      ? `New Retell agent created (ID: ${retellResult.agent_id})`
-                      : 'Retell agent prompt updated and published',
-                  });
-                }
-              }
-              // Fetch cost after successful sync
-              if (retellResult?.agent_id) {
-                fetchRetellCost(retellResult.agent_id);
-              }
-            }
-          }
-        } catch (retellErr: any) {
-          console.warn('⚠️ Retell sync error (non-blocking):', retellErr);
-          toast({
-            title: 'Retell sync warning',
-            description: retellErr?.message || 'Prompt saved, but Retell sync failed.',
-            variant: 'destructive',
-          });
+        // Build full prompt including booking instructions when enabled
+        const promptParts = [personaForSave, contentForSave].filter(Boolean);
+        if (currentAgentSettings?.booking_function_enabled && currentAgentSettings?.booking_prompt) {
+          promptParts.push(`\n## BOOKING INSTRUCTIONS\n${currentAgentSettings.booking_prompt}`);
         }
+        await pushVoiceSetterToRetell({
+          promptText: promptParts.join('\n\n'),
+          agentSettings: currentAgentSettings,
+          agentTitle: effectivePromptTitle,
+        });
       }
 
       // Persist the last successfully deployed full prompt to agent_settings.last_deployed_prompt
@@ -6692,8 +6870,8 @@ const PromptManagement = () => {
     try {
       const {
         error
-      } = await supabase.from('clients').update({
-        system_prompt: systemPrompt
+      } = await (supabase as any).from('clients').update({
+        ai_meta_prompt: systemPrompt
       }).eq('id', clientId);
       if (error) throw error;
       toast({
@@ -6798,7 +6976,15 @@ const PromptManagement = () => {
     };
     setPromptContent(contentToSet);
     console.log('📝 Set promptContent with description:', initialDescription);
-    setCurrentView('editor');
+    // Doc model (2026-06-12): existing voice setters open the canonical prompt
+    // document (agency-only). New (temp-) slots keep the legacy section editor
+    // until the setup wizard ships; client-role users always get the legacy editor.
+    if (slotId?.startsWith('Voice-Setter-') && userRole === 'agency' && !isNewPrompt) {
+      setCurrentView('doc');
+      void loadOrPromoteDoc(prompt, slotId);
+    } else {
+      setCurrentView('editor');
+    }
     
     // If navigated from ?configure=response_delay or followup_instructions, trigger highlight
     const configureParam = searchParams.get('configure');
@@ -6990,6 +7176,55 @@ const PromptManagement = () => {
             }} />
         </div>
       </div>;
+  }
+
+  // Doc model (2026-06-12): canonical prompt document view for voice setters.
+  if (currentView === 'doc' && editingSlotId) {
+    const docAgentSettings = getAgentSettings(editingSlotId);
+    return (
+      <div className="p-4 md:p-6 space-y-4 bg-background min-h-full">
+        <PromptDocPage
+          clientId={clientId!}
+          slotId={editingSlotId}
+          setterName={promptContent.title || editingPrompt?.name || editingSlotId}
+          doc={docRecord}
+          retellAgentId={slotAgentId}
+          clientTimezone={docClientTimezone}
+          bookingEnabled={docAgentSettings?.booking_function_enabled ?? false}
+          bookingPrompt={docAgentSettings?.booking_prompt ?? null}
+          retellVoiceSettings={retellVoiceSettings}
+          onRetellVoiceSettingsChange={handleRetellVoiceSettingsChange}
+          model={docAgentSettings?.model || 'gpt-4.1-nano'}
+          onModelChange={(m) => { void updateAgentSettings(editingSlotId, { model: m }); }}
+          saving={saving}
+          onSaveDraft={handleSaveDocDraft}
+          onPush={handlePushDoc}
+          onBack={() => {
+            setCurrentView('list');
+            setEditingPrompt(null);
+            setEditingSlotId(null);
+            setDocRecord(null);
+          }}
+          onOpenModifyWithAI={(content, apply) => {
+            setDocAIContent(content);
+            docAIApplyRef.current = apply;
+            setDocAIDialogOpen(true);
+          }}
+          onOpenSettings={() => setCurrentView('settings')}
+        />
+        <AIPromptDialog
+          open={docAIDialogOpen}
+          onOpenChange={setDocAIDialogOpen}
+          action="modify"
+          currentPromptContent={docAIContent}
+          onPromptGenerated={(p) => {
+            docAIApplyRef.current?.(p.content);
+            setDocAIDialogOpen(false);
+            toast({ title: 'Prompt updated', description: 'AI changes applied to the document. Save Draft to keep them.' });
+          }}
+        />
+      </div>
+    );
   }
 
   // Rich text editor view
