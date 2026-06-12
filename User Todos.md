@@ -30,6 +30,32 @@ The doc-model rework merged + deployed (main `7efbfff`). These came out of Brend
 
 ---
 
+## 🐢 VOICE LATENCY: prompt rewrite READY TO APPLY (2026-06-12)
+
+Fixes the measured latency root cause (21 `{{available_time_slots}}` substitutions -> ~291k-char per-turn context -> 4.5s first-token timeout loops, 2.6-6.8s e2e, leads hanging up). Full rewrite + both prompt texts + step-by-step in **`Docs/VOICE_SETTER_PROMPT_REWRITE_2026-06-12.md`** (root cause: `Docs/VOICE_LATENCY_INVESTIGATION_2026-06-10.md`). Target = Voice-Setter-Test / "Main Outbound" (`agent_f45f4dd…`) first, then roll out.
+
+**KEY:** the 21 refs come from **two** editable surfaces (main prompt ~10 + the auto-appended Booking Instructions field `booking_prompt` = 8) plus the auto dynamic-vars block (1). Editing only the main prompt leaves 8 live — a partial fix. Both prompts in the doc carry ZERO `{{available_time_slots}}`; the one real substitution is the auto-appended dynamic-vars block. `0 + 0 + 1 = exactly one`.
+
+**Brendan — apply (all in the UI, ~20 min):**
+- [ ] **(S) Replace the main prompt** for Voice-Setter-Test with Deliverable A (no booking section).
+- [ ] **(S) Replace the Booking Instructions field** (Agent Settings → Booking Instructions, "appended at push") with Deliverable B. Keep booking-function ENABLED so the tools stay attached.
+- [ ] **(S) Set the greeting** — `begin_message` = Deliverable C, `begin_message_delay_ms` 2000 → 600. Kills the 6-8s silent open.
+- [ ] **(S) Save/push**, then ping Claude with the call_id of one test call for `get-call` verification.
+
+**Brendan — test after applying (Claude runs the read-only `get-call` checks):**
+- [ ] Live prompt pull shows **exactly 1** `{{available_time_slots}}`; no duplicate identity/booking blocks.
+- [ ] `get-call`: `llm_token_usage.average` < 25k (expect ~11k); `latency.llm.p50` < 1.2s; **zero** "4500ms timeout" lines in `public_log_url`.
+- [ ] **Outbound phone version actually repointed to the new published version** (last push left outbound on stale v10 — see doc-model follow-up #1 above). Else the test call hits the OLD prompt. Diagnostic: `GET /list-phone-numbers`, compare `inbound_agent_version` vs `outbound_agent_version`.
+- [ ] Booking on the test call: tool fires (`tool_calls` non-empty), correct name/params, slot was actually offered, confirmation spoken. Reschedule + cancel paths fire. `send-sms` / `schedule-callback` work.
+- [ ] Persona intact (Aussie tone, empathy, qualification gate before booking, pricing deferred), greeting instant with no double-"it's Gary".
+- [ ] Then roll the same two-surface fix to Mortgage Broker / Property Coach / Finance Strategist (~19 refs each).
+
+**Claude — durable prevention (code, separate pass, optional):**
+- [ ] (M) Push-time guard in `retell-proxy`: count `{{available_time_slots}}` in the assembled prompt, warn/auto-collapse >1 so this can't regress.
+- [ ] (M) Compact the slots JSON (11k → ~2k) in `make-retell-outbound-call buildAvailabilityDynamicVariable` — shrinks even the single remaining substitution.
+
+---
+
 ## 🛡️ FULL SYSTEM AUDIT + FIXES — SHIPPED & DEPLOYED LIVE (2026-06-10) — HEAD `06425c3`
 
 Multi-agent full audit (80 raised → **62 confirmed**) + the CA1-CA8 onboarding gaps. **All deployed live**: 17 edge functions, Trigger.dev **v20260610.1**, 3 migrations (RLS + constraint + ghl_channel_field_id), frontend pushed → Railway. Report: `Docs/AUDIT_2026-06-10_full-system-audit.md`. Handoff: `Operations/handoffs/2026-06-10-audit-fixes-and-deploy.md`.
