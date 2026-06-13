@@ -18,6 +18,25 @@ Autonomous build of the approved plan. Full detail + Brendan UI-smoke checklist 
 - **Tier 3** (`618d5d2`): directions selector on the doc page + card badges. Inbound-only retirement BLOCKED (live workflow uses legacy outbound column).
 - **Tier 4** (`08b79f4`): credential Verify (BFD all-Connected), email validation, brand voice. DEFERRED w/ designs: 4.4 cost ceiling, 4.5 pause/resume.
 
+### Brendan — verify after Railway rebuilds (full checklist in the handoff)
+- [ ] Homepage walk: logged-out `/` = login page (no signup link); `/register` 404s; logged-in lands on first client.
+- [ ] Change password via **Account Settings**, sign out, sign back in. **Change the 2026-06-12 temp admin password here.**
+- [ ] Password-reset test for `brendan@` → email arrives (built-in mailer), link lands on `app.buildingflowdigital.com/reset-password`.
+- [ ] API Management → **Verify Credentials** card → all 4 Connected.
+- [ ] Voice doc page → Agent Settings now has the Directions selector; voice cards show direction badges.
+- [ ] Engagement → enable an email channel with no subject → save blocked ("Email: subject is required").
+- [ ] Sub-Account Settings → set a **Brand Voice**, save; AI engagement copy reflects it.
+- [ ] Call Logs tab renders rows; re-click "Push DM now" / "Push follow-up now".
+- [ ] Apply the voice prompt rewrite (`Docs/VOICE_SETTER_PROMPT_REWRITE_2026-06-12.md`), push, send Claude a call_id. Confirm BOTH inbound + outbound repoint to the new published version (`GET /v2/list-phone-numbers`) — this exercises the Tier 0 fix.
+- [ ] (decision) Pick an email provider from `Docs/EMAIL_PROVIDER_OPTIONS.md` for sub-account self-reset (gates only the custom-SMTP wiring).
+
+### Claude — next build session (designs in the 2026-06-13 handoff)
+- [ ] **4.5 pause/resume** on a running cadence — design ready; modifies runEngagement (frozen-wait step-boundary hold, opt-in only) + `pause-engagement` edge fn + UI. Needs Brendan's live E2E test. Verify `engagement_executions.status` has no CHECK constraint blocking `'paused'` first.
+- [ ] **Voice analytics "Total Voice Call = N/A"** — make `compute-analytics.resolveHistoryTable` analytics-type-aware AND give voice a real source (persist Retell transcripts to the external DB, or add a platform `call_history` read path with Conversation-shape mapping). BFD's external DB has only `chat_history` today.
+- [ ] **4.4 cost ceiling** — build a per-execution cost-tracking table first, then per-tenant rolling aggregate + `clients.weekly/monthly_cost_ceiling_cents` (flag-only, no auto-pause).
+- [ ] **FEATURE_ROADMAP 2.4 (UUID-native node picker)** + migrate `Voice-Setter-N` node refs to `voice_setters` UUIDs → then **3.3** retire the outbound direction columns + inbound-only UI. Currently blocked: live workflow `40e8bea3` uses legacy `Voice-Setter-2`.
+- [ ] **Custom SMTP wiring** once Brendan provides provider credentials.
+
 ---
 
 ## 🔐 AUTH + HOMEPAGE — ✅ DONE 2026-06-13 (Tier 1, `9a196a5`)
