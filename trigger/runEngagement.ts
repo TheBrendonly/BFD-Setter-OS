@@ -695,6 +695,49 @@ export const runEngagement = task({
             });
           } catch { /* non-fatal */ }
         }
+
+        // D2 (4.4) — per-tenant ROLLING cost ceiling (flag-only, no auto-pause).
+        // The cadence_metrics upsert above is already counted, so client_cost_rollup
+        // reflects this run. Only checked when the client has a ceiling configured.
+        try {
+          const { data: clientCeil } = await supabase
+            .from("clients")
+            .select("weekly_cost_ceiling_cents, monthly_cost_ceiling_cents")
+            .eq("id", client_id)
+            .maybeSingle();
+          const weeklyCeil = clientCeil?.weekly_cost_ceiling_cents ?? null;
+          const monthlyCeil = clientCeil?.monthly_cost_ceiling_cents ?? null;
+          if (weeklyCeil != null || monthlyCeil != null) {
+            const { data: rollup } = await supabase
+              .from("client_cost_rollup")
+              .select("week_cents, month_cents")
+              .eq("client_id", client_id)
+              .maybeSingle();
+            const weekCents = Number(rollup?.week_cents ?? 0);
+            const monthCents = Number(rollup?.month_cents ?? 0);
+            const weeklyBreached = weeklyCeil != null && weekCents >= weeklyCeil;
+            const monthlyBreached = monthlyCeil != null && monthCents >= monthlyCeil;
+            if (weeklyBreached || monthlyBreached) {
+              await supabase.from("error_logs").insert({
+                client_ghl_account_id: ghl_account_id,
+                error_type: "cost_ceiling_breach",
+                error_message:
+                  `Tenant rolling cost ceiling reached ` +
+                  `(week ${weekCents}c/${weeklyCeil ?? "—"}c, month ${monthCents}c/${monthlyCeil ?? "—"}c)`,
+                severity: "warning",
+                source: "trigger.runEngagement.writeCadenceMetrics",
+                execution_id,
+                lead_id,
+                context: {
+                  week_cents: weekCents,
+                  month_cents: monthCents,
+                  weekly_ceiling_cents: weeklyCeil,
+                  monthly_ceiling_cents: monthlyCeil,
+                },
+              });
+            }
+          }
+        } catch { /* non-fatal */ }
       } catch (metricsErr) {
         console.warn("writeCadenceMetrics failed (non-fatal):", (metricsErr as Error).message);
       }

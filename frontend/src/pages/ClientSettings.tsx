@@ -46,7 +46,10 @@ export default function ClientSettings() {
     image_url: "",
     brand_voice: "",
     timezone: "Australia/Sydney",
+    weekly_cost_ceiling: "",
+    monthly_cost_ceiling: "",
   });
+  const [rollup, setRollup] = useState<{ week_cents: number; month_cents: number } | null>(null);
   const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
   const savedSnapshotRef = useRef<string>('');
 
@@ -73,17 +76,36 @@ export default function ClientSettings() {
     try {
       const { data, error } = await supabase
         .from("clients")
-        .select("name, email, description, image_url, timezone, brand_voice")
+        .select("name, email, description, image_url, timezone, brand_voice, weekly_cost_ceiling_cents, monthly_cost_ceiling_cents")
         .eq("id", clientId)
         .single();
 
       if (error) throw error;
       if (data) {
+        const d = data as typeof data & { weekly_cost_ceiling_cents?: number | null; monthly_cost_ceiling_cents?: number | null; brand_voice?: string | null };
         // Default timezone fallback for clients provisioned before the column was added.
-        const merged = { ...data, timezone: data.timezone || "Australia/Sydney", brand_voice: (data as { brand_voice?: string | null }).brand_voice ?? "" };
+        // Cost ceilings are stored in cents but edited in dollars.
+        const merged = {
+          name: d.name ?? "",
+          email: d.email ?? "",
+          description: d.description ?? "",
+          image_url: d.image_url ?? "",
+          brand_voice: d.brand_voice ?? "",
+          timezone: d.timezone || "Australia/Sydney",
+          weekly_cost_ceiling: d.weekly_cost_ceiling_cents != null ? String(d.weekly_cost_ceiling_cents / 100) : "",
+          monthly_cost_ceiling: d.monthly_cost_ceiling_cents != null ? String(d.monthly_cost_ceiling_cents / 100) : "",
+        };
         setClientData(merged);
         savedSnapshotRef.current = JSON.stringify(merged);
       }
+
+      // Rolling spend badge (best-effort; RLS-scoped via the security_invoker view).
+      const { data: rollupRow } = await supabase
+        .from("client_cost_rollup")
+        .select("week_cents, month_cents")
+        .eq("client_id", clientId)
+        .maybeSingle();
+      if (rollupRow) setRollup({ week_cents: Number(rollupRow.week_cents ?? 0), month_cents: Number(rollupRow.month_cents ?? 0) });
     } catch (error) {
       console.error("Error fetching client data:", error);
       toast.error("Failed to load sub-account settings");
@@ -130,6 +152,14 @@ export default function ClientSettings() {
         imageUrl = "";
       }
 
+      // Cost ceilings: dollars in the UI -> integer cents in the DB; blank = no ceiling (null).
+      const parseCeilingCents = (v: string): number | null => {
+        const t = (v ?? "").trim();
+        if (!t) return null;
+        const n = Math.round(parseFloat(t) * 100);
+        return Number.isFinite(n) && n >= 0 ? n : null;
+      };
+
       const { error } = await supabase
         .from("clients")
         .update({
@@ -139,6 +169,8 @@ export default function ClientSettings() {
           image_url: imageUrl || null,
           brand_voice: clientData.brand_voice || null,
           timezone: clientData.timezone || "Australia/Sydney",
+          weekly_cost_ceiling_cents: parseCeilingCents(clientData.weekly_cost_ceiling),
+          monthly_cost_ceiling_cents: parseCeilingCents(clientData.monthly_cost_ceiling),
         })
         .eq("id", clientId);
 
@@ -282,6 +314,44 @@ export default function ClientSettings() {
               </Select>
               <p className="text-muted-foreground text-xs" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
                 Drives booking time formatting, cadence quiet-hours scheduling, and what the voice agent says ("Sydney time", etc.). Used by voice-booking-tools, make-retell-outbound-call, and retell-proxy.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="field-text">Cost Ceiling (flag only)</Label>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label htmlFor="weekly_cost_ceiling" className="text-muted-foreground text-xs" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>Weekly ($)</Label>
+                  <Input
+                    id="weekly_cost_ceiling"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={clientData.weekly_cost_ceiling}
+                    onChange={(e) => setClientData({ ...clientData, weekly_cost_ceiling: e.target.value })}
+                    placeholder="no limit"
+                    className="field-text"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="monthly_cost_ceiling" className="text-muted-foreground text-xs" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>Monthly ($)</Label>
+                  <Input
+                    id="monthly_cost_ceiling"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={clientData.monthly_cost_ceiling}
+                    onChange={(e) => setClientData({ ...clientData, monthly_cost_ceiling: e.target.value })}
+                    placeholder="no limit"
+                    className="field-text"
+                  />
+                </div>
+              </div>
+              <p className="text-muted-foreground text-xs" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
+                {rollup
+                  ? `Rolling spend — this week $${(rollup.week_cents / 100).toFixed(2)}, this month $${(rollup.month_cents / 100).toFixed(2)}. `
+                  : ""}
+                Crossing a ceiling logs an alert (error_logs: cost_ceiling_breach); it never auto-pauses cadences. Estimate based on cadence_metrics (SMS/email/voice/AI).
               </p>
             </div>
 
