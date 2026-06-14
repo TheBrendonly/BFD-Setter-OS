@@ -28,7 +28,7 @@ export default function ClientSettings() {
 
   const { cb } = useCreatorMode();
 
-  usePageHeader({ title: 'Sub-Account Settings' });
+  usePageHeader({ title: 'Sub-Account Config' });
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [loading, setLoading] = useState(true);
   const [hasClientUser, setHasClientUser] = useState<boolean | null>(null);

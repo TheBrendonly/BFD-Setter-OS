@@ -178,8 +178,40 @@ async function sendTwilioSmsAndStamp(args: {
   ghlLocationId: string | null;
   ghlContactId: string | null;
   ghlConversationProviderId: string | null;
+  // Synthetic-probe / system client: write the outbound message_queue row the hourly
+  // canary asserts, but DO NOT call Twilio (no real SMS, no A2P burn, no spend).
+  skipDispatch?: boolean;
 }): Promise<{ ok: boolean; sid: string | null; errorCode?: number; errorMessage?: string }> {
   const supabaseUrl = process.env.SUPABASE_URL!;
+
+  if (args.skipDispatch) {
+    const syntheticSid = `PROBE_SKIPPED_${Date.now()}`;
+    try {
+      await args.supabase.from("message_queue").insert({
+        lead_id: args.leadId,
+        ghl_account_id: args.ghlAccountId,
+        message_body: args.body,
+        contact_name: args.contactName,
+        contact_email: args.contactEmail,
+        contact_phone: args.toNumber,
+        channel: "sms_outbound",
+        twilio_message_sid: syntheticSid,
+        processed: true,
+      });
+    } catch (insErr) {
+      console.warn("runEngagement: probe message_queue insert failed (non-fatal)", insErr);
+    }
+    try {
+      await args.supabase
+        .from("leads")
+        .update({ last_outbound_at: new Date().toISOString() })
+        .eq("client_id", args.clientId)
+        .eq("lead_id", args.leadId);
+    } catch { /* non-fatal */ }
+    console.log(`runEngagement: SMS dispatch SKIPPED (system/probe client) for lead ${args.leadId}; message_queue row written (sid=${syntheticSid})`);
+    return { ok: true, sid: syntheticSid };
+  }
+
   const statusCallbackUrl = `${supabaseUrl}/functions/v1/twilio-status-webhook`;
   const params: Record<string, string> = {
     From: args.fromNumber,
@@ -786,7 +818,7 @@ export const runEngagement = task({
       // ── Load client config ────────────────────────────────────────────────
       const { data: client } = await supabase
         .from("clients")
-        .select("send_engagement_webhook_url, supabase_url, supabase_service_key, cadence_quiet_hours, twilio_account_sid, twilio_auth_token, twilio_default_phone, retell_phone_1, ghl_api_key, ghl_location_id, ghl_conversation_provider_id, openrouter_api_key, llm_model, timezone, brand_voice")
+        .select("send_engagement_webhook_url, supabase_url, supabase_service_key, cadence_quiet_hours, twilio_account_sid, twilio_auth_token, twilio_default_phone, retell_phone_1, ghl_api_key, ghl_location_id, ghl_conversation_provider_id, openrouter_api_key, llm_model, timezone, brand_voice, is_system")
         .eq("id", client_id)
         .single();
 
@@ -1258,13 +1290,16 @@ export const runEngagement = task({
 
             if (ch.type === "sms") {
               // Phase 11f — direct Twilio Messages.create + message_queue stamp.
+              // System/probe clients (clients.is_system) write the message_queue row
+              // the canary verifies but skip the real Twilio dispatch (verify-only).
+              const isSystemClient = client.is_system === true;
               const twilioSid = client.twilio_account_sid as string | null;
               const twilioAuth = client.twilio_auth_token as string | null;
               const twilioFrom =
                 (client.twilio_default_phone as string | null) ??
                 (client.retell_phone_1 as string | null);
               const toNumber = payload.Phone;
-              if (!twilioSid || !twilioAuth || !twilioFrom) {
+              if (!isSystemClient && (!twilioSid || !twilioAuth || !twilioFrom)) {
                 throw new Error("SMS requires twilio_account_sid + twilio_auth_token + (twilio_default_phone || retell_phone_1)");
               }
               if (!toNumber) {
@@ -1272,9 +1307,9 @@ export const runEngagement = task({
               }
               const sendResult = await sendTwilioSmsAndStamp({
                 supabase,
-                twilioSid,
-                twilioAuth,
-                fromNumber: twilioFrom,
+                twilioSid: twilioSid ?? "",
+                twilioAuth: twilioAuth ?? "",
+                fromNumber: twilioFrom ?? "",
                 toNumber,
                 body: message,
                 clientId: client_id,
@@ -1287,6 +1322,7 @@ export const runEngagement = task({
                 ghlContactId: lead_id,
                 ghlConversationProviderId:
                   (client.ghl_conversation_provider_id as string | null) ?? null,
+                skipDispatch: isSystemClient,
               });
               if (!sendResult.ok) {
                 throw new Error(

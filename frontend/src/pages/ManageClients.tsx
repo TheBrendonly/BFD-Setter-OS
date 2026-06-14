@@ -155,6 +155,7 @@ export default function ManageClients() {
       const { data, error } = await supabase
         .from("clients")
         .select("id, name, email, description, image_url, created_at")
+        .eq("is_system", false)
         .order("sort_order");
       if (error) throw error;
       setClients(data || []);

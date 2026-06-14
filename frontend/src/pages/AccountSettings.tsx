@@ -34,7 +34,7 @@ export default function AccountSettings() {
   const [changingPassword, setChangingPassword] = useState(false);
 
   usePageHeader({
-    title: isAgency ? 'Agency Settings' : 'Account Settings',
+    title: 'My Account',
     rightExtra: isCreatorMode ? (
       <Button
         variant="outline"

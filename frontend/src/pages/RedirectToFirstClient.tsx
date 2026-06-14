@@ -62,6 +62,7 @@ export default function RedirectToFirstClient() {
       const { data, error } = await supabase
         .from("clients")
         .select("id")
+        .eq("is_system", false)
         .order("sort_order")
         .limit(1)
         .maybeSingle();

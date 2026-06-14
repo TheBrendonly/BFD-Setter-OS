@@ -422,7 +422,7 @@ function ClientSidebar() {
       const {
         data,
         error
-      } = await supabase.from("clients").select("id, name, description, image_url, sort_order, presentation_only_mode").order("sort_order");
+      } = await supabase.from("clients").select("id, name, description, image_url, sort_order, presentation_only_mode").eq("is_system", false).order("sort_order");
       if (error) throw error;
       setClients(data || []);
     } catch (error) {
@@ -971,7 +971,7 @@ function ClientSidebar() {
                 <SidebarMenuButton asChild>
                   <NavLink to={`/client/${clientId}/settings`} className="flex items-center gap-3 px-3 py-2 transition-colors hover:bg-muted/50 sidebar-nav-item" activeClassName="bg-primary/10 text-primary border-l-2 border-primary">
                     <span className="w-4 text-center text-foreground" style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '14px' }}>⚑</span>
-                    <span>Sub-Account Settings</span>
+                    <span>Sub-Account Config</span>
                   </NavLink>
                 </SidebarMenuButton>
               </SidebarMenuItem>
@@ -981,7 +981,7 @@ function ClientSidebar() {
                 <SidebarMenuButton asChild>
                   <NavLink to={`/client/${clientId}/account-settings`} className="flex items-center gap-3 px-3 py-2 transition-colors hover:bg-muted/50 sidebar-nav-item" activeClassName="bg-primary/10 text-primary border-l-2 border-primary">
                     <span className="w-4 text-center text-foreground" style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '14px' }}>◉</span>
-                    <span>Account Settings</span>
+                    <span>My Account</span>
                   </NavLink>
                 </SidebarMenuButton>
               </SidebarMenuItem>
