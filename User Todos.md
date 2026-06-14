@@ -228,7 +228,7 @@ Whole-codebase security review shipped + deployed to `bjgrgbgykvjrsuwwruoh`. Ful
 
 ---
 
-## 🔎 ONBOARDING DRY-RUN SIMULATION (2026-06-06) — ✅ CODE GAPS (CA1-CA8) SHIPPED 2026-06-09 (deploy pending)
+## 🔎 ONBOARDING DRY-RUN SIMULATION (2026-06-06) — ✅ CODE GAPS (CA1-CA8) SHIPPED 2026-06-09 + DEPLOYED 2026-06-10 (confirmed live 2026-06-14)
 
 Full simulation walkthrough (all 11 phases, provision/store/verify/breaks-if-skipped + 12-item gap list):
 `~/.claude/plans/you-are-a-senior-calm-cocke.md` (durable copy of findings in handoff
@@ -236,7 +236,7 @@ Full simulation walkthrough (all 11 phases, provision/store/verify/breaks-if-ski
 Nothing was executed — this was a read-only audit of `Docs/CLIENT_ONBOARDING_SOP.md` against live code.
 Note: edge fns live under `frontend/supabase/functions/`. These items feed Phase C (onboard Client #2) + the §A6 / security items above.
 
-### Coding-agent (autonomous code) — ✅ ALL SHIPPED 2026-06-09 (NOT YET DEPLOYED)
+### Coding-agent (autonomous code) — ✅ ALL SHIPPED 2026-06-09 + DEPLOYED (2026-06-10 fleet redeploy; confirmed live 2026-06-14)
 
 Shipped this session. `tsc --noEmit` clean, `onboard-client.mjs --dry-run` verified, all 6 edited edge fns + `processMessages.ts` pass a TS syntax transpile. **⚠️ DEPLOY STILL REQUIRED** (see new Brendan/Claude item below): `supabase functions deploy` the 6 edge fns with `--use-api --no-verify-jwt`, apply migration `20260609120000_add_ghl_channel_field_id.sql` to `bjgrgbgykvjrsuwwruoh`, and the `types.ts` change rides the next Railway frontend deploy.
 
@@ -249,7 +249,7 @@ Shipped this session. `tsc --noEmit` clean, `onboard-client.mjs --dry-run` verif
 - [x] **CA7. 🟡 `ghl_last_synced_from_field_value`** — was ALREADY in `types.ts`; no change needed.
 - [x] **CA8. 🟢 SOP doc fixes** in `Docs/CLIENT_ONBOARDING_SOP.md` — tag standardized to `bfd_setter-new_lead` (+ noted it's really the per-client `engagement_workflows.new_leads_tag`), `llm_model` default documented (nullable, distinct from the prompt-config slot default), edge-fn/trigger code paths noted, `bookings-webhook` flagged canonical vs `sync-ghl-booking`.
 
-- [ ] **CA-DEPLOY. ⚠️ (S, Brendan or Claude) Deploy the CA1-CA8 code** — 6 edge fns (`sync-ghl-contact`, `sync-ghl-booking`, `retell-call-webhook`, `workflow-inbound-webhook`, `twilio-configure-webhook`, `test-external-supabase`) via `supabase functions deploy <slug> --use-api --no-verify-jwt`; apply the new migration to `bjgrgbgykvjrsuwwruoh`; push to `main` so `types.ts` + the trigger task ride the next deploy. Until deployed, the live system is unchanged (still safe — CA1 is inert without secrets anyway).
+- [x] **CA-DEPLOY — ✅ DONE (deployed 2026-06-10 fleet redeploy; confirmed live 2026-06-14).** The CA1-CA8 edge fns + migration all went live in the 2026-06-10 audit deploy. Verified via the Supabase Management API function list: all 83 functions have `updated_at` on or after 2026-06-10T04:33Z (`sync-ghl-contact` v20, `workflow-inbound-webhook` v11, `retell-call-webhook` v17, `process-lead-file` v12), so nothing is stuck at the 2026-06-09 code-written state. No deploy action pending.
 
 ### Brendan-required — by severity
 
