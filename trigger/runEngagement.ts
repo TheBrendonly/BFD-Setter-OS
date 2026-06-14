@@ -1639,6 +1639,9 @@ export const runEngagement = task({
         stop_reason: "sequence_complete",
         stage_description: "Engagement sequence finished.",
         completed_at: new Date().toISOString(),
+        // B7: clear any dangling call hold. Every other terminal/branch exit nulls
+        // active_call_id; the sequence_complete path was the one that omitted it.
+        active_call_id: null,
       });
 
       await writeCadenceMetrics("sequence_complete");
