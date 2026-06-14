@@ -157,7 +157,9 @@ export default function ClientSettings() {
         const t = (v ?? "").trim();
         if (!t) return null;
         const n = Math.round(parseFloat(t) * 100);
-        return Number.isFinite(n) && n >= 0 ? n : null;
+        if (!Number.isFinite(n) || n < 0) return null;
+        // Clamp to PostgreSQL int4 max so a huge value can't silently fail the insert.
+        return Math.min(n, 2147483647);
       };
 
       const { error } = await supabase

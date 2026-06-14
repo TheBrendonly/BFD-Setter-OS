@@ -13,6 +13,7 @@ export const useAuth = () => {
       loading: true,
       role: null as UserRole,
       userClientId: null as string | null,
+      mfaRequired: false,
       signUp: async () => ({ error: new Error('AuthProvider missing') as any }),
       signIn: async () => ({ error: new Error('AuthProvider missing') as any }),
       signOut: async () => ({ error: new Error('AuthProvider missing') as any }),

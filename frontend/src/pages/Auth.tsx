@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -18,12 +18,35 @@ const Auth = () => {
   const [mfaFactorId, setMfaFactorId] = useState('');
   const [mfaChallengeId, setMfaChallengeId] = useState('');
   const [mfaCode, setMfaCode] = useState('');
-  const { user, signIn, loading: authLoading, role, userClientId } = useAuth();
+  const { user, signIn, loading: authLoading, role, userClientId, mfaRequired } = useAuth();
   const { toast } = useToast();
 
-  // Do NOT redirect while a sign-in is in flight or an MFA challenge is pending,
-  // otherwise the aal1 session would navigate away before the code is entered.
-  if (!authLoading && user && !submitting && !mfaStep) {
+  // Issue a TOTP challenge for the user's verified factor and show the code screen.
+  const beginMfaChallenge = async (): Promise<boolean> => {
+    const { data: factors } = await supabase.auth.mfa.listFactors();
+    const totp = factors?.totp?.find((f) => f.status === 'verified') || factors?.totp?.[0];
+    if (!totp) return false;
+    const { data: ch, error: chErr } = await supabase.auth.mfa.challenge({ factorId: totp.id });
+    if (chErr || !ch) return false;
+    setMfaFactorId(totp.id);
+    setMfaChallengeId(ch.id);
+    setMfaStep(true);
+    return true;
+  };
+
+  // Reload / deep-link bounce: route guards send an aal1-pending session back to /auth.
+  // Re-enter the challenge on mount so the code screen shows instead of a redirect —
+  // this is what closes the "reload escapes MFA" hole, not just the in-flow path.
+  useEffect(() => {
+    if (mfaRequired && !mfaStep && !submitting) {
+      void beginMfaChallenge();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mfaRequired]);
+
+  // Do NOT redirect while a sign-in is in flight, an MFA challenge is pending, or the
+  // session still owes aal2 — otherwise the aal1 session would slip past the code step.
+  if (!authLoading && user && !mfaRequired && !submitting && !mfaStep) {
     if (role === 'client' && userClientId) {
       return <Navigate to={`/client/${userClientId}/analytics/chatbot/dashboard`} replace />;
     }
@@ -44,19 +67,11 @@ const Auth = () => {
         return;
       }
       // If the user has a verified TOTP factor, Supabase reports nextLevel aal2.
-      // Issue a challenge and hold them on the code screen.
+      // Issue the challenge synchronously here (before submitting clears) so the
+      // redirect guard can't fire in the window before mfaRequired recomputes.
       const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
       if (aal && aal.nextLevel === 'aal2' && aal.currentLevel !== 'aal2') {
-        const { data: factors } = await supabase.auth.mfa.listFactors();
-        const totp = factors?.totp?.find((f) => f.status === 'verified') || factors?.totp?.[0];
-        if (totp) {
-          const { data: ch, error: chErr } = await supabase.auth.mfa.challenge({ factorId: totp.id });
-          if (!chErr && ch) {
-            setMfaFactorId(totp.id);
-            setMfaChallengeId(ch.id);
-            setMfaStep(true);
-          }
-        }
+        await beginMfaChallenge();
       }
       // No MFA required -> the user state drives the redirect above once submitting clears.
     } catch (error) {

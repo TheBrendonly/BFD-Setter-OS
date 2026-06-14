@@ -11,6 +11,11 @@ export type AuthContextType = {
   loading: boolean;
   role: UserRole;
   userClientId: string | null;
+  // True when the session is at aal1 but a verified TOTP factor makes aal2 the
+  // required level — i.e. the user signed in with a password but has NOT yet passed
+  // the MFA challenge. Route guards bounce such sessions back to /auth so a reload or
+  // a direct deep link can't bypass the TOTP step.
+  mfaRequired: boolean;
   signUp: (email: string, password: string, fullName: string) => Promise<{ error: Error | null }>;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<{ error: Error | null }>;
@@ -24,6 +29,19 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [loading, setLoading] = useState(true);
   const [role, setRole] = useState<UserRole>(null);
   const [userClientId, setUserClientId] = useState<string | null>(null);
+  const [mfaRequired, setMfaRequired] = useState(false);
+
+  // Recompute whether the current session still owes an MFA challenge. aal1 + a
+  // verified factor (nextLevel=aal2) means "password done, TOTP pending".
+  const refreshMfaRequired = async () => {
+    try {
+      const { data, error } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+      if (error || !data) { setMfaRequired(false); return; }
+      setMfaRequired(data.currentLevel === 'aal1' && data.nextLevel === 'aal2');
+    } catch {
+      setMfaRequired(false);
+    }
+  };
 
   const fetchUserRole = async (userId: string) => {
     try {
@@ -97,11 +115,18 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         setUser(null);
         setRole(null);
         setUserClientId(null);
+        setMfaRequired(false);
         setLoading(false);
+      } else if (event === 'MFA_CHALLENGE_VERIFIED') {
+        // TOTP passed — re-evaluate (should clear the gate to aal2).
+        setSession(session);
+        setUser(session?.user ?? null);
+        void refreshMfaRequired();
       } else if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
         setSession(session);
         setUser(session?.user ?? null);
         if (session?.user) {
+          void refreshMfaRequired();
           // Defer to avoid Supabase auth deadlock
           setTimeout(() => {
             if (mounted) {
@@ -111,6 +136,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             }
           }, 0);
         } else {
+          setMfaRequired(false);
           setLoading(false);
         }
       }
@@ -127,6 +153,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           setSession(session);
           setUser(session?.user ?? null);
           if (session?.user) {
+            await refreshMfaRequired();
             await fetchUserRole(session.user.id);
           }
         }
@@ -192,10 +219,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     loading,
     role,
     userClientId,
+    mfaRequired,
     signUp,
     signIn,
     signOut,
-  }), [user, session, loading, role, userClientId]);
+  }), [user, session, loading, role, userClientId, mfaRequired]);
 
   return (
     <AuthContext.Provider value={value}>

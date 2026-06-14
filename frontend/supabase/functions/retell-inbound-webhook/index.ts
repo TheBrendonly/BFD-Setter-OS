@@ -129,14 +129,16 @@ Deno.serve(async (req) => {
     lead = exact ?? null;
 
     if (!lead && last9.length >= 7) {
-      const { data: suffix } = await supabase
+      const { data: suffixRows } = await supabase
         .from("leads")
         .select("lead_id, first_name, last_name, phone, email, business_name")
         .eq("client_id", client.id)
         .ilike("phone", `%${last9}`)
-        .limit(1)
-        .maybeSingle();
-      lead = suffix ?? null;
+        .limit(2);
+      // Only trust the suffix match when it is UNAMBIGUOUS. If two leads share the
+      // last 9 digits (e.g. different country codes within one client), do NOT guess —
+      // fall through to empty vars (the prompt's empty-vars guidance handles it).
+      lead = Array.isArray(suffixRows) && suffixRows.length === 1 ? suffixRows[0] : null;
     }
 
     // current_time in the client's timezone (cheap, always useful on inbound).

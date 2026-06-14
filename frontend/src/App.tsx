@@ -118,38 +118,42 @@ const queryClient = new QueryClient({
 });
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
-  const { user, loading } = useAuth();
-  
+  const { user, loading, mfaRequired } = useAuth();
+
   if (loading) return <RetroLoader />;
-  
-  return user ? <>{children}</> : <Navigate to="/auth" replace />;
+  if (!user) return <Navigate to="/auth" replace />;
+  // aal1 session with a verified factor still owes the TOTP challenge — bounce to /auth.
+  if (mfaRequired) return <Navigate to="/auth" replace />;
+  return <>{children}</>;
 };
 
 const AgencyRoute = ({ children }: { children: React.ReactNode }) => {
-  const { user, loading, role, userClientId } = useAuth();
-  
+  const { user, loading, role, userClientId, mfaRequired } = useAuth();
+
   if (loading) return <RetroLoader />;
-  
+
   if (!user) return <Navigate to="/auth" replace />;
+  if (mfaRequired) return <Navigate to="/auth" replace />;
   if (role === 'client' && userClientId) {
     return <Navigate to={`/client/${userClientId}/analytics/chatbot/dashboard`} replace />;
   }
-  
+
   return <>{children}</>;
 };
 
 const ClientRouteGuard = ({ children }: { children: React.ReactNode }) => {
-  const { user, loading, role, userClientId } = useAuth();
+  const { user, loading, role, userClientId, mfaRequired } = useAuth();
   const { clientId } = useParams<{ clientId: string }>();
-  
+
   if (loading) return <RetroLoader />;
-  
+
   if (!user) return <Navigate to="/auth" replace />;
-  
+  if (mfaRequired) return <Navigate to="/auth" replace />;
+
   if (role === 'client' && userClientId && clientId !== userClientId) {
     return <Navigate to={`/client/${userClientId}/analytics/chatbot/dashboard`} replace />;
   }
-  
+
   return <>{children}</>;
 };
 
@@ -165,12 +169,15 @@ const CreatorRouteGuard = ({ children }: { children: React.ReactNode }) => {
 };
 
 const IndexRoute = () => {
-  const { user, loading } = useAuth();
-  
+  const { user, loading, mfaRequired } = useAuth();
+
   if (loading) return <RetroLoader />;
-  
-  // Login-only: logged-out users land on the sign-in page (no public waitlist/signup).
-  return user ? <Suspense fallback={<RetroLoader />}><RedirectToFirstClient /></Suspense> : <Suspense fallback={<RetroLoader />}><Auth /></Suspense>;
+
+  // Login-only: logged-out users (and aal1 sessions still owing the TOTP challenge)
+  // land on the sign-in page; only fully-authed users redirect to their workspace.
+  return (user && !mfaRequired)
+    ? <Suspense fallback={<RetroLoader />}><RedirectToFirstClient /></Suspense>
+    : <Suspense fallback={<RetroLoader />}><Auth /></Suspense>;
 };
 
 const ConditionalSupportChat = () => {
