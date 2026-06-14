@@ -21,7 +21,7 @@ import { Switch } from '@/components/ui/switch';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { StatusTag } from '@/components/StatusTag';
 import { toast } from 'sonner';
-import { X, Save, ClipboardCheck, RefreshCw, Loader2, Square, Code, ChevronDown, ChevronRight, ChevronLeft, Search, Layers, Rocket, Power, Zap, MessageSquare, Phone, GripVertical, Clock, Maximize2, Check, Trash2, Plus, Copy, Globe, Pencil } from '@/components/icons';
+import { X, Save, ClipboardCheck, RefreshCw, Loader2, Square, Code, ChevronDown, ChevronRight, ChevronLeft, Search, Layers, Rocket, Power, Zap, MessageSquare, Phone, GripVertical, Clock, Maximize2, Check, Trash2, Plus, Copy, Globe, Pencil, Pause, Play } from '@/components/icons';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 import SavingOverlay from '@/components/SavingOverlay';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -1831,6 +1831,10 @@ function EngagementExecutionDetail({
   stopping,
   onPushNow,
   pushingNow,
+  onPause,
+  pausing,
+  onResume,
+  resuming,
 }: {
   execution: EngagementExecution;
   nodes: WorkflowNode[];
@@ -1840,6 +1844,10 @@ function EngagementExecutionDetail({
   stopping: boolean;
   onPushNow: () => void;
   pushingNow: boolean;
+  onPause: () => void;
+  pausing: boolean;
+  onResume: () => void;
+  resuming: boolean;
 }) {
   const { clientId } = useParams();
   const navigate = useNavigate();
@@ -1852,7 +1860,7 @@ function EngagementExecutionDetail({
       case 'completed':
       case 'replied':
         return 'positive';
-      case 'running': case 'pending': return 'warning';
+      case 'running': case 'pending': case 'paused': return 'warning';
       case 'failed': case 'stopped': case 'cancelled': return 'negative';
       default: return 'neutral';
     }
@@ -2104,7 +2112,7 @@ function EngagementExecutionDetail({
 
   return (
     <>
-      <SavingOverlay isVisible={stopping || pushingNow} message={stopping ? 'Ending execution...' : 'Pushing now...'} variant="fixed" />
+      <SavingOverlay isVisible={stopping || pushingNow || pausing || resuming} message={stopping ? 'Ending execution...' : pausing ? 'Pausing...' : resuming ? 'Resuming...' : 'Pushing now...'} variant="fixed" />
       <div className="w-[408px] h-full bg-card overflow-hidden flex flex-col" style={{ borderLeft: '3px groove hsl(var(--border-groove))' }}>
         <div
           className="px-4 shrink-0 flex items-center justify-between"
@@ -2166,11 +2174,49 @@ function EngagementExecutionDetail({
               <button
                 className="groove-btn !h-7 px-3 uppercase text-foreground flex items-center flex-1 justify-center"
                 style={{ fontFamily: "'VT323', monospace", fontSize: '14px', letterSpacing: '0.06em' }}
+                onClick={onPause}
+                disabled={pausing}
+              >
+                <Pause className="h-3.5 w-3.5" />
+                <span className="ml-1.5">{pausing ? 'PAUSING...' : 'PAUSE'}</span>
+              </button>
+              <button
+                className="groove-btn !h-7 px-3 uppercase text-foreground flex items-center flex-1 justify-center"
+                style={{ fontFamily: "'VT323', monospace", fontSize: '14px', letterSpacing: '0.06em' }}
                 onClick={() => setPushConfirmOpen(true)}
                 disabled={pushingNow}
               >
                 <Zap className="h-3.5 w-3.5" />
                 <span className="ml-1.5">{pushingNow ? 'PUSHING...' : 'PUSH NOW'}</span>
+              </button>
+            </div>
+          </div>
+        ) : execution.status === 'paused' ? (
+          <div className="px-4 py-3 border-b border-border/50 space-y-2">
+            <div className="flex items-center justify-between">
+              <StatusTag variant="warning">PAUSED</StatusTag>
+              <span className="text-muted-foreground" style={fieldStyle}>
+                {execution.started_at ? format(new Date(execution.started_at), 'MMM d, HH:mm:ss') : '—'}
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                className="groove-btn !h-7 px-3 uppercase text-foreground flex items-center flex-1 justify-center"
+                style={{ fontFamily: "'VT323', monospace", fontSize: '14px', letterSpacing: '0.06em' }}
+                onClick={onResume}
+                disabled={resuming}
+              >
+                <Play className="h-3.5 w-3.5" />
+                <span className="ml-1.5">{resuming ? 'RESUMING...' : 'RESUME'}</span>
+              </button>
+              <button
+                className="groove-btn groove-btn-destructive !h-7 px-3 uppercase flex items-center flex-1 justify-center"
+                style={{ fontFamily: "'VT323', monospace", fontSize: '14px', letterSpacing: '0.06em' }}
+                onClick={() => setStopConfirmOpen(true)}
+                disabled={stopping}
+              >
+                <Square className="h-3.5 w-3.5" />
+                <span className="ml-1.5">{stopping ? 'ENDING...' : 'END NOW'}</span>
               </button>
             </div>
           </div>
@@ -2614,6 +2660,8 @@ export default function Engagement() {
   useEffect(() => { selectedExecutionRef.current = selectedExecution; }, [selectedExecution]);
   const [stoppingId, setStoppingId] = useState<string | null>(null);
   const [pushingNowId, setPushingNowId] = useState<string | null>(null);
+  const [pausingId, setPausingId] = useState<string | null>(null);
+  const [resumingId, setResumingId] = useState<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [showCampaignDialog, setShowCampaignDialog] = useState(false);
   const [campaignContactIds, setCampaignContactIds] = useState('');
@@ -2991,6 +3039,42 @@ export default function Engagement() {
       toast.error('Failed to push');
     }
     setPushingNowId(null);
+  }, [fetchExecutions]);
+
+  // Pause — freeze a running cadence (resumable). D1 (4.5).
+  const handlePause = useCallback(async (executionId: string) => {
+    setPausingId(executionId);
+    try {
+      const { error } = await supabase.functions.invoke('pause-engagement', {
+        body: { execution_id: executionId },
+      });
+      if (error) throw error;
+      toast.success('Engagement paused');
+      setSelectedExecution(prev => prev?.id === executionId ? { ...prev, status: 'paused', stage_description: 'Paused — manually paused from UI.' } : prev);
+      setExecutions(prev => prev.map(e => e.id === executionId ? { ...e, status: 'paused' } : e));
+      fetchExecutions();
+    } catch {
+      toast.error('Failed to pause engagement');
+    }
+    setPausingId(null);
+  }, [fetchExecutions]);
+
+  // Resume — continue a paused cadence from where it left off. D1 (4.5).
+  const handleResume = useCallback(async (executionId: string) => {
+    setResumingId(executionId);
+    try {
+      const { error } = await supabase.functions.invoke('resume-engagement', {
+        body: { execution_id: executionId },
+      });
+      if (error) throw error;
+      toast.success('Engagement resumed');
+      setSelectedExecution(prev => prev?.id === executionId ? { ...prev, status: 'running', stage_description: 'Resumed — continuing the sequence.' } : prev);
+      setExecutions(prev => prev.map(e => e.id === executionId ? { ...e, status: 'running' } : e));
+      fetchExecutions();
+    } catch {
+      toast.error('Failed to resume engagement');
+    }
+    setResumingId(null);
   }, [fetchExecutions]);
 
   // Start Campaign handler — uses the existing linked campaign
@@ -3831,6 +3915,10 @@ export default function Engagement() {
           stopping={stoppingId === selectedExecution.id}
           onPushNow={() => handlePushNow(selectedExecution.id)}
           pushingNow={pushingNowId === selectedExecution.id}
+          onPause={() => handlePause(selectedExecution.id)}
+          pausing={pausingId === selectedExecution.id}
+          onResume={() => handleResume(selectedExecution.id)}
+          resuming={resumingId === selectedExecution.id}
         />
       )}
 

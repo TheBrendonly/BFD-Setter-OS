@@ -430,6 +430,21 @@ export const runEngagement = task({
       return false;
     };
 
+    // A pause (status='paused', set by pause-engagement) is NON-terminal: unlike the
+    // statuses isCancelled() catches, a paused run must exit WITHOUT finalizing
+    // cadence_metrics so resume-engagement can re-trigger it from last_completed+1.
+    // The Trigger.dev run-cancel issued by pause-engagement is the primary stop; this
+    // boundary check is the backstop for the window between status='paused' and the
+    // cancel landing (the most common case: paused while looping between nodes).
+    const isPaused = async (): Promise<boolean> => {
+      const { data } = await supabase
+        .from("engagement_executions")
+        .select("status")
+        .eq("id", execution_id)
+        .single();
+      return data?.status === "paused";
+    };
+
     // Log a campaign analytics event — non-fatal if it fails (table may not exist yet).
     const logCampaignEvent = async (fields: {
       event_type: "enrolled" | "message_sent" | "completed";
@@ -873,6 +888,13 @@ export const runEngagement = task({
         // Skip nodes already completed (retry resume or Push Now)
         if (i < resumeFromIndex) {
           continue;
+        }
+
+        // Exit cleanly on a pause request — non-terminal, so do NOT finalize metrics;
+        // resume-engagement re-triggers from last_completed+1.
+        if (await isPaused()) {
+          console.log(`Engagement ${execution_id} paused at node ${i}`);
+          return { status: "paused", node_index: i };
         }
 
         // Check for external cancellation before every node
