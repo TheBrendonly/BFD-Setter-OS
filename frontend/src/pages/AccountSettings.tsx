@@ -258,6 +258,9 @@ export default function AccountSettings() {
             </CardContent>
           </Card>
 
+          {/* Two-Factor Authentication (TOTP) — opt-in for the logged-in user */}
+          <TwoFactorCard />
+
           {/* Sub-Account Subscription Overview (Agency only) */}
           {isAgency && <SubAccountOverview />}
 
@@ -266,6 +269,123 @@ export default function AccountSettings() {
         </div>
       </main>
     </div>
+  );
+}
+
+function TwoFactorCard() {
+  const [factors, setFactors] = useState<{ id: string; status: string }[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [enrolling, setEnrolling] = useState(false);
+  const [qrCode, setQrCode] = useState("");
+  const [secret, setSecret] = useState("");
+  const [newFactorId, setNewFactorId] = useState("");
+  const [code, setCode] = useState("");
+  const [verifying, setVerifying] = useState(false);
+
+  const loadFactors = async () => {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase.auth.mfa.listFactors();
+      if (error) throw error;
+      setFactors((data?.totp || []).map((f) => ({ id: f.id, status: f.status })));
+    } catch {
+      setFactors([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { loadFactors(); }, []);
+
+  const verifiedFactor = factors.find((f) => f.status === "verified");
+
+  const startEnroll = async () => {
+    setCode("");
+    try {
+      const { data, error } = await supabase.auth.mfa.enroll({ factorType: "totp" });
+      if (error) throw error;
+      setNewFactorId(data.id);
+      setQrCode(data.totp.qr_code);
+      setSecret(data.totp.secret);
+      setEnrolling(true);
+    } catch (e: any) {
+      toast.error(e?.message || "Could not start 2FA enrollment");
+    }
+  };
+
+  const confirmEnroll = async () => {
+    if (!newFactorId || code.trim().length < 6) { toast.error("Enter the 6-digit code from your authenticator app"); return; }
+    setVerifying(true);
+    try {
+      const { data: ch, error: chErr } = await supabase.auth.mfa.challenge({ factorId: newFactorId });
+      if (chErr) throw chErr;
+      const { error: vErr } = await supabase.auth.mfa.verify({ factorId: newFactorId, challengeId: ch.id, code: code.trim() });
+      if (vErr) throw vErr;
+      toast.success("Two-factor authentication enabled");
+      setEnrolling(false); setQrCode(""); setSecret(""); setNewFactorId(""); setCode("");
+      loadFactors();
+    } catch (e: any) {
+      toast.error(e?.message || "Invalid code — try again");
+    } finally {
+      setVerifying(false);
+    }
+  };
+
+  const cancelEnroll = async () => {
+    // Remove the unverified factor so it does not linger.
+    if (newFactorId) { try { await supabase.auth.mfa.unenroll({ factorId: newFactorId }); } catch { /* ignore */ } }
+    setEnrolling(false); setQrCode(""); setSecret(""); setNewFactorId(""); setCode("");
+  };
+
+  const removeFactor = async (factorId: string) => {
+    try {
+      const { error } = await supabase.auth.mfa.unenroll({ factorId });
+      if (error) throw error;
+      toast.success("Two-factor authentication removed");
+      loadFactors();
+    } catch (e: any) {
+      toast.error(e?.message || "Failed to remove 2FA");
+    }
+  };
+
+  return (
+    <Card className="material-surface">
+      <CardHeader>
+        <CardTitle className="text-lg flex items-center gap-2">
+          <Lock className="w-5 h-5" />
+          Two-Factor Authentication
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {loading ? (
+          <p className="text-muted-foreground field-text">Loading...</p>
+        ) : verifiedFactor && !enrolling ? (
+          <div className="space-y-3">
+            <p className="text-sm text-green-600 flex items-center gap-2"><CheckCircle2 className="w-4 h-4" /> 2FA is enabled — you'll be asked for a code at sign-in.</p>
+            <Button variant="outline" onClick={() => removeFactor(verifiedFactor.id)}>Remove 2FA</Button>
+          </div>
+        ) : enrolling ? (
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground field-text">Scan this QR code with an authenticator app (Google Authenticator, Authy, 1Password), then enter the 6-digit code to confirm.</p>
+            {qrCode && <img src={qrCode} alt="2FA QR code" className="h-44 w-44 border border-border rounded bg-white p-2" />}
+            {secret && <p className="text-xs text-muted-foreground break-all">Or enter this secret manually: <code>{secret}</code></p>}
+            <div className="space-y-2">
+              <Label htmlFor="mfa_code" className="field-text">6-digit code</Label>
+              <Input id="mfa_code" inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))} placeholder="123456" className="field-text w-40" />
+            </div>
+            <div className="flex gap-2">
+              <Button onClick={confirmEnroll} disabled={verifying}>{verifying ? "Verifying..." : "Confirm & Enable"}</Button>
+              <Button variant="outline" onClick={cancelEnroll} disabled={verifying}>Cancel</Button>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground field-text">Add a second step at sign-in using an authenticator app. Recommended for the agency login.</p>
+            <Button onClick={startEnroll}><Lock className="h-4 w-4 mr-2" /> Enable 2FA</Button>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
