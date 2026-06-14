@@ -834,20 +834,34 @@ function PhoneCallChannelConfig({ channel, updateChannel, clientId }: {
   updateChannel: (updates: Partial<EngageChannel>) => void;
   clientId?: string;
 }) {
-  const [voiceSetters, setVoiceSetters] = useState<{ slot_id: string; name: string }[]>([]);
+  // UUID-native picker: prefer the voice_setters model and store the row UUID.
+  // Falls back to legacy "Voice-Setter-N" slots for clients not yet backfilled.
+  // Existing nodes may hold either an id or a legacy slot string — both resolve at
+  // call time (make-retell-outbound-call dual-accepts), so we never rewrite stored
+  // values here; Brendan re-selects to migrate the live cadence.
+  const [options, setOptions] = useState<{ id: string; name: string }[]>([]);
   const [setterOpen, setSetterOpen] = useState(false);
-  // Show value as-is; placeholder communicates the default behavior. Field is optional.
 
   useEffect(() => {
     if (!clientId) return;
-    (supabase as any)
-      .from('agent_settings')
-      .select('slot_id, name')
-      .eq('client_id', clientId)
-      .like('slot_id', 'Voice-Setter-%')
-      .then(({ data }: any) => {
-        if (data) setVoiceSetters(data.map((d: any) => ({ slot_id: d.slot_id, name: d.name || d.slot_id })));
-      });
+    (async () => {
+      const { data: vs } = await (supabase as any)
+        .from('voice_setters')
+        .select('id, name, is_active')
+        .eq('client_id', clientId)
+        .eq('is_active', true)
+        .order('name');
+      if (vs && vs.length > 0) {
+        setOptions(vs.map((d: any) => ({ id: d.id, name: d.name || d.id })));
+        return;
+      }
+      const { data: legacy } = await (supabase as any)
+        .from('agent_settings')
+        .select('slot_id, name')
+        .eq('client_id', clientId)
+        .like('slot_id', 'Voice-Setter-%');
+      if (legacy) setOptions(legacy.map((d: any) => ({ id: d.slot_id, name: d.name || d.slot_id })));
+    })();
   }, [clientId]);
 
   return (
@@ -863,7 +877,7 @@ function PhoneCallChannelConfig({ channel, updateChannel, clientId }: {
             >
               <span className="truncate text-foreground flex-1">
                 {channel.voice_setter_id
-                  ? (voiceSetters.find(v => v.slot_id === channel.voice_setter_id)?.name || channel.voice_setter_id)
+                  ? (options.find(o => o.id === channel.voice_setter_id)?.name || channel.voice_setter_id)
                   : <span className="text-muted-foreground">Select voice setter</span>}
               </span>
               <span className="absolute right-0 top-1/2 -translate-y-1/2 h-7 w-7 flex items-center justify-center">
@@ -883,7 +897,7 @@ function PhoneCallChannelConfig({ channel, updateChannel, clientId }: {
             sideOffset={4}
           >
             <div className="p-1">
-              {voiceSetters.length === 0 ? (
+              {options.length === 0 ? (
                 <div className="px-3 py-4 text-center text-muted-foreground" style={{ fontSize: '13px', fontFamily: "'IBM Plex Mono', monospace" }}>
                   No voice setters configured.
                 </div>
@@ -892,23 +906,23 @@ function PhoneCallChannelConfig({ channel, updateChannel, clientId }: {
                   <div className="pt-1.5 pb-1.5 border-b border-border/50 mb-1 px-3 -mx-1 w-[calc(100%+0.5rem)]">
                     <span className="text-muted-foreground uppercase" style={{ fontSize: '11px', fontFamily: "'IBM Plex Mono', monospace", letterSpacing: 'normal' }}>Voice Setters</span>
                   </div>
-                  {voiceSetters.map(vs => (
+                  {options.map(o => (
                     <button
-                      key={vs.slot_id}
+                      key={o.id}
                       type="button"
-                      onClick={() => { updateChannel({ voice_setter_id: vs.slot_id }); setSetterOpen(false); }}
+                      onClick={() => { updateChannel({ voice_setter_id: o.id }); setSetterOpen(false); }}
                       className={cn(
                         "w-full text-left px-3 py-1.5 flex items-center gap-2 transition-colors",
-                        channel.voice_setter_id === vs.slot_id
+                        channel.voice_setter_id === o.id
                           ? "bg-accent/50 text-foreground"
                           : "hover:bg-muted/50 text-foreground"
                       )}
                       style={{ fontSize: '13px', fontFamily: "'IBM Plex Mono', monospace", letterSpacing: 'normal' }}
                     >
                       <span className="w-4 shrink-0 flex items-center justify-center">
-                        {channel.voice_setter_id === vs.slot_id ? <Check className="w-3.5 h-3.5 text-foreground" /> : ''}
+                        {channel.voice_setter_id === o.id ? <Check className="w-3.5 h-3.5 text-foreground" /> : ''}
                       </span>
-                      <span>{vs.name}</span>
+                      <span>{o.name}</span>
                     </button>
                   ))}
                 </>
