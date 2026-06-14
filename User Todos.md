@@ -8,6 +8,24 @@ Effort: S = under 30 min, M = 30 min - 2 hr, L = half day+.
 
 ---
 
+## 🗺️ POST-BUILD PLANNING + NEXT SESSIONS (2026-06-14)
+
+Planning/status session after the Tier 0-4 build. Produced a full bug/issue/feature catalogue + a Brendan-only action checklist, and split the remaining work into two fresh sessions. Authoritative current-state docs:
+- **Full catalogue (everything open, prioritised):** `~/.claude/plans/you-did-a-really-cozy-summit.md`
+- **Next-session handoff (the two copy-paste kickoff prompts + the grouped Brendan-only checklist):** `Operations/handoffs/2026-06-14-status-catalogue-and-next-sessions.md`
+
+**Decisions locked (2026-06-13):**
+- **Stripe billing: PARKED.** Not in scope; do not raise until Brendan brings it up. HubSpot coexistence also parked.
+- **Next build = all four designed features** (4.5 pause/resume, voice-analytics source fix, 4.4 cost ceiling, UUID node picker then outbound-column retirement) PLUS every open bug, the roadmap features, the Conversation Flow engine build, and rearchitecture proposals (brought for approval, not done blind).
+
+**Two sessions, in this order:**
+1. **Brendan walkthrough** (human-only tasks: smoke tests, decisions, account keys, prompt rewrite). Do this first: the build is gated on the decisions + keys.
+2. **Claude comprehensive build** (everything else). Run after the decisions + keys land.
+
+The grouped Brendan-only checklist (Groups 1-5) lives in the 2026-06-14 handoff; older sub-items below are superseded where they conflict with it.
+
+---
+
 ## ✅ TIER 0-4 BUILD SHIPPED (2026-06-13) — HEAD `08b79f4`, all live
 
 Autonomous build of the approved plan. Full detail + Brendan UI-smoke checklist + deferred designs: **`Operations/handoffs/2026-06-13-tier0-4-build.md`**.
@@ -107,9 +125,9 @@ Multi-agent full audit (80 raised → **62 confirmed**) + the CA1-CA8 onboarding
 
 **From the 2026-06-10 deploy smoke-test (Brendan walkthrough):**
 - [x] **`push-followup-now` 401 / wrong-project — FIXED this session.** The "Push follow-up now" button used a raw `fetch` with no JWT *and* the stale `qfbhcixkxzivpmxlciot` host. Switched to `supabase.functions.invoke` (forwards the JWT, targets the live project). Pushed to GitHub → Railway.
-- [ ] (S) **`push-dm-now` tenant guard + JWT.** `push-dm-now/index.ts` has NO `authorizeClientRequest` — any authed user can push any `execution_id` (cross-tenant). Its frontend call (`ProcessDMs.tsx:502`) is also a raw fetch to the stale project with no JWT. Add the guard (key on the execution's `client_id`, mirror push-followup-now) + switch the frontend to `invoke`.
-- [ ] (M) **Voice Analytics shows 0 calls / "Total Voice Call = N/A".** The call-recordings panel pulls from Retell `list-calls` (`useRetellApi.ts:115` → retell-proxy); 16 outbound calls exist but it renders 0. Prime suspect: the 2026-06-09 `list-calls` → `POST /v3/list-calls` migration result-shape (`unwrapList`) — UI smoke was still pending. Separately the voice metric (N/A) = voice calls not landing in the analytics LLM source. Investigate both.
-- [ ] (M) **Stale `qfbhcixkxzivpmxlciot` (old Supabase project) ref — 7 live sites across 6 files.** Production frontend client is `bjgrgbgykvjrsuwwruoh` (confirmed from the live bundle), but these still hardcode the OLD project: `push-dm-now` + the now-fixed follow-up (`ProcessDMs.tsx:21`), a raw fetch in `Engagement.tsx:1295`, `SyncGHLBookings.tsx:16`, `SyncGHLContacts.tsx:16`, the Retell `termination_uri` in `RetellPhoneNumberSelector.tsx:243` + `RetellPhoneNumbersTab.tsx:98`, and the **GHL workflow-inbound-webhook copy-URL shown to users** in `WorkflowNodeConfig.tsx:85-88`. (The `AuthProvider.tsx:145` ref is legit — it clears the old token.) FIRST verify whether `qfbhcixkxzivpmxlciot` still exists: if deleted these features are hard-broken; if alive they silently run on stale data / route traffic to the wrong project. Migrate all to `invoke` / `VITE_SUPABASE_URL`.
+- [x] (S) **`push-dm-now` tenant guard + JWT — SHIPPED Tier 0 (`33f24a7`).** Guard added, keyed on `ghl_account_id = clients.ghl_location_id` (since `dm_executions` has no `client_id`); frontend (`ProcessDMs.tsx`) switched to `supabase.functions.invoke`. Verified anon, real execution_id, returns 401.
+- [~] (M) **Voice Analytics — INVESTIGATED Tier 2.** The call-logs panel is CODE-CORRECT: live `POST /v3/list-calls` returns calls, `unwrapList` extracts them, the UI renders (the "0 calls" was a stale pre-deploy read). The remaining piece is **"Total Voice Call = N/A"**, a data-source gap: `compute-analytics` reads the client external DB, which holds only `chat_history`, no voice transcript table. Moved to Claude next-build (analytics-type-aware history source + a real voice transcript source).
+- [x] (M) **Stale `qfbhcixkxzivpmxlciot` refs — PURGED Tier 2 (`94fe00e`).** All 6 files migrated to `supabase.functions.invoke` / `VITE_SUPABASE_URL` (via a new `functionsBase.ts` helper): ProcessDMs, Engagement, SyncGHLContacts, SyncGHLBookings, RetellPhoneNumberSelector, RetellPhoneNumbersTab, WorkflowNodeConfig. `grep` now returns only the legit `AuthProvider.tsx` token-cleanup line.
 
 **Remaining — Brendan (next session #2):**
 - [ ] (S) **Smoke-test the live deploy** — prompt/Save-Setter UI (RLS) + Trigger Engagement / Push Now / Run Analytics (auth). Flag any 401/empty.
@@ -118,7 +136,7 @@ Multi-agent full audit (80 raised → **62 confirmed**) + the CA1-CA8 onboarding
 - [ ] (S) Rotate the expired `GITHUB_PAT` (mint in GitHub; Claude stores it).
 - [ ] (M/L) AU SMS A2P / registered Messaging Service (V2).
 - [ ] (S) Synthetic probe env (V1): `PROBE_CLIENT_ID`/`PROBE_INTAKE_SECRET`/`PROBE_TEST_PHONE` in Trigger.dev prod + probe-client from-number.
-- [ ] (decision) Stripe billing in scope? If yes Claude builds it. **HubSpot parked.**
+- [x] (decision) **Stripe billing: PARKED (Brendan, 2026-06-13).** Not in scope; do not raise until Brendan brings it up. **HubSpot also parked.**
 
 ---
 
