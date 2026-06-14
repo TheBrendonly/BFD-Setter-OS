@@ -69,6 +69,9 @@ interface PromptDocPageProps {
   onHydrateFlow?: () => Promise<FlowOutline | null>;
   onSaveFlowDraft?: (outline: FlowOutline) => Promise<void>;
   onPushFlow?: (outline: FlowOutline) => Promise<void>;
+  // Convert this single-prompt doc to the rigid Conversation Flow engine (seeds the
+  // 5-node template). Optional; when absent the convert button is hidden.
+  onEnableConversationFlow?: () => Promise<void>;
   // EE1 direction routing (voice setters): which calls use this setter. Optional
   // so non-voice/legacy callers can omit. State lives in PromptManagement.
   directions?: string[];
@@ -106,6 +109,7 @@ export const PromptDocPage: React.FC<PromptDocPageProps> = ({
   onHydrateFlow,
   onSaveFlowDraft,
   onPushFlow,
+  onEnableConversationFlow,
   directions,
   onDirectionsChange,
   otherSlotDirections,
@@ -279,6 +283,11 @@ export const PromptDocPage: React.FC<PromptDocPageProps> = ({
             {onRerunSetup && (
               <Button onClick={() => setShowRerunConfirm(true)} disabled={saving} size="sm" variant="ghost">
                 <Bot className="w-4 h-4 mr-1.5" /> Re-run Setup
+              </Button>
+            )}
+            {onEnableConversationFlow && (
+              <Button onClick={() => void onEnableConversationFlow()} disabled={saving} size="sm" variant="ghost" title="Convert to a rigid Conversation Flow (Welcome → Qualify → Pitch → Book → End)">
+                <Settings2 className="w-4 h-4 mr-1.5" /> Convert to Conversation Flow
               </Button>
             )}
           </>

@@ -30,7 +30,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { AIPromptDialog } from '@/components/AIPromptDialog';
 import { PromptDocPage, type PromptDocRecord } from '@/components/prompt-doc/PromptDocPage';
 import { DirectionsToggle } from '@/components/prompt-doc/DirectionsToggle';
-import { hydrateOutlineFromRetellFlow, type FlowOutline } from '@/lib/conversationFlowOutline';
+import { hydrateOutlineFromRetellFlow, compileWizardToFlowOutline, type FlowOutline } from '@/lib/conversationFlowOutline';
 import { SetterPromptAIDialog } from '@/components/SetterPromptAIDialog';
 import { CopySetterDialog } from '@/components/CopySetterDialog';
 import { DuplicateSetterDialog } from '@/components/DuplicateSetterDialog';
@@ -6201,6 +6201,49 @@ const PromptManagement = () => {
     }
   };
 
+  // Convert a single-prompt doc to the rigid Conversation Flow engine (agency-only,
+  // gated at the doc-page entry). Seeds flow_outline from the 5-node rigid template
+  // (Welcome → Qualify → Pitch → Book → End) using the current doc as the global
+  // prompt. conversation_flow_id stays null until the first Push to Retell creates the
+  // flow + agent; afterward, get-conversation-flow round-trips dashboard edits.
+  // Brendan authors the node prompts in the Retell dashboard (content is his).
+  const handleEnableConversationFlow = async () => {
+    if (!clientId || !docRecord) return;
+    const ok = window.confirm(
+      'Convert this setter to a rigid Conversation Flow? It seeds a 5-node template ' +
+      '(Welcome → Qualify → Pitch → Book → End) from the current prompt. The first ' +
+      'Push to Retell creates the flow; you then edit the node graph in the Retell ' +
+      'dashboard. Single-prompt editing is disabled while in flow mode.',
+    );
+    if (!ok) return;
+    setSaving(true);
+    try {
+      const seeded = compileWizardToFlowOutline({
+        globalPrompt: docRecord.doc_content || '',
+        bookingEnabled: true,
+      });
+      const { data: updated, error } = await (supabase as any)
+        .from('prompt_docs')
+        .update({
+          engine_type: 'conversation-flow',
+          flow_outline: seeded,
+          status: 'draft',
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', docRecord.id)
+        .select()
+        .single();
+      if (error) throw error;
+      if (updated) setDocRecord(updated as PromptDocRecord);
+      toast({ title: 'Switched to Conversation Flow', description: 'Edit the node graph, then Push to Retell to create the flow.' });
+    } catch (err: any) {
+      console.error('Failed to enable conversation flow:', err);
+      toast({ title: 'Could not switch to Conversation Flow', description: err?.message || 'Try again.', variant: 'destructive' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
   // Load the canonical prompt doc for a voice setter, auto-promoting the persisted
   // __full_prompt__ row (byte-identical to what the section editor compiles) when no
   // doc exists yet. Any failure (e.g. migration not applied) falls back to the
@@ -7437,6 +7480,7 @@ const PromptManagement = () => {
           onHydrateFlow={handleHydrateFlow}
           onSaveFlowDraft={handleSaveFlowDraft}
           onPushFlow={handlePushFlow}
+          onEnableConversationFlow={handleEnableConversationFlow}
           directions={voiceSetterDirections}
           onDirectionsChange={handleVoiceSetterDirectionsChange}
           otherSlotDirections={otherSlotDirections}
