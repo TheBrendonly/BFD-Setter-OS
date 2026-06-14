@@ -319,6 +319,66 @@ async function fetchConversations(
   return Array.from(sessionMap.values());
 }
 
+// Voice analytics source (B1 / D3 fix). Voice transcripts live in the PLATFORM
+// `call_history` table (written by retell-call-webhook / retell-call-analysis-webhook),
+// one row per call — NOT in the client's external DB (which only holds chat_history).
+// Each call row maps to ONE Conversation whose messages come from transcript_object,
+// so the same computeDefaultMetrics / conversation-list path works unchanged.
+async function fetchVoiceConversations(
+  platformSupabase: any,
+  clientId: string,
+  dateFilter: { from: string; to: string }
+): Promise<Conversation[]> {
+  const conversations: Conversation[] = [];
+  const pageSize = 1000;
+  let offset = 0;
+
+  while (true) {
+    const { data: rows, error } = await platformSupabase
+      .from("call_history")
+      .select("call_id, transcript_object, transcript, call_summary, created_at, start_timestamp, user_sentiment")
+      .eq("client_id", clientId)
+      .gte("created_at", dateFilter.from)
+      .lte("created_at", dateFilter.to)
+      .order("created_at", { ascending: true })
+      .range(offset, offset + pageSize - 1);
+
+    if (error) {
+      throw new Error(`Failed to fetch call history (${error.code ?? "?"}): ${error.message}`);
+    }
+    if (!rows || rows.length === 0) break;
+
+    for (const row of rows) {
+      const ts = (row.start_timestamp as string) || (row.created_at as string);
+      const messages: ConversationMessage[] = [];
+      const turns = Array.isArray(row.transcript_object) ? row.transcript_object : [];
+      for (const turn of turns) {
+        const t = (turn ?? {}) as Record<string, unknown>;
+        const content = String(t.content ?? "").trim();
+        if (!content) continue;
+        messages.push({ type: normalizeRole(t.role ?? t.type), content, timestamp: ts });
+      }
+      // Fallback when there is no structured transcript_object: synthesize a single
+      // message from the plain transcript or summary so the call still counts.
+      if (messages.length === 0) {
+        const fallback = String(row.transcript ?? row.call_summary ?? "").trim();
+        if (fallback) messages.push({ type: "ai", content: fallback, timestamp: ts });
+      }
+      conversations.push({
+        session_id: (row.call_id as string) || undefined,
+        client_id: clientId,
+        messages,
+        first_timestamp: ts,
+      });
+    }
+
+    if (rows.length < pageSize) break;
+    offset += pageSize;
+  }
+
+  return conversations;
+}
+
 async function computeDefaultMetrics(conversations: Conversation[]): Promise<any[]> {
   let totalBotMessages = 0;
   let totalHumanMessages = 0;
@@ -612,37 +672,42 @@ Deno.serve(async (req) => {
     const extKey = (clientRow?.supabase_service_key as string | null) || null;
     const extTable = (clientRow?.supabase_table_name as string | null) || "";
 
+    // Voice analytics reads the PLATFORM call_history (Retell transcripts); text
+    // analytics reads the client's external DB. Route the source by type.
+    const isVoice = analytics_type === "voice";
+
     // Mark as running
-    await updateStage(supabase, execution_id, "Fetching chat history...", "running");
-
-    // Step 1: Fetch conversations
-    if (!extUrl || !extKey) {
-      await supabase.from("analytics_executions").update({
-        status: "failed",
-        error_message: "Client Supabase credentials not configured",
-        completed_at: new Date().toISOString(),
-      }).eq("id", execution_id);
-
-      return new Response(
-        JSON.stringify({ error: "Client Supabase credentials not configured" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
+    await updateStage(supabase, execution_id, `Fetching ${isVoice ? "call" : "chat"} history...`, "running");
 
     const dateFilter = getDateFilter(time_range || "7", start_date, end_date);
     let conversations: Conversation[];
 
+    // Step 1: Fetch conversations
     try {
-      conversations = await fetchConversations(
-        extUrl,
-        extKey,
-        extTable,
-        dateFilter
-      );
+      if (isVoice) {
+        // B1 fix: voice must NOT require external creds (it reads the platform DB).
+        // Previously this path fell through to fetchConversations over chat_history,
+        // so voice metrics ran on text data (or failed the external-cred guard).
+        conversations = await fetchVoiceConversations(supabase, client_id, dateFilter);
+      } else {
+        if (!extUrl || !extKey) {
+          await supabase.from("analytics_executions").update({
+            status: "failed",
+            error_message: "Client Supabase credentials not configured",
+            completed_at: new Date().toISOString(),
+          }).eq("id", execution_id);
+
+          return new Response(
+            JSON.stringify({ error: "Client Supabase credentials not configured" }),
+            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+        conversations = await fetchConversations(extUrl, extKey, extTable, dateFilter);
+      }
     } catch (fetchErr: any) {
       await supabase.from("analytics_executions").update({
         status: "failed",
-        error_message: `Failed to fetch chat history: ${fetchErr.message}`,
+        error_message: `Failed to fetch ${isVoice ? "call" : "chat"} history: ${fetchErr.message}`,
         completed_at: new Date().toISOString(),
       }).eq("id", execution_id);
 
