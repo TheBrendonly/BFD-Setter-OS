@@ -538,7 +538,27 @@ const ChatAnalytics = () => {
   // This eliminates race conditions between effects that caused flicker
   const currentWebhookData = useMemo(() => {
     const cache = analyticsType === 'text' ? textWebhookDataCache : voiceWebhookDataCache;
-    return cache[timeRange]?.data ?? null;
+    const data = cache[timeRange]?.data ?? null;
+    if (!data || analyticsType !== 'voice') return data;
+    // Derive the "Call Recordings & Transcripts" table shape (TranscriptRecord[])
+    // from conversations_list (voice only). compute-analytics now carries
+    // recording_url/public_log_url/transcript per call, so the table populates
+    // instead of showing 0 CALLS. Skip if an upstream payload already set the key.
+    if (data['Transcript & Recording URL']) return data;
+    const convos = data.conversations_list || data.Conversations_List
+      || data.metrics?.conversations_list || data.metrics?.Conversations_List;
+    if (!Array.isArray(convos) || convos.length === 0) return data;
+    const recordings = convos.map((c: any, i: number) => ({
+      Id: i + 1,
+      Timestamp: c.first_timestamp || '',
+      Session_Id: c.session_id || '',
+      Call_Recording: c.recording_url || c.public_log_url || '',
+      Call_Transcript: c.transcript
+        || (Array.isArray(c.messages)
+          ? c.messages.map((m: any) => `${m.role === 'ai' || m.role === 'agent' ? 'Agent' : 'User'}: ${m.content}`).join('\n')
+          : ''),
+    }));
+    return { ...data, 'Transcript & Recording URL': recordings };
   }, [analyticsType, textWebhookDataCache, voiceWebhookDataCache, timeRange]);
 
   const lastRefreshed = useMemo(() => {
@@ -781,11 +801,15 @@ const ChatAnalytics = () => {
     
     try {
       await Promise.all([fetchClientData(), loadPersistedWebhookData()]);
-      setInitialLoadComplete(true);
     } catch (error) {
       console.error('Error loading initial data:', error);
       hasLoadedInitialDataRef.current = false;
     } finally {
+      // Always mark the initial attempt complete so the full-page loader gate
+      // clears even on a zero-data / zero-config (is_system) client or a load
+      // error. Previously this only ran on success, so those paths hung on the
+      // RetroLoader forever.
+      setInitialLoadComplete(true);
       setIsLoadingData(false);
     }
   }, [clientId, user]);
@@ -1219,7 +1243,11 @@ const ChatAnalytics = () => {
         description: "Failed to fetch client data",
         variant: "destructive"
       });
-      navigate(`/client/${clientId}`);
+      // Do NOT navigate(`/client/${clientId}`) here: the index route bounces
+      // straight back to analytics/chatbot/dashboard, which remounts this page
+      // and retries the failing fetch — an infinite redirect/remount loop that
+      // shows the RetroLoader forever. Leave client null; the render falls
+      // through to the empty state below.
     } finally {
       setLoading(false);
     }
@@ -2677,7 +2705,12 @@ const ChatAnalytics = () => {
     return <RetroLoader />;
   }
   if (!client) {
-    return <div>Client not found</div>;
+    return (
+      <div className="flex flex-col items-center justify-center py-24 text-center text-muted-foreground">
+        <p className="text-sm">No analytics to show yet.</p>
+        <p className="text-xs mt-1">This sub-account has no data or could not be loaded. Try refreshing, or pick another sub-account.</p>
+      </div>
+    );
   }
   return <div className="relative space-y-6 pb-6" style={{ position: 'relative' }}>
       {/* Channel toggle — merged Text + Voice analytics into a single sidebar item;
