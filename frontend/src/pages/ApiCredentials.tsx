@@ -15,7 +15,7 @@ import { StatusTag } from '@/components/StatusTag';
 import { useToast } from '@/hooks/use-toast';
 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Save, Key, Webhook, Brain, Loader2, Eye, EyeOff, AlertCircle, Lock, Phone, RefreshCw, Building, Link2 } from '@/components/icons';
+import { Save, Key, Webhook, Brain, Loader2, Eye, EyeOff, AlertCircle, Phone, RefreshCw, Building } from '@/components/icons';
 import { ConfigStatusBar } from '@/components/ConfigStatusBar';
 import { WebhookManifestCard } from '@/components/WebhookManifestCard';
 import { cn } from '@/lib/utils';
@@ -377,47 +377,11 @@ const ApiCredentials = () => {
   // Send all credentials to the api-credentials webhook after any save
   const sendToApiCredentialsWebhook = async () => {
     if (!clientId) return;
-    try {
-      const { data } = await (await import('@/integrations/supabase/client')).supabase
-        .from('clients')
-        .select('*')
-        .eq('id', clientId)
-        .single();
-      if (!data) return;
-
-      const apiWebhookUrl = data.api_webhook_url;
-      if (!apiWebhookUrl) {
-        // Per-client api_webhook_url not configured — skip the external mirror rather than
-        // leak credentials to a hardcoded upstream fallback (N5 2026-05-19).
-        return;
-      }
-      
-      const payload = {
-        type: 'api_settings_updated',
-        timestamp: new Date().toISOString(),
-        client_id: clientId,
-        supabase_url: data.supabase_url,
-        supabase_service_key: data.supabase_service_key,
-        openai_api_key: data.openai_api_key,
-        openrouter_api_key: data.openrouter_api_key,
-        elevenlabs_api_key: data.elevenlabs_api_key,
-        elevenlabs_agent_id: data.elevenlabs_agent_id,
-        ghl_api_key: data.ghl_api_key,
-        ghl_calendar_id: data.ghl_calendar_id,
-        ghl_location_id: data.ghl_location_id,
-        knowledge_base_webhook: data.knowledge_base_add_webhook_url,
-      };
-
-      await fetch(apiWebhookUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-      console.log('Sent credentials to api-credentials webhook:', apiWebhookUrl);
-    } catch (error) {
-      console.error('Error sending to api-credentials webhook:', error);
-    }
-
+    // Legacy n8n credential mirror (POST every secret to api_webhook_url) RETIRED
+    // 2026-06-16: n8n is decommissioned (Phase 10) and nothing native reads
+    // api_webhook_url, so fanning all credentials out to a dead n8n endpoint was
+    // pure risk. We still sync creds to the per-client external Supabase, which the
+    // platform DOES read. (Kept the function name to avoid churning 7 call sites.)
     await syncToExternalSupabase();
   };
   
@@ -1137,43 +1101,10 @@ const ApiCredentials = () => {
               fn (computes URLs + generates missing GHL/intake secrets). */}
           {clientId && <WebhookManifestCard clientId={clientId} />}
 
-          {/* Simulation (only field is simulation_webhook, still read by run-simulation) */}
-          <Card id="knowledge-base-webhooks" className={cn(
-            "material-surface border border-border scroll-mt-6",
-            !requiredFieldsConfigured && "opacity-60"
-          )}>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-lg flex items-center gap-2">
-                  {!requiredFieldsConfigured ? <Lock className="w-5 h-5 text-muted-foreground" /> : <Link2 className="w-5 h-5" />}
-                  Simulation
-                </CardTitle>
-                <div className="flex items-center gap-2">
-                  {!requiredFieldsConfigured && (
-                    <Badge variant="outline" className="text-muted-foreground">Locked</Badge>
-                  )}
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    className="h-8 w-8"
-                    onClick={() => handleRefreshGroup('webhooks')}
-                    disabled={refreshingGroup === 'webhooks' || !requiredFieldsConfigured}
-                  >
-                    <RefreshCw className={cn("h-4 w-4", refreshingGroup === 'webhooks' && "animate-spin")} />
-                  </Button>
-                </div>
-              </div>
-              {!requiredFieldsConfigured && (
-                <p className="text-sm text-muted-foreground mt-2">
-                  Configure Supabase & LLM credentials first to unlock this section
-                </p>
-              )}
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <ApiCredentialField id="simulation_webhook" label="Simulation Webhook URL" value={settings.simulation_webhook || ''} onChange={(value) => handleInputChange('simulation_webhook', value)} onSave={() => handleSaveField('simulation_webhook')} isSaving={savingField === 'simulation_webhook'} disabled={!requiredFieldsConfigured} isSavedConfigured={isCredentialConfigured((credentials as any)?.simulation_webhook)} placeholder="Enter Simulation webhook URL" />
-            </CardContent>
-          </Card>
-
+          {/* n8n "Simulation" webhook card RETIRED 2026-06-16 (n8n decommissioned,
+              Phase 10). The simulation_webhook DB column is kept; the legacy
+              run-simulation edge fn is the only reader. If the simulator is revived
+              it gets its own UI. */}
 
         </div>
       </div>
