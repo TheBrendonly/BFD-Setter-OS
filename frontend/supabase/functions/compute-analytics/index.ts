@@ -379,7 +379,7 @@ async function fetchVoiceConversations(
   return conversations;
 }
 
-async function computeDefaultMetrics(conversations: Conversation[]): Promise<any[]> {
+async function computeDefaultMetrics(conversations: Conversation[], isVoice = false): Promise<any[]> {
   let totalBotMessages = 0;
   let totalHumanMessages = 0;
   const uniqueUsers = new Set<string>();
@@ -399,8 +399,11 @@ async function computeDefaultMetrics(conversations: Conversation[]): Promise<any
     }
   }
 
+  // Voice dashboard reads a "Total Voice Call" tile; text dashboard reads "Total Conversations".
+  // Same underlying count (distinct sessions/calls), different label per channel.
+  const totalLabel = isVoice ? "Total Voice Call" : "Total Conversations";
   return [
-    { title: "Total Conversations", value: conversations.length, label: "Total Conversations" },
+    { title: totalLabel, value: conversations.length, label: totalLabel },
     { title: "Total Bot Messages", value: totalBotMessages, label: "Total Bot Messages" },
     { title: "Total Human Messages", value: totalHumanMessages, label: "Total Human Messages" },
     { title: "New Users", value: uniqueUsers.size, label: "New Users" },
@@ -721,7 +724,7 @@ Deno.serve(async (req) => {
 
     // Step 2: Compute default metrics (instant, code-based)
     await updateStage(supabase, execution_id, "Computing default metrics...");
-    const defaultMetricResults = await computeDefaultMetrics(conversations);
+    const defaultMetricResults = await computeDefaultMetrics(conversations, isVoice);
 
     // Step 3: Build conversations list for the frontend
     const conversationsList = conversations.map((conv) => ({
