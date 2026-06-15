@@ -17,12 +17,18 @@ import { useToast } from '@/hooks/use-toast';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Save, Key, Webhook, Brain, Loader2, Eye, EyeOff, AlertCircle, Lock, Phone, RefreshCw, Building, Link2 } from '@/components/icons';
 import { ConfigStatusBar } from '@/components/ConfigStatusBar';
+import { WebhookManifestCard } from '@/components/WebhookManifestCard';
 import { cn } from '@/lib/utils';
 import { usePageHeader } from '@/contexts/PageHeaderContext';
 import { useRetellApi } from '@/hooks/useRetellApi';
 
 
-// Webhook fields that should fire test payloads
+// Webhook fields that should fire test payloads.
+// Removed ai_chat_webhook_url + chat_analytics_webhook_url (2026-06-16 cleanup):
+// they had no functional reader anywhere (display-only in ApiManagement) — dead
+// fields. The rest still have live readers (analytics → ChatAnalytics, campaign →
+// Campaign pages, knowledge_base_add → KnowledgeBase, db-reactivation → LeadRow,
+// prompt/update_pipeline → SetupGuide), so they stay.
 const WEBHOOK_FIELDS = [
   'update_pipeline_webhook_url',
   'knowledge_base_webhook_url',
@@ -30,9 +36,7 @@ const WEBHOOK_FIELDS = [
   'campaign_webhook_url',
   'database_reactivation_inbound_webhook_url',
   'prompt_webhook_url',
-  'analytics_webhook_url',
-  'ai_chat_webhook_url',
-  'chat_analytics_webhook_url'
+  'analytics_webhook_url'
 ];
 
 // Simple input field without save button (for grouped use)
@@ -239,8 +243,6 @@ interface ApiSettings {
   knowledge_base_webhook_url?: string | null;
   prompt_webhook_url?: string | null;
   analytics_webhook_url?: string | null;
-  ai_chat_webhook_url?: string | null;
-  chat_analytics_webhook_url?: string | null;
   simulation_webhook?: string | null;
   system_prompt?: string | null;
   database_reactivation_inbound_webhook_url?: string | null;
@@ -435,8 +437,6 @@ const ApiCredentials = () => {
     knowledge_base_webhook_url: '',
     prompt_webhook_url: '',
     analytics_webhook_url: '',
-    ai_chat_webhook_url: '',
-    chat_analytics_webhook_url: '',
     simulation_webhook: '',
     system_prompt: '',
     database_reactivation_inbound_webhook_url: '',
@@ -476,8 +476,6 @@ const ApiCredentials = () => {
         knowledge_base_webhook_url: credentials.knowledge_base_add_webhook_url || '',
         prompt_webhook_url: credentials.prompt_webhook_url || '',
         analytics_webhook_url: credentials.analytics_webhook_url || '',
-        ai_chat_webhook_url: credentials.ai_chat_webhook_url || '',
-        chat_analytics_webhook_url: credentials.chat_analytics_webhook_url || '',
         simulation_webhook: (credentials as any).simulation_webhook || '',
         system_prompt: '',
         database_reactivation_inbound_webhook_url: credentials.database_reactivation_inbound_webhook_url || '',
@@ -1134,7 +1132,12 @@ const ApiCredentials = () => {
             </CardContent>
           </Card>
 
-          {/* n8n Connections */}
+          {/* Inbound webhook manifest: the "paste these into HighLevel / Retell /
+              Twilio / Unipile" list, served by the authorized webhook-manifest edge
+              fn (computes URLs + generates missing GHL/intake secrets). */}
+          {clientId && <WebhookManifestCard clientId={clientId} />}
+
+          {/* Simulation (only field is simulation_webhook, still read by run-simulation) */}
           <Card id="knowledge-base-webhooks" className={cn(
             "material-surface border border-border scroll-mt-6",
             !requiredFieldsConfigured && "opacity-60"
@@ -1143,7 +1146,7 @@ const ApiCredentials = () => {
               <div className="flex items-center justify-between">
                 <CardTitle className="text-lg flex items-center gap-2">
                   {!requiredFieldsConfigured ? <Lock className="w-5 h-5 text-muted-foreground" /> : <Link2 className="w-5 h-5" />}
-                  n8n Connections
+                  Simulation
                 </CardTitle>
                 <div className="flex items-center gap-2">
                   {!requiredFieldsConfigured && (

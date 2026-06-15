@@ -302,6 +302,8 @@ DO NOT yet `UPDATE clients SET auto_engagement_workflow_id = ...` — copy revie
 
 ## 5. External wiring (click-paths)
 
+> **NEW (2026-06-16) — read this first.** The exact inbound webhook URLs + tokens are now auto-surfaced in the app: open **API Credentials → Inbound Webhooks**. That card (backed by the `webhook-manifest` edge fn) computes each URL, generates + shows the `ghl_webhook_secret` (x-wh-token) and `intake_lead_secret`, marks each row secured / forgeable, and shows "last received" so you can confirm the paste worked. Workflow per webhook: **read the row → Copy URL → Copy token → paste into the named screen (HighLevel / Retell / Twilio / Unipile) → Verify "last received" goes green.** The sub-sections below remain the authoritative reference for WHERE in each upstream tool to paste, and the per-handler behaviour. The manifest emits the `x-wh-token` header for the GHL handlers (incl. `sync-ghl-contact`), so always copy the token from the card rather than hand-building the request.
+
 > **Code locations:** the webhook handlers referenced below (Supabase edge functions) live under `frontend/supabase/functions/<slug>/index.ts`. The cadence/queue tasks (`runEngagement`, `processMessages`, `sendFollowup`, etc.) live under `trigger/` and run on Trigger.dev (`proj_fdozaybvhgxnzopabtse`).
 
 ### 5.1 GHL "Send Setter Reply" workflow

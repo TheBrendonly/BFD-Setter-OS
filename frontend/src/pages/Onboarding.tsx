@@ -91,9 +91,17 @@ const Onboarding = () => {
         // (voice-booking-tools, intake-lead) can authenticate the tenant's
         // tool-calls + form submissions without manual credential setup.
         // Mirrors scripts/onboard-client.mjs:169.
-        const secretBytes = new Uint8Array(24);
-        crypto.getRandomValues(secretBytes);
-        const intakeLeadSecret = btoa(String.fromCharCode(...secretBytes));
+        const mintSecret = () => {
+          const b = new Uint8Array(24);
+          crypto.getRandomValues(b);
+          return btoa(String.fromCharCode(...b));
+        };
+        const intakeLeadSecret = mintSecret();
+        // Also mint the GHL inbound-webhook token up front so the inbound webhook
+        // manifest is "secured" from day one (the operator copies it into GHL's
+        // x-wh-token header). Verify-if-present until the upstream actually sends
+        // it. The webhook-manifest edge fn back-fills this for existing clients.
+        const ghlWebhookSecret = mintSecret();
         const { data: newClient, error: createError } = await supabase
           .from('clients')
           .insert({
@@ -103,6 +111,7 @@ const Onboarding = () => {
             agency_id: profile.agency_id,
             subscription_status: 'free',
             intake_lead_secret: intakeLeadSecret,
+            ghl_webhook_secret: ghlWebhookSecret,
           })
           .select('id')
           .single();
