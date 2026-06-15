@@ -8,6 +8,28 @@ Effort: S = under 30 min, M = 30 min - 2 hr, L = half day+.
 
 ---
 
+## ✅ P0-P2 CLUSTER BUILD (2026-06-16) — HEAD `6270c66`, all live
+
+Cleared the critical voice-publish path + the P1/P2 cluster. Full record: `Operations/handoffs/2026-06-16-p0-p2-cluster-build.md`. Staged A-F, each verified + deployed + pushed; 8-agent adversarial review (2 medium fixes applied).
+
+**Shipped (live):**
+- [x] **🔴 P0 Retell publish endpoint** — `publishAgentVersion()` helper → `POST publish-agent-version/{id}` + `{version}` at all 8 sites + the missing repoint at refresh-booking-tool-messages. retell-proxy **v36**. (`2256919`)
+- [x] **P1 booking collapse** — retired the separate `## BOOKING INSTRUCTIONS` append (both push paths); tools stay attached by name. (`fb17c44`)
+- [x] **P1 doc-page UI** — wired "Expand Advanced Settings"; relabeled "Open full settings view" → "Modify-with-AI instructions". (`fb17c44`)
+- [x] **P2 webhook sig-verify rewrite** — `_shared/verify-webhook.ts` (real Retell `v=,d=` scheme + 5-min window); unipile → static token. retell-call-webhook v19 / analysis v21 / inbound v3 / unipile v13. Secrets still NULL (inert). (`2bedfb3`)
+- [x] **P2 analytics** — recording_url/transcript surfaced (recordings table populates) + "new user messages" collision fixed. compute-analytics **v14** + ChatAnalytics derivation. (`2bedfb3`/`0c3180b`)
+- [x] **P2 probe is_system bypass** — intake-lead **v9**; verified probe POST → 200 + execution_id (was 409). (`2bedfb3`)
+- [x] **P2 ChatAnalytics hang** — loader clears on zero-data + removed navigate loop. (`0c3180b`)
+- [x] **P1 credentials cleanup + inbound webhook manifest** — `webhook-manifest` edge fn **v2** + WebhookManifestCard (Copy URL/token, status pills, go-live badge) + onboarding mints ghl_webhook_secret + SOP §5 pointer. Conservative cleanup (only 2 truly-dead fields removed). (`b6f5139`/`6270c66`)
+
+**Brendan — required (unblocks all voice):**
+- [ ] **Re-save all 5 voice setters** (Main Outbound slot 1, then Garys 4-7) — their rewrites are stuck as DRAFTS; the P0 fix publishes them on re-save. Send a call_id → Claude verifies repoint + latency.
+- [ ] UI smoke list in the handoff (doc-page settings, recordings table, Inbound Webhooks card, probe empty state).
+
+**Deferred/flagged:** F7 deep `useClientCredentials` write-only refactor (manifest already serves inbound secrets server-side; agency-only exposure today). P3a column drop + P3b CF rollout still gated on Brendan's live tests. Confirm retiring the legacy `api_webhook_url` n8n cred-mirror.
+
+---
+
 ## ✅ ACTION-WALKER SESSION (2026-06-15) — paused at T15
 
 Brendan walked the 18-task action list (`Docs/BRENDAN_ACTION_WALKER_PROMPT.md`). Full record: `Operations/handoffs/2026-06-15-action-walker-progress.md`.
