@@ -23,6 +23,9 @@ Brendan walked the 18-task action list (`Docs/BRENDAN_ACTION_WALKER_PROMPT.md`).
 - [ ] **Live run-through** (`project_live_test_runthrough`): T16 pause/resume E2E · T17 outbound repoint `40e8bea3`→"Main Outbound" + live call (gates column drop) · T18 CF pilot A/B (gates fleet rollout) · inbound phone-first call test (+61481614530 from a known lead).
 
 **NEXT-BUILD code items surfaced (logged in memory):**
+- [ ] **🔴 CRITICAL — Retell publish endpoint changed → ALL voice pushes stuck in DRAFT** (never go live). retell-proxy calls old `POST publish-agent/{id}` (no body, 8 sites); Retell now needs `POST /publish-agent-version/{id}` + `{version}` body. Publish throws → phone-repoint (same try) skipped → draft unpublished, phone stays on old version. Fix all 8 sites + source the draft version. See `project_voice_publish_and_ui_bugs`.
+- [ ] Doc-page **"Expand Advanced Settings" no-op** (PromptDocPage:407 doesn't wire the expand callback) + **"Open full settings view" → Modify-with-AI trap** (mislabeled, PromptManagement:7915).
+- [ ] **Collapse the separate Booking Instructions into the main prompt body** (Retell's model = main body + functions + settings; the booking_prompt append double-adds the OLD get_contact/slots). Disable `booking_function_enabled` append for the 5 voice setters.
 - [ ] compute-analytics: surface recording_url so "Call Recordings & Transcripts" stops showing 0 CALLS (**Brendan requested**) + fix "New User Messages" metric collision.
 - [ ] intake-lead **is_system bypass** so the probe can go green (currently 409 "no GHL credentials"; env vars already set).
 - [ ] **Webhook sig verify rewrite** (blocks arming Retell/Unipile secrets): verifyRetellSignature must match Retell's `v=ts,d=HMAC(body+ts, API_KEY)`; storing the secret today would 403 all Retell webhooks.
