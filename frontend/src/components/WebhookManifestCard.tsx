@@ -150,7 +150,8 @@ export function WebhookManifestCard({ clientId }: { clientId: string }) {
             </div>
             {entries.map((e) => {
               const token = tokenFromHeaders(e.headers);
-              const pill = STATUS_PILL[e.secretStatus];
+              const pill = STATUS_PILL[e.secretStatus]
+                || { label: 'Unknown', className: 'bg-muted text-muted-foreground border-border' };
               return (
                 <div key={e.key} className="rounded-md border border-border p-3 space-y-2">
                   <div className="flex items-center justify-between gap-2 flex-wrap">

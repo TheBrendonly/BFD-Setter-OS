@@ -76,6 +76,12 @@ Deno.serve(async (req) => {
     const ghlSecret = client.ghl_webhook_secret as string | null;
     const intakeSecret = client.intake_lead_secret as string | null;
     const ghlLocation = client.ghl_location_id as string | null;
+    // URL-encode interpolated query values (tenant ids / location ids are free-text
+    // in the DB and could contain &, ?, # etc.). Readable placeholders are left raw.
+    const enc = (v: string) => encodeURIComponent(v);
+    const cid = enc(clientId);
+    const wfId = client.auto_engagement_workflow_id ? enc(client.auto_engagement_workflow_id as string) : "<workflow_id>";
+    const locParam = ghlLocation ? enc(ghlLocation) : "<location_id>";
     const phones = [client.retell_phone_1, client.retell_phone_2, client.retell_phone_3]
       .filter((p): p is string => typeof p === "string" && p.trim().length > 0);
 
@@ -110,7 +116,7 @@ Deno.serve(async (req) => {
       // ── GHL-bound (GoHighLevel → Workflows → Custom Webhook action) ──
       {
         key: "sync-ghl-contact", label: "Lead created / updated (main lead ingress)",
-        url: `${base}/sync-ghl-contact?clientId=${clientId}`, method: "POST",
+        url: `${base}/sync-ghl-contact?clientId=${cid}`, method: "POST",
         headers: ghlHeaders, destination: "GoHighLevel",
         sopRef: "5.3", lastReceivedAt: ghlSig,
         required: true, secretStatus: ghlSecret ? "secured" : "forgeable",
@@ -131,21 +137,21 @@ Deno.serve(async (req) => {
       },
       {
         key: "sync-ghl-booking", label: "Booking sync (by GHL account)",
-        url: `${base}/sync-ghl-booking${ghlLocation ? `?GHL_Account_ID=${ghlLocation}` : ""}`, method: "POST",
+        url: `${base}/sync-ghl-booking${ghlLocation ? `?GHL_Account_ID=${enc(ghlLocation)}` : ""}`, method: "POST",
         headers: ghlHeaders, destination: "GoHighLevel",
         sopRef: "5.5", lastReceivedAt: null,
         required: false, secretStatus: ghlSecret ? "secured" : "forgeable",
       },
       {
         key: "workflow-inbound-webhook", label: "Workflow inbound (strict once secret set)",
-        url: `${base}/workflow-inbound-webhook?client_id=${clientId}&workflow_id=${client.auto_engagement_workflow_id ?? "<workflow_id>"}`, method: "POST",
+        url: `${base}/workflow-inbound-webhook?client_id=${cid}&workflow_id=${wfId}`, method: "POST",
         headers: ghlHeaders, destination: "GoHighLevel",
         sopRef: "5.6", lastReceivedAt: null,
         required: false, secretStatus: ghlSecret ? "secured" : "forgeable",
       },
       {
         key: "receive-dm-webhook", label: "Inbound DM / message",
-        url: `${base}/receive-dm-webhook?GHL_Account_ID=${ghlLocation ?? "<location_id>"}&Lead_ID=&Message_Body=&Name=&Phone=&Email=&Setter_Number=`, method: "POST",
+        url: `${base}/receive-dm-webhook?GHL_Account_ID=${locParam}&Lead_ID=&Message_Body=&Name=&Phone=&Email=&Setter_Number=`, method: "POST",
         headers: ghlHeaders, destination: "GoHighLevel",
         sopRef: "5.7", lastReceivedAt: msgSig,
         required: false, secretStatus: ghlSecret ? "secured" : "forgeable",
@@ -192,7 +198,7 @@ Deno.serve(async (req) => {
       // ── Unipile ──
       {
         key: "unipile-webhook", label: "Unipile account events",
-        url: `${base}/unipile-webhook?client_id=${clientId}`, method: "POST",
+        url: `${base}/unipile-webhook?client_id=${cid}`, method: "POST",
         headers: [{ key: "x-unipile-signature", value: client.unipile_webhook_secret ? "<configured>" : "<leave blank for now>" }],
         destination: "Unipile",
         sopRef: "5.9", lastReceivedAt: null,
