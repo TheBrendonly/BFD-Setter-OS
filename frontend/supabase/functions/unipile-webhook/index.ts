@@ -1,41 +1,16 @@
 import { createClient } from "npm:@supabase/supabase-js@2.101.0";
+// Unipile auth: static custom-header token check. Unipile attaches a static
+// custom header you define on the webhook (NOT an HMAC body signature), so the
+// old generic HMAC verify never matched. We constant-time compare the configured
+// secret against the header value. Verify-if-present; confirm the exact header +
+// value against the Unipile webhook config before arming the secret.
+import { verifyStaticToken } from "../_shared/verify-webhook.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type, x-unipile-signature",
 };
-
-// Phase 8c — Unipile webhook signature verification (HMAC-SHA256, hex).
-// Verification requires `clients.unipile_webhook_secret` to be set on the
-// resolved client; otherwise backwards-compat (no verification).
-async function verifyUnipileSignature(
-  rawBody: string,
-  signatureHeader: string | null,
-  secret: string,
-): Promise<boolean> {
-  if (!signatureHeader) return false;
-  const enc = new TextEncoder();
-  const key = await crypto.subtle.importKey(
-    "raw",
-    enc.encode(secret),
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign"],
-  );
-  const sigBuf = await crypto.subtle.sign("HMAC", key, enc.encode(rawBody));
-  const sigBytes = new Uint8Array(sigBuf);
-  let hex = "";
-  for (const b of sigBytes) hex += b.toString(16).padStart(2, "0");
-  const expected = hex.toLowerCase();
-  const presented = signatureHeader.replace(/^sha256=/i, "").toLowerCase();
-  if (expected.length !== presented.length) return false;
-  let mismatch = 0;
-  for (let i = 0; i < expected.length; i++) {
-    mismatch |= expected.charCodeAt(i) ^ presented.charCodeAt(i);
-  }
-  return mismatch === 0;
-}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -82,7 +57,7 @@ Deno.serve(async (req) => {
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
         }
-        const sigOk = await verifyUnipileSignature(rawBodyText, sigHeader, unipileSecret);
+        const sigOk = verifyStaticToken(sigHeader, unipileSecret);
         if (!sigOk) {
           console.warn("unipile-webhook: signature mismatch", { clientId: sigClientId });
           return new Response(JSON.stringify({ error: "Forbidden" }), {

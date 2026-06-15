@@ -28,6 +28,11 @@ interface Conversation {
   client_id?: string;
   messages: ConversationMessage[];
   first_timestamp?: string;
+  // Voice only: surfaced so the "Call Recordings & Transcripts" table can render
+  // (it was showing 0 CALLS because these never flowed through). Empty for text.
+  recording_url?: string;
+  public_log_url?: string;
+  transcript?: string;
 }
 
 const HUMAN_ROLE_SET = new Set(["human", "user", "business", "customer", "lead"]);
@@ -336,7 +341,7 @@ async function fetchVoiceConversations(
   while (true) {
     const { data: rows, error } = await platformSupabase
       .from("call_history")
-      .select("call_id, transcript_object, transcript, call_summary, created_at, start_timestamp, user_sentiment")
+      .select("call_id, transcript_object, transcript, call_summary, created_at, start_timestamp, user_sentiment, recording_url, public_log_url")
       .eq("client_id", clientId)
       .gte("created_at", dateFilter.from)
       .lte("created_at", dateFilter.to)
@@ -369,6 +374,9 @@ async function fetchVoiceConversations(
         client_id: clientId,
         messages,
         first_timestamp: ts,
+        recording_url: (row.recording_url as string) || undefined,
+        public_log_url: (row.public_log_url as string) || undefined,
+        transcript: (row.transcript as string) || undefined,
       });
     }
 
@@ -507,7 +515,9 @@ async function processCustomMetricsInBackground(
     "total human messages",
     "new users",
     "total voice call",
-    "new user messages",
+    // "new user messages" removed: it was reserved here (excluding it from the LLM
+    // custom-metric path) but never produced as a default, so it rendered N/A. A
+    // user can now define it as a custom metric.
   ]);
 
   const customMetricsList = (customMetrics || []).filter(
@@ -731,6 +741,11 @@ Deno.serve(async (req) => {
       session_id: conv.session_id,
       message_count: conv.messages.length,
       first_timestamp: conv.first_timestamp,
+      // Voice recordings/transcripts (empty for text); the frontend derives the
+      // "Call Recordings & Transcripts" table from these.
+      recording_url: conv.recording_url,
+      public_log_url: conv.public_log_url,
+      transcript: conv.transcript,
       messages: conv.messages.map((m) => ({
         role: m.type,
         content: m.content,

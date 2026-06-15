@@ -262,7 +262,7 @@ Deno.serve(async (req) => {
 
     const { data: client, error: clientErr } = await supabase
       .from("clients")
-      .select("id, ghl_location_id, ghl_api_key, intake_lead_secret, auto_engagement_workflow_id, supabase_url, supabase_service_key, supabase_table_name")
+      .select("id, is_system, ghl_location_id, ghl_api_key, intake_lead_secret, auto_engagement_workflow_id, supabase_url, supabase_service_key, supabase_table_name")
       .eq("id", clientId)
       .maybeSingle();
     if (clientErr || !client) {
@@ -283,7 +283,12 @@ Deno.serve(async (req) => {
     if (mismatch !== 0) {
       throw new IntakeError(403, "Invalid intake secret");
     }
-    if (!client.ghl_api_key || !client.ghl_location_id) {
+    // is_system clients (the synthetic probe / canary) have no GHL credentials.
+    // Mirror the B3 verify-only pattern in runEngagement: skip the GHL contact
+    // create/find entirely and synthesize a lead_id so the canary still exercises
+    // the real lead -> enroll -> queue pipeline. Real clients still require creds.
+    const isSystem = client.is_system === true;
+    if (!isSystem && (!client.ghl_api_key || !client.ghl_location_id)) {
       throw new IntakeError(409, "Client has no GHL credentials configured");
     }
 
@@ -296,17 +301,23 @@ Deno.serve(async (req) => {
       throw new IntakeError(400, "At least one of phone or email is required");
     }
 
-    // Resolve / create GHL contact
-    const { contactId } = await findOrCreateGhlContact({
-      ghlApiKey: client.ghl_api_key as string,
-      ghlLocationId: client.ghl_location_id as string,
-      firstName,
-      lastName,
-      phone,
-      email,
-      source: body.source || "intake-lead",
-      tags: Array.isArray(body.tags) ? body.tags : [],
-    });
+    // Resolve / create GHL contact (skipped for is_system: no creds → synthetic id).
+    let contactId: string;
+    if (isSystem) {
+      const synthetic = `probe-${phone || email || clientId}`.replace(/[^a-zA-Z0-9_-]/g, "");
+      contactId = synthetic.slice(0, 64) || `probe-${clientId}`;
+    } else {
+      ({ contactId } = await findOrCreateGhlContact({
+        ghlApiKey: client.ghl_api_key as string,
+        ghlLocationId: client.ghl_location_id as string,
+        firstName,
+        lastName,
+        phone,
+        email,
+        source: body.source || "intake-lead",
+        tags: Array.isArray(body.tags) ? body.tags : [],
+      }));
+    }
 
     // Upsert into platform leads
     const fullName = [firstName, lastName].filter(Boolean).join(" ").trim() || null;
@@ -362,7 +373,9 @@ Deno.serve(async (req) => {
           supabase,
           clientId: client.id,
           workflowId: routed.workflowId,
-          ghlAccountId: client.ghl_location_id as string,
+          // is_system has no GHL location; keep ghl_account_id non-null (use the
+          // client id) so the engagement_executions row still writes.
+          ghlAccountId: (client.ghl_location_id as string) || (client.id as string),
           leadId: contactId,
           contactName: fullName,
           contactPhone: phone,

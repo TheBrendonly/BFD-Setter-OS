@@ -1,4 +1,8 @@
 import { createClient } from "npm:@supabase/supabase-js@2.101.0";
+// Retell signature verification (correct v={ts},d=HMAC(body+ts, API_KEY) scheme,
+// 5-min window). Shared across the 3 Retell webhooks. Verify-if-present; the
+// stored secret value is the Retell API key.
+import { verifyRetellSignature } from "../_shared/verify-webhook.ts";
 
 // retell-inbound-webhook — phone-first inbound contact load (B5).
 //
@@ -21,35 +25,6 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-retell-signature",
 };
 
-// Verify-if-present HMAC (mirrors retell-call-webhook); inert until the resolved
-// client sets retell_webhook_secret.
-async function verifyRetellSignature(
-  rawBody: string,
-  signatureHeader: string | null,
-  secret: string,
-): Promise<boolean> {
-  if (!signatureHeader) return false;
-  const enc = new TextEncoder();
-  const key = await crypto.subtle.importKey(
-    "raw",
-    enc.encode(secret),
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign"],
-  );
-  const sigBuf = await crypto.subtle.sign("HMAC", key, enc.encode(rawBody));
-  const sigBytes = new Uint8Array(sigBuf);
-  let hex = "";
-  for (const b of sigBytes) hex += b.toString(16).padStart(2, "0");
-  const expected = hex.toLowerCase();
-  const presented = signatureHeader.replace(/^sha256=/i, "").toLowerCase();
-  if (expected.length !== presented.length) return false;
-  let mismatch = 0;
-  for (let i = 0; i < expected.length; i++) {
-    mismatch |= expected.charCodeAt(i) ^ presented.charCodeAt(i);
-  }
-  return mismatch === 0;
-}
 
 // Always return 200 with whatever dynamic_variables we could resolve. Returning an
 // error or empty payload still lets the call proceed (the prompt's empty-vars guidance

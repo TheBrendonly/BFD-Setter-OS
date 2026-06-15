@@ -1,42 +1,14 @@
 import { createClient } from "npm:@supabase/supabase-js@2.101.0";
+// Retell signature verification (correct v={ts},d=HMAC(body+ts, API_KEY) scheme,
+// 5-min window). Shared across the 3 Retell webhooks. The stored secret value is
+// the Retell API key. Verify-if-present.
+import { verifyRetellSignature } from "../_shared/verify-webhook.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type, x-retell-signature",
 };
-
-// Optional Retell webhook signature verification (HMAC-SHA256 hex over the raw
-// body, keyed by clients.retell_webhook_secret). Mirrors
-// retell-call-analysis-webhook. Only enforced when the resolved client has the
-// secret set; otherwise accept (the prior behaviour).
-async function verifyRetellSignature(
-  rawBody: string,
-  signatureHeader: string | null,
-  secret: string,
-): Promise<boolean> {
-  if (!signatureHeader) return false;
-  const enc = new TextEncoder();
-  const key = await crypto.subtle.importKey(
-    "raw",
-    enc.encode(secret),
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign"],
-  );
-  const sigBuf = await crypto.subtle.sign("HMAC", key, enc.encode(rawBody));
-  const sigBytes = new Uint8Array(sigBuf);
-  let hex = "";
-  for (const b of sigBytes) hex += b.toString(16).padStart(2, "0");
-  const expected = hex.toLowerCase();
-  const presented = signatureHeader.replace(/^sha256=/i, "").toLowerCase();
-  if (expected.length !== presented.length) return false;
-  let mismatch = 0;
-  for (let i = 0; i < expected.length; i++) {
-    mismatch |= expected.charCodeAt(i) ^ presented.charCodeAt(i);
-  }
-  return mismatch === 0;
-}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
