@@ -8,6 +8,31 @@ Effort: S = under 30 min, M = 30 min - 2 hr, L = half day+.
 
 ---
 
+## ✅ ACTION-WALKER SESSION (2026-06-15) — paused at T15
+
+Brendan walked the 18-task action list (`Docs/BRENDAN_ACTION_WALKER_PROMPT.md`). Full record: `Operations/handoffs/2026-06-15-action-walker-progress.md`.
+
+**Shipped:** compute-analytics **v13** — fixed voice "Total Voice Call = N/A" (emit the voice label; verified renders 21 live). Committed + pushed.
+
+**Done/verified:** T1 sidebar labels · T2 probe hidden · T3 pause/resume buttons (code-verified) · T5 cost ceiling (persisted) · T6 Convert-to-CF · T7 MFA card · **T8 landing order APPLIED** (sort_order probe=100/BFD=0) · **T9 MFA enrolled** (verified totp factor) · **T10 phone-first inbound** (inbound_webhook_url set on +61481614530; verified) · **T13 probe env SET** in Trigger prod.
+
+**Deferred (Brendan-decided):** T11 webhook secrets (leave NULL — verify-code bug), T12 AU A2P (skip), T14 HIBP (skip → on Pro).
+
+**PENDING — resume here:**
+- [ ] **T15 apply the 5 voice rewrites** (Brendan, once home) — Main Outbound slot1 then Garys 4-7 → send call_id(s) for verify. Fold in the T10b inbound "ask for details" drop.
+- [ ] **Live run-through** (`project_live_test_runthrough`): T16 pause/resume E2E · T17 outbound repoint `40e8bea3`→"Main Outbound" + live call (gates column drop) · T18 CF pilot A/B (gates fleet rollout) · inbound phone-first call test (+61481614530 from a known lead).
+
+**NEXT-BUILD code items surfaced (logged in memory):**
+- [ ] compute-analytics: surface recording_url so "Call Recordings & Transcripts" stops showing 0 CALLS (**Brendan requested**) + fix "New User Messages" metric collision.
+- [ ] intake-lead **is_system bypass** so the probe can go green (currently 409 "no GHL credentials"; env vars already set).
+- [ ] **Webhook sig verify rewrite** (blocks arming Retell/Unipile secrets): verifyRetellSignature must match Retell's `v=ts,d=HMAC(body+ts, API_KEY)`; storing the secret today would 403 all Retell webhooks.
+- [ ] Probe ChatAnalytics hang (zero-data client → stuck RetroLoader + navigate-loop).
+- [ ] Account-access restructure (My Account = client self-serve, admin-governed; admin config under Manage Sub-Accounts) — roadmap.
+
+**For-later notes:** Twilio AU regulatory bundle + client number-acquisition model (BYO-per-client recommended); enable HIBP on Pro upgrade.
+
+---
+
 ## 🗺️ POST-BUILD PLANNING + NEXT SESSIONS (2026-06-14)
 
 Planning/status session after the Tier 0-4 build. Produced a full bug/issue/feature catalogue + a Brendan-only action checklist, and split the remaining work into two fresh sessions. Authoritative current-state docs:
@@ -18,11 +43,36 @@ Planning/status session after the Tier 0-4 build. Produced a full bug/issue/feat
 - **Stripe billing: PARKED.** Not in scope; do not raise until Brendan brings it up. HubSpot coexistence also parked.
 - **Next build = all four designed features** (4.5 pause/resume, voice-analytics source fix, 4.4 cost ceiling, UUID node picker then outbound-column retirement) PLUS every open bug, the roadmap features, the Conversation Flow engine build, and rearchitecture proposals (brought for approval, not done blind).
 
-**Two sessions, in this order:**
-1. **Brendan walkthrough** (human-only tasks: smoke tests, decisions, account keys, prompt rewrite). Do this first: the build is gated on the decisions + keys.
-2. **Claude comprehensive build** (everything else). Run after the decisions + keys land.
+**Decisions locked (2026-06-14 — walkthrough session):**
+- **Email provider: built-in mailer now, Resend later (A1).** Resets are agency-only today (built-in mailer covers 100%); custom-SMTP wiring (D5) deferred until sub-accounts need self-reset, then Resend (~15 min Brendan: account + domain verify + hand Claude the API key).
+- **Sidebar labels (6.1): adopt proposed set.** Keep "Manage Sub-Accounts"; rename "Sub-Account Settings" → **Sub-Account Config**, "Account Settings" → **My Account**. UI-text only (sidebar labels in `ClientLayout.tsx:960/974/984` + matching `usePageHeader` titles in `ClientSettings.tsx:31` / `AccountSettings.tsx:37`). Claude builds it.
+- **Login bug (6.2): agency login WORKS — no bug** (verified 2026-06-14). Only one user exists (`brendan@`, role `agency`); two client rows (BFD + "Synthetic Probe"). No client-role user exists, so the sub-account login path can't be reproduced yet → verify it during the build by provisioning a test client-role user (scoping is via `profiles.userClientId`, not `user_roles`). Default-landing picks lowest `clients.sort_order` (`RedirectToFirstClient.tsx:65`) → was landing on the Probe; fix = set BFD's sort_order lowest (Brendan-approved; applying via SQL).
+- **Phone-first inbound lookup (B5): TRUST the phone match.** On inbound, backend loads the phone-matched contact as authoritative — no email/identity confirmation step. Build: wire inbound contact-by-phone dynamic-var load so "details already loaded" becomes true on inbound; prompt change is Brendan's (Group 4.3). Accepted residual risk: recycled/shared/ported numbers can match the wrong person. Optional cheap mitigation (greet by matched name) deferred to the prompt-change step.
+- **Retire outbound direction columns (D4 / 3.3): YES, staged.** Build UUID-native node picker (2.4) → migrate BFD's live cadence off legacy `Voice-Setter-2` (workflow `40e8bea3`) onto a stable `voice_setters` UUID → verify an outbound call still fires (Brendan live test, TEST_PHONE_A) → THEN retire outbound columns + inbound-only directions UI. Highest-risk feature (live booking path); the column drop is gated on the live verify.
+- **EE6 Aria scrub (B4): DE-TRACKED.** The stale `Aria` + "drowning in DMs" leftovers in BFD's Voice-Setter-1 `prompts.content` will be fixed naturally by Brendan via ongoing prompt improvements (prompt-content, Brendan-owned). Not a build/Claude item; closed as a tracked todo.
+- **Cadence v2 activation (2.1): DE-TRACKED.** Staying on the current main cadence ("New-Lead Cadence from Form-Fill", `40e8bea3`, auto_engagement_workflow_id) for now; Brendan activates v2 when he judges it's needed. v2 (`c206da3e`) is eyeballed + content-approved (14 touches / ~23d, 6 SMS + 3 calls + 5 AI-generated emails). When activated it MUST be bundled with the A5/D4 UUID migration (its 3 call steps still use legacy `voice_setter_id:"Voice-Setter-2"`) + a live test-lead verify. Not a build go-live item.
+- **Conversation Flow pilot (A8): YES — rigid CF on Voice-Setter-Test.** Rigid only, never Flex Mode. Split: Claude drafts the decomposition doc + builds the CF engine (retell-proxy + UI) in the build; Brendan builds the CF agent in the Retell dashboard on Voice-Setter-Test (node prompts = content); A/B vs the current agent (gate: booking rate ≥ control, no surcharge line, llm p50 < 900ms). See `project_retell_conversation_flow_eval_2026_06_11`.
+- **Optional hardening (A9): MFA + HIBP both YES.** MFA on the agency login = build task (TOTP enrollment in Account Settings + login challenge via Supabase Auth MFA; no MFA UI exists today). HIBP leaked-password block = wanted, gated on Brendan upgrading the Supabase project to Pro (infra cost, NOT the parked Stripe/client-billing); once on Pro, Claude flips the auth leaked-password setting.
+- **Synthetic probe (B2): VERIFY-ONLY (no SMS).** The hourly real SMS (~$30/mo, burns A2P on `+61481614530`, unread) adds zero monitoring value over verifying the queued row. Build task: make the SMS send path SKIP the actual Twilio dispatch for `source='synthetic-probe'` leads (probe already tags them at intake, `syntheticProbe.ts:102`), still write the `message_queue` row so the canary verifies the pipeline; THEN set `PROBE_*` + enable. Env NOT set now (avoids interim hourly spam); probe stays dark until the change ships. Known: PROBE_CLIENT_ID=`b0e4f199-3fa5-4c8d-851b-6167ff46ad91`, PROBE_INTAKE_SECRET = probe client `intake_lead_secret` (in DB), PROBE_TEST_PHONE = any owned number once it no longer actually sends.
+- **Group 4 voice-prompt rewrite (C): DELIVERED 2026-06-14** → `Docs/VOICE_AGENT_PROMPT_REWRITES_2026-06-14.md` (full new main prompt + Booking Instructions + greeting per agent, each labelled with its setter card). Adversarial verify: **4 clean PASS** (Crazy/Finance/Mortgage/Property) + Main Outbound PASS=false **resolved as a FALSE POSITIVE** (its "dropped" inbound guards are auto-appended at push via `buildDynamicVarsBlock` `retell-proxy:560-587`; do NOT re-add). Wins: Property 55,411→16,059c; all 19/21 slot-refs→0 editable (+1 auto-block = 1 total = latency target). **🚨 KEY LIVE BUG (all 5 agents): the booking flow calls a phantom `get_contact` tool (5-10×) that doesn't exist → live book step fails/stalls; the rewrites fix it (book directly / use get-contact-appointments). Confirm OK dropping the contact-existence pre-check.** Tool gap: Crazy Gary (+orphan master) lack send-sms/schedule-callback. Awaiting Brendan: apply (start Main Outbound slot 1 + test call → send call_id) → Claude verifies version-repoint + latency, then roll to the 4 Garys. Scope-correction context follows:
+- **Group 4 scope correction (2026-06-14):** Read-only pull + best-practices research + token-efficient rewrite (ZERO functional change, all guardrails/negatives kept) + adversarial verify of the **5 ACTIVE setters**, delivered as a doc for Brendan to paste (Claude updates nothing). **CRITICAL live mapping (resolves recurring confusion):** LIVE MAIN = agent named **"Voice-Setter-Test"** (`agent_f45f4dd…`, 57k/21-refs) = **"Main Outbound" setter slot 1** (client inbound/outbound/followup). Garys: Property=slot4, Mortgage=slot5, Finance=slot6, Crazy=slot7 (already lean). **"Voice-Setter-master" (`agent_c0ccb0259…`) is ORPHANED → dropped.** Tool gap flagged: master+Crazy lack send-sms/schedule-callback that 3 peers have; none have a begin_message. Post-apply: Claude verifies versions pushed-to-current + latency.
+- **Webhook secrets (B4): GHL DONE; Retell + Unipile PENDING.** `ghl_webhook_secret` SET for BFD on 2026-06-14 (prefix `a3f37f…`) + **enforcement verified live** (header-less POST → 403). Brendan added the `x-wh-token` header to all his GHL Custom Webhook actions (6 handlers verify it: sync-ghl-contact, ghl-tag-webhook, bookings-webhook, sync-ghl-booking, workflow-inbound-webhook; receive-dm-webhook is the Unipile path). KEY: `sync-ghl-contact` resolves the client by `GHL_Account_ID` in the payload (BFD `ghl_location_id=xo0XjmenBBJxJgSnAdyM`), NOT the URL — no `?clientId=` needed. STILL PENDING (Brendan provides → Claude stores): `retell_webhook_secret` (Retell Agent webhook config; guards retell-call-webhook + retell-call-analysis-webhook — the live call path) and `unipile_webhook_secret` (Unipile). Non-blocking for the build. Brendan to smoke-test a real GHL lead lands (catches any action missing the header).
 
-The grouped Brendan-only checklist (Groups 1-5) lives in the 2026-06-14 handoff; older sub-items below are superseded where they conflict with it.
+**Sessions:**
+1. ✅ **Brendan walkthrough DONE (2026-06-14)** — all 9 Group 2 decisions locked (above) + Group 3 keys handled (GITHUB_PAT stored, GHL secret stored+enforced, AU code clean + stale Vapi cb cleared, probe→verify-only). Agent↔setter mapping corrected. Voice rewrites delivered → `Docs/VOICE_AGENT_PROMPT_REWRITES_2026-06-14.md`. Full record: `Operations/handoffs/2026-06-14-walkthrough-keys-and-voice-rewrites.md`. **BUILD CLEARED.**
+2. **Claude comprehensive build** — Prompt 2 in `Operations/handoffs/2026-06-14-status-catalogue-and-next-sessions.md` (§D). Staged plan + rearchitecture approval before any structural change.
+3. **Finish-off / verification** (Brendan human-side + Claude verify) — prompt in the walkthrough handoff §G.
+
+**REMAINING — Brendan (post-walkthrough; all NON-BLOCKING for the build):**
+- [ ] Apply the 5 voice rewrites via the BFD setter UI (Main Outbound slot 1 first, then Garys slots 4-7) → send Claude the call_id(s) for version-repoint + latency verify.
+- [ ] Provide the **Retell + Unipile** webhook signing secrets → Claude stores `retell_webhook_secret` / `unipile_webhook_secret` + verifies (Retell guards the live call path — verify no 403 before trusting).
+- [ ] **GHL real-lead smoke** — confirm a real lead still lands now that `x-wh-token` enforcement is live.
+- [ ] **AU SMS** — register the Messaging Service / A2P for `+61481614530`; confirm which number real leads text from (2 Twilio accounts on file).
+- [ ] **Landing fix** — run the one-line `clients.sort_order` SQL (BFD=0, Probe=100) so the agency lands on BFD.
+- [ ] **Group 1** 8-item UI smoke list (homepage / temp-admin-password / reset email / Verify Credentials / Directions selector / email-no-subject blocked / brand voice / Call Logs + re-push).
+- [ ] (later) Upgrade Supabase to **Pro** to activate HIBP.
+
+The grouped Brendan-only checklist (Groups 1-5) lives in the 2026-06-14 status-catalogue handoff; older sub-items below are superseded where they conflict.
 
 ---
 
@@ -46,7 +96,7 @@ Autonomous build of the approved plan. Full detail + Brendan UI-smoke checklist 
 - [ ] Sub-Account Settings → set a **Brand Voice**, save; AI engagement copy reflects it.
 - [ ] Call Logs tab renders rows; re-click "Push DM now" / "Push follow-up now".
 - [ ] Apply the voice prompt rewrite (`Docs/VOICE_SETTER_PROMPT_REWRITE_2026-06-12.md`), push, send Claude a call_id. Confirm BOTH inbound + outbound repoint to the new published version (`GET /v2/list-phone-numbers`) — this exercises the Tier 0 fix.
-- [ ] (decision) Pick an email provider from `Docs/EMAIL_PROVIDER_OPTIONS.md` for sub-account self-reset (gates only the custom-SMTP wiring).
+- [x] (decision) Email provider — **built-in mailer now, Resend later** (locked 2026-06-14). Gates only the custom-SMTP wiring (D5), now deferred.
 
 ### Claude — next build session (designs in the 2026-06-13 handoff)
 - [ ] **4.5 pause/resume** on a running cadence — design ready; modifies runEngagement (frozen-wait step-boundary hold, opt-in only) + `pause-engagement` edge fn + UI. Needs Brendan's live E2E test. Verify `engagement_executions.status` has no CHECK constraint blocking `'paused'` first.
@@ -54,6 +104,9 @@ Autonomous build of the approved plan. Full detail + Brendan UI-smoke checklist 
 - [ ] **4.4 cost ceiling** — build a per-execution cost-tracking table first, then per-tenant rolling aggregate + `clients.weekly/monthly_cost_ceiling_cents` (flag-only, no auto-pause).
 - [ ] **FEATURE_ROADMAP 2.4 (UUID-native node picker)** + migrate `Voice-Setter-N` node refs to `voice_setters` UUIDs → then **3.3** retire the outbound direction columns + inbound-only UI. Currently blocked: live workflow `40e8bea3` uses legacy `Voice-Setter-2`.
 - [ ] **Custom SMTP wiring** once Brendan provides provider credentials.
+- [ ] **Hide the Synthetic Probe from the agency UI** (Brendan ask, 2026-06-14). Add `clients.is_system boolean default false`, set it on the probe row, and filter `is_system` out of the agency client list/switcher + `RedirectToFirstClient` query (keep it reachable by direct URL / a "show system accounts" toggle so the probe from-number stays settable). Do NOT delete the probe row.
+- [ ] **Provision + verify a client-role login** (closes the 6.2 sub-account half). Create a test client-role user scoped to a client (via `profiles`), confirm it lands on its own client dashboard and is RLS-scoped. Fold into Client #2 onboarding.
+- [ ] **Probe verify-only + enable** (B2 decision 2026-06-14). Make the SMS send path skip the actual Twilio dispatch for `source='synthetic-probe'` leads (probe tags them at intake) while still writing the `message_queue` row so the canary verifies the full lead→enrol→queue pipeline; then set `PROBE_CLIENT_ID` (`b0e4f199-…`) / `PROBE_INTAKE_SECRET` (probe client `intake_lead_secret`) / `PROBE_TEST_PHONE` in Trigger prod (`proj_fdozaybvhgxnzopabtse`, env prod, `TRIGGER_DEPLOY_PAT`) + enable. Kills the ~$30/mo wasted hourly "[probe] do not respond" SMS. Until then the probe stays dark (env unset).
 
 ---
 
@@ -132,10 +185,10 @@ Multi-agent full audit (80 raised → **62 confirmed**) + the CA1-CA8 onboarding
 **Remaining — Brendan (next session #2):**
 - [ ] (S) **Smoke-test the live deploy** — prompt/Save-Setter UI (RLS) + Trigger Engagement / Push Now / Run Analytics (auth). Flag any 401/empty.
 - [ ] (S) Save Voice-Setter-1 (3 dirs) + Bug 29 booking prompt (slot 2) + $1 publish smoke.
-- [ ] (S, per client) BR3: set webhook secret in UI + add `x-wh-token: <secret>` header in each GHL Custom Webhook action (after the UI ships). Do NOT enable native GHL Webhook V2 (RSA).
-- [ ] (S) Rotate the expired `GITHUB_PAT` (mint in GitHub; Claude stores it).
-- [ ] (M/L) AU SMS A2P / registered Messaging Service (V2).
-- [ ] (S) Synthetic probe env (V1): `PROBE_CLIENT_ID`/`PROBE_INTAKE_SECRET`/`PROBE_TEST_PHONE` in Trigger.dev prod + probe-client from-number.
+- [~] BR3 webhook secrets — **GHL DONE 2026-06-14** (`ghl_webhook_secret` set for BFD + `x-wh-token` header added to all GHL Custom Webhook actions; enforcement verified, header-less POST → 403). Do NOT enable native GHL Webhook V2 (RSA). **Retell + Unipile still pending** (Brendan provides the signing secrets → Claude stores `retell_webhook_secret` / `unipile_webhook_secret`).
+- [x] (S) Rotate the expired `GITHUB_PAT` — **DONE 2026-06-14**: new fine-grained PAT (Contents:Read) stored in Supabase prod secrets via Management API (201 Created); verified valid + live (GitHub 200, authenticated, 5000 rate limit). `github-proxy` unblocked. (Token was pasted in chat → mildly exposed; rotate again later if desired.)
+- [~] AU SMS A2P / Messaging Service (B3) — **2026-06-14:** code confirmed clean (all 4 SMS paths already → `twilio-status-webhook`, nothing to repoint); the stale Vapi **voice** `status_callback` on `+61481614530` was **CLEARED** via Twilio API (it was inert — no Twilio voice on this number). **Remaining (Brendan, NON-BLOCKING for the build):** no Messaging Service exists → create one, attach the number, complete AU sender registration (the real deliverability fix). 2 Twilio accounts on file — confirm which number real BFD leads text from. Optional build: add `MessagingServiceSid` send support (code sends `From=<number>` today).
+- [~] Synthetic probe env (V1) — **REDIRECTED 2026-06-14 → verify-only** (no real SMS). Not a "set env vars now" Brendan task anymore; see the Claude build task **Probe verify-only + enable**. Env values known; from-number already set (`+61481614530`).
 - [x] (decision) **Stripe billing: PARKED (Brendan, 2026-06-13).** Not in scope; do not raise until Brendan brings it up. **HubSpot also parked.**
 
 ---
@@ -196,8 +249,8 @@ Outcome: system is **functionally healthy end-to-end**. Live E2E to TEST_PHONE_A
 
 ### Brendan-required — ordered by severity
 
-- [ ] **V1. (HIGH, S) Restore the synthetic probe** — runs hourly but failed **0/48 in 48h**: `Missing env: PROBE_CLIENT_ID, PROBE_INTAKE_SECRET, PROBE_TEST_PHONE` (never set in Trigger.dev **prod**). The canary verifies nothing right now. Set those 3 env vars in Trigger.dev prod, AND give probe client `b0e4f199-3fa5-4c8d-851b-6167ff46ad91` a sendable from-number (its `retell_phone_1` is null) or its cadence SMS step fails even once env is set. Code: [trigger/syntheticProbe.ts](trigger/syntheticProbe.ts) lines 57-88.
-- [ ] **V2. (HIGH, M/L) AU SMS deliverability** — messages are accepted by Twilio (`sent`, no error) but AU handset delivery on bare long code `+61481614530` is slow/unconfirmed since ~Jun 5 (Jun 3 DLR took 6.7h; recipient saw them eventually). NOT a code fault. Pursue **A2P / a registered Messaging Service** for the number. Separately, the number-level `status_callback` is stale -> `https://api.vapi.ai/twilio/status` (Vapi leftover); repoint to `.../functions/v1/twilio-status-webhook` (per-message callbacks already work, so this is cleanup not the cause).
+- [~] **V1. Synthetic probe — REDIRECTED 2026-06-14 → verify-only** (no real SMS; Claude build task "Probe verify-only + enable"). Correction: its SMS from-number IS set (`twilio_default_phone=+61481614530`); the `retell_phone_1` null below was about voice, irrelevant to the single-SMS probe. Original diagnosis: runs hourly but failed **0/48 in 48h**: `Missing env: PROBE_CLIENT_ID, PROBE_INTAKE_SECRET, PROBE_TEST_PHONE` (never set in Trigger.dev **prod**). The canary verifies nothing right now. Set those 3 env vars in Trigger.dev prod, AND give probe client `b0e4f199-3fa5-4c8d-851b-6167ff46ad91` a sendable from-number (its `retell_phone_1` is null) or its cadence SMS step fails even once env is set. Code: [trigger/syntheticProbe.ts](trigger/syntheticProbe.ts) lines 57-88.
+- [ ] **V2. (HIGH, M/L) AU SMS deliverability** — messages are accepted by Twilio (`sent`, no error) but AU handset delivery on bare long code `+61481614530` is slow/unconfirmed since ~Jun 5 (Jun 3 DLR took 6.7h; recipient saw them eventually). NOT a code fault. Pursue **A2P / a registered Messaging Service** for the number. Separately, the number-level `status_callback` was stale -> `https://api.vapi.ai/twilio/status` (Vapi leftover); **CLEARED 2026-06-14** (blanked, not repointed — it's a VOICE status callback on a number with no Twilio voice handler, so inert; outbound SMS status already uses the per-message `twilio-status-webhook`). Real fix = registered Messaging Service (above).
 - [ ] **V3. (MED) Webhook secrets still unset** — BFD has zero `ghl/retell/unipile_webhook_secret`. **UPDATE (2026-06-09):** CA1 now adds verify-if-present HMAC to the 4 previously-forgeable handlers (incl. the primary lead ingress `sync-ghl-contact`), so once you provision the secrets (→ BR3) AND configure the upstream provider to sign, those paths become authenticated too. Until then they still accept unsigned POSTs (forgeable). **Same item as the SECURITY REVIEW "Provision webhook secrets" task below.**
 - [ ] **V4. (LOW, S, optional) Snappier text replies** — the ~2 min reply delay is ~60s intentional debounce (`clients.debounce_seconds=60`) + ~70s gemini-2.5-pro generation. Lower `debounce_seconds` (e.g. 20-30s) for faster replies, at a small risk of answering before a multi-text lead finishes. Code: [trigger/processMessages.ts](trigger/processMessages.ts) lines 146-158.
 - [ ] **V5. (LOW, S, optional) Close code-verified-only items** — STOP/START opt-out flow and the UI Save+publish smoke were verified by code, not live-fired this session. Run when convenient (STOP -> opt-out + one compliance reply -> START resubscribe; publish -> phone agent repoint).
@@ -222,7 +275,7 @@ Whole-codebase security review shipped + deployed to `bjgrgbgykvjrsuwwruoh`. Ful
 
 **Open — Brendan to action:**
 - [ ] **(S, per client) Provision webhook secrets** — GHL/Retell/Unipile/workflow webhooks are still forgeable (0/2 clients have secrets). Set `clients.<provider>_webhook_secret` + configure the upstream provider to send it, then flip handlers to fail-closed. **This is now a NEW onboarding step.** Runbook in the Docs file.
-- [ ] **(S) Rotate or remove `GITHUB_PAT`** — currently expired; `github-proxy` source-files feature is broken until rotated.
+- [x] **(S) Rotate or remove `GITHUB_PAT`** — **DONE 2026-06-14** (new PAT stored in prod secrets, verified live). `github-proxy` unblocked.
 - [ ] **(M, low) F7:** stop exposing `clients` secret columns to the browser (column-restricted view/RPC).
 - [ ] **(S, low) F10:** rotate the anon key/project ref `awzlcmdomhtyqjabzvnn` baked into 5 old cron migrations, if that project is still live.
 
@@ -352,7 +405,7 @@ Companion smoke docs: `/srv/bfd/Operations/verifications/2026-05-{21,22,23,24}-*
 
 **Open from prior sessions (still pending, unchanged this session):**
 
-- **🚩 D25 EE6 Aria/"drowning in DMs" scrub** in BFD's `prompts.content` — Brendan-manual per the no-internal-prompt-edits rule.
+- ~~**D25 EE6 Aria/"drowning in DMs" scrub** in BFD's `prompts.content`~~ **CLOSED / de-tracked 2026-06-14:** Brendan resolves the stale `Aria` + "drowning in DMs" leftovers naturally through his own ongoing prompt improvements (prompt-content, Brendan-owned). No longer a tracked item.
 - **🚩 BFD prompts.content "dynamic vars pre-loaded" line** — same Brendan-manual rule.
 - **N3 PNG re-shoots** for setup-guide once Brendan does the Retell screenshot session.
 - **Template JSONs URL sweep** (~42 hardcoded upstream URLs in `frontend/public/workflows/*.json` + `retell-agents/*.json`) — low urgency.
