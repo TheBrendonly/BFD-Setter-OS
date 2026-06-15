@@ -8,7 +8,7 @@ Effort: S = under 30 min, M = 30 min - 2 hr, L = half day+.
 
 ---
 
-## ✅ P0-P2 CLUSTER BUILD (2026-06-16) — HEAD `6270c66`, all live
+## ✅ P0-P2 CLUSTER BUILD (2026-06-16) — HEAD `eb158e3`, all live
 
 Cleared the critical voice-publish path + the P1/P2 cluster. Full record: `Operations/handoffs/2026-06-16-p0-p2-cluster-build.md`. Staged A-F, each verified + deployed + pushed; 8-agent adversarial review (2 medium fixes applied).
 
@@ -22,11 +22,20 @@ Cleared the critical voice-publish path + the P1/P2 cluster. Full record: `Opera
 - [x] **P2 ChatAnalytics hang** — loader clears on zero-data + removed navigate loop. (`0c3180b`)
 - [x] **P1 credentials cleanup + inbound webhook manifest** — `webhook-manifest` edge fn **v2** + WebhookManifestCard (Copy URL/token, status pills, go-live badge) + onboarding mints ghl_webhook_secret + SOP §5 pointer. Conservative cleanup (only 2 truly-dead fields removed). (`b6f5139`/`6270c66`)
 
-**Brendan — required (unblocks all voice):**
-- [ ] **Re-save all 5 voice setters** (Main Outbound slot 1, then Garys 4-7) — their rewrites are stuck as DRAFTS; the P0 fix publishes them on re-save. Send a call_id → Claude verifies repoint + latency.
-- [ ] UI smoke list in the handoff (doc-page settings, recordings table, Inbound Webhooks card, probe empty state).
+**Also shipped (late session):**
+- [x] **Retired n8n remnants** — removed the "Simulation" card + the `api_webhook_url` credential mirror (it fanned every secret to a dead n8n endpoint); kept the external-Supabase sync. (`5bf22e3`)
+- [x] **Researched the GHL send path** (Brendan pushback): confirmed SMS replies go DIRECT via Twilio + GHL is updated via the conversations API; the 5 `leadconnectorhq` webhook fields are mostly vestigial. Retiring them is a small code cleanup (remove processMessages STEP 6 + line-106 guard, add Twilio-direct to sendFollowup) → now the LEAD item of the next build. (memory `project_ghl_is_the_outbound_send_channel`)
+- [x] **Next-session docs:** `Docs/SESSION_CLOSEOUT_2026-06-16_AND_NEXT_PROMPTS.md` (single source of truth + 8 ordered prompts) + `Docs/NEXT_SESSION_BUILD_KICKOFF_2026-06-17.md` (filtered backlog).
 
-**Deferred/flagged:** F7 deep `useClientCredentials` write-only refactor (manifest already serves inbound secrets server-side; agency-only exposure today). P3a column drop + P3b CF rollout still gated on Brendan's live tests. Confirm retiring the legacy `api_webhook_url` n8n cred-mirror.
+**Brendan — verified done:** Main Outbound (slot 1) re-saved → published v15, phone repinned (P0 fix confirmed live).
+
+**Brendan — still to do** (see `Docs/SESSION_CLOSEOUT_2026-06-16_AND_NEXT_PROMPTS.md` Section 2; the full run-through test is the LAST thing):
+- [ ] Re-save the **4 remaining Garys** (slots 4-7) + fold in the report-only prompt fixes → send call_id(s).
+- [ ] Provide Retell + Unipile webhook secrets; AU SMS A2P for +61481614530; (optional) Supabase Pro for HIBP.
+- [ ] Lock decisions: GHL send-path migration go/no-go · email provider · Twilio number model.
+- [ ] Full live run-through test (LAST): inbound call · outbound repoint+call · pause/resume · reply+follow-up via Twilio · CF A/B (if built) · UI smoke · probe green.
+
+**Deferred/flagged builds:** GHL send-path cleanup (next-build LEAD) · F7 write-only useClientCredentials · P3a column drop + P3b CF rollout (gated on the live tests) · larger features (A/B research, account-access, lifecycle 3.5-3.7) each get their own session per the closeout doc.
 
 ---
 

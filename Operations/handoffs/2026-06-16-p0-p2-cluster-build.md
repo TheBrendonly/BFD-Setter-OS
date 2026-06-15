@@ -57,5 +57,12 @@ retell-proxy v36 · retell-call-webhook v19 · retell-call-analysis-webhook v21 
 - **F7 deep lockdown:** the manifest now serves inbound secrets via the authorized edge fn (not bulk page-load). The full write-only refactor of `useClientCredentials` (stop shipping API-key columns to the browser) is deferred — it risks destabilising cred-saving and current exposure is agency-only (no client-role users exist yet).
 - **P3a** outbound-column retirement (gated on the outbound-repoint + live call on `40e8bea3` — not run). **P3b** CF fleet rollout (gated on the CF A/B — not run). Account-access restructure, schema-drift reconcile, N5 templates, F10, HIBP-on-Pro, Twilio AU bundle, roadmap §7, A/B research brief.
 
+## Addendum (late session, after the P0-P2 cluster)
+- **Brendan re-saved Main Outbound → P0 fix VERIFIED LIVE:** agent `agent_f45f4dd…` v15 is now `is_published=true` (was `false` — the stuck draft) and phone +61481614530 repinned. The renamed-endpoint fix works. (4 Garys still to re-save.)
+- **Retired n8n remnants (`5bf22e3`):** removed the "Simulation" card + the `api_webhook_url` credential mirror (it POSTed every secret to a dead n8n endpoint); kept `syncToExternalSupabase()`. Dropped orphaned Lock/Link2 imports.
+- **GHL send-path research (Brendan pushback → I was wrong, corrected):** SMS replies are delivered DIRECT via Twilio (`processMessages` STEP 6.1b) + GHL updated via the conversations API (`pushSmsToGhl`); the GHL `ghl_send_setter_reply_webhook_url` forward (STEP 6) is a vestigial gate, and `sendFollowup` still uses the GHL webhook. The 5 `leadconnectorhq` fields are NOT removable as a UI tweak — needs a code cleanup (now the LEAD item of the next build). Memory: `project_ghl_is_the_outbound_send_channel`.
+- **Probe:** `intake-lead v9` is_system bypass live; a manual probe POST wrote the `sms_outbound` message_queue row the canary asserts. No probe run recorded since 2026-06-15 22:02 (all prior failed pre-fix) — should pass on the next hourly run; confirm.
+- **Next-session docs written + pushed:** `Docs/SESSION_CLOSEOUT_2026-06-16_AND_NEXT_PROMPTS.md` (single source of truth: missed things / Brendan tasks / build tasks + 8 ordered copy-paste prompts) and `Docs/NEXT_SESSION_BUILD_KICKOFF_2026-06-17.md` (filtered backlog).
+
 ## State
-HEAD `6270c66` on `main` (Forgejo + GitHub). 8 edge fns live. No live prompt edits (report-only honored).
+HEAD `eb158e3` on `main` (Forgejo + GitHub). 8 edge fns live (retell-proxy v36, retell-call-webhook v19, retell-call-analysis-webhook v21, retell-inbound-webhook v3, unipile-webhook v13, compute-analytics v14, intake-lead v9, webhook-manifest v2). No live prompt edits (report-only honored).
