@@ -232,6 +232,33 @@ async function fetchLatestPublishedAgentVersion(
   }
 }
 
+// Retell renamed the publish endpoint (2026-06): the old `POST publish-agent/{id}`
+// (no body) is gone. The live API is `POST publish-agent-version/{id}` with a
+// REQUIRED `{ version }` body — the draft version to publish. We source that draft
+// version from the caller (the update-agent PATCH response) when available, else a
+// GET get-agent right before publishing returns the current (draft) version.
+// Returns the publish response (used only as a fallback version source by
+// repointPhoneVersionsAfterPublish, which re-derives the authoritative published
+// version via get-agent-versions).
+async function publishAgentVersion(
+  apiKey: string,
+  agentId: string,
+  knownVersion?: number,
+  versionDescription?: string,
+): Promise<{ version?: number }> {
+  let version = knownVersion;
+  if (typeof version !== "number") {
+    const agent = await retellFetch(apiKey, "GET", `get-agent/${agentId}`) as { version?: number };
+    version = typeof agent?.version === "number" ? agent.version : undefined;
+  }
+  if (typeof version !== "number") {
+    throw new Error(`publishAgentVersion: could not resolve a draft version for agent ${agentId}`);
+  }
+  const body: Record<string, unknown> = { version };
+  if (versionDescription) body.version_description = versionDescription;
+  return await retellFetch(apiKey, "POST", `publish-agent-version/${agentId}`, body) as { version?: number };
+}
+
 // EE2: After publishing an agent, Retell phone-number version pins do NOT auto-update.
 // Without this, every UI push silently fails to make tool changes live on real calls
 // because the phone keeps routing to the previously-pinned (stale) agent version.
@@ -906,7 +933,7 @@ async function syncVoiceSetter(
       await retellFetch(apiKey, "PATCH", `update-agent/${existingAgentId}`, agentPatch);
       // Auto-publish so changes go live immediately
       try {
-        const publishResp = await retellFetch(apiKey, "POST", `publish-agent/${existingAgentId}`) as { version?: number };
+        const publishResp = await publishAgentVersion(apiKey, existingAgentId);
         console.log(`[sync-voice-setter] Auto-published agent ${existingAgentId} (v${publishResp?.version ?? "?"})`);
         await repointPhoneVersionsAfterPublish(supabase, apiKey, clientId, slotNumber, existingAgentId, publishResp?.version);
       } catch (pubErr) {
@@ -936,7 +963,7 @@ async function syncVoiceSetter(
       });
       // Auto-publish so changes go live immediately
       try {
-        const publishResp = await retellFetch(apiKey, "POST", `publish-agent/${existingAgentId}`) as { version?: number };
+        const publishResp = await publishAgentVersion(apiKey, existingAgentId);
         console.log(`[sync-voice-setter] Auto-published agent ${existingAgentId} (v${publishResp?.version ?? "?"})`);
         await repointPhoneVersionsAfterPublish(supabase, apiKey, clientId, slotNumber, existingAgentId, publishResp?.version);
       } catch (pubErr) {
@@ -991,7 +1018,7 @@ async function syncVoiceSetter(
     console.log(`[sync-voice-setter] Created agent ${newAgent.agent_id} and stored in ${agentColumn}`);
     // Auto-publish newly created agent
     try {
-      const publishResp = await retellFetch(apiKey, "POST", `publish-agent/${newAgent.agent_id}`) as { version?: number };
+      const publishResp = await publishAgentVersion(apiKey, newAgent.agent_id);
       console.log(`[sync-voice-setter] Auto-published new agent ${newAgent.agent_id} (v${publishResp?.version ?? "?"})`);
       await repointPhoneVersionsAfterPublish(supabase, apiKey, clientId, slotNumber, newAgent.agent_id, publishResp?.version);
     } catch (pubErr) {
@@ -1185,7 +1212,7 @@ async function syncVoiceSetterConversationFlow(
     if (!agentPatch.webhook_url) agentPatch.webhook_url = getAutoWebhookUrl();
     await retellFetch(apiKey, "PATCH", `update-agent/${existingAgentId}`, agentPatch);
     try {
-      const publishResp = await retellFetch(apiKey, "POST", `publish-agent/${existingAgentId}`) as { version?: number };
+      const publishResp = await publishAgentVersion(apiKey, existingAgentId);
       console.log(`[sync-voice-setter-cf] Auto-published agent ${existingAgentId} (v${publishResp?.version ?? "?"})`);
       await repointPhoneVersionsAfterPublish(supabase, apiKey, clientId, slotNumber, existingAgentId, publishResp?.version);
     } catch (pubErr) {
@@ -1239,7 +1266,7 @@ async function syncVoiceSetterConversationFlow(
   await supabase.from("clients").update({ [agentColumn]: newAgent.agent_id }).eq("id", clientId);
   console.log(`[sync-voice-setter-cf] Created agent ${newAgent.agent_id} (flow ${newFlow.conversation_flow_id}) in ${agentColumn}`);
   try {
-    const publishResp = await retellFetch(apiKey, "POST", `publish-agent/${newAgent.agent_id}`) as { version?: number };
+    const publishResp = await publishAgentVersion(apiKey, newAgent.agent_id);
     console.log(`[sync-voice-setter-cf] Auto-published new agent ${newAgent.agent_id} (v${publishResp?.version ?? "?"})`);
     await repointPhoneVersionsAfterPublish(supabase, apiKey, clientId, slotNumber, newAgent.agent_id, publishResp?.version);
   } catch (pubErr) {
@@ -1509,7 +1536,7 @@ Deno.serve(async (req) => {
         await retellFetch(apiKey, "PATCH", `update-agent/${existingAgentId}`, { agent_name: agentName });
         let publishedVersion: number | undefined;
         try {
-          const publishResp = await retellFetch(apiKey, "POST", `publish-agent/${existingAgentId}`) as { version?: number };
+          const publishResp = await publishAgentVersion(apiKey, existingAgentId);
           publishedVersion = publishResp?.version;
           await repointPhoneVersionsAfterPublish(supabaseAdmin, apiKey, clientId, slotNumber, existingAgentId, publishedVersion);
         } catch (pubErr) {
@@ -1828,9 +1855,12 @@ Deno.serve(async (req) => {
 
             await retellFetch(apiKey, "PATCH", `update-retell-llm/${llmId}`, { general_tools: patchedTools });
             try {
-              await retellFetch(apiKey, "POST", `publish-agent/${agentId}`);
+              const publishResp = await publishAgentVersion(apiKey, agentId);
+              // Repoint phone version pins so the refreshed tool messages go live
+              // (this site previously published but never repinned — latent bug).
+              await repointPhoneVersionsAfterPublish(supabaseAdmin, apiKey, clientId, Number(slotStr), agentId, publishResp?.version);
             } catch (pubErr) {
-              console.warn(`[refresh-booking-tool-messages] publish failed for ${agentId}`, pubErr);
+              console.warn(`[refresh-booking-tool-messages] publish/repoint failed for ${agentId}`, pubErr);
             }
             updates.push({ slot: Number(slotStr), agent_id: agentId, llm_id: llmId, status: "updated", tools_patched: touched });
           } catch (slotErr) {
@@ -2001,7 +2031,7 @@ Deno.serve(async (req) => {
         let publishWarning: string | null = null;
         let publishedVersion: number | undefined;
         try {
-          const publishResp = await retellFetch(apiKey, "POST", `publish-agent/${newAgentId}`) as { version?: number };
+          const publishResp = await publishAgentVersion(apiKey, newAgentId);
           publishedVersion = publishResp?.version;
           console.log(`[fork-slot-direction] Auto-published new agent ${newAgentId} (v${publishedVersion ?? "?"})`);
         } catch (pubErr) {
