@@ -27,7 +27,8 @@ import { outlineToText, type FlowOutline } from '@/lib/conversationFlowOutline';
 
 // Canonical prompt-document page (doc model, 2026-06-12). After initial setup the
 // prompt lives HERE as one editable document; the section editor is setup-only.
-// Push sends this text verbatim (+ booking append + retell-proxy DYNAMIC_VARS_BLOCK).
+// Push sends this text verbatim (+ retell-proxy DYNAMIC_VARS_BLOCK). Booking now
+// lives in the body itself; the separate booking_prompt append has been retired.
 // Admin (agency-role) surface; gated at the PromptManagement entry point.
 
 export interface PromptDocRecord {
@@ -120,6 +121,10 @@ export const PromptDocPage: React.FC<PromptDocPageProps> = ({
   const [flowRefreshing, setFlowRefreshing] = useState(false);
   const [showAppends, setShowAppends] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  // Drives the "Expand Advanced Settings" toggle inside VoiceRetellSettings. Was
+  // previously unwired here, so the expand button was a silent no-op (the handler
+  // is optional-chained in VoiceRetellSettings). Mirrors AgentConfigBuilder.
+  const [advancedExpanded, setAdvancedExpanded] = useState(false);
   const [showVersions, setShowVersions] = useState(false);
   const [showRerunConfirm, setShowRerunConfirm] = useState(false);
   const [expandedVersionId, setExpandedVersionId] = useState<string | null>(null);
@@ -394,7 +399,7 @@ export const PromptDocPage: React.FC<PromptDocPageProps> = ({
         <CollapsibleContent className="mt-2 space-y-4">
           <p className="text-muted-foreground" style={{ ...MONO_STYLE, fontSize: '12px' }}>
             Voice, model and call settings. Changes here are included on the next Push to Retell.
-            Booking prompt and delays live in the full settings view.
+            Booking instructions now live in the prompt body above.
           </p>
           {onDirectionsChange && (
             <DirectionsToggle
@@ -409,9 +414,11 @@ export const PromptDocPage: React.FC<PromptDocPageProps> = ({
             settings={retellVoiceSettings}
             onChange={onRetellVoiceSettingsChange}
             bookingEnabled={bookingEnabled}
+            advancedExpanded={advancedExpanded}
+            onAdvancedExpandedChange={setAdvancedExpanded}
           />
           <Button variant="ghost" size="sm" onClick={onOpenSettings}>
-            Open full settings view
+            Modify-with-AI instructions
           </Button>
         </CollapsibleContent>
       </Collapsible>

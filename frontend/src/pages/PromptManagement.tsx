@@ -6372,11 +6372,14 @@ const PromptManagement = () => {
     setSaving(true);
     try {
       const currentAgentSettings = getAgentSettings(editingSlotId);
-      // Same booking append the legacy save path builds (byte-identical pipeline).
+      // Booking now lives in the doc body itself (Retell-model collapse: main
+      // prompt + functions + settings). We no longer append the separate legacy
+      // booking_prompt: it double-added the old get_contact / slot-ref booking on
+      // top of the doc body and fought the rewrite. Booking TOOLS stay attached by
+      // name in retell-proxy regardless of booking_function_enabled, so retiring
+      // the text append does not detach them. The booking_prompt DATA is left
+      // untouched in agent_settings (reversible).
       const promptParts = [content].filter(Boolean);
-      if (currentAgentSettings?.booking_function_enabled && currentAgentSettings?.booking_prompt) {
-        promptParts.push(`\n## BOOKING INSTRUCTIONS\n${currentAgentSettings.booking_prompt}`);
-      }
       const result = await pushVoiceSetterToRetell({
         promptText: promptParts.join('\n\n'),
         agentSettings: currentAgentSettings,
@@ -6701,11 +6704,10 @@ const PromptManagement = () => {
 
       // Sync to Retell AI for voice setters (shared push routine; the doc page uses it too)
       if (editingSlotId?.startsWith('Voice-Setter-')) {
-        // Build full prompt including booking instructions when enabled
+        // Booking lives in the prompt body now (Retell-model collapse); the
+        // separate booking_prompt append is retired (see handlePushDoc). Booking
+        // tools remain attached by name in retell-proxy.
         const promptParts = [personaForSave, contentForSave].filter(Boolean);
-        if (currentAgentSettings?.booking_function_enabled && currentAgentSettings?.booking_prompt) {
-          promptParts.push(`\n## BOOKING INSTRUCTIONS\n${currentAgentSettings.booking_prompt}`);
-        }
         const pushResult = await pushVoiceSetterToRetell({
           promptText: promptParts.join('\n\n'),
           agentSettings: currentAgentSettings,
