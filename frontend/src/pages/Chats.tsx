@@ -1739,7 +1739,7 @@ export default function Chats() {
                     supabaseServiceKey={credentials?.supabase_service_key || null}
                     clientId={clientId}
                     contactId={selectedLead.id}
-                    hasTwilio={!!((credentials?.twilio_account_sid && credentials?.twilio_auth_token && credentials?.twilio_default_phone) || credentials?.send_message_webhook_url)}
+                    hasTwilio={!!(credentials?.twilio_account_sid && credentials?.twilio_auth_token && (credentials?.twilio_default_phone || (credentials as any)?.retell_phone_1))}
                     phoneNumber={selectedLead.phone || ''}
                     refreshKey={selectedLead.last_message_at || undefined}
                     onNewActivity={() => {
