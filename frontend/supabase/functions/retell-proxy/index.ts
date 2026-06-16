@@ -259,6 +259,89 @@ async function publishAgentVersion(
   return await retellFetch(apiKey, "POST", `publish-agent-version/${agentId}`, body) as { version?: number };
 }
 
+// Retell makes PUBLISHED agent / retell-llm / conversation-flow versions
+// IMMUTABLE: a PATCH on a published resource 400s ("Cannot update published LLM")
+// or 422s ("Cannot update published agent other than version title"). The 2026-06-16
+// P0 publish fix made auto-publish actually work, so every setter's latest version
+// is now published with no trailing draft, and the in-place edit path broke for all
+// 5 BFD setters. The fix: create a DRAFT from the published base version, edit the
+// draft, then publish it. This helper normalizes "give me an editable draft":
+//   - Case A: the latest version is already a draft (is_published=false) -> reuse it
+//     in place (no version sprawl; a prior push that drafted then failed before
+//     publish self-heals on the next push).
+//   - Case B: the latest version is published -> POST create-agent-version with
+//     base_version=latest to mint the next draft, then return it.
+// Verified live 2026-06-16 on a throwaway agent: create-agent-version versions the
+// LLM IN PLACE (same llm_id, response_engine.version bumped, NOT forked), and both
+// update-agent and update-retell-llm with no version param then target the draft.
+// We still return the draft's llm_id / flow_id so a future fork behavior would be
+// handled transparently by callers. See [[project_retell_published_version_immutable_bug]].
+interface EditableAgentDraft {
+  draftVersion: number;
+  llmId: string | null;
+  flowId: string | null;
+  engineType: string | null;
+  createdNewVersion: boolean;
+}
+
+async function ensureEditableAgentDraft(
+  apiKey: string,
+  agentId: string,
+): Promise<EditableAgentDraft> {
+  type VersionEntry = {
+    version?: number;
+    is_published?: boolean;
+    response_engine?: { type?: string; llm_id?: string; conversation_flow_id?: string };
+  };
+  const pickEngine = (e?: VersionEntry["response_engine"]) => ({
+    engineType: e?.type ?? null,
+    llmId: e?.llm_id ?? null,
+    flowId: e?.conversation_flow_id ?? null,
+  });
+  const maxEntry = (versions: VersionEntry[]): VersionEntry => {
+    let best = versions[0];
+    let bestV = typeof best?.version === "number" ? best.version : -1;
+    for (const v of versions) {
+      if (typeof v.version === "number" && v.version > bestV) {
+        best = v;
+        bestV = v.version;
+      }
+    }
+    return best;
+  };
+
+  const versions = await retellFetch(apiKey, "GET", `get-agent-versions/${agentId}`) as VersionEntry[];
+  if (!Array.isArray(versions) || versions.length === 0) {
+    throw new Error(`ensureEditableAgentDraft: no versions returned for agent ${agentId}`);
+  }
+  const latest = maxEntry(versions);
+
+  // Case A: latest is already a draft -> edit it in place.
+  if (latest.is_published !== true) {
+    console.log(`[ensureEditableAgentDraft] agent ${agentId} v${latest.version} is already a draft; reusing`);
+    return { draftVersion: latest.version as number, ...pickEngine(latest.response_engine), createdNewVersion: false };
+  }
+
+  // Case B: latest is published -> mint a draft from it.
+  const created = await retellFetch(apiKey, "POST", `create-agent-version/${agentId}`, {
+    base_version: latest.version,
+  }) as VersionEntry;
+  let draftVersion = typeof created?.version === "number" ? created.version : undefined;
+  let engine = pickEngine(created?.response_engine);
+  // Fallback: if the create response omits version/engine, re-read and take the new max.
+  if (typeof draftVersion !== "number" || engine.engineType === null) {
+    const after = await retellFetch(apiKey, "GET", `get-agent-versions/${agentId}`) as VersionEntry[];
+    const newLatest = maxEntry(after);
+    draftVersion = newLatest.version;
+    engine = pickEngine(newLatest.response_engine);
+  }
+  if (typeof draftVersion !== "number") {
+    throw new Error(`ensureEditableAgentDraft: could not resolve a draft version for agent ${agentId}`);
+  }
+  console.log(`[ensureEditableAgentDraft] agent ${agentId}: minted draft v${draftVersion} from base v${latest.version} (llm=${engine.llmId}, flow=${engine.flowId})`);
+  return { draftVersion, ...engine, createdNewVersion: true };
+}
+
 // EE2: After publishing an agent, Retell phone-number version pins do NOT auto-update.
 // Without this, every UI push silently fails to make tool changes live on real calls
 // because the phone keeps routing to the previously-pinned (stale) agent version.
@@ -917,10 +1000,16 @@ async function syncVoiceSetter(
           `the single-prompt save path cannot update it. Use the conversation-flow editor instead.`,
       };
     }
-    const llmId = agent?.response_engine?.llm_id;
+    const staleLlmId = agent?.response_engine?.llm_id;
 
-    if (llmId) {
-      const updatedLlm = await retellFetch(apiKey, "PATCH", `update-retell-llm/${llmId}`, llmPayload);
+    if (staleLlmId) {
+      // Published agent/LLM versions are IMMUTABLE; patching them 400s/422s. Mint
+      // (or reuse) an editable draft, then edit the DRAFT's LLM. Verified live
+      // 2026-06-16: create-agent-version versions the LLM in place (same llm_id),
+      // and update-agent / update-retell-llm with no version param target the draft.
+      const draft = await ensureEditableAgentDraft(apiKey, existingAgentId);
+      const editLlmId = draft.llmId ?? staleLlmId;
+      const updatedLlm = await retellFetch(apiKey, "PATCH", `update-retell-llm/${editLlmId}`, llmPayload);
       // Always update agent with name + voice settings + auto webhook
       const agentPatch: Record<string, unknown> = {
         ...agentUpdates,
@@ -929,12 +1018,12 @@ async function syncVoiceSetter(
       if (agentName) agentPatch.agent_name = agentName;
       // Auto-set webhook so call data syncs without manual config
       if (!agentPatch.webhook_url) agentPatch.webhook_url = getAutoWebhookUrl();
-      // Always send the patch to ensure all settings sync
+      // Always send the patch to ensure all settings sync (targets the draft)
       await retellFetch(apiKey, "PATCH", `update-agent/${existingAgentId}`, agentPatch);
-      // Auto-publish so changes go live immediately
+      // Auto-publish the draft so changes go live immediately
       try {
-        const publishResp = await publishAgentVersion(apiKey, existingAgentId);
-        console.log(`[sync-voice-setter] Auto-published agent ${existingAgentId} (v${publishResp?.version ?? "?"})`);
+        const publishResp = await publishAgentVersion(apiKey, existingAgentId, draft.draftVersion);
+        console.log(`[sync-voice-setter] Auto-published agent ${existingAgentId} (draft v${draft.draftVersion})`);
         await repointPhoneVersionsAfterPublish(supabase, apiKey, clientId, slotNumber, existingAgentId, publishResp?.version);
       } catch (pubErr) {
         const message = pubErr instanceof Error ? pubErr.message : String(pubErr);
@@ -946,10 +1035,13 @@ async function syncVoiceSetter(
       if (!directionFanOutBlocked) {
         await fanOutDirections(supabase, clientId, `Voice-Setter-${slotNumber}`, existingAgentId, effectiveDirections);
       }
-      await dualWriteVoiceSetter(supabase, clientId, slotNumber, agentName, existingAgentId, llmId);
-      return { success: true, action: "updated_and_published", agent_id: existingAgentId, llm_id: llmId, llm: updatedLlm, publish_warning: publishWarning, slot_substitution_warning: slotSubstitutionWarning, direction_warning: directionWarning, conflicting_agent_id: directionFanOutBlocked ? existingAgentId : null, shared_columns: directionFanOutBlocked ? directionConflictColumns : null };
+      await dualWriteVoiceSetter(supabase, clientId, slotNumber, agentName, existingAgentId, editLlmId);
+      return { success: true, action: "updated_and_published", agent_id: existingAgentId, llm_id: editLlmId, llm: updatedLlm, publish_warning: publishWarning, slot_substitution_warning: slotSubstitutionWarning, direction_warning: directionWarning, conflicting_agent_id: directionFanOutBlocked ? existingAgentId : null, shared_columns: directionFanOutBlocked ? directionConflictColumns : null };
     } else {
       const newLlm = await retellFetch(apiKey, "POST", "create-retell-llm", llmPayload) as any;
+      // Published agent versions are IMMUTABLE; mint/reuse an editable draft
+      // before repointing the agent's response_engine to the new LLM.
+      const draft = await ensureEditableAgentDraft(apiKey, existingAgentId);
       await retellFetch(apiKey, "PATCH", `update-agent/${existingAgentId}`, {
         agent_name: agentName || agent.agent_name,
         response_engine: {
@@ -961,10 +1053,10 @@ async function syncVoiceSetter(
         webhook_url: agentUpdates.webhook_url || getAutoWebhookUrl(),
         webhook_events: DEFAULT_RETELL_WEBHOOK_EVENTS,
       });
-      // Auto-publish so changes go live immediately
+      // Auto-publish the draft so changes go live immediately
       try {
-        const publishResp = await publishAgentVersion(apiKey, existingAgentId);
-        console.log(`[sync-voice-setter] Auto-published agent ${existingAgentId} (v${publishResp?.version ?? "?"})`);
+        const publishResp = await publishAgentVersion(apiKey, existingAgentId, draft.draftVersion);
+        console.log(`[sync-voice-setter] Auto-published agent ${existingAgentId} (draft v${draft.draftVersion})`);
         await repointPhoneVersionsAfterPublish(supabase, apiKey, clientId, slotNumber, existingAgentId, publishResp?.version);
       } catch (pubErr) {
         const message = pubErr instanceof Error ? pubErr.message : String(pubErr);
@@ -1200,10 +1292,15 @@ async function syncVoiceSetterConversationFlow(
           `Conversation Flow is only supported on newly created setters; duplicate into a fresh slot instead.`,
       };
     }
-    const flowId = agent?.response_engine?.conversation_flow_id;
-    if (!flowId) throw new Error(`[sync-voice-setter-cf] Agent ${existingAgentId} has no conversation_flow_id`);
-    console.log(`[sync-voice-setter-cf] Updating flow ${flowId} on agent ${existingAgentId} (slot ${slotNumber})`);
-    const updatedFlow = await retellFetch(apiKey, "PATCH", `update-conversation-flow/${flowId}`, flowPayload) as any;
+    const staleFlowId = agent?.response_engine?.conversation_flow_id;
+    if (!staleFlowId) throw new Error(`[sync-voice-setter-cf] Agent ${existingAgentId} has no conversation_flow_id`);
+    // Published versions (and their flows) are IMMUTABLE; mint/reuse an editable
+    // draft, then edit the DRAFT's flow. No live BFD setter uses CF, so this path
+    // is unverified live, but keeps the CF flow symmetric with the retell-llm path.
+    const draft = await ensureEditableAgentDraft(apiKey, existingAgentId);
+    const editFlowId = draft.flowId ?? staleFlowId;
+    console.log(`[sync-voice-setter-cf] Updating flow ${editFlowId} on agent ${existingAgentId} draft v${draft.draftVersion} (slot ${slotNumber})`);
+    const updatedFlow = await retellFetch(apiKey, "PATCH", `update-conversation-flow/${editFlowId}`, flowPayload) as any;
     const agentPatch: Record<string, unknown> = {
       ...agentUpdates,
       webhook_events: DEFAULT_RETELL_WEBHOOK_EVENTS,
@@ -1212,8 +1309,8 @@ async function syncVoiceSetterConversationFlow(
     if (!agentPatch.webhook_url) agentPatch.webhook_url = getAutoWebhookUrl();
     await retellFetch(apiKey, "PATCH", `update-agent/${existingAgentId}`, agentPatch);
     try {
-      const publishResp = await publishAgentVersion(apiKey, existingAgentId);
-      console.log(`[sync-voice-setter-cf] Auto-published agent ${existingAgentId} (v${publishResp?.version ?? "?"})`);
+      const publishResp = await publishAgentVersion(apiKey, existingAgentId, draft.draftVersion);
+      console.log(`[sync-voice-setter-cf] Auto-published agent ${existingAgentId} (draft v${draft.draftVersion})`);
       await repointPhoneVersionsAfterPublish(supabase, apiKey, clientId, slotNumber, existingAgentId, publishResp?.version);
     } catch (pubErr) {
       const message = pubErr instanceof Error ? pubErr.message : String(pubErr);
@@ -1227,7 +1324,7 @@ async function syncVoiceSetterConversationFlow(
       success: true,
       action: "updated_and_published",
       agent_id: existingAgentId,
-      conversation_flow_id: flowId,
+      conversation_flow_id: editFlowId,
       flow_version: updatedFlow?.version ?? null,
       publish_warning: publishWarning,
       direction_warning: directionWarning,
@@ -1395,10 +1492,25 @@ Deno.serve(async (req) => {
         result = await retellFetch(apiKey, "POST", "create-retell-llm", params.llmData);
         break;
 
-      case "update-llm":
+      case "update-llm": {
         if (!params.llmId) throw new Error("llmId is required");
+        // Published LLM versions are IMMUTABLE. This raw pass-through has no agent
+        // context, so it cannot mint a draft via create-agent-version (that endpoint
+        // is keyed by agent, not LLM). Surface a clear, actionable error instead of
+        // leaking Retell's opaque 400; anything editing a live setter's prompt must
+        // go through sync-voice-setter, which drafts + publishes.
+        const llmState = await retellFetch(apiKey, "GET", `get-retell-llm/${params.llmId}`) as { is_published?: boolean };
+        if (llmState?.is_published === true) {
+          const guardErr = new Error(
+            `LLM ${params.llmId} is published and cannot be edited directly. Use the voice setter ` +
+            `"Push to Retell" (sync-voice-setter) flow, which creates a draft version and publishes it.`,
+          ) as Error & { code?: string };
+          guardErr.code = "llm_update_requires_agent_context";
+          throw guardErr;
+        }
         result = await retellFetch(apiKey, "PATCH", `update-retell-llm/${params.llmId}`, params.llmData);
         break;
+      }
 
       case "delete-llm":
         if (!params.llmId) throw new Error("llmId is required");
@@ -1533,10 +1645,12 @@ Deno.serve(async (req) => {
           break;
         }
 
+        // Published agent versions are IMMUTABLE; mint/reuse a draft, rename it, publish.
+        const draft = await ensureEditableAgentDraft(apiKey, existingAgentId);
         await retellFetch(apiKey, "PATCH", `update-agent/${existingAgentId}`, { agent_name: agentName });
         let publishedVersion: number | undefined;
         try {
-          const publishResp = await publishAgentVersion(apiKey, existingAgentId);
+          const publishResp = await publishAgentVersion(apiKey, existingAgentId, draft.draftVersion);
           publishedVersion = publishResp?.version;
           await repointPhoneVersionsAfterPublish(supabaseAdmin, apiKey, clientId, slotNumber, existingAgentId, publishedVersion);
         } catch (pubErr) {
@@ -1853,9 +1967,12 @@ Deno.serve(async (req) => {
               continue;
             }
 
-            await retellFetch(apiKey, "PATCH", `update-retell-llm/${llmId}`, { general_tools: patchedTools });
+            // Published versions are IMMUTABLE; mint/reuse a draft and edit the
+            // draft's LLM (same llm_id, in place) before publishing.
+            const draft = await ensureEditableAgentDraft(apiKey, agentId);
+            await retellFetch(apiKey, "PATCH", `update-retell-llm/${draft.llmId ?? llmId}`, { general_tools: patchedTools });
             try {
-              const publishResp = await publishAgentVersion(apiKey, agentId);
+              const publishResp = await publishAgentVersion(apiKey, agentId, draft.draftVersion);
               // Repoint phone version pins so the refreshed tool messages go live
               // (this site previously published but never repinned — latent bug).
               await repointPhoneVersionsAfterPublish(supabaseAdmin, apiKey, clientId, Number(slotStr), agentId, publishResp?.version);
