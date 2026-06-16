@@ -93,7 +93,7 @@ export const processMessages = task({
       // Done BEFORE the debounce wait so the lead appears in the CRM immediately.
       const { data: client, error: clientError } = await supabase
         .from("clients")
-        .select("id, ghl_send_setter_reply_webhook_url, supabase_url, supabase_service_key, supabase_table_name, twilio_account_sid, twilio_auth_token, retell_phone_1, use_native_text_engine, ghl_api_key, ghl_location_id, ghl_conversation_provider_id")
+        .select("id, supabase_url, supabase_service_key, supabase_table_name, twilio_account_sid, twilio_auth_token, retell_phone_1, use_native_text_engine, ghl_api_key, ghl_location_id, ghl_conversation_provider_id")
         .eq("ghl_location_id", ghl_account_id)
         .single();
 
@@ -102,9 +102,6 @@ export const processMessages = task({
       }
       if (!client.use_native_text_engine) {
         throw new Error(`use_native_text_engine must be true for GHL account: ${ghl_account_id} — n8n path decommissioned (Phase 10)`);
-      }
-      if (!client.ghl_send_setter_reply_webhook_url) {
-        throw new Error(`ghl_send_setter_reply_webhook_url not configured for GHL account: ${ghl_account_id}`);
       }
 
       // Create lead in internal + external Supabase if it doesn't exist yet
@@ -297,51 +294,17 @@ export const processMessages = task({
       }
       await updateExecution({ setter_messages: setterMessages });
 
-      // ── STEP 6: Forward setter reply to GHL — Message_N format ──────────────
+      // ── STEP 6: Send setter reply ───────────────────────────────────────────
       await updateExecution({
         status: "sending",
-        stage_description: "Sending reply to GHL...",
+        stage_description: "Sending reply...",
       });
 
-      console.log(
-        `Forwarding to GHL: ${client.ghl_send_setter_reply_webhook_url}`
-      );
-
-      const ghlReplyUrl = `${client.ghl_send_setter_reply_webhook_url}?Contact_ID=${encodeURIComponent(lead_id)}`;
-
-      // The setter reply has Message_1..5, userID, chat_history — but NO Channel.
-      // The "Send Setter Reply" GHL workflow's "Which Channel?" decision needs
-      // it; without Channel set, the workflow falls to the "None" branch and
-      // no message goes out. Inject Channel from the inbound message_queue row
-      // (uppercase to match GHL decision conditions like 'includes "SMS"').
-      const ghlPayload: Record<string, unknown> = {
-        ...(setterReplyOutput as Record<string, unknown>),
-        Channel: channel ? channel.toUpperCase() : "SMS",
-      };
-
-      const ghlResponse = await fetch(ghlReplyUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(ghlPayload),
-      });
-
-      if (!ghlResponse.ok) {
-        const errorText = await ghlResponse.text();
-        await logError(
-          "ghl_webhook_error",
-          `GHL webhook failed: ${ghlResponse.status} ${errorText}`,
-          { lead_id, ghl_account_id, status: ghlResponse.status }
-        );
-        throw new Error(
-          `GHL webhook failed: ${ghlResponse.status} ${errorText}`
-        );
-      }
-
-      console.log("Reply forwarded to GHL successfully.");
-
-      // ── STEP 6.1b: Send SMS directly via Twilio (bypass GHL Custom Webhook substitution) ─
-      // GHL's Custom Webhook body doesn't substitute {{contact.phone}} reliably,
-      // so we send each setter message directly using the Twilio REST API.
+      // ── STEP 6.1b: Send SMS directly via Twilio ─────────────────────────────
+      // GHL is no longer in the reply send path (the leadconnectorhq
+      // "Send Setter Reply" webhook was retired 2026-06-17; it never delivered
+      // SMS anyway, it couldn't substitute {{contact.phone}}). Twilio is now the
+      // sole sender; the GHL conversations API is used only to mirror the thread.
       const twilioSid = (client as any).twilio_account_sid as string | null;
       const twilioAuth = (client as any).twilio_auth_token as string | null;
       const twilioFrom = (client as any).retell_phone_1 as string | null;
@@ -352,7 +315,9 @@ export const processMessages = task({
       const statusCallbackUrl = supabaseUrl
         ? `${supabaseUrl.replace(/\/$/, "")}/functions/v1/twilio-status-webhook`
         : null;
-      if (channel === "sms" && twilioSid && twilioAuth && twilioFrom && contact_phone) {
+      const sendPathFired =
+        channel === "sms" && !!twilioSid && !!twilioAuth && !!twilioFrom && !!contact_phone;
+      if (sendPathFired) {
         for (const msg of setterMessages) {
           if (!msg?.trim()) continue;
           const params: Record<string, string> = {
@@ -421,6 +386,34 @@ export const processMessages = task({
             }
           }
         }
+      }
+
+      // ── STEP 6.1a: Fail loud if no send path fired ──────────────────────────
+      // Twilio (6.1b) is the only sender now that the GHL reply webhook is gone.
+      // If its gate didn't fire we would otherwise complete silently without
+      // sending the reply, so surface it as a real error instead.
+      if (setterMessages.length > 0 && !sendPathFired) {
+        const missing = [
+          channel !== "sms" ? `channel=${channel ?? "null"}` : null,
+          !twilioSid ? "twilio_account_sid" : null,
+          !twilioAuth ? "twilio_auth_token" : null,
+          !twilioFrom ? "retell_phone_1(from)" : null,
+          !contact_phone ? "contact_phone" : null,
+        ]
+          .filter(Boolean)
+          .join(", ");
+        await logError(
+          "no_send_path",
+          `Setter reply generated but NOT sent — no Twilio send path fired. Missing/blocking: ${missing}`,
+          {
+            lead_id,
+            ghl_account_id,
+            channel,
+            has_twilio: !!(twilioSid && twilioAuth && twilioFrom),
+            has_phone: !!contact_phone,
+          }
+        );
+        throw new Error(`Setter reply not sent — no Twilio send path (${missing})`);
       }
 
       // ── STEP 6.1: Bump last_message_at + preview for conversation list ──────
@@ -508,7 +501,7 @@ export const processMessages = task({
       // ── STEP 8: Mark execution as complete ──────────────────────────────────
       await updateExecution({
         status: "completed",
-        stage_description: "Done — reply sent to GHL.",
+        stage_description: "Done. Reply sent.",
         completed_at: new Date().toISOString(),
         resume_at: null,
         has_error: false, // clear any error flag set during earlier retry attempts

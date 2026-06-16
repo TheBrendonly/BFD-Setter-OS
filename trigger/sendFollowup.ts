@@ -1,5 +1,6 @@
 import { task, wait } from "@trigger.dev/sdk";
 import { createClient } from "@supabase/supabase-js";
+import { sendTwilioSmsAndStamp } from "./_shared/sendTwilioSmsAndStamp";
 
 const getMainSupabase = () =>
   createClient(
@@ -100,7 +101,7 @@ export const sendFollowup = task({
     // ── STEP 2.5: Check if setter was stopped for this lead ───────────────────
     const { data: leadRow } = await supabase
       .from("leads")
-      .select("setter_stopped")
+      .select("setter_stopped, phone")
       .eq("lead_id", lead_id)
       .eq("client_id", client_id)
       .maybeSingle();
@@ -126,18 +127,13 @@ export const sendFollowup = task({
     // ── STEP 3: Fetch client config ───────────────────────────────────────────
     const { data: client } = await supabase
       .from("clients")
-      .select("openrouter_api_key, llm_model, send_followup_webhook_url, supabase_url, supabase_service_key")
+      .select("openrouter_api_key, llm_model, supabase_url, supabase_service_key, twilio_account_sid, twilio_auth_token, retell_phone_1, twilio_default_phone, ghl_api_key, ghl_location_id, ghl_conversation_provider_id")
       .eq("id", client_id)
       .single();
 
     if (!client?.openrouter_api_key) {
       await supabase.from("followup_timers").update({ status: "failed", updated_at: new Date().toISOString() }).eq("id", timer_id);
       throw new Error("Missing client openrouter_api_key");
-    }
-    const followupWebhookUrl = client.send_followup_webhook_url as string | null;
-    if (!followupWebhookUrl) {
-      await supabase.from("followup_timers").update({ status: "failed", updated_at: new Date().toISOString() }).eq("id", timer_id);
-      throw new Error("Missing client send_followup_webhook_url");
     }
 
     // ── STEP 4: Fetch agent settings ──────────────────────────────────────────
@@ -318,22 +314,67 @@ export const sendFollowup = task({
       };
     }
 
-    // ── STEP 8: Send via send_followup_webhook_url (falls back to send_message_webhook_url) ──
+    // ── STEP 8: Send the follow-up directly via Twilio ───────────────────────
+    // GHL is no longer in the send path (send_followup_webhook_url retired
+    // 2026-06-17). sendTwilioSmsAndStamp delivers via the Twilio REST API,
+    // stamps the outbound message_queue row, and mirrors the body to GHL.
     const followupMessage = aiDecision.message;
     if (!followupMessage) throw new Error("AI decided to follow up but returned empty message");
 
-    const smsResponse = await fetch(followupWebhookUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        Lead_ID: lead_id,
-        Message: followupMessage,
-      }),
+    const toNumber = (leadRow?.phone as string | null) ?? null;
+    const fromNumber =
+      (client.retell_phone_1 as string | null) ?? (client.twilio_default_phone as string | null) ?? null;
+    const twilioSid = client.twilio_account_sid as string | null;
+    const twilioAuth = client.twilio_auth_token as string | null;
+    if (!twilioSid || !twilioAuth || !fromNumber || !toNumber) {
+      const missing = [
+        !twilioSid ? "twilio_account_sid" : null,
+        !twilioAuth ? "twilio_auth_token" : null,
+        !fromNumber ? "from_number(retell_phone_1/twilio_default_phone)" : null,
+        !toNumber ? "lead.phone" : null,
+      ]
+        .filter(Boolean)
+        .join(", ");
+      await supabase
+        .from("followup_timers")
+        .update({ status: "failed", updated_at: new Date().toISOString() })
+        .eq("id", timer_id);
+      await supabase.from("error_logs").insert({
+        client_ghl_account_id: ghl_account_id,
+        lead_id,
+        severity: "error",
+        source: "send_followup",
+        error_type: "followup_no_send_path",
+        error_message: `Follow-up not sent, missing ${missing}`,
+        created_at: new Date().toISOString(),
+      });
+      throw new Error(`Follow-up not sent, missing ${missing}`);
+    }
+
+    const sendResult = await sendTwilioSmsAndStamp({
+      supabase,
+      twilioSid,
+      twilioAuth,
+      fromNumber,
+      toNumber,
+      body: followupMessage,
+      clientId: client_id,
+      leadId: lead_id,
+      ghlAccountId: ghl_account_id,
+      contactName: null,
+      contactEmail: null,
+      ghlApiKey: (client.ghl_api_key as string | null) ?? null,
+      ghlLocationId: (client.ghl_location_id as string | null) ?? null,
+      ghlContactId: lead_id,
+      ghlConversationProviderId: (client.ghl_conversation_provider_id as string | null) ?? null,
     });
 
-    if (!smsResponse.ok) {
-      const errText = await smsResponse.text();
-      throw new Error(`SMS webhook failed ${smsResponse.status}: ${errText.slice(0, 200)}`);
+    if (!sendResult.ok) {
+      await supabase
+        .from("followup_timers")
+        .update({ status: "failed", updated_at: new Date().toISOString() })
+        .eq("id", timer_id);
+      throw new Error(`Follow-up Twilio send failed: ${sendResult.errorCode} ${sendResult.errorMessage}`);
     }
 
     console.log(`Follow-up #${sequenceIndex} sent: "${followupMessage.slice(0, 100)}"`);
