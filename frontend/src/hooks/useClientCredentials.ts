@@ -43,12 +43,6 @@ export interface ClientCredentials {
   database_reactivation_inbound_webhook_url: string | null;
   lead_score_webhook_url: string | null;
   update_pipeline_webhook_url: string | null;
-  ghl_send_setter_reply_webhook_url: string | null;
-  send_message_webhook_url: string | null;
-  send_followup_webhook_url: string | null;
-  send_engagement_webhook_url: string | null;
-  
-  stop_bot_webhook_url: string | null;
   supabase_access_token: string | null;
   twilio_account_sid: string | null;
   twilio_auth_token: string | null;
@@ -99,12 +93,6 @@ const CREDENTIALS_FIELDS = `
   database_reactivation_inbound_webhook_url,
   lead_score_webhook_url,
   update_pipeline_webhook_url,
-  ghl_send_setter_reply_webhook_url,
-  send_message_webhook_url,
-  send_followup_webhook_url,
-  send_engagement_webhook_url,
-  
-  stop_bot_webhook_url,
   supabase_access_token,
   twilio_account_sid,
   twilio_auth_token,

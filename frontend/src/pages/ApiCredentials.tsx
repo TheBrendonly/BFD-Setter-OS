@@ -255,11 +255,6 @@ interface ApiSettings {
   gohighlevel_booking_title?: string | null;
   ghl_assignee_id?: string | null;
   ghl_location_id?: string | null;
-  ghl_send_setter_reply_webhook_url?: string | null;
-  send_message_webhook_url?: string | null;
-  send_followup_webhook_url?: string | null;
-  send_engagement_webhook_url?: string | null;
-  stop_bot_webhook_url?: string | null;
   llm_model?: string | null;
 }
 
@@ -413,11 +408,6 @@ const ApiCredentials = () => {
     gohighlevel_booking_title: '',
     ghl_assignee_id: '',
     ghl_location_id: '',
-    ghl_send_setter_reply_webhook_url: '',
-    send_message_webhook_url: '',
-    send_followup_webhook_url: '',
-    send_engagement_webhook_url: '',
-    stop_bot_webhook_url: '',
     llm_model: '',
   });
 
@@ -452,11 +442,6 @@ const ApiCredentials = () => {
         gohighlevel_booking_title: (credentials as any).gohighlevel_booking_title || '',
         ghl_assignee_id: (credentials as any).ghl_assignee_id || '',
         ghl_location_id: credentials.ghl_location_id || '',
-        ghl_send_setter_reply_webhook_url: (credentials as any).ghl_send_setter_reply_webhook_url || '',
-        send_message_webhook_url: (credentials as any).send_message_webhook_url || '',
-        send_followup_webhook_url: (credentials as any).send_followup_webhook_url || '',
-        send_engagement_webhook_url: (credentials as any).send_engagement_webhook_url || '',
-        stop_bot_webhook_url: (credentials as any).stop_bot_webhook_url || '',
         llm_model: (credentials as any).llm_model || '',
       });
     }
@@ -989,51 +974,6 @@ const ApiCredentials = () => {
                   isSavedConfigured={isCredentialConfigured(credentials?.ghl_location_id)}
                   placeholder="Enter your GHL Location ID"
                 />
-                <CredentialInputField
-                  id="ghl_send_setter_reply_webhook_url"
-                  label="Send Setter Reply Webhook URL"
-                  value={settings.ghl_send_setter_reply_webhook_url || ''}
-                  onChange={(value) => handleInputChange('ghl_send_setter_reply_webhook_url', value)}
-                  disabled={false}
-                  isSavedConfigured={isCredentialConfigured((credentials as any)?.ghl_send_setter_reply_webhook_url)}
-                  placeholder="Enter the webhook URL for sending setter replies back to GHL"
-                />
-                <CredentialInputField
-                  id="send_message_webhook_url"
-                  label="Send Message Webhook URL"
-                  value={settings.send_message_webhook_url || ''}
-                  onChange={(value) => handleInputChange('send_message_webhook_url', value)}
-                  disabled={false}
-                  isSavedConfigured={isCredentialConfigured((credentials as any)?.send_message_webhook_url)}
-                  placeholder="Enter the webhook URL for sending manual messages via GHL"
-                />
-                <CredentialInputField
-                  id="send_followup_webhook_url"
-                  label="Send Follow-Up Webhook URL"
-                  value={settings.send_followup_webhook_url || ''}
-                  onChange={(value) => handleInputChange('send_followup_webhook_url', value)}
-                  disabled={false}
-                  isSavedConfigured={isCredentialConfigured((credentials as any)?.send_followup_webhook_url)}
-                  placeholder="Enter the webhook URL for sending text setter follow-up messages via GHL"
-                />
-                <CredentialInputField
-                  id="send_engagement_webhook_url"
-                  label="Send Engagement Webhook URL"
-                  value={settings.send_engagement_webhook_url || ''}
-                  onChange={(value) => handleInputChange('send_engagement_webhook_url', value)}
-                  disabled={false}
-                  isSavedConfigured={isCredentialConfigured((credentials as any)?.send_engagement_webhook_url)}
-                  placeholder="Enter the webhook URL for sending engagement workflow messages via GHL"
-                />
-                <CredentialInputField
-                  id="stop_bot_webhook_url"
-                  label="Stop Bot Webhook URL"
-                  value={settings.stop_bot_webhook_url || ''}
-                  onChange={(value) => handleInputChange('stop_bot_webhook_url', value)}
-                  disabled={false}
-                  isSavedConfigured={isCredentialConfigured((credentials as any)?.stop_bot_webhook_url)}
-                  placeholder="Enter the webhook URL to stop the AI setter for a lead"
-                />
                 <div className="flex gap-2 pt-2">
                   <Button
                     onClick={async () => {
@@ -1066,11 +1006,6 @@ const ApiCredentials = () => {
                             gohighlevel_booking_title: settings.gohighlevel_booking_title?.trim() || null,
                             ghl_assignee_id: settings.ghl_assignee_id?.trim() || null,
                             ghl_location_id: settings.ghl_location_id?.trim() || null,
-                            ghl_send_setter_reply_webhook_url: settings.ghl_send_setter_reply_webhook_url?.trim() || null,
-                            send_message_webhook_url: settings.send_message_webhook_url?.trim() || null,
-                            send_followup_webhook_url: settings.send_followup_webhook_url?.trim() || null,
-                            send_engagement_webhook_url: settings.send_engagement_webhook_url?.trim() || null,
-                            stop_bot_webhook_url: settings.stop_bot_webhook_url?.trim() || null,
                           }
                         });
                         await sendToApiCredentialsWebhook();
