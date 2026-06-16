@@ -38,7 +38,9 @@ description: Session closeout (2026-06-16, HEAD 5bf22e3 → cd66282 docs). Singl
 - [x] Retell + Unipile webhook secrets: **PROVIDE NOW** (locked 2026-06-16). Values still owed — paste/vault them so Build 1 (or task 2B) stores + tests them (Retell value = the Retell API key; Unipile = static custom-header token). Sig-verify code already fixed + deployed.
 - [x] Email provider: **Resend (or other) later — defer** (locked 2026-06-16). Do NOT ship the built-in mailer; email features (3.6 long-tail drip, D5 custom SMTP) wait for the provider.
 - [x] Twilio number model: **BYO-Twilio-per-client** (locked 2026-06-16). Client owns the number + AU regulatory bundle; document per-client in the onboarding SOP.
-- [ ] SetupGuide canonical BFD folder name (for the screenshot reshoot). — still open
+- [x] SetupGuide canonical BFD folder name: **"BFD Setter"** (locked 2026-06-16). Drives the 5.1/5.2 rebrand: setup-guide text/screenshots + the "© 1PROMPT.COM" Home footer → "BFD Setter". (Legit upstream refs — the `1prompt-os` repo + the Skool course — stay.)
+- [x] Sidebar labels: **KEEP current** (Manage Sub-Accounts / Sub-Account Settings / Account Settings; no rename) (2026-06-16).
+- [x] Orphan "Voice-Setter-master" Retell agent: **DELETED** 2026-06-16 (HTTP 204, confirmed zero refs in voice_setters / clients / phones).
 
 ### 2D. THE FULL RUN-THROUGH TEST (the very last thing — after the build sessions)
 - [ ] Inbound phone-first call to `+61481614530` from a known-lead phone → greets by name, doesn't re-ask details.
