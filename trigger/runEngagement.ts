@@ -621,23 +621,40 @@ export const runEngagement = task({
             const weeklyBreached = weeklyCeil != null && weekCents >= weeklyCeil;
             const monthlyBreached = monthlyCeil != null && monthCents >= monthlyCeil;
             if (weeklyBreached || monthlyBreached) {
-              await supabase.from("error_logs").insert({
-                client_ghl_account_id: ghl_account_id,
-                error_type: "cost_ceiling_breach",
-                error_message:
-                  `Tenant rolling cost ceiling reached ` +
-                  `(week ${weekCents}c/${weeklyCeil ?? "—"}c, month ${monthCents}c/${monthlyCeil ?? "—"}c)`,
-                severity: "warning",
-                source: "trigger.runEngagement.writeCadenceMetrics",
-                execution_id,
-                lead_id,
-                context: {
-                  week_cents: weekCents,
-                  month_cents: monthCents,
-                  weekly_ceiling_cents: weeklyCeil,
-                  monthly_ceiling_cents: monthlyCeil,
-                },
-              });
+              // Throttle: one breach log per client per UTC day. The rolling
+              // ceiling stays breached for the rest of the period, so without
+              // this every later cadence completion would re-log the breach.
+              const dayStartIso = (() => {
+                const d = new Date();
+                d.setUTCHours(0, 0, 0, 0);
+                return d.toISOString();
+              })();
+              const { data: loggedToday } = await supabase
+                .from("error_logs")
+                .select("id")
+                .eq("client_ghl_account_id", ghl_account_id)
+                .eq("error_type", "cost_ceiling_breach")
+                .gte("created_at", dayStartIso)
+                .limit(1);
+              if (!loggedToday || loggedToday.length === 0) {
+                await supabase.from("error_logs").insert({
+                  client_ghl_account_id: ghl_account_id,
+                  error_type: "cost_ceiling_breach",
+                  error_message:
+                    `Tenant rolling cost ceiling reached ` +
+                    `(week ${weekCents}c/${weeklyCeil ?? "n/a"}c, month ${monthCents}c/${monthlyCeil ?? "n/a"}c)`,
+                  severity: "warning",
+                  source: "trigger.runEngagement.writeCadenceMetrics",
+                  execution_id,
+                  lead_id,
+                  context: {
+                    week_cents: weekCents,
+                    month_cents: monthCents,
+                    weekly_ceiling_cents: weeklyCeil,
+                    monthly_ceiling_cents: monthlyCeil,
+                  },
+                });
+              }
             }
           }
         } catch { /* non-fatal */ }

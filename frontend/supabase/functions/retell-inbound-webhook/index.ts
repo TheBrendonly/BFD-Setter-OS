@@ -25,6 +25,13 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-retell-signature",
 };
 
+// Observability — redact the caller number in logs (keep the last 4 for matching).
+const redactPhone = (p: string | null): string => {
+  if (!p) return "<none>";
+  const s = String(p);
+  return s.length <= 4 ? "***" : "***" + s.slice(-4);
+};
+
 
 // Always return 200 with whatever dynamic_variables we could resolve. Returning an
 // error or empty payload still lets the call proceed (the prompt's empty-vars guidance
@@ -74,6 +81,7 @@ Deno.serve(async (req) => {
       );
     const client = clients?.[0];
     if (!client) {
+      console.log(`retell-inbound-webhook: ${eventKey} no client for agent=${agentId} from=${redactPhone(fromNumber)} — returning empty vars`);
       return inboundResponse(eventKey, {});
     }
 
@@ -139,6 +147,7 @@ Deno.serve(async (req) => {
       dv.contact_id = String(lead.lead_id ?? "");
     }
 
+    console.log(`retell-inbound-webhook: ${eventKey} agent=${agentId} from=${redactPhone(fromNumber)} client=${client.id} matched=${!!lead} verified=${!!client.retell_webhook_secret}`);
     return inboundResponse(eventKey, dv);
   } catch (err) {
     console.error("retell-inbound-webhook error:", err);

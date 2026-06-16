@@ -864,6 +864,14 @@ function PhoneCallChannelConfig({ channel, updateChannel, clientId }: {
     })();
   }, [clientId]);
 
+  // Orphaned-UUID detection: a stored voice_setter_id that no longer resolves to
+  // a known setter (the setter was deleted/deactivated). Only flag once options
+  // have loaded so we don't false-positive during the initial fetch.
+  const resolvedSetter = channel.voice_setter_id
+    ? options.find(o => o.id === channel.voice_setter_id)
+    : undefined;
+  const isOrphanSetter = !!channel.voice_setter_id && options.length > 0 && !resolvedSetter;
+
   return (
     <div className="space-y-3 pt-2">
       <div className="space-y-1">
@@ -875,10 +883,14 @@ function PhoneCallChannelConfig({ channel, updateChannel, clientId }: {
               className="relative flex h-8 w-full items-center groove-border bg-card px-3 pr-10 py-1 text-left"
               style={{ fontSize: '13px', fontFamily: "'IBM Plex Mono', monospace", textTransform: 'uppercase', letterSpacing: 'normal' }}
             >
-              <span className="truncate text-foreground flex-1">
-                {channel.voice_setter_id
-                  ? (options.find(o => o.id === channel.voice_setter_id)?.name || channel.voice_setter_id)
-                  : <span className="text-muted-foreground">Select voice setter</span>}
+              <span className="truncate flex-1">
+                {!channel.voice_setter_id
+                  ? <span className="text-muted-foreground">Select voice setter</span>
+                  : resolvedSetter
+                    ? <span className="text-foreground">{resolvedSetter.name}</span>
+                    : isOrphanSetter
+                      ? <span className="text-destructive">Unknown setter (removed)</span>
+                      : <span className="text-foreground">{channel.voice_setter_id}</span>}
               </span>
               <span className="absolute right-0 top-1/2 -translate-y-1/2 h-7 w-7 flex items-center justify-center">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="h-5 w-5 text-foreground" fill="currentColor" style={{ imageRendering: 'pixelated' as const }}>
@@ -933,6 +945,11 @@ function PhoneCallChannelConfig({ channel, updateChannel, clientId }: {
         {!channel.voice_setter_id && (
           <p className="text-destructive" style={{ ...fieldStyle, fontSize: '13px' }}>
             A voice setter must be selected for the call to fire.
+          </p>
+        )}
+        {isOrphanSetter && (
+          <p className="text-destructive" style={{ ...fieldStyle, fontSize: '13px' }}>
+            The selected setter no longer exists. Pick another so the call can fire.
           </p>
         )}
       </div>
