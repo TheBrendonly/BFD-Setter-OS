@@ -1419,13 +1419,13 @@ export default function Chats() {
         variant: 'destructive' as const,
         className: 'groove-btn groove-btn-destructive',
       }] : []),
-      ...((credentials as any)?.stop_bot_webhook_url ? [{
+      {
         label: stoppingBot ? (isSetterStopped ? 'ACTIVATING...' : 'STOPPING...') : (isSetterStopped ? 'ACTIVATE SETTER' : 'STOP SETTER'),
         icon: stoppingBot ? <Loader2 className="w-4 h-4 animate-spin" /> : (isSetterStopped ? <Play className="w-4 h-4" /> : <Square className="w-4 h-4" />),
         onClick: () => setShowStopConfirm(true),
         className: isSetterStopped ? 'groove-btn-pulse' : 'groove-btn',
         disabled: stoppingBot,
-      }] : []),
+      },
       ...(detailsDirty && rightPanel === 'details' ? [{
         label: 'SAVE',
         icon: <Save className="w-4 h-4" />,

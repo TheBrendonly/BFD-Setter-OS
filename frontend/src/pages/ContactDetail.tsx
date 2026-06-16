@@ -354,13 +354,13 @@ const ContactDetail = () => {
         variant: 'destructive' as const,
         className: 'groove-btn groove-btn-destructive',
       }] : []),
-      ...((credentials as any)?.stop_bot_webhook_url ? [{
+      {
         label: stoppingBot ? (setterStopped ? 'ACTIVATING...' : 'STOPPING...') : (setterStopped ? 'ACTIVATE SETTER' : 'STOP SETTER'),
         icon: stoppingBot ? <Loader2 className="w-4 h-4 animate-spin" /> : (setterStopped ? <Play className="w-4 h-4" /> : <Square className="w-4 h-4" />),
         onClick: () => setShowStopConfirm(true),
         className: setterStopped ? 'groove-btn-pulse' : 'groove-btn',
         disabled: stoppingBot,
-      }] : []),
+      },
       {
         label: 'LAUNCH CAMPAIGN',
         icon: <Zap className="w-4 h-4" />,

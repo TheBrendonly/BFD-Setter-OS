@@ -51,71 +51,20 @@ Deno.serve(async (req) => {
 
     const requestType = request_type === "Activate" ? "Activate" : "Stop";
 
-    const { data: client, error: clientError } = await supabase
+    // Validate the client exists. The GHL stop-bot webhook was retired
+    // 2026-06-17, so this is now a purely local state toggle. setter_stopped is
+    // already honored by processMessages (STEP 1.5) and runEngagement; an
+    // inbound STOP keyword is handled separately by receive-twilio-sms.
+    const { error: clientError } = await supabase
       .from("clients")
-      .select("stop_bot_webhook_url, ghl_location_id")
+      .select("id")
       .eq("id", client_id)
       .single();
 
-    if (clientError || !client) {
+    if (clientError) {
       return new Response(
         JSON.stringify({ error: "Client not found" }),
         { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    if (!client.stop_bot_webhook_url) {
-      return new Response(
-        JSON.stringify({ error: "Stop Bot Webhook URL not configured. Go to Credentials > GoHighLevel to add it." }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    const { data: contact, error: contactError } = await supabase
-      .from("leads")
-      .select("id, lead_id")
-      .eq("id", contact_id)
-      .single();
-
-    if (contactError || !contact) {
-      return new Response(
-        JSON.stringify({ error: "Contact not found" }),
-        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    const leadId = contact.lead_id || contact.id;
-
-    let webhookResponse: Response;
-    let webhookData: any;
-    try {
-      webhookResponse = await fetch(client.stop_bot_webhook_url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          Lead_ID: leadId,
-          Request_Type: requestType,
-        }),
-      });
-
-      try {
-        webhookData = await webhookResponse.json();
-      } catch {
-        webhookData = await webhookResponse.text();
-      }
-
-      if (!webhookResponse.ok) {
-        console.error("Stop bot webhook error:", webhookResponse.status, webhookData);
-        return new Response(
-          JSON.stringify({ error: `Webhook returned ${webhookResponse.status}`, details: webhookData }),
-          { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-    } catch (fetchError: any) {
-      console.error("Stop bot webhook fetch error:", fetchError);
-      return new Response(
-        JSON.stringify({ error: `Failed to reach webhook: ${fetchError.message}` }),
-        { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
@@ -131,7 +80,7 @@ Deno.serve(async (req) => {
     }
 
     return new Response(
-      JSON.stringify({ success: true, request_type: requestType, setter_stopped: setterStopped, data: webhookData }),
+      JSON.stringify({ success: true, request_type: requestType, setter_stopped: setterStopped }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error: any) {
