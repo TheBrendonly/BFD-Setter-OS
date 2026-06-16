@@ -176,6 +176,16 @@ All code is on `main`, **uncommitted and undeployed**, pending review.
 
 **Difficulty: MODERATE** (index change + group table + resolver rotation + grouping UI + comparison view). **Recommendation: DEFER to a dedicated build;** broadly useful across clients, so worth doing properly (with sticky-by-lead assignment and a clean comparison dashboard) rather than a quick hack.
 
+**Research done + business-timing decision (2026-06-16):** full research brief in
+`Docs/AB_TESTING_RESEARCH_2026-06-16.md` (three levels, schema deltas, measurement vs `cadence_metrics`,
+statistical validity at 50-200 leads/week with booking rate primary, report-only prompt constraint,
+AI-eval loop, phased build + effort). Business verdict = **DEFER short-term: do not build yet.** BFD is
+at 0 clients / $0 MRR / no real lead traffic (build-freeze sales sprint), so there is nothing to A/B
+test. **Revisit trigger:** first paying client sustaining ~50+ leads/week (or a deal that closes on the
+A/B promise). Cheap interim = run cadence/setter A vs B manually for ~2 weeks each and eyeball reply +
+booking rate; sell the promise without building the feature. When triggered, build Phase 1 / 3.1a
+(campaign-level) first.
+
 ## UI holes — implementation plan (next session)
 
 Frontend-only; deploys via Railway on push. Suggested order:
