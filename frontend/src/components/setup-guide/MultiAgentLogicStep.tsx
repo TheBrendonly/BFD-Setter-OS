@@ -402,7 +402,7 @@ export default function MultiAgentLogicStep({ clientId, onNavigationChange }: Mu
 
       <div className="bg-primary/10 border-2 border-primary/30 rounded-lg p-6 text-center">
         <h3 className="text-2xl font-bold text-primary mb-4">
-          1 Prompt = 1 Agent = 1 AI Rep
+          1 Setter = 1 Agent = 1 AI Rep
         </h3>
         <p className="text-muted-foreground">
           This is the most important equation to understand

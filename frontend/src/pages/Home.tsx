@@ -575,7 +575,7 @@ export default function Home() {
       {/* ── Footer ── */}
       <footer className="mt-auto border-t border-border bg-sidebar px-6 py-4">
         <p className="field-text text-center text-muted-foreground">
-          © {new Date().getFullYear()} 1PROMPT.COM. ALL RIGHTS RESERVED
+          © {new Date().getFullYear()} BUILDING FLOW DIGITAL. ALL RIGHTS RESERVED
         </p>
       </footer>
     </div>
