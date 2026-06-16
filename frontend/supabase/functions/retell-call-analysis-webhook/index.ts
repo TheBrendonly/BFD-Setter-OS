@@ -349,7 +349,19 @@ Deno.serve(async (req) => {
       if (wantsCallback && !appointmentBooked && clientId && contactId && setterId) {
         try {
           const toPhone = call.to_number || (dynamicVars.phone as string | undefined) || null;
-          if (toPhone) {
+          // CAD-03 dedup: the in-call schedule-callback tool may have ALREADY
+          // created a pending callback for this contact during the call. Don't
+          // create a second row (→ a second dial 24h later). Partial unique index
+          // scheduled_callbacks_pending_contact_uidx is the DB backstop; this is
+          // the friendly pre-check that also avoids a noisy 23505 in the logs.
+          const { data: existingCb } = toPhone
+            ? await supabase.from("scheduled_callbacks").select("id")
+                .eq("client_id", clientId).eq("ghl_contact_id", contactId)
+                .eq("status", "pending").limit(1).maybeSingle()
+            : { data: null };
+          if (toPhone && existingCb?.id) {
+            console.log(`📅 callback already pending for contact ${contactId} (cb=${existingCb.id}); skipping webhook-path insert`);
+          } else if (toPhone) {
             const { data: clientTz } = await supabase.from("clients").select("timezone").eq("id", clientId).maybeSingle();
             const tz = (clientTz?.timezone as string | null) || "Australia/Brisbane";
             const parsed = parseCallbackTime(String(requestedCallbackRaw || callResultStr || "later"), new Date(), tz);

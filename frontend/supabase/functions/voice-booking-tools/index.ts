@@ -376,7 +376,22 @@ async function toolBookAppointments(args: {
 
   const r = await ghlSend("POST", "/calendars/events/appointments", client.ghl_api_key as string, ghlBody);
   if (r.status >= 400) {
-    throw new ToolError(502, `GHL book-appointments failed ${r.status}: ${JSON.stringify(r.body).slice(0, 300)}`);
+    // GHL rejects a slot that isn't actually free (e.g. the agent offered a time
+    // that wasn't returned by get-available-slots, or it was taken since) with
+    // 400 "The slot you have selected is no longer available." Return a clean,
+    // recoverable result (HTTP 200 wrapper, booked:false) so the voice agent
+    // re-checks availability and offers a real slot, instead of seeing an opaque
+    // 502 Axios error. Other GHL errors still surface as a 502.
+    const bodyStr = JSON.stringify(r.body);
+    if (r.status === 400 && /no longer available|not available|slot/i.test(bodyStr)) {
+      return {
+        booked: false,
+        status: "slot_unavailable",
+        message: "That time isn't available anymore. Let me check the calendar for the current open times and offer you one of those.",
+        retry_with_available_slots: true,
+      };
+    }
+    throw new ToolError(502, `GHL book-appointments failed ${r.status}: ${bodyStr.slice(0, 300)}`);
   }
 
   const appt = (r.body as any) ?? {};
@@ -800,6 +815,24 @@ async function toolScheduleCallback(args: { client: ClientRow; body: Record<stri
     contact_phone: (typeof body.phone === "string" ? body.phone : null),
     scheduled_for: parsed.scheduledFor, callback_reason: parsed.reason, status: "pending",
   }).select("id").single();
+
+  // CAD-03: a partial unique index allows only one PENDING callback per
+  // (client, contact). A 23505 here means one is already scheduled (an earlier
+  // call, or a race with the post-call webhook) — confirm the existing one
+  // rather than creating a duplicate dial or falsely telling the caller it
+  // failed. Don't re-trigger: the existing row already has its own task run.
+  if (cbErr && (cbErr as { code?: string }).code === "23505") {
+    const { data: existing } = await supabase.from("scheduled_callbacks")
+      .select("scheduled_for, callback_reason")
+      .eq("client_id", client.id).eq("ghl_contact_id", contactId).eq("status", "pending")
+      .order("created_at", { ascending: false }).limit(1).maybeSingle();
+    return {
+      scheduled: true,
+      already_scheduled: true,
+      scheduled_for: existing?.scheduled_for ?? parsed.scheduledFor,
+      when: existing?.callback_reason ?? parsed.reason,
+    };
+  }
 
   // Don't falsely confirm: if the row didn't persist, surface a tool error so the
   // agent re-tries / tells the caller, rather than promising a callback we lost.

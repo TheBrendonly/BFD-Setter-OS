@@ -14,7 +14,7 @@ description: Session closeout (2026-06-16, HEAD 5bf22e3 → cd66282 docs). Singl
 
 ## SECTION 1 — MISSED THINGS (gaps, watch-items, decisions, couldn't-build)
 
-1. **Probe — confirm it goes green (watch).** The `intake-lead v9` is_system bypass is live and verified (a manual probe POST wrote the `sms_outbound` message_queue row the canary asserts). BUT no probe run is recorded since 2026-06-15 22:02 (all prior runs failed pre-fix). It should pass on the next hourly run; if it never fires, the Trigger.dev cron needs a poke. Not a build — a verification.
+1. **Probe — RED due to a canary race (confirmed 2026-06-16, read-only). NOT a watch-item; it needs a code fix.** The `intake-lead v9` is_system bypass works (probe POST → 200 + execution_id; the old 409 stopped ~12:30 UTC 2026-06-15) and runEngagement's verify-only `skipDispatch` works (the lone `PROBE_SKIPPED` row at 12:21 UTC was an off-cron manual run). The cron is HEALTHY — firing hourly through 2026-06-16 00:01 UTC; no poke needed. But 0/11 scheduled runs pass: they now fail a *later* assertion, "no outbound message_queue row after cadence ran". Root cause is in `trigger/syntheticProbe.ts`: Step 2 breaks the instant status is `running` (which runEngagement sets at its very START, before the SMS node), then Step 3 does ONE `message_queue` check with no retry and immediately cancels the execution, so the verify-only send never completes (worsened by ~50s Trigger.dev task-start latency). It will NOT self-heal. Fix is ~15 min, probe-only — folded into Build 1. (Detail: `project_probe_enable_status`.)
 2. **Retell + Unipile webhook secrets still NULL (blocker for full webhook security).** The sig-verify code is now correct (real Retell `v=,d=` scheme), but the secrets aren't provided, so those paths remain forgeable (verify-if-present is inert). Decision: provide them now (→ Claude arms + tests) or keep deferred. GHL is already done + enforced.
 3. **GHL send-path — decision/go-ahead.** Confirmed: SMS replies already go DIRECT via Twilio + GHL is updated via API; the `leadconnectorhq` webhook fields are mostly vestigial leftovers. Removing them is a small CODE cleanup (not a UI tweak), scoped as Build-1's lead item. Needs your go-ahead since it changes the live messaging path. (Detail: `project_ghl_is_the_outbound_send_channel`.)
 4. **Couldn't build this session (by design):** F7 deep secret-column lockdown (risk to cred-saving — descoped/flagged); P3a + P3b (gated on your live tests); the GHL send-path cleanup (needed your go-ahead). All carried into the build prompts.
@@ -34,10 +34,11 @@ description: Session closeout (2026-06-16, HEAD 5bf22e3 → cd66282 docs). Singl
 - [ ] (Optional, when ready) Upgrade Supabase to Pro → Claude flips HIBP leaked-password protection.
 
 ### 2C. Decisions to lock
-- [ ] GHL send-path migration: go / no-go (recommended: go — it's what makes the webhook fields removable).
-- [ ] Email provider: built-in mailer now / Resend later (leaning built-in).
-- [ ] Twilio number model: BYO-Twilio-per-client (recommended) vs shared.
-- [ ] SetupGuide canonical BFD folder name (for the screenshot reshoot).
+- [x] GHL send-path migration: **GO** (locked 2026-06-16). Build 1 lead item; live reply + follow-up test after.
+- [x] Retell + Unipile webhook secrets: **PROVIDE NOW** (locked 2026-06-16). Values still owed — paste/vault them so Build 1 (or task 2B) stores + tests them (Retell value = the Retell API key; Unipile = static custom-header token). Sig-verify code already fixed + deployed.
+- [x] Email provider: **Resend (or other) later — defer** (locked 2026-06-16). Do NOT ship the built-in mailer; email features (3.6 long-tail drip, D5 custom SMTP) wait for the provider.
+- [x] Twilio number model: **BYO-Twilio-per-client** (locked 2026-06-16). Client owns the number + AU regulatory bundle; document per-client in the onboarding SOP.
+- [ ] SetupGuide canonical BFD folder name (for the screenshot reshoot). — still open
 
 ### 2D. THE FULL RUN-THROUGH TEST (the very last thing — after the build sessions)
 - [ ] Inbound phone-first call to `+61481614530` from a known-lead phone → greets by name, doesn't re-ask details.
@@ -60,6 +61,7 @@ Ships BEFORE the final test so the test covers it.
 - **Review polish:** cost-ceiling breach-log throttle · orphaned-UUID badge in the voice-setter picker · inbound-webhook observability log.
 - **2.3** per-setter phone-binding UI (setters 4-10). **3.10** tz-aware nudgeColdReply cron. **V4** lower debounce_seconds.
 - **VC1/VC3 close-out** · **F10** stale project-ref URL in 4 cron migrations.
+- **Probe canary fix** (`trigger/syntheticProbe.ts`, ~15 min, probe-only): the hourly canary asserts the `message_queue` row the instant status flips to `running` (which runEngagement sets before the SMS node) and cancels the execution immediately — so it never passes. Poll the Step-3 `message_queue` check on a deadline (mirror Step 2) and cancel only after it resolves, and/or wait for status `completed` not `running`; optionally widen the Step-2 deadline for the ~50s Trigger.dev start latency. No change to intake-lead/runEngagement. (Detail: `project_probe_enable_status`.)
 - **N5 stale-template cleanup** (report-first) · **schema-drift reconcile** (investigate-first).
 - **5.1/5.2** "1Prompt"→BFD setup-guide screenshots + pun-quiz copy.
 
