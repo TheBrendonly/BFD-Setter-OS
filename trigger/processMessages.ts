@@ -141,7 +141,10 @@ export const processMessages = task({
       }
 
       // ── STEP 1: Wait the configured debounce period ─────────────────────────
-      const debounceSeconds = payload.debounce_seconds ?? 60;
+      // V4 — snappier default. The per-client clients.debounce_seconds drives
+      // real behaviour (BFD lowered 60 -> 25s); this fallback only applies if a
+      // caller omits the value.
+      const debounceSeconds = payload.debounce_seconds ?? 30;
       const resumeAt = new Date(Date.now() + debounceSeconds * 1000);
 
       await updateExecution({

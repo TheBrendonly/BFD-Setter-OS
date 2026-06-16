@@ -46,12 +46,20 @@ const TIER_INTENT = [
   "The lead replied a few days ago and then went silent. They might have lost interest or just got busy. Send ONE message that reframes — ask what the underlying goal or pain is, not whether they're 'still interested'. Avoid 'just checking in' and 'circling back'. Keep it human.",
 ];
 
+// Lead-local nudge window (3.10). A nudge only fires when it is between these
+// hours in the lead's client timezone, so a re-engagement SMS never lands in
+// the middle of the night regardless of the tenant's timezone.
+const NUDGE_LOCAL_START_HOUR = 9;  // 9am local
+const NUDGE_LOCAL_END_HOUR = 20;   // 8pm local (exclusive)
+
 export const nudgeColdReply = schedules.task({
   id: "nudge-cold-reply",
-  // 06:00 UTC daily = Sydney 16:00, US-East 02:00. AU-leaning timing
-  // (BFD's only active tenant 2026-05). Multi-tenant tz-awareness is
-  // Phase B work.
-  cron: "0 6 * * *",
+  // 3.10 — runs HOURLY and gates each nudge on the lead's client-local hour
+  // (NUDGE_LOCAL_*). A once-daily fixed-UTC cron would never reach a tenant
+  // whose local time at that UTC hour is outside the window (e.g. US-East at
+  // 06:00 UTC = 01:00). Hourly is safe: the tier thresholds + nudge_count
+  // increment dedup, so a lead is nudged at most once per tier window.
+  cron: "0 * * * *",
   maxDuration: 600, // 10 min ceiling
   retry: { maxAttempts: 1 },
 
@@ -64,7 +72,7 @@ export const nudgeColdReply = schedules.task({
     const { data: candidates, error: queryErr } = await supabase
       .from("leads")
       .select(
-        "client_id, lead_id, phone, email, first_name, last_name, last_inbound_at, last_outbound_at, nudge_count, clients ( id, twilio_account_sid, twilio_auth_token, twilio_default_phone, retell_phone_1, openrouter_api_key, llm_model, supabase_url, supabase_service_key )",
+        "client_id, lead_id, phone, email, first_name, last_name, last_inbound_at, last_outbound_at, nudge_count, clients ( id, twilio_account_sid, twilio_auth_token, twilio_default_phone, retell_phone_1, openrouter_api_key, llm_model, supabase_url, supabase_service_key, timezone )",
       )
       .eq("setter_stopped", false)
       .eq("tagged_silent_after_engagement", false)
@@ -139,6 +147,7 @@ export const nudgeColdReply = schedules.task({
         llm_model: string | null;
         supabase_url: string | null;
         supabase_service_key: string | null;
+        timezone: string | null;
       } | null;
 
       if (!cl?.openrouter_api_key || !cl.twilio_account_sid || !cl.twilio_auth_token) {
@@ -150,6 +159,30 @@ export const nudgeColdReply = schedules.task({
       }
       const fromNumber = cl.twilio_default_phone || cl.retell_phone_1;
       if (!fromNumber || !lead.phone) {
+        stats.skipped++;
+        continue;
+      }
+
+      // 3.10 lead-local-hour gate. Skip if it is outside the nudge window in
+      // the client's timezone (a later hourly run picks the lead up once it is
+      // a sane local hour). Checked BEFORE AI generation so we never pay to
+      // generate copy we won't send.
+      const clientTz = cl.timezone || "Australia/Sydney";
+      const localHour = (() => {
+        try {
+          return parseInt(
+            new Intl.DateTimeFormat("en-US", {
+              timeZone: clientTz,
+              hour: "numeric",
+              hour12: false,
+            }).format(now),
+            10,
+          );
+        } catch {
+          return 12; // invalid tz, treat as mid-day so we don't block sends
+        }
+      })();
+      if (localHour < NUDGE_LOCAL_START_HOUR || localHour >= NUDGE_LOCAL_END_HOUR) {
         stats.skipped++;
         continue;
       }
