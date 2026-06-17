@@ -309,9 +309,9 @@ const App = () => {
                 <Route path="contacts" element={<SpeedToLeadContacts />} />
               </Route>
               <Route path="speed-to-lead/contacts/:contactId" element={<SpeedToLeadContactDetail />} />
-              <Route path="settings" element={<ClientSettings />} />
-              <Route path="manage-clients" element={<ManageClients />} />
-              <Route path="create-client" element={<CreateClient />} />
+              <Route path="settings" element={<AgencyRoute><ClientSettings /></AgencyRoute>} />
+              <Route path="manage-clients" element={<AgencyRoute><ManageClients /></AgencyRoute>} />
+              <Route path="create-client" element={<AgencyRoute><CreateClient /></AgencyRoute>} />
               <Route path="account-settings" element={<AccountSettings />} />
               <Route path="client-portal" element={<ClientPortal />} />
               <Route path="error-logs" element={<ErrorLogs />} />

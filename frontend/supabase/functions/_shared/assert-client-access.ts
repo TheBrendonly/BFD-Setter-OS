@@ -48,7 +48,13 @@ export async function verifyUserId(authHeader: string | null): Promise<string> {
   return data.user.id;
 }
 
-export async function assertClientAccess(authHeader: string | null, clientId: string): Promise<void> {
+// Same verification + ownership check as assertClientAccess, but RETURNS the
+// resolved { userId, role } so callers that need the role (e.g. field-level
+// governance in save-account-settings) don't have to re-query user_roles.
+export async function resolveClientAccess(
+  authHeader: string | null,
+  clientId: string,
+): Promise<{ userId: string; role: "agency" | "client" }> {
   const userId = await verifyUserId(authHeader);
   const admin = getSupabaseAdmin();
   const [{ data: client }, { data: roleData }, { data: profile }] = await Promise.all([
@@ -67,4 +73,9 @@ export async function assertClientAccess(authHeader: string | null, clientId: st
     console.warn(`[assertClientAccess] forbidden: user=${userId} role=${role ?? "none"} clientId=${clientId}`);
     throw new AssertAccessError(403, "Forbidden");
   }
+  return { userId, role: role as "agency" | "client" };
+}
+
+export async function assertClientAccess(authHeader: string | null, clientId: string): Promise<void> {
+  await resolveClientAccess(authHeader, clientId);
 }

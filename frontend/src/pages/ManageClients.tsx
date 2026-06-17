@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { ClientMenuConfigEditor } from "@/components/ClientMenuConfigEditor";
+import { ClientAccountFieldConfigEditor } from "@/components/ClientAccountFieldConfigEditor";
 import { useSubscription } from "@/hooks/useSubscription";
 import { CreditCard } from "@/components/icons";
 
@@ -392,6 +393,9 @@ export default function ManageClients() {
                 </div>
               </CardContent>
             </Card>
+
+             {/* My Account Field Access — governs which My Account fields this sub-account sees/edits */}
+            <ClientAccountFieldConfigEditor clientId={editingClient.id} />
 
              {/* Sub-Account Menu Settings */}
             <ClientMenuConfigEditor clientId={editingClient.id} />

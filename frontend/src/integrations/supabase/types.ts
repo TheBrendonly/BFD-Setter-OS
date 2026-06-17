@@ -1153,6 +1153,38 @@ export type Database = {
         }
         Relationships: []
       }
+      client_account_field_config: {
+        Row: {
+          client_id: string
+          created_at: string
+          fields: Json
+          id: string
+          updated_at: string
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          fields?: Json
+          id?: string
+          updated_at?: string
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          fields?: Json
+          id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_account_field_config_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: true
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       client_custom_fields: {
         Row: {
           client_id: string

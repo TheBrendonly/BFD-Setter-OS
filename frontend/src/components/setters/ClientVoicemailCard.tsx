@@ -32,16 +32,44 @@ interface Props {
   clientId: string;
   title?: string;
   description?: string;
+  // Client mode (My Account): a client cannot read/write the clients table
+  // directly (RLS is agency-only). When `onPersist` is provided the card uses
+  // the injected value + persists via the callback (the save-account-settings
+  // edge function, which performs the Retell push server-side) instead of
+  // touching the clients table / retell-proxy. Omit these in the agency context
+  // to keep the original self-load / self-save + push behaviour.
+  readOnly?: boolean;
+  initialValue?: unknown;
+  onPersist?: (config: VoicemailConfig) => Promise<boolean>;
 }
 
-export const ClientVoicemailCard: React.FC<Props> = ({ clientId, title, description }) => {
+function parseVoicemail(raw: unknown): VoicemailConfig {
+  if (raw && typeof raw === 'object') {
+    const r = raw as Record<string, unknown>;
+    const mode = (r.mode as VoicemailMode) || 'hangup';
+    const text = typeof r.text === 'string' ? r.text : null;
+    const detect_enabled = typeof r.detect_enabled === 'boolean' ? r.detect_enabled : true;
+    const detect_timeout_ms =
+      typeof r.detect_timeout_ms === 'number' && r.detect_timeout_ms > 0 ? r.detect_timeout_ms : 30000;
+    return { mode, text, detect_enabled, detect_timeout_ms };
+  }
+  return DEFAULT_CONFIG;
+}
+
+export const ClientVoicemailCard: React.FC<Props> = ({ clientId, title, description, readOnly, initialValue, onPersist }) => {
+  const clientMode = !!onPersist;
   const [config, setConfig] = useState<VoicemailConfig>(DEFAULT_CONFIG);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!clientMode);
   const [saving, setSaving] = useState(false);
   const [pushing, setPushing] = useState(false);
   const [textDirty, setTextDirty] = useState(false);
 
   useEffect(() => {
+    if (clientMode) {
+      setConfig(parseVoicemail(initialValue));
+      setLoading(false);
+      return;
+    }
     let cancelled = false;
     (async () => {
       setLoading(true);
@@ -53,20 +81,7 @@ export const ClientVoicemailCard: React.FC<Props> = ({ clientId, title, descript
           .maybeSingle();
         if (error) throw error;
         if (cancelled) return;
-        const raw = (data as { voicemail_config?: unknown } | null)?.voicemail_config;
-        if (raw && typeof raw === 'object') {
-          const r = raw as Record<string, unknown>;
-          const mode = (r.mode as VoicemailMode) || 'hangup';
-          const text = typeof r.text === 'string' ? r.text : null;
-          const detect_enabled = typeof r.detect_enabled === 'boolean' ? r.detect_enabled : true;
-          const detect_timeout_ms =
-            typeof r.detect_timeout_ms === 'number' && r.detect_timeout_ms > 0
-              ? r.detect_timeout_ms
-              : 30000;
-          setConfig({ mode, text, detect_enabled, detect_timeout_ms });
-        } else {
-          setConfig(DEFAULT_CONFIG);
-        }
+        setConfig(parseVoicemail((data as { voicemail_config?: unknown } | null)?.voicemail_config));
       } catch (err) {
         if (!cancelled) toast.error(err instanceof Error ? err.message : 'Failed to load voicemail config');
       } finally {
@@ -74,9 +89,27 @@ export const ClientVoicemailCard: React.FC<Props> = ({ clientId, title, descript
       }
     })();
     return () => { cancelled = true; };
-  }, [clientId]);
+  }, [clientId, clientMode, initialValue]);
 
   const persistAndPush = async (next: VoicemailConfig) => {
+    if (readOnly) return;
+    // Client mode: persist (+ server-side Retell push) via the edge function.
+    if (clientMode) {
+      setSaving(true);
+      try {
+        const ok = await onPersist!(next);
+        if (!ok) throw new Error('Failed to save voicemail config');
+        setConfig(next);
+        setTextDirty(false);
+        toast.success('Voicemail config saved');
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Failed to save voicemail config');
+      } finally {
+        setSaving(false);
+      }
+      return;
+    }
+
     setSaving(true);
     try {
       const { error } = await supabase
@@ -170,7 +203,7 @@ export const ClientVoicemailCard: React.FC<Props> = ({ clientId, title, descript
     void persistAndPush(config);
   };
 
-  const busy = loading || saving || pushing;
+  const busy = loading || saving || pushing || !!readOnly;
 
   return (
     <Card>

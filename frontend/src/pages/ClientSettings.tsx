@@ -9,10 +9,11 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Upload, X, LogOut, CreditCard } from "@/components/icons";
+import { Upload, X, CreditCard } from "@/components/icons";
 import { usePageHeader } from '@/contexts/PageHeaderContext';
 import { useAuth } from "@/hooks/useAuth";
 import { ClientMenuConfigEditor } from "@/components/ClientMenuConfigEditor";
+import { ClientAccountFieldConfigEditor } from "@/components/ClientAccountFieldConfigEditor";
 import { useSubscription } from "@/hooks/useSubscription";
 import { UnsavedChangesDialog } from '@/components/UnsavedChangesDialog';
 import { ClientVoicemailCard } from '@/components/setters/ClientVoicemailCard';
@@ -24,7 +25,6 @@ export default function ClientSettings() {
   const navigate = useNavigate();
   const { role: userRole } = useAuth();
   const isAgency = userRole === 'agency';
-  const isClient = userRole === 'client';
 
   const { cb } = useCreatorMode();
 
@@ -38,7 +38,6 @@ export default function ClientSettings() {
   const [imageRemoved, setImageRemoved] = useState(false);
   const [newPassword, setNewPassword] = useState("");
   const [updatingPassword, setUpdatingPassword] = useState(false);
-  const [signingOut, setSigningOut] = useState(false);
   const [clientData, setClientData] = useState({
     name: "",
     email: "",
@@ -213,18 +212,6 @@ export default function ClientSettings() {
     }
   };
 
-  const handleSignOut = async () => {
-    setSigningOut(true);
-    try {
-      await supabase.auth.signOut({ scope: 'global' });
-      toast.success("Signed out successfully");
-    } catch (error) {
-      console.error("Error signing out:", error);
-    } finally {
-      setSigningOut(false);
-      navigate("/auth", { replace: true });
-    }
-  };
 
   if (loading) {
     return <RetroLoader />;
@@ -464,25 +451,17 @@ export default function ClientSettings() {
 
           
 
+          {/* My Account Field Access - Agency only: governs which fields the client sees/edits on My Account */}
+          {isAgency && clientId && (
+            <div className="border-t border-dashed border-border pt-6">
+              <ClientAccountFieldConfigEditor clientId={clientId} />
+            </div>
+          )}
+
           {/* Client Menu Settings - Agency only */}
           {isAgency && clientId && (
             <div className="border-t border-dashed border-border pt-6">
               <ClientMenuConfigEditor clientId={clientId} />
-            </div>
-          )}
-
-          {/* Sign Out - Client users only */}
-          {isClient && (
-            <div className="border-t border-dashed border-border pt-6">
-              <Button
-                variant="destructive"
-                onClick={handleSignOut}
-                disabled={signingOut}
-                className="bg-destructive text-destructive-foreground hover:bg-destructive/90 border-destructive"
-              >
-                <LogOut className="h-4 w-4 mr-2" />
-                {signingOut ? "Signing Out..." : "Sign Out"}
-              </Button>
             </div>
           )}
         </div>

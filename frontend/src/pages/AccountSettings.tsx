@@ -13,6 +13,7 @@ import { Save, LogOut, User, CreditCard, Eye, EyeOff, Users, CheckCircle2, Dolla
 import { useSubscription } from "@/hooks/useSubscription";
 import { useCreatorMode } from "@/hooks/useCreatorMode";
 import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
+import { ClientAccountSettingsCard } from "@/components/ClientAccountSettingsCard";
 
 
 export default function AccountSettings() {
@@ -260,6 +261,9 @@ export default function AccountSettings() {
 
           {/* Two-Factor Authentication (TOTP) — opt-in for the logged-in user */}
           <TwoFactorCard />
+
+          {/* Sub-Account Settings (client self-serve over admin-governed fields) */}
+          {!isAgency && clientId && <ClientAccountSettingsCard clientId={clientId} />}
 
           {/* Sub-Account Subscription Overview (Agency only) */}
           {isAgency && <SubAccountOverview />}

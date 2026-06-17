@@ -33,6 +33,15 @@ const DAY_LABELS = [
 
 interface Props {
   clientId: string;
+  // Client mode (My Account): a client cannot read/write the clients table
+  // directly (RLS is agency-only). When `onPersist` is provided the card uses
+  // the injected value + persists via the callback (the save-account-settings
+  // edge function) instead of touching the clients table. Omit all of these in
+  // the agency context to keep the original self-load / self-save behaviour.
+  readOnly?: boolean;
+  initialValue?: unknown;
+  fallbackTz?: string;
+  onPersist?: (config: QuietHoursConfig) => Promise<boolean>;
 }
 
 function parseConfig(raw: unknown): QuietHoursConfig {
@@ -64,14 +73,23 @@ function isWithinWindow(now: Date, qh: QuietHoursConfig): boolean {
   }
 }
 
-export const ClientQuietHoursCard: React.FC<Props> = ({ clientId }) => {
+export const ClientQuietHoursCard: React.FC<Props> = ({ clientId, readOnly, initialValue, fallbackTz, onPersist }) => {
+  const clientMode = !!onPersist;
   const [config, setConfig] = useState<QuietHoursConfig>(DEFAULT_CONFIG);
-  const [clientTz, setClientTz] = useState<string>('Australia/Sydney');
-  const [loading, setLoading] = useState(true);
+  const [clientTz, setClientTz] = useState<string>(fallbackTz || 'Australia/Sydney');
+  const [loading, setLoading] = useState(!clientMode);
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
 
   useEffect(() => {
+    // Client mode: use the injected value (no clients-table read).
+    if (clientMode) {
+      const tz = fallbackTz || 'Australia/Sydney';
+      setClientTz(tz);
+      setConfig(initialValue ? parseConfig(initialValue) : { ...DEFAULT_CONFIG, tz });
+      setLoading(false);
+      return;
+    }
     let cancelled = false;
     (async () => {
       setLoading(true);
@@ -96,7 +114,7 @@ export const ClientQuietHoursCard: React.FC<Props> = ({ clientId }) => {
       }
     })();
     return () => { cancelled = true; };
-  }, [clientId]);
+  }, [clientId, clientMode, initialValue, fallbackTz]);
 
   const handleSave = async () => {
     if (saving) return;
@@ -106,13 +124,18 @@ export const ClientQuietHoursCard: React.FC<Props> = ({ clientId }) => {
     }
     setSaving(true);
     try {
-      const { error } = await supabase
-        .from('clients')
-        .update({ cadence_quiet_hours: config })
-        .eq('id', clientId)
-        .select('id')
-        .maybeSingle();
-      if (error) throw error;
+      if (clientMode) {
+        const ok = await onPersist!(config);
+        if (!ok) throw new Error('Failed to save contact hours');
+      } else {
+        const { error } = await supabase
+          .from('clients')
+          .update({ cadence_quiet_hours: config })
+          .eq('id', clientId)
+          .select('id')
+          .maybeSingle();
+        if (error) throw error;
+      }
       setDirty(false);
       toast.success('Contact hours saved');
     } catch (err) {
@@ -148,7 +171,7 @@ export const ClientQuietHoursCard: React.FC<Props> = ({ clientId }) => {
     return { localStr, inWindow };
   }, [config]);
 
-  const busy = loading || saving;
+  const busy = loading || saving || !!readOnly;
 
   return (
     <Card>
@@ -232,10 +255,12 @@ export const ClientQuietHoursCard: React.FC<Props> = ({ clientId }) => {
             Now in {config.tz}: <span className="font-mono">{livePreview.localStr}</span> —
             within window: <span className={livePreview.inWindow ? 'text-green-600 font-semibold' : 'text-amber-600 font-semibold'}>{livePreview.inWindow ? 'Yes' : 'No'}</span>
           </div>
-          <Button size="sm" onClick={handleSave} disabled={busy || !dirty}>
-            {saving && <Loader2 className="h-3 w-3 mr-1 animate-spin" />}
-            {saving ? 'Saving...' : 'Save'}
-          </Button>
+          {!readOnly && (
+            <Button size="sm" onClick={handleSave} disabled={busy || !dirty}>
+              {saving && <Loader2 className="h-3 w-3 mr-1 animate-spin" />}
+              {saving ? 'Saving...' : 'Save'}
+            </Button>
+          )}
         </div>
       </CardContent>
     </Card>
