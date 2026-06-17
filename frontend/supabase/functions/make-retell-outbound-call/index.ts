@@ -10,11 +10,13 @@ const corsHeaders = {
 const RETELL_BASE = "https://api.retellai.com";
 const GHL_BASE = "https://services.leadconnectorhq.com";
 
-// Map Voice-Setter slot numbers to client column names for agent IDs
+// Map Voice-Setter slot numbers to client column names for agent IDs.
+// Slots 2 + 3 (retell_outbound_agent_id / retell_outbound_followup_agent_id)
+// were retired 2026-06-17 (P3a): outbound routing is now UUID/voice_setters
+// driven. A legacy "Voice-Setter-2"/"Voice-Setter-3" node now errors clearly
+// (see the retired-slot guard below) instead of reading those columns.
 const SLOT_TO_AGENT_COLUMN: Record<number, string> = {
   1: "retell_inbound_agent_id",
-  2: "retell_outbound_agent_id",
-  3: "retell_outbound_followup_agent_id",
   4: "retell_agent_id_4",
   5: "retell_agent_id_5",
   6: "retell_agent_id_6",
@@ -596,6 +598,17 @@ Deno.serve(async (req) => {
           error: `Invalid voice_setter_id format: ${voice_setter_id}`,
           code: "invalid_voice_setter_id",
         }, 400);
+      }
+      // Slots 2 + 3 were retired 2026-06-17 (P3a). A legacy outbound cadence node
+      // still pointing at "Voice-Setter-2"/"Voice-Setter-3" must be repointed to a
+      // UUID voice setter in the picker — those direction columns are no longer read.
+      if (slotNumber === 2 || slotNumber === 3) {
+        return ok({
+          error: `Voice setter slot ${slotNumber} (${voice_setter_id}) was retired. Repoint this cadence's phone_call node to a voice setter in the picker (UUID model).`,
+          code: "voice_setter_slot_retired",
+          slot_id: voice_setter_id,
+          slot_number: slotNumber,
+        }, 409);
       }
       agentColumn = SLOT_TO_AGENT_COLUMN[slotNumber];
       if (!agentColumn) {

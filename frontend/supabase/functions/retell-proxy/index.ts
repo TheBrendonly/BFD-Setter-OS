@@ -134,11 +134,13 @@ async function getRetellApiKey(clientId: string): Promise<string> {
   return data.retell_api_key;
 }
 
-// Map Voice-Setter slot numbers to client column names for agent IDs
+// Map Voice-Setter slot numbers to client column names for agent IDs.
+// Slots 2 (retell_outbound_agent_id) + 3 (retell_outbound_followup_agent_id)
+// were retired 2026-06-17 (P3a): outbound routing is now UUID/voice_setters
+// driven, so those direction columns are no longer load-bearing. Slot 1
+// (inbound) and slots 4-10 (campaign/persona setters) remain.
 const SLOT_TO_AGENT_COLUMN: Record<number, string> = {
   1: "retell_inbound_agent_id",
-  2: "retell_outbound_agent_id",
-  3: "retell_outbound_followup_agent_id",
   4: "retell_agent_id_4",
   5: "retell_agent_id_5",
   6: "retell_agent_id_6",
@@ -467,95 +469,11 @@ async function repointPhoneVersionsAfterPublish(
   }
 }
 
-// EE1: column name for each direction key on the clients table.
-const DIRECTION_TO_AGENT_COLUMN: Record<string, string> = {
-  inbound: "retell_inbound_agent_id",
-  outbound_initial: "retell_outbound_agent_id",
-  outbound_followup: "retell_outbound_followup_agent_id",
-};
-
-// EE1: fan out a slot's published Retell agent_id to the selected direction
-// columns on `clients`. Also:
-//  - clears any direction column that USED to point at this agent but is no
-//    longer selected (releasing that direction so another slot can claim it).
-//  - rewrites OTHER voice_setter prompts.directions rows to drop any direction
-//    we just claimed, keeping the data model consistent.
-async function fanOutDirections(
-  supabase: ReturnType<typeof getSupabaseAdmin>,
-  clientId: string,
-  slotId: string,
-  agentId: string,
-  selected: string[],
-): Promise<void> {
-  const valid = selected.filter((d) => d in DIRECTION_TO_AGENT_COLUMN);
-
-  // Read current direction columns to know what's pointing at this agent
-  const { data: clientRow, error: clientErr } = await supabase
-    .from("clients")
-    .select("retell_inbound_agent_id, retell_outbound_agent_id, retell_outbound_followup_agent_id")
-    .eq("id", clientId)
-    .maybeSingle();
-  if (clientErr || !clientRow) {
-    console.warn(`[fan-out-directions] Failed to read client ${clientId} columns:`, clientErr?.message);
-    return;
-  }
-  const current = clientRow as Record<string, string | null>;
-
-  // Build the UPDATE payload
-  const update: Record<string, string | null> = {};
-  for (const [direction, column] of Object.entries(DIRECTION_TO_AGENT_COLUMN)) {
-    if (valid.includes(direction)) {
-      // Claim: point this direction column at this slot's agent
-      if (current[column] !== agentId) update[column] = agentId;
-    } else if (current[column] === agentId) {
-      // Release: this direction was previously owned by this slot but is no
-      // longer selected. Clear so another slot can claim, or so the direction
-      // becomes inactive.
-      update[column] = null;
-    }
-  }
-  if (Object.keys(update).length > 0) {
-    const { error: updErr } = await supabase
-      .from("clients")
-      .update(update)
-      .eq("id", clientId);
-    if (updErr) {
-      console.warn(`[fan-out-directions] clients update failed:`, updErr.message);
-    } else {
-      console.log(`[fan-out-directions] clients updated for slot ${slotId}:`, JSON.stringify(update));
-    }
-  }
-
-  // Rewrite OTHER voice_setter rows' directions to remove anything we just claimed.
-  // Without this, the UI would still show stale ownership on those other slots.
-  if (valid.length > 0) {
-    const { data: otherRows, error: othersErr } = await supabase
-      .from("prompts")
-      .select("id, slot_id, directions")
-      .eq("client_id", clientId)
-      .eq("category", "voice_setter")
-      .neq("slot_id", slotId);
-    if (othersErr) {
-      console.warn(`[fan-out-directions] read other prompts rows failed:`, othersErr.message);
-      return;
-    }
-    for (const row of (otherRows ?? []) as Array<{ id: string; slot_id: string; directions: string[] | null }>) {
-      const dirs = Array.isArray(row.directions) ? row.directions : [];
-      const next = dirs.filter((d) => !valid.includes(d));
-      if (next.length !== dirs.length) {
-        const { error: writeErr } = await supabase
-          .from("prompts")
-          .update({ directions: next })
-          .eq("id", row.id);
-        if (writeErr) {
-          console.warn(`[fan-out-directions] rewrite slot ${row.slot_id} failed:`, writeErr.message);
-        } else {
-          console.log(`[fan-out-directions] dropped claimed directions from ${row.slot_id}: ${JSON.stringify(dirs)} -> ${JSON.stringify(next)}`);
-        }
-      }
-    }
-  }
-}
+// EE1 direction fan-out (DIRECTION_TO_AGENT_COLUMN + fanOutDirections) was
+// removed 2026-06-17 (P3a). It was the only code that NULLed a direction column,
+// and the source of the 2026-05-18 shared-agent wipe class. Outbound routing is
+// now UUID/voice_setters-driven; agent-id persistence to clients[agentColumn]
+// happens directly in the sync paths, so no fan-out is needed.
 
 // BFD voice-tool URL authority + default-tool injection, shared by the retell-llm
 // and conversation-flow sync paths (CustomTool schema is identical for both).
@@ -697,101 +615,6 @@ On inbound calls to a BYO Twilio number, Retell does NOT inject dynamic variable
 4. **For timezone**, default to ${clientTimezone}. Say "${clientTimezone.split('/').pop()?.replace('_', ' ') || 'local'} time" when confirming bookings.`;
 }
 
-// EE1 direction-ownership resolution (Layer 1 empty-set expansion + Layer 2
-// shared-agent fan-out guard), extracted VERBATIM from syncVoiceSetter
-// (2026-06-12) so the conversation-flow path gets identical wipe protection.
-async function resolveDirectionOwnership(
-  supabase: ReturnType<typeof getSupabaseAdmin>,
-  clientId: string,
-  slotNumber: number,
-  existingAgentId: string | null,
-  directions: string[],
-  clientRowAgents: Record<string, string | null>,
-  allAgentColumns: string[],
-  logTag: string,
-): Promise<{
-  effectiveDirections: string[];
-  directionFanOutBlocked: boolean;
-  directionWarning: string | null;
-  directionConflictColumns: string[];
-}> {
-  // Hardening (2026-06-09): a content-only Save with NO directions selected
-  // (stale/empty toggles) would otherwise make fanOutDirections RELEASE every
-  // direction column this agent occupies — unbinding a single master agent that
-  // legitimately serves all directions, and tripping the EE1 guard below. When
-  // the slot's existing agent already owns one or more direction columns and the
-  // push selects none, interpret empty as "preserve current ownership" instead of
-  // "release all". This only ever EXPANDS the claim to columns the SAME agent
-  // already holds, so it can never claim a column held by a different agent and
-  // cannot cause a cross-slot wipe. Explicit partial saves (a non-empty subset)
-  // are untouched and still hit the guard.
-  let effectiveDirections = directions;
-  if (existingAgentId && directions.length === 0) {
-    const ownedDirections = Object.entries(DIRECTION_TO_AGENT_COLUMN)
-      .filter(([, col]) => clientRowAgents[col] === existingAgentId)
-      .map(([dir]) => dir);
-    if (ownedDirections.length > 0) {
-      effectiveDirections = ownedDirections;
-      console.log(
-        `[${logTag}] Empty directions on save; preserving current ownership for agent ${existingAgentId}: ${JSON.stringify(ownedDirections)}`,
-      );
-      // Best-effort self-heal: write the expanded set back to this slot's prompts
-      // row so the UI toggles reflect reality on next load. Non-blocking.
-      const { error: healErr } = await supabase
-        .from("prompts")
-        .update({ directions: effectiveDirections })
-        .eq("client_id", clientId)
-        .eq("slot_id", `Voice-Setter-${slotNumber}`)
-        .eq("category", "voice_setter");
-      if (healErr) {
-        console.warn(`[${logTag}] directions self-heal failed (non-blocking): ${healErr.message}`);
-      }
-    }
-  }
-
-  // EE1 safety (Layer 2, 2026-06-09): the agent PUSH + publish is always safe and
-  // idempotent, so a Save NEVER aborts here anymore — the agent always updates and
-  // publishes. What stays gated is the DIRECTION-COLUMN FAN-OUT. If `existingAgentId`
-  // is referenced by MULTIPLE slot anchor columns and this push's directions do NOT
-  // claim every one of them, running fanOutDirections would CLEAR the unclaimed shared
-  // column(s) — wiping the agent another slot, or a legacy "Voice-Setter-N" cadence
-  // that reads those columns, is serving (the 2026-05-18 incident). In that case we
-  // SKIP the fan-out and return a non-fatal warning so the user can resolve ownership
-  // via Fork / Delete, WITHOUT losing the agent push. (Layer 1 above already expands an
-  // empty selection to the agent's currently-owned columns, so a routine content-only
-  // Save is never flagged here.)
-  let directionFanOutBlocked = false;
-  let directionWarning: string | null = null;
-  let directionConflictColumns: string[] = [];
-  if (existingAgentId) {
-    const columnsPointingAtThisAgent = allAgentColumns.filter(
-      (col) => clientRowAgents[col] === existingAgentId,
-    );
-    if (columnsPointingAtThisAgent.length > 1) {
-      const claimedColumns = new Set(
-        effectiveDirections.map((d) => DIRECTION_TO_AGENT_COLUMN[d]).filter(Boolean),
-      );
-      const unclaimedSharedColumns = columnsPointingAtThisAgent.filter(
-        (col) => !claimedColumns.has(col),
-      );
-      if (unclaimedSharedColumns.length > 0) {
-        directionFanOutBlocked = true;
-        directionConflictColumns = columnsPointingAtThisAgent;
-        directionWarning =
-          `Agent updated and published, but direction ownership was left unchanged: agent ${existingAgentId} ` +
-          `is shared across column(s) ${columnsPointingAtThisAgent.join(", ")} and this Save only claims ` +
-          `direction(s) ${directions.length > 0 ? directions.join(", ") : "(none selected)"}. ` +
-          `Applying it would have cleared the shared column(s) [${unclaimedSharedColumns.join(", ")}], which could ` +
-          `break another slot or a legacy "Voice-Setter-N" cadence that reads those columns. To change direction ` +
-          `ownership, Fork this direction onto its own agent, or delete + recreate this slot on a dedicated agent.`;
-        console.warn(`[${logTag}] DIRECTION FAN-OUT SKIPPED (non-fatal): ${directionWarning}`);
-      }
-    }
-  }
-
-  return { effectiveDirections, directionFanOutBlocked, directionWarning, directionConflictColumns };
-}
-
 // Build agent-level update payload from voiceSettings. Engine-agnostic (the agent
 // object is the same for retell-llm and conversation-flow engines). Extracted
 // VERBATIM from syncVoiceSetter (2026-06-12).
@@ -875,7 +698,6 @@ async function syncVoiceSetter(
   agentName: string,
   voiceSettings?: Record<string, unknown>,
   llmSettings?: Record<string, unknown>,
-  directions: string[] = [],
 ): Promise<unknown> {
   const retellModel = mapToRetellModel(model);
   const supabase = getSupabaseAdmin();
@@ -950,35 +772,16 @@ async function syncVoiceSetter(
   // with the conversation-flow path).
   const agentUpdates = buildAgentUpdatesFromVoiceSettings(voiceSettings);
 
-  // Fetch the current agent ID for this slot (plus all sibling slot anchor columns
-  // for the EE1 safety guard immediately below).
-  const allAgentColumns = Object.values(SLOT_TO_AGENT_COLUMN);
+  // Fetch the current agent ID for this slot.
   const { data: clientData, error: agentLookupErr } = await supabase
     .from("clients")
-    .select(allAgentColumns.join(", "))
+    .select(agentColumn)
     .eq("id", clientId)
     .single();
   if (agentLookupErr) throw new Error(`Failed to fetch client: ${agentLookupErr.message}`);
 
   const clientRowAgents = clientData as Record<string, string | null>;
   const existingAgentId = clientRowAgents[agentColumn];
-
-  // EE1 Layer 1 + Layer 2 (extracted; see resolveDirectionOwnership above).
-  const {
-    effectiveDirections,
-    directionFanOutBlocked,
-    directionWarning,
-    directionConflictColumns,
-  } = await resolveDirectionOwnership(
-    supabase,
-    clientId,
-    slotNumber,
-    existingAgentId,
-    directions,
-    clientRowAgents,
-    allAgentColumns,
-    "sync-voice-setter",
-  );
 
   // Capture any non-blocking publish failure (was silently swallowed before
   // the 2026-05-18 incident — Brendan's UI Save Setter looked like a hard error
@@ -1030,13 +833,8 @@ async function syncVoiceSetter(
         console.warn(`[sync-voice-setter] Auto-publish failed (non-blocking):`, message);
         publishWarning = message;
       }
-      // EE1: fan out direction selection across clients columns + sibling slots
-      // (skipped when it would clear a shared column — Layer 2 guard above).
-      if (!directionFanOutBlocked) {
-        await fanOutDirections(supabase, clientId, `Voice-Setter-${slotNumber}`, existingAgentId, effectiveDirections);
-      }
       await dualWriteVoiceSetter(supabase, clientId, slotNumber, agentName, existingAgentId, editLlmId);
-      return { success: true, action: "updated_and_published", agent_id: existingAgentId, llm_id: editLlmId, llm: updatedLlm, publish_warning: publishWarning, slot_substitution_warning: slotSubstitutionWarning, direction_warning: directionWarning, conflicting_agent_id: directionFanOutBlocked ? existingAgentId : null, shared_columns: directionFanOutBlocked ? directionConflictColumns : null };
+      return { success: true, action: "updated_and_published", agent_id: existingAgentId, llm_id: editLlmId, llm: updatedLlm, publish_warning: publishWarning, slot_substitution_warning: slotSubstitutionWarning };
     } else {
       const newLlm = await retellFetch(apiKey, "POST", "create-retell-llm", llmPayload) as any;
       // Published agent versions are IMMUTABLE; mint/reuse an editable draft
@@ -1063,13 +861,8 @@ async function syncVoiceSetter(
         console.warn(`[sync-voice-setter] Auto-publish failed (non-blocking):`, message);
         publishWarning = message;
       }
-      // EE1: fan out direction selection across clients columns + sibling slots
-      // (skipped when it would clear a shared column — Layer 2 guard above).
-      if (!directionFanOutBlocked) {
-        await fanOutDirections(supabase, clientId, `Voice-Setter-${slotNumber}`, existingAgentId, effectiveDirections);
-      }
       await dualWriteVoiceSetter(supabase, clientId, slotNumber, agentName, existingAgentId, newLlm.llm_id);
-      return { success: true, action: "updated_with_new_llm_and_published", agent_id: existingAgentId, llm_id: newLlm.llm_id, publish_warning: publishWarning, slot_substitution_warning: slotSubstitutionWarning, direction_warning: directionWarning, conflicting_agent_id: directionFanOutBlocked ? existingAgentId : null, shared_columns: directionFanOutBlocked ? directionConflictColumns : null };
+      return { success: true, action: "updated_with_new_llm_and_published", agent_id: existingAgentId, llm_id: newLlm.llm_id, publish_warning: publishWarning, slot_substitution_warning: slotSubstitutionWarning };
     }
   } else {
     console.log(`[sync-voice-setter] Creating new agent for slot ${slotNumber}`);
@@ -1116,8 +909,6 @@ async function syncVoiceSetter(
     } catch (pubErr) {
       console.warn(`[sync-voice-setter] Auto-publish of new agent failed (non-blocking):`, pubErr);
     }
-    // EE1: fan out direction selection across clients columns + sibling slots.
-    await fanOutDirections(supabase, clientId, `Voice-Setter-${slotNumber}`, newAgent.agent_id, effectiveDirections);
     await dualWriteVoiceSetter(supabase, clientId, slotNumber, agentName, newAgent.agent_id, newLlm.llm_id);
     return { success: true, action: "created_and_published", agent_id: newAgent.agent_id, llm_id: newLlm.llm_id, publish_warning: publishWarning, slot_substitution_warning: slotSubstitutionWarning };
   }
@@ -1197,7 +988,6 @@ async function syncVoiceSetterConversationFlow(
   agentName: string,
   voiceSettings?: Record<string, unknown>,
   llmSettings?: Record<string, unknown>,
-  directions: string[] = [],
 ): Promise<unknown> {
   const supabase = getSupabaseAdmin();
   const agentColumn = SLOT_TO_AGENT_COLUMN[slotNumber];
@@ -1251,31 +1041,14 @@ async function syncVoiceSetterConversationFlow(
   // field mapping by patching the agent exactly like the retell-llm path does.
   const agentUpdates = buildAgentUpdatesFromVoiceSettings(voiceSettings);
 
-  const allAgentColumns = Object.values(SLOT_TO_AGENT_COLUMN);
   const { data: clientData, error: agentLookupErr } = await supabase
     .from("clients")
-    .select(allAgentColumns.join(", "))
+    .select(agentColumn)
     .eq("id", clientId)
     .single();
   if (agentLookupErr) throw new Error(`Failed to fetch client: ${agentLookupErr.message}`);
   const clientRowAgents = clientData as Record<string, string | null>;
   const existingAgentId = clientRowAgents[agentColumn];
-
-  const {
-    effectiveDirections,
-    directionFanOutBlocked,
-    directionWarning,
-    directionConflictColumns,
-  } = await resolveDirectionOwnership(
-    supabase,
-    clientId,
-    slotNumber,
-    existingAgentId,
-    directions,
-    clientRowAgents,
-    allAgentColumns,
-    "sync-voice-setter-cf",
-  );
 
   let publishWarning: string | null = null;
 
@@ -1317,9 +1090,6 @@ async function syncVoiceSetterConversationFlow(
       console.warn(`[sync-voice-setter-cf] Auto-publish failed (non-blocking):`, message);
       publishWarning = message;
     }
-    if (!directionFanOutBlocked) {
-      await fanOutDirections(supabase, clientId, `Voice-Setter-${slotNumber}`, existingAgentId, effectiveDirections);
-    }
     return {
       success: true,
       action: "updated_and_published",
@@ -1327,9 +1097,6 @@ async function syncVoiceSetterConversationFlow(
       conversation_flow_id: editFlowId,
       flow_version: updatedFlow?.version ?? null,
       publish_warning: publishWarning,
-      direction_warning: directionWarning,
-      conflicting_agent_id: directionFanOutBlocked ? existingAgentId : null,
-      shared_columns: directionFanOutBlocked ? directionConflictColumns : null,
     };
   }
 
@@ -1371,7 +1138,6 @@ async function syncVoiceSetterConversationFlow(
     console.warn(`[sync-voice-setter-cf] Auto-publish of new agent failed (non-blocking):`, message);
     publishWarning = message;
   }
-  await fanOutDirections(supabase, clientId, `Voice-Setter-${slotNumber}`, newAgent.agent_id, effectiveDirections);
   return {
     success: true,
     action: "created_and_published",
@@ -1831,15 +1597,8 @@ Deno.serve(async (req) => {
         const agentName = (params.agentName as string) || "";
         const voiceSettings = params.voiceSettings as Record<string, unknown> | undefined;
         const llmSettings = params.llmSettings as Record<string, unknown> | undefined;
-        // EE1: directions multi-select. Whitelist + dedupe before passing in.
-        const ALLOWED_DIRECTIONS = ["inbound", "outbound_initial", "outbound_followup"];
-        const rawDirections = Array.isArray(params.directions) ? params.directions : [];
-        const directions = Array.from(new Set(
-          rawDirections.filter((d: unknown): d is string => typeof d === "string" && ALLOWED_DIRECTIONS.includes(d))
-        ));
         console.log(`[sync-voice-setter] Starting sync for slot ${slotNumber}, model: ${model}, agentName: ${agentName}`);
         console.log(`[sync-voice-setter] beginMessage: "${beginMessage}"`);
-        console.log(`[sync-voice-setter] directions:`, JSON.stringify(directions));
         console.log(`[sync-voice-setter] Voice settings keys:`, voiceSettings ? Object.keys(voiceSettings) : 'none');
         console.log(`[sync-voice-setter] LLM settings:`, JSON.stringify({
           model_high_priority: llmSettings?.model_high_priority,
@@ -1847,7 +1606,7 @@ Deno.serve(async (req) => {
           kb_ids: llmSettings?.knowledge_base_ids,
           start_speaker: llmSettings?.start_speaker,
         }));
-        result = await syncVoiceSetter(apiKey, clientId, slotNumber, generalPrompt, beginMessage, model, agentName, voiceSettings, llmSettings, directions);
+        result = await syncVoiceSetter(apiKey, clientId, slotNumber, generalPrompt, beginMessage, model, agentName, voiceSettings, llmSettings);
         console.log(`[sync-voice-setter] Result:`, JSON.stringify(result));
         break;
       }
@@ -1864,13 +1623,8 @@ Deno.serve(async (req) => {
         const agentName = (params.agentName as string) || "";
         const voiceSettings = params.voiceSettings as Record<string, unknown> | undefined;
         const llmSettings = params.llmSettings as Record<string, unknown> | undefined;
-        const ALLOWED_DIRECTIONS = ["inbound", "outbound_initial", "outbound_followup"];
-        const rawDirections = Array.isArray(params.directions) ? params.directions : [];
-        const directions = Array.from(new Set(
-          rawDirections.filter((d: unknown): d is string => typeof d === "string" && ALLOWED_DIRECTIONS.includes(d))
-        ));
         console.log(`[sync-voice-setter-cf] Starting sync for slot ${slotNumber}, model: ${model}, nodes: ${Array.isArray(flowOutline.nodes) ? flowOutline.nodes.length : 0}`);
-        result = await syncVoiceSetterConversationFlow(apiKey, clientId, slotNumber, flowOutline, model, agentName, voiceSettings, llmSettings, directions);
+        result = await syncVoiceSetterConversationFlow(apiKey, clientId, slotNumber, flowOutline, model, agentName, voiceSettings, llmSettings);
         console.log(`[sync-voice-setter-cf] Result:`, JSON.stringify(result));
         break;
       }
@@ -1987,293 +1741,6 @@ Deno.serve(async (req) => {
         }
 
         result = { success: true, updated: updates.filter(u => u.status === "updated").length, total: updates.length, results: updates };
-        break;
-      }
-
-      // ===== FORK SLOT DIRECTION =====
-      // Per-direction agent fork. When a client's `retell_<direction>_agent_id`
-      // points at an agent that is ALSO referenced by other slot columns
-      // (the EE1 "shared agent" scenario), this action clones the shared agent
-      // into a NEW Retell agent + LLM dedicated to a single direction, and
-      // repoints `clients.retell_<direction>_agent_id` to the new agent. The
-      // other 2 direction columns are left untouched — they keep pointing at
-      // the original shared agent.
-      //
-      // Brendan reaches this action via the Fork button on the EE1 safety-guard
-      // toast in PromptManagement.tsx (added 2026-05-20 in the same tag).
-      //
-      // Note re: [[feedback_no_internal_prompt_edits]] — this action CLONES the
-      // existing prompts row + Retell LLM/Agent without mutating their content.
-      // The client owns both the source and the new copies; we are not editing
-      // any LLM-facing prompt content. The new agent's general_prompt is byte-
-      // identical to the source's at fork time.
-      case "fork-slot-direction": {
-        const direction = (params.direction as string) || "";
-        if (!DIRECTION_TO_AGENT_COLUMN[direction]) {
-          throw new Error(
-            `Invalid direction: ${direction}. Expected one of inbound, outbound_initial, outbound_followup.`,
-          );
-        }
-        const directionColumn = DIRECTION_TO_AGENT_COLUMN[direction];
-        // Direction → canonical slot number for phone-version repoint.
-        const DIRECTION_TO_SLOT: Record<string, number> = {
-          inbound: 1,
-          outbound_initial: 2,
-          outbound_followup: 3,
-        };
-        const targetSlotNumber = DIRECTION_TO_SLOT[direction];
-        const targetSlotId = `Voice-Setter-${targetSlotNumber}`;
-        const DIRECTION_LABEL: Record<string, string> = {
-          inbound: "inbound",
-          outbound_initial: "outbound initial",
-          outbound_followup: "outbound follow-up",
-        };
-
-        const supabaseAdmin = getSupabaseAdmin();
-        const allAgentCols = Object.values(SLOT_TO_AGENT_COLUMN);
-
-        // 1. Read the source agent_id + sibling columns (to verify sharing).
-        const { data: clientRow, error: clientFetchErr } = await supabaseAdmin
-          .from("clients")
-          .select(allAgentCols.join(", "))
-          .eq("id", clientId)
-          .single();
-        if (clientFetchErr) throw new Error(`Failed to fetch client: ${clientFetchErr.message}`);
-        const agentMap = clientRow as Record<string, string | null>;
-        const sourceAgentId = agentMap[directionColumn];
-        if (!sourceAgentId) {
-          const err = new Error(
-            `Cannot fork ${direction}: clients.${directionColumn} is null. Provision the slot first via Save Setter.`,
-          );
-          (err as Error & { status?: number; code?: string }).status = 409;
-          (err as Error & { code?: string }).code = "no_agent_for_direction";
-          throw err;
-        }
-        const columnsPointingAtSource = allAgentCols.filter(
-          (col) => agentMap[col] === sourceAgentId,
-        );
-        if (columnsPointingAtSource.length < 2) {
-          const err = new Error(
-            `Cannot fork ${direction}: agent ${sourceAgentId} is only referenced by clients.${directionColumn}. ` +
-            `It is already dedicated to this direction — no fork needed.`,
-          );
-          (err as Error & { status?: number; code?: string }).status = 400;
-          (err as Error & { code?: string }).code = "not_shared";
-          throw err;
-        }
-
-        // 2. GET source agent + source LLM from Retell.
-        const sourceAgent = await retellFetch(apiKey, "GET", `get-agent/${sourceAgentId}`) as any;
-        // Conversation-flow agents are not fork-clonable in v1 (flow duplication
-        // is a later GET+POST clone); surface a clear code instead of the generic
-        // "no llm_id" error so the frontend can toast it properly.
-        if (sourceAgent?.response_engine?.type === "conversation-flow") {
-          const err = new Error(
-            `Source agent ${sourceAgentId} is a conversation-flow agent; forking is not yet supported for conversation flows.`,
-          );
-          (err as Error & { code?: string }).code = "cf_not_supported";
-          throw err;
-        }
-        const sourceLlmId = sourceAgent?.response_engine?.llm_id;
-        if (!sourceLlmId) {
-          throw new Error(
-            `Source agent ${sourceAgentId} has no response_engine.llm_id; cannot clone without source LLM.`,
-          );
-        }
-        const sourceLlm = await retellFetch(apiKey, "GET", `get-retell-llm/${sourceLlmId}`) as any;
-
-        // 3. Create a new Retell LLM cloning the source's settings byte-for-byte.
-        //    No prompt editing — pure clone (per the no-internal-prompt-edits rule).
-        const newLlmPayload: Record<string, unknown> = {
-          model: sourceLlm.model,
-          general_prompt: sourceLlm.general_prompt,
-          begin_message: sourceLlm.begin_message ?? null,
-          general_tools: sourceLlm.general_tools ?? [],
-          model_high_priority: sourceLlm.model_high_priority ?? true,
-          start_speaker: sourceLlm.start_speaker ?? "agent",
-          knowledge_base_ids: sourceLlm.knowledge_base_ids ?? [],
-        };
-        const newLlm = await retellFetch(apiKey, "POST", "create-retell-llm", newLlmPayload) as any;
-        console.log(`[fork-slot-direction] Created new LLM ${newLlm.llm_id} (cloned from ${sourceLlmId})`);
-
-        // 4. Create a new Retell agent cloning the source's voice/STT/PII settings,
-        //    pointing at the new LLM. Override agent_name so Brendan can tell the
-        //    forked agent apart from the source in the Retell dashboard.
-        const sourceName = (sourceAgent.agent_name as string | undefined) ?? `Voice-Setter-${targetSlotNumber}`;
-        const newAgentName = `${sourceName} (${DIRECTION_LABEL[direction]})`;
-
-        // Whitelist the agent-level fields that are safe to clone. Avoid
-        // copying read-only fields like agent_id, version, last_modification_timestamp.
-        const AGENT_CLONE_FIELDS = [
-          "voice_id", "voice_model", "voice_temperature", "voice_speed", "volume",
-          "language", "ambient_sound", "ambient_sound_volume",
-          "responsiveness", "interruption_sensitivity",
-          "end_call_after_silence_ms", "max_call_duration_ms",
-          "boosted_keywords",
-          "enable_backchannel", "backchannel_frequency",
-          "begin_message_delay_ms", "webhook_timeout_ms",
-          "data_storage_setting", "normalize_for_speech",
-          "reminder_trigger_ms", "reminder_max_count",
-          "opt_out_sensitive_data_storage",
-          "post_call_analysis_model", "post_call_analysis_data",
-          "analysis_successful_prompt", "analysis_summary_prompt", "analysis_user_sentiment_prompt",
-          "voicemail_option", "enable_voicemail_detection", "voicemail_detection_timeout_ms",
-          "vocab_specialization", "user_dtmf_options",
-          "stt_mode", "custom_stt_config", "pii_config",
-        ];
-        const clonedAgentSettings: Record<string, unknown> = {};
-        for (const f of AGENT_CLONE_FIELDS) {
-          if (sourceAgent[f] !== undefined && sourceAgent[f] !== null) {
-            clonedAgentSettings[f] = sourceAgent[f];
-          }
-        }
-
-        const createAgentPayload: Record<string, unknown> = {
-          agent_name: newAgentName,
-          channel: "voice",
-          response_engine: {
-            type: "retell-llm",
-            llm_id: newLlm.llm_id,
-            ...(newLlm?.version ? { version: newLlm.version } : {}),
-          },
-          ...clonedAgentSettings,
-          webhook_url: getAutoWebhookUrl(),
-          webhook_events: DEFAULT_RETELL_WEBHOOK_EVENTS,
-        };
-        const newAgent = await retellFetch(apiKey, "POST", "create-agent", createAgentPayload) as any;
-        const newAgentId = newAgent.agent_id as string;
-        console.log(`[fork-slot-direction] Created new agent ${newAgentId} cloned from ${sourceAgentId}`);
-
-        // 5. Auto-publish the new agent. Non-blocking — surface as publish_warning.
-        let publishWarning: string | null = null;
-        let publishedVersion: number | undefined;
-        try {
-          const publishResp = await publishAgentVersion(apiKey, newAgentId);
-          publishedVersion = publishResp?.version;
-          console.log(`[fork-slot-direction] Auto-published new agent ${newAgentId} (v${publishedVersion ?? "?"})`);
-        } catch (pubErr) {
-          publishWarning = pubErr instanceof Error ? pubErr.message : String(pubErr);
-          console.warn(`[fork-slot-direction] Auto-publish failed (non-blocking):`, publishWarning);
-        }
-
-        // 6. Repoint the appropriate phone version pin so live calls route to the new agent.
-        try {
-          await repointPhoneVersionsAfterPublish(
-            supabaseAdmin,
-            apiKey,
-            clientId,
-            targetSlotNumber,
-            newAgentId,
-            publishedVersion,
-          );
-        } catch (repointErr) {
-          console.warn(`[fork-slot-direction] Phone repoint failed (non-blocking):`, repointErr);
-        }
-
-        // 7. Repoint the clients column to the new agent. The other 2 direction
-        //    columns stay pointing at the original shared agent.
-        const { error: clientsUpdateErr } = await supabaseAdmin
-          .from("clients")
-          .update({ [directionColumn]: newAgentId })
-          .eq("id", clientId);
-        if (clientsUpdateErr) {
-          throw new Error(`Forked agent ${newAgentId} successfully but failed to repoint clients.${directionColumn}: ${clientsUpdateErr.message}`);
-        }
-        console.log(`[fork-slot-direction] Repointed clients.${directionColumn} from ${sourceAgentId} to ${newAgentId}`);
-
-        // 8. Prompts table maintenance.
-        //    Find the prompts row that currently claims this direction.
-        //    Two cases:
-        //    (a) Source row's slot_id matches the target slot → narrow its
-        //        directions array to just [direction] (it's the canonical
-        //        editor for the forked agent now).
-        //    (b) Source row lives on a different slot → clone its content into
-        //        a new row at the target slot with directions=[direction], and
-        //        remove `direction` from the source row's directions array.
-        const { data: sourcePromptsRows, error: sourcePromptsErr } = await supabaseAdmin
-          .from("prompts")
-          .select("id, slot_id, directions, content, name, model, temperature")
-          .eq("client_id", clientId)
-          .eq("category", "voice_setter")
-          .contains("directions", [direction]);
-        if (sourcePromptsErr) {
-          console.warn(`[fork-slot-direction] Prompts row lookup failed (non-fatal):`, sourcePromptsErr.message);
-        }
-        const sourceRow = (sourcePromptsRows ?? [])[0] as
-          | { id: string; slot_id: string; directions: string[] | null; content: string | null; name: string | null; model: string | null; temperature: number | null }
-          | undefined;
-
-        if (sourceRow) {
-          if (sourceRow.slot_id === targetSlotId) {
-            // Case (a) — narrow directions on the existing row at the target slot.
-            const { error: narrowErr } = await supabaseAdmin
-              .from("prompts")
-              .update({ directions: [direction] })
-              .eq("id", sourceRow.id);
-            if (narrowErr) {
-              console.warn(`[fork-slot-direction] Narrow source row failed:`, narrowErr.message);
-            } else {
-              console.log(`[fork-slot-direction] Narrowed prompts row ${sourceRow.id} directions to [${direction}]`);
-            }
-          } else {
-            // Case (b) — clone source row to target slot, remove direction from source.
-            // Check if target slot already has a row (shouldn't, but be safe).
-            const { data: targetRows } = await supabaseAdmin
-              .from("prompts")
-              .select("id")
-              .eq("client_id", clientId)
-              .eq("category", "voice_setter")
-              .eq("slot_id", targetSlotId);
-            if (!targetRows || targetRows.length === 0) {
-              const { error: cloneErr } = await supabaseAdmin
-                .from("prompts")
-                .insert({
-                  client_id: clientId,
-                  category: "voice_setter",
-                  slot_id: targetSlotId,
-                  directions: [direction],
-                  content: sourceRow.content,
-                  name: sourceRow.name ?? newAgentName,
-                  model: sourceRow.model,
-                  temperature: sourceRow.temperature,
-                });
-              if (cloneErr) {
-                console.warn(`[fork-slot-direction] Clone prompts row failed:`, cloneErr.message);
-              } else {
-                console.log(`[fork-slot-direction] Cloned prompts row to ${targetSlotId} directions=[${direction}]`);
-              }
-            } else {
-              console.log(`[fork-slot-direction] Target slot ${targetSlotId} already has prompts row; skipping clone`);
-            }
-            // Remove direction from source row.
-            const newSourceDirs = (sourceRow.directions ?? []).filter((d) => d !== direction);
-            const { error: stripErr } = await supabaseAdmin
-              .from("prompts")
-              .update({ directions: newSourceDirs })
-              .eq("id", sourceRow.id);
-            if (stripErr) {
-              console.warn(`[fork-slot-direction] Strip direction from source row failed:`, stripErr.message);
-            } else {
-              console.log(`[fork-slot-direction] Stripped ${direction} from source prompts row ${sourceRow.id}; new directions=${JSON.stringify(newSourceDirs)}`);
-            }
-          }
-        } else {
-          console.log(`[fork-slot-direction] No prompts row currently claims ${direction}; UI will show empty editor for the new agent until Save Setter is run.`);
-        }
-
-        result = {
-          success: true,
-          action: "forked",
-          source_agent_id: sourceAgentId,
-          source_llm_id: sourceLlmId,
-          new_agent_id: newAgentId,
-          new_llm_id: newLlm.llm_id,
-          new_agent_name: newAgentName,
-          direction,
-          column_updated: directionColumn,
-          published_version: publishedVersion ?? null,
-          publish_warning: publishWarning,
-        };
         break;
       }
 
