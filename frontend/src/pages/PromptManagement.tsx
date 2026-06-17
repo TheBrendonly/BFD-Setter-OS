@@ -14,7 +14,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { UnsavedChangesDialog } from '@/components/UnsavedChangesDialog';
 import { useToast } from '@/hooks/use-toast';
-import { ToastAction } from '@/components/ui/toast';
 import { ArrowLeft, Plus, Edit, Trash2, MessageSquare, Save, X, FileText, Sparkles, Link, Settings, Key, Wand2, Bot, Webhook, ExternalLink, CheckCircle, AlertCircle, Calendar, RotateCcw, Copy, Phone, RefreshCw } from '@/components/icons';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 import { ConfigStatusBar } from '@/components/ConfigStatusBar';
@@ -4738,25 +4737,11 @@ const PromptManagement = () => {
   // Retell voice settings state (loaded after hooks below)
   const [retellVoiceSettings, setRetellVoiceSettings] = useState<RetellVoiceSettings>({ ...DEFAULT_RETELL_VOICE_SETTINGS });
 
-  // EE1: per-slot direction multi-select (which clients.retell_*_agent_id columns
-  // this slot's agent gets fanned out to on push). Stored in prompts.directions.
-  // Allowed values: 'inbound', 'outbound_initial', 'outbound_followup'.
+  // Voice-setter direction. After P3a (2026-06-17) the direction concept is
+  // inbound-only: outbound routing is driven by the cadence node's UUID voice
+  // setter, so the legacy outbound direction columns + cross-slot fan-out are
+  // retired. Stored in prompts.directions (kept as a data column).
   const [voiceSetterDirections, setVoiceSetterDirections] = useState<string[]>([]);
-  // Map of slot_id -> directions for other voice slots, used for cross-slot
-  // conflict detection in the toggle UI.
-  const [otherSlotDirections, setOtherSlotDirections] = useState<Record<string, string[]>>({});
-
-  // Fork-to-dedicated-agent modal (added 2026-05-20 in phase-night-per-direction-agent-fork).
-  // Shown when the EE1 safety guard fires AND the user has selected exactly one
-  // direction — i.e. the legitimate "I want to update just this direction" flow
-  // that was blocked by the shared-agent guard. Modal confirms the fork before
-  // calling retell-proxy `fork-slot-direction`.
-  const [forkModalState, setForkModalState] = useState<{
-    open: boolean;
-    direction: string | null;
-    sourceAgentId: string | null;
-  }>({ open: false, direction: null, sourceAgentId: null });
-  const [forkInFlight, setForkInFlight] = useState(false);
 
    // Unsaved changes tracking
   const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
@@ -4878,27 +4863,17 @@ const PromptManagement = () => {
     }
   }, [editingSlotId, clientId, savedPromptConfigs]);
 
-  // EE1: load voice-setter direction multi-select from the prompts row on slot change.
-  // Defaults to [] if the row has no `directions` field yet (legacy / pre-migration).
+  // Load the voice-setter direction from the prompts row on slot change.
+  // Inbound-only post-P3a; defaults to [] if the row has no `directions` field.
   useEffect(() => {
     if (!editingSlotId?.startsWith('Voice-Setter-')) {
       setVoiceSetterDirections([]);
-      setOtherSlotDirections({});
       return;
     }
     const current = prompts.find(
       p => p.slot_id === editingSlotId && p.category === 'voice_setter',
     );
     setVoiceSetterDirections(Array.isArray(current?.directions) ? current!.directions! : []);
-    // Map of OTHER voice slots' directions for cross-slot conflict UI
-    const others: Record<string, string[]> = {};
-    for (const p of prompts) {
-      if (p.category !== 'voice_setter') continue;
-      if (!p.slot_id || p.slot_id === editingSlotId) continue;
-      if (!p.slot_id.startsWith('Voice-Setter-')) continue;
-      others[p.slot_id] = Array.isArray(p.directions) ? p.directions : [];
-    }
-    setOtherSlotDirections(others);
   }, [editingSlotId, prompts]);
 
   const handleVoiceSetterDirectionsChange = useCallback((next: string[]) => {
@@ -5627,6 +5602,7 @@ const PromptManagement = () => {
 
       // Auto-create Retell agent for voice setters
       if (isVoice) {
+        const isNewSetter = !existingInternalPrompt;
         try {
           console.log(`[create-setter] Auto-creating Retell agent for ${newSlotId}`);
           const { data: retellResult, error: retellError } = await supabase.functions.invoke('retell-proxy', {
@@ -5636,8 +5612,15 @@ const PromptManagement = () => {
               slotNumber: nextNum,
               generalPrompt: '',
               beginMessage: '',
-              model: 'gpt-5.2',
+              // Non-reasoning default; gpt-5.2 was a latency liability and is never desirable here.
+              model: 'gemini-3.0-flash',
               agentName: `Voice Setter ${nextNum}`,
+              // New setters are born bookable: pass the full default tool set so
+              // retell-proxy wires all 8 tools (5 GHL booking + send-sms +
+              // schedule-callback + end_call). Without this the agent gets only 3.
+              ...(isNewSetter
+                ? { llmSettings: { general_tools: [...DEFAULT_RETELL_GENERAL_TOOLS] } }
+                : {}),
             },
           });
           if (retellError) {
@@ -5647,6 +5630,22 @@ const PromptManagement = () => {
           }
         } catch (retellErr) {
           console.warn('[create-setter] Retell agent auto-create failed (non-blocking):', retellErr);
+        }
+
+        // Seed durable booking config so the first Save/Push preserves the 5 booking
+        // tools — pushVoiceSetterToRetell strips them unless booking_function_enabled
+        // is true — and keeps the sane model. New setters only: never clobber an
+        // existing setter the user may have deliberately set to non-booking.
+        if (isNewSetter) {
+          try {
+            await updateAgentSettings(
+              newSlotId,
+              { booking_function_enabled: true, model: 'gemini-3.0-flash' },
+              { silent: true },
+            );
+          } catch (seedErr) {
+            console.warn('[create-setter] seed agent_settings failed (non-blocking):', seedErr);
+          }
         }
       }
 
@@ -5902,15 +5901,13 @@ const PromptManagement = () => {
           DEFAULT_RETELL_USER_DTMF_OPTIONS,
           'DTMF options'
         );
-        console.log('🔊 Syncing voice setter to Retell AI, slot:', slotNumber, 'directions:', voiceSetterDirections);
+        console.log('🔊 Syncing voice setter to Retell AI, slot:', slotNumber);
         const { data: retellResult, error: retellError } = await supabase.functions.invoke('retell-proxy', {
           body: {
             action: opts.flowOutline ? 'sync-voice-setter-cf' : 'sync-voice-setter',
             ...(opts.flowOutline ? { flowOutline: opts.flowOutline } : {}),
             clientId,
             slotNumber,
-            // EE1: which clients.retell_*_agent_id columns to fan out to.
-            directions: voiceSetterDirections,
             generalPrompt: promptText,
             beginMessage: retellVoiceSettings.begin_message || '',
             model: currentAgentSettings?.model || 'gpt-4.1-nano',
@@ -5960,22 +5957,11 @@ const PromptManagement = () => {
             },
           },
         });
-        // EE1 safety-guard surfacing (FALLBACK path): as of Layer 2 (2026-06-09)
-        // retell-proxy no longer aborts the push for a shared agent — it pushes,
-        // skips the fan-out, and returns a non-fatal direction_warning (handled in
-        // the success branch below). This 409 'agent_shared_across_slots' handler is
-        // retained only for a pre-Layer-2 (<= v28) proxy still in the rollout window.
-        // When triggered, the body returns {code: 'agent_shared_across_slots',
-        // shared_columns, conflicting_agent_id}. Show a longer, action-oriented toast
-        // so the user knows exactly how to recover instead of seeing a generic warning.
-        //
-        // Brendan-2026-05-20 fix: previously this read `retellError.context.body.code`
-        // but supabase-js FunctionsHttpError wraps the non-2xx response with `.context`
-        // as a raw Response object — body parsing required `await ctx.json()`. This
-        // mirrors the TestCallDialog fix from phase-e3-followup-test-call-error-ux.
-        // Without this, the safety guard would fire on the backend but the user would
-        // see the generic "Make sure your Retell API key is configured" toast.
-        let parsedErrorBody: { error?: string; code?: string; shared_columns?: string[]; conflicting_agent_id?: string } | null = null;
+        // Parse a non-2xx error body so we can surface the real backend message
+        // (supabase-js FunctionsHttpError wraps the response in retellError.context
+        // as a raw Response; body parsing requires await ctx.json()). Without this
+        // the user would see the generic "Edge Function returned non-2xx" toast.
+        let parsedErrorBody: { error?: string; code?: string } | null = null;
         if (retellError) {
           try {
             const ctx: any = (retellError as any)?.context;
@@ -5986,45 +5972,7 @@ const PromptManagement = () => {
             }
           } catch { /* fall back to retellError.message */ }
         }
-        const safetyCode = (retellResult as { code?: string } | null)?.code
-          ?? parsedErrorBody?.code;
-        if (safetyCode === 'agent_shared_across_slots') {
-          const safetyMessage =
-            (retellResult as { error?: string } | null)?.error
-            ?? parsedErrorBody?.error
-            ?? retellError?.message
-            ?? 'Push blocked: this slot shares an agent with another slot.';
-          console.warn('🛡️ EE1 safety guard blocked push:', safetyMessage);
-          // Fork-button (phase-night-per-direction-agent-fork, 2026-05-20):
-          // when the user has selected exactly ONE direction, offer a Fork
-          // button. This is the legitimate "carve off this direction's agent
-          // so I can edit it independently" flow that the safety guard
-          // otherwise blocks. The button opens a confirmation modal which
-          // calls retell-proxy `fork-slot-direction`.
-          const conflictingAgentId = parsedErrorBody?.conflicting_agent_id ?? null;
-          const onlyOneDirection = voiceSetterDirections.length === 1
-            ? voiceSetterDirections[0]
-            : null;
-          const showForkButton = !!(onlyOneDirection && conflictingAgentId);
-          toast({
-            title: '🛡️ Push blocked — agent shared across slots',
-            description: safetyMessage,
-            variant: 'destructive',
-            duration: 20000,
-            action: showForkButton ? (
-              <ToastAction
-                altText="Fork to dedicated agent for this direction"
-                onClick={() => setForkModalState({
-                  open: true,
-                  direction: onlyOneDirection,
-                  sourceAgentId: conflictingAgentId,
-                })}
-              >
-                Fork
-              </ToastAction>
-            ) : undefined,
-          });
-        } else if (retellError) {
+        if (retellError) {
           // Surface the parsed backend error if available (better than the generic
           // "Edge Function returned a non-2xx status code" message).
           const backendMsg = parsedErrorBody?.error ?? retellError.message;
@@ -6076,42 +6024,12 @@ const PromptManagement = () => {
               duration: 15000,
             });
           } else {
-            // Layer 2 (2026-06-09): the agent push always succeeds now. If the
-            // backend SKIPPED the direction-column fan-out because this slot's
-            // agent is shared across slots, it returns a non-fatal
-            // direction_warning (the push + publish still happened). Surface it
-            // with the same Fork opt-in the old hard-block path offered, instead
-            // of a plain success toast.
-            const directionWarning = (retellResult as { direction_warning?: string } | null)?.direction_warning;
-            if (directionWarning) {
-              const conflictingAgentId = (retellResult as { conflicting_agent_id?: string } | null)?.conflicting_agent_id ?? null;
-              const onlyOneDirection = voiceSetterDirections.length === 1 ? voiceSetterDirections[0] : null;
-              const showForkButton = !!(onlyOneDirection && conflictingAgentId);
-              toast({
-                title: '✅ Published — direction ownership unchanged',
-                description: directionWarning,
-                duration: 18000,
-                action: showForkButton ? (
-                  <ToastAction
-                    altText="Fork to dedicated agent for this direction"
-                    onClick={() => setForkModalState({
-                      open: true,
-                      direction: onlyOneDirection,
-                      sourceAgentId: conflictingAgentId,
-                    })}
-                  >
-                    Fork
-                  </ToastAction>
-                ) : undefined,
-              });
-            } else {
-              toast({
-                title: 'Retell AI Synced',
-                description: retellResult?.action === 'created'
-                  ? `New Retell agent created (ID: ${retellResult.agent_id})`
-                  : 'Retell agent prompt updated and published',
-              });
-            }
+            toast({
+              title: 'Retell AI Synced',
+              description: retellResult?.action === 'created'
+                ? `New Retell agent created (ID: ${retellResult.agent_id})`
+                : 'Retell agent prompt updated and published',
+            });
           }
           // Fetch cost after successful sync
           if (retellResult?.agent_id) {
@@ -6752,61 +6670,6 @@ const PromptManagement = () => {
       });
     } finally {
       setSaving(false);
-    }
-  };
-
-  // Fork-to-dedicated-agent (phase-night-per-direction-agent-fork, 2026-05-20).
-  // Called from the Fork modal. Invokes retell-proxy `fork-slot-direction`,
-  // refreshes client config + prompt configs so the editor sees the new agent,
-  // and re-runs the original Save Setter now that the safety guard won't fire.
-  const handleForkConfirm = async () => {
-    if (!forkModalState.direction || !clientId || !editingSlotId) {
-      setForkModalState({ open: false, direction: null, sourceAgentId: null });
-      return;
-    }
-    const targetDirection = forkModalState.direction;
-    setForkInFlight(true);
-    try {
-      const { data, error } = await supabase.functions.invoke('retell-proxy', {
-        body: {
-          action: 'fork-slot-direction',
-          clientId,
-          direction: targetDirection,
-        },
-      });
-      if (error) {
-        // Try to surface backend message from FunctionsHttpError context.
-        let backendMsg = error.message;
-        try {
-          const ctx: any = (error as any)?.context;
-          if (ctx?.json) {
-            const body = await ctx.json();
-            backendMsg = body?.error ?? backendMsg;
-          }
-        } catch { /* keep default */ }
-        throw new Error(backendMsg);
-      }
-      console.log('✅ Forked agent:', data);
-      toast({
-        title: 'Forked to dedicated agent',
-        description: `New agent ${(data as { new_agent_name?: string })?.new_agent_name ?? (data as { new_agent_id?: string })?.new_agent_id} provisioned for ${targetDirection}. Refreshing config + retrying save…`,
-        duration: 8000,
-      });
-      setForkModalState({ open: false, direction: null, sourceAgentId: null });
-      // Refresh client + prompt config so the editor picks up the new agent.
-      await Promise.all([refetchPromptConfigs(), refetchAgentSettings()]);
-      // Re-run the original Save Setter now that the direction has its own agent.
-      await handleSavePrompt();
-    } catch (err) {
-      console.error('Fork failed:', err);
-      toast({
-        variant: 'destructive',
-        title: 'Fork failed',
-        description: err instanceof Error ? err.message : String(err),
-        duration: 15000,
-      });
-    } finally {
-      setForkInFlight(false);
     }
   };
 
@@ -7485,7 +7348,6 @@ const PromptManagement = () => {
           onEnableConversationFlow={handleEnableConversationFlow}
           directions={voiceSetterDirections}
           onDirectionsChange={handleVoiceSetterDirectionsChange}
-          otherSlotDirections={otherSlotDirections}
         />
         <AIPromptDialog
           open={docAIDialogOpen}
@@ -7648,15 +7510,13 @@ const PromptManagement = () => {
                     </div>
                   );
                 })()}
-                {/* EE1: Voice AI Setter direction multi-select.
-                    Determines which clients.retell_*_agent_id columns get
-                    pointed at this slot's agent on next "Push to Retell".
-                    Only shown for Voice-Setter-N slots. */}
+                {/* Voice AI Setter inbound toggle (inbound-only post-P3a).
+                    Outbound routing is driven by the cadence node's UUID voice
+                    setter. Only shown for Voice-Setter-N slots. */}
                 {editingSlotId?.startsWith('Voice-Setter-') && (
                   <DirectionsToggle
                     value={voiceSetterDirections}
                     onChange={handleVoiceSetterDirectionsChange}
-                    otherSlotDirections={otherSlotDirections}
                   />
                 )}
                 {/* Agent Config Builder - includes Settings + all config layers */}
@@ -7802,64 +7662,6 @@ const PromptManagement = () => {
                   setterName={promptContent.title || editingSlotId}
                 />
               )}
-
-              {/* Fork-to-dedicated-agent (phase-night-per-direction-agent-fork, 2026-05-20).
-                  Shown when the user clicks Fork on the EE1 safety-guard toast. Confirms
-                  what's about to happen + which columns change, then calls retell-proxy
-                  `fork-slot-direction` and re-runs Save Setter. */}
-              <Dialog
-                open={forkModalState.open}
-                onOpenChange={(o) => { if (!o && !forkInFlight) setForkModalState({ open: false, direction: null, sourceAgentId: null }); }}
-              >
-                <DialogContent className="max-w-md !p-0">
-                  <DialogHeader className="px-6 pt-6" style={{ borderBottom: '3px groove hsl(var(--border-groove))', paddingBottom: '16px' }}>
-                    <DialogTitle style={{ fontFamily: "'VT323', monospace", fontSize: '18px', letterSpacing: '1px', textTransform: 'uppercase' }}>
-                      FORK TO DEDICATED AGENT
-                    </DialogTitle>
-                  </DialogHeader>
-                  <div className="px-6 py-5 space-y-3" style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '13px' }}>
-                    <p className="text-muted-foreground leading-relaxed">
-                      This will create a NEW Retell agent dedicated to{' '}
-                      <strong>{forkModalState.direction}</strong> and repoint{' '}
-                      <code className="bg-sidebar px-1">
-                        clients.{forkModalState.direction ? `retell_${forkModalState.direction === 'outbound_initial' ? 'outbound' : forkModalState.direction === 'outbound_followup' ? 'outbound_followup' : 'inbound'}_agent_id` : ''}
-                      </code>{' '}
-                      to the new agent.
-                    </p>
-                    <p className="text-muted-foreground leading-relaxed">
-                      The other 2 direction columns will continue pointing at the current shared agent
-                      {forkModalState.sourceAgentId && (
-                        <> (<code className="bg-sidebar px-1">{forkModalState.sourceAgentId}</code>)</>
-                      )}
-                      . They are unaffected.
-                    </p>
-                    <p className="text-xs text-muted-foreground leading-relaxed">
-                      After fork: this slot's edits will only affect the {forkModalState.direction} agent.
-                      If you later want to keep the directions in sync, you'll need to push the same content to each agent individually.
-                    </p>
-                  </div>
-                  <div className="flex gap-3 px-6 pb-6" style={{ borderTop: '3px groove hsl(var(--border-groove))', paddingTop: '16px' }}>
-                    <Button
-                      variant="default"
-                      className="flex-1"
-                      disabled={forkInFlight}
-                      onClick={() => setForkModalState({ open: false, direction: null, sourceAgentId: null })}
-                      style={{ fontFamily: "'VT323', monospace", fontSize: '18px', letterSpacing: '0.5px' }}
-                    >
-                      CANCEL
-                    </Button>
-                    <Button
-                      variant="destructive"
-                      className="flex-1"
-                      disabled={forkInFlight}
-                      onClick={handleForkConfirm}
-                      style={{ fontFamily: "'VT323', monospace", fontSize: '18px', letterSpacing: '0.5px' }}
-                    >
-                      {forkInFlight ? 'FORKING…' : 'FORK + RETRY SAVE'}
-                    </Button>
-                  </div>
-                </DialogContent>
-              </Dialog>
 
               {/* Unsaved Changes Dialog */}
               <UnsavedChangesDialog
@@ -8188,20 +7990,13 @@ const PromptManagement = () => {
                               })()}
                               <StatusTag variant="neutral">VOICE CHANNEL</StatusTag>
                               {(() => {
+                                // Inbound-only post-P3a: outbound routing is per-cadence
+                                // (UUID voice setter), so only surface an Inbound badge.
                                 const dirs = prompts.find(p => p.slot_id === slot.id && p.category === 'voice_setter')?.directions;
-                                const dirList = Array.isArray(dirs) ? dirs : [];
-                                const DIR_LABELS: Record<string, string> = { inbound: 'Inbound', outbound_initial: 'Out (initial)', outbound_followup: 'Out (follow-up)' };
-                                return (
-                                  <div className="flex flex-wrap gap-1">
-                                    {dirList.length === 0 ? (
-                                      <StatusTag variant="negative">No direction</StatusTag>
-                                    ) : (
-                                      dirList.map((d: string) => (
-                                        <StatusTag key={d} variant="positive">{DIR_LABELS[d] || d}</StatusTag>
-                                      ))
-                                    )}
-                                  </div>
-                                );
+                                const isInbound = Array.isArray(dirs) && dirs.includes('inbound');
+                                return isInbound ? (
+                                  <StatusTag variant="positive">Inbound</StatusTag>
+                                ) : null;
                               })()}
                             </div>
                             <div className="flex flex-col items-end gap-1.5 shrink-0">

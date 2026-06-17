@@ -73,11 +73,11 @@ interface PromptDocPageProps {
   // Convert this single-prompt doc to the rigid Conversation Flow engine (seeds the
   // 5-node template). Optional; when absent the convert button is hidden.
   onEnableConversationFlow?: () => Promise<void>;
-  // EE1 direction routing (voice setters): which calls use this setter. Optional
-  // so non-voice/legacy callers can omit. State lives in PromptManagement.
+  // Inbound toggle (voice setters): whether this setter handles inbound calls.
+  // Inbound-only post-P3a; optional so non-voice/legacy callers can omit. State
+  // lives in PromptManagement.
   directions?: string[];
   onDirectionsChange?: (next: string[]) => void;
-  otherSlotDirections?: Record<string, string[]>;
 }
 
 const MONO_STYLE: React.CSSProperties = {
@@ -113,7 +113,6 @@ export const PromptDocPage: React.FC<PromptDocPageProps> = ({
   onEnableConversationFlow,
   directions,
   onDirectionsChange,
-  otherSlotDirections,
 }) => {
   const [docText, setDocText] = useState('');
   const isFlowEngine = doc?.engine_type === 'conversation-flow';
@@ -405,7 +404,6 @@ export const PromptDocPage: React.FC<PromptDocPageProps> = ({
             <DirectionsToggle
               value={directions ?? []}
               onChange={onDirectionsChange}
-              otherSlotDirections={otherSlotDirections ?? {}}
             />
           )}
           <RetellModelSelector value={model} onChange={onModelChange} />
