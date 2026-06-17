@@ -29,6 +29,24 @@ Diagnosed two live-call issues + shipped fixes + delivered a new "Main Outbound 
 
 ---
 
+## 🆕 2026-06-17 FULL LIVE RUN-THROUGH — results + tomorrow's plan — see `Docs/NEXT_SESSION_KICKOFF_2026-06-18.md` + `Operations/handoffs/2026-06-17-full-live-run-through.md`
+
+10 of 12 run-through items PASS. The GHL→Twilio send-path migration is VALIDATED (reply + follow-up + manual all via Twilio). Booking timezone-offset root cause FIXED by a parallel session (`eb53690`, voice-booking-tools v17) — re-test tomorrow. P3a shipped (`ab254ad`+`1153545`); cadence `40e8bea3` Voice-Setter-1 repoint already done in the run-through.
+
+**Brendan — tonight before closing:**
+- [ ] **END the pause-test enrolment** (Engagement page, execution `80563572` "Brendan Green") so it doesn't auto-call you ~9am tomorrow.
+
+**Brendan — tomorrow (one live session, paste `Docs/NEXT_SESSION_KICKOFF_2026-06-18.md`):**
+- [ ] Pre-flight: confirm the live frontend is on latest main (`eb53690`) so it has the Create-Setter fix + the env fix.
+- [ ] P3a: repoint draft cadence `c206da3e` (Voice-Setter-2 → UUID, don't activate); fire outbound on `40e8bea3` to TEST_PHONE_A; fire a Try-Gary persona; Save/Push a Gary (slots 4-7, expect no "shared across slots" warning); inbound call to +61481614530.
+- [ ] Create-Setter E2E: create a new voice setter → verify 8 tools + gemini-3.0-flash; Save once (durability); booking test call. Then V2 "Voice Setter 8" (`agent_088a9ed`): toggle Booking Function ON + Save/Push → verify 8 tools; test call.
+- [ ] Booking RE-TEST on an outbound: ask to book a real open slot → expect book-appointments SUCCEEDS now (v17 fix).
+- [ ] (Optional, report-only) decide if you want `{{first_name}}` in the greeting opener.
+
+**Bugs found (now in `FEATURE_ROADMAP.md` §6.3-6.8, separate build sessions):** 6.3 raw-fetch refactor (manual-send class); 6.4 lead edit reverts (GHL re-sync); 6.5 internal/by-phone STOP + dedup (drop GHL contact lookup); 6.6 Retell inbound sig-verify 403s when armed (do NOT arm the secret yet); 6.7 probe canary v2 (~2/24); 6.8 greeting opener `{{first_name}}`.
+
+---
+
 ## ✅ P0-P2 CLUSTER BUILD (2026-06-16) — HEAD `eb158e3`, all live
 
 Cleared the critical voice-publish path + the P1/P2 cluster. Full record: `Operations/handoffs/2026-06-16-p0-p2-cluster-build.md`. Staged A-F, each verified + deployed + pushed; 8-agent adversarial review (2 medium fixes applied).
