@@ -2,7 +2,16 @@
 
 The operator playbook for wiring a client's GoHighLevel (GHL) account to BFD-Setter. It explains the framework, then gives the exact automations to build, then a checklist to verify everything is correct. Written for BFD's own account but applies to any client.
 
-Verified against the live code and a real GHL webhook test on 2026-05-31.
+Verified against the live code and a real GHL webhook test on 2026-05-31. Roles + dormant-workflow
+section reconciled against the Twilio-direct send path on 2026-06-17.
+
+> **GHL's role in BFD-setter (read this first):** GHL is used for three things only: (1) lead
+> INGRESS (forms -> routing tags -> the one `sync-ghl-contact` webhook), (2) the booking calendar
+> (the two BOOKED/CANCELLED webhooks to `bookings-webhook`), and (3) mirroring the SMS conversation
+> thread onto the contact. **GHL does NOT send outbound SMS.** Outbound SMS sends direct via the
+> Twilio REST API (`trigger/_shared/sendTwilioSmsAndStamp.ts`); the GHL conversation mirror is a copy,
+> not the send path. The 5 legacy `leadconnectorhq` outbound webhook fields are retired from the BFD
+> UI (DB columns kept). See CLIENT_ONBOARDING_SOP.md section 0.
 
 ---
 
@@ -110,11 +119,17 @@ What it does: upserts the booking, and **BOOKED ends any active cadence** for th
 ### D. Opt-out / STOP — already native, nothing to build
 Inbound "STOP" is handled in code (`receive-twilio-sms` sets the contact to stopped). The old GHL "Stop / Activate Setter" workflow is vestigial: it is safe to leave published (it does not double-fire) or delete it.
 
-### E. Dormant / deprecated automations (leave alone or delete)
-These came from the snapshot and are not used by the native engine. They do no harm if left published:
-- **Send Setter Reply**, **Send Engagement**, **Send Followup** — old n8n-era sending paths. The native engine sends directly; these are dormant.
-- **Add Booking to 1Prompt OS** — replaced by the two split BOOKED/CANCELLED workflows above. Do not use it.
-- The legacy Try-Gary **`source: "try-gary-landing"`** direct webhook — replaced by the tag pattern (it still works for backward compatibility, but new setups should use the tag).
+### E. Dormant / deprecated automations (snapshot clients: leave; greenfield: do not build)
+These ship with the GHL snapshot and are NOT used by the native engine. Because outbound SMS sends
+direct via Twilio (see "GHL's role" at the top), none of the GHL "send" workflows are in the path.
+- **Send Setter Reply**, **Send Engagement**, **Send Followup**, **Send Message**: legacy n8n-era
+  sending paths. The 5 `leadconnectorhq` outbound webhook fields they relied on are retired from the
+  BFD UI (DB columns kept). For snapshot clients these are safe to leave published (they do not fire
+  and do not double-send). For greenfield clients, do not build them at all.
+- **Add Booking to 1Prompt OS**: replaced by the two split BOOKED/CANCELLED booking webhooks above.
+  Do not use it. ("1Prompt OS" is the snapshot's historical workflow name; the product is BFD-setter.)
+- The legacy Try-Gary `source: "try-gary-landing"` direct webhook: replaced by the tag pattern (it
+  still works for backward compatibility, but new setups should use the tag).
 
 ---
 
@@ -275,4 +290,4 @@ These must match the Form Tag set on each Campaign in the app's Workflows page e
 
 ---
 
-See also: [FORM_ROUTING.md](FORM_ROUTING.md) (routing internals), [ARCHITECTURE.md](ARCHITECTURE.md) (system overview), [CADENCE_DESIGN.md](CADENCE_DESIGN.md) (the cadence engine).
+See also: [FORM_ROUTING.md](../Docs/FORM_ROUTING.md) (routing internals), [ARCHITECTURE.md](../Docs/ARCHITECTURE.md) (system overview), [CADENCE_DESIGN.md](../Docs/CADENCE_DESIGN.md) (the cadence engine).

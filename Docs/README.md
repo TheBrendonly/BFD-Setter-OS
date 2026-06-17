@@ -9,15 +9,24 @@ Start here. The docs are now a small, maintained set; everything historical live
 | [`/README.md`](../README.md) | Product + repo orientation: what BFD-Setter is, the stack, quick start. |
 | [`ARCHITECTURE.md`](ARCHITECTURE.md) | System source of truth: services, data flow, the lead → cadence → booking pipeline, and the current capability set (form routing, native reactivation, voice setters). |
 | [`WEBHOOKS.md`](WEBHOOKS.md) | Per-endpoint webhook catalogue + auth. |
-| [`RUNBOOK.md`](RUNBOOK.md) | Operations: deploy commands, rollback, incident playbooks. |
-| [`CLIENT_ONBOARDING_SOP.md`](CLIENT_ONBOARDING_SOP.md) | Step-by-step new-client provisioning. |
 | [`CADENCE_DESIGN.md`](CADENCE_DESIGN.md) | The engagement cadence engine: state machine, node types, guards. |
-| [`CAMPAIGN_PLAYBOOK.md`](CAMPAIGN_PLAYBOOK.md) | Operator recipes: new-lead, reactivation (native), and list campaigns. |
 | [`FORM_ROUTING.md`](FORM_ROUTING.md) | Operator guide: how inbound forms route to cadences/agents (incl. BFD's main + Try-Gary setup), adding new forms, and provisioning additional voice agents. |
 | [`ROADMAP.md`](ROADMAP.md) | Active build roadmap + the Claude/Brendan to-do lists. |
 | [`SELF_HOSTING_FEASIBILITY.md`](SELF_HOSTING_FEASIBILITY.md) | Future-reference investigation: replacing Supabase + Trigger.dev with self-hosted infra on Railway. Findings, pros/cons, recommendation, migration steps. |
 
-Mental model of the friendly names: ARCHITECTURE (+ WEBHOOKS) = "how it's built", RUNBOOK = "operations", ONBOARDING = "set up a client", CADENCE_DESIGN = "engagement engine", CAMPAIGN_PLAYBOOK = "reactivation/list campaigns".
+Mental model of the friendly names: ARCHITECTURE (+ WEBHOOKS) = "how it's built", CADENCE_DESIGN = "the engagement engine". Operator-facing SOPs and setup guides now live in the sibling [`../SOP/`](../SOP/) folder (see below).
+
+## Operator SOPs and setup guides
+
+Kept separate from the build docs above, in the sibling [`../SOP/`](../SOP/) folder:
+
+| Doc | What it covers |
+|-----|----------------|
+| [`../SOP/CLIENT_ONBOARDING_SOP.md`](../SOP/CLIENT_ONBOARDING_SOP.md) | Canonical step-by-step new-client onboarding (hosting model, intake, wiring, go-live). |
+| [`../SOP/GHL_SETUP.md`](../SOP/GHL_SETUP.md) | GoHighLevel forms, tags, automations, webhooks. |
+| [`../SOP/PERSONA_SETUP.md`](../SOP/PERSONA_SETUP.md) | Per-persona setters + campaigns (Try-Gary). |
+| [`../SOP/RUNBOOK.md`](../SOP/RUNBOOK.md) | Operations: deploy commands, rollback, incident playbooks. |
+| [`../SOP/CAMPAIGN_PLAYBOOK.md`](../SOP/CAMPAIGN_PLAYBOOK.md) | Operator recipes: new-lead, reactivation, list campaigns. |
 
 ## Archive
 
@@ -25,4 +34,4 @@ Mental model of the friendly names: ARCHITECTURE (+ WEBHOOKS) = "how it's built"
 
 ## Deployment
 
-Nothing here auto-deploys. See `RUNBOOK.md` and `ROADMAP.md` (each feature lists its deploy steps). Migrations live in `../frontend/supabase/migrations/`; fresh projects use `../supabase/schema.sql` + `../supabase/client-schema.sql` rather than replaying the full migration history.
+Nothing here auto-deploys. See [`../SOP/RUNBOOK.md`](../SOP/RUNBOOK.md) and `ROADMAP.md` (each feature lists its deploy steps). Migrations live in `../frontend/supabase/migrations/`; fresh projects use `../supabase/schema.sql` + `../supabase/client-schema.sql` rather than replaying the full migration history.

@@ -212,7 +212,7 @@ Different inbound forms for the same client can now activate different agents/ca
 - Wired into `ghl-tag-webhook`, `sync-ghl-contact`, `intake-lead`; `leads.form_source` records the originating tag.
 - Managed in the Workflows UI (multiple tag-bound campaigns per client).
 - Operator action: each GHL form/workflow must emit its routing tag into the webhook.
-- **GHL operator guide (forms, tags, automations, webhooks, verification checklist): see [GHL_SETUP.md](GHL_SETUP.md).** Routing internals + voice-agent provisioning: [FORM_ROUTING.md](FORM_ROUTING.md). Try-Gary routes to the cadence tagged `bfd_setter-try_gary` (constant `TRY_GARY_WORKFLOW_TAG`).
+- **GHL operator guide (forms, tags, automations, webhooks, verification checklist): see [GHL_SETUP.md](../SOP/GHL_SETUP.md).** Routing internals + voice-agent provisioning: [FORM_ROUTING.md](FORM_ROUTING.md). Try-Gary routes to the cadence tagged `bfd_setter-try_gary` (constant `TRY_GARY_WORKFLOW_TAG`).
 
 ### Native reactivation (cold-list calling)
 The "DB Reactivation" flow now enrols an uploaded CSV / selected contacts into a chosen cadence **natively** via `runEngagement` — no external/n8n webhook.

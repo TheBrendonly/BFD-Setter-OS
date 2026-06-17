@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // onboard-client.mjs — phase-11h
 //
-// Automates the SQL portion of Docs/CLIENT_ONBOARDING_SOP.md §3-§5 for a new
+// Automates the SQL portion of SOP/CLIENT_ONBOARDING_SOP.md §3-§5 for a new
 // client: INSERT clients row, create the GHL last_synced_from custom field,
 // clone the BFD default workflow, and print a follow-up checklist for the
 // click-path steps that still require human judgement.
@@ -341,7 +341,7 @@ RETURNING id;
   }
   console.log("");
 
-  console.log("Click-path follow-ups (see Docs/CLIENT_ONBOARDING_SOP.md):");
+  console.log("Click-path follow-ups (see SOP/CLIENT_ONBOARDING_SOP.md):");
   console.log("");
   console.log("§3.1  Provision external Supabase project + run seed SQL.");
   console.log("§5.1  Configure GHL 'Send Setter Reply' workflow (or skip if");

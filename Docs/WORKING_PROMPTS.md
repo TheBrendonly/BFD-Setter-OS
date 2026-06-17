@@ -32,7 +32,7 @@ Pull EVERYTHING that requires ME (Brendan) — the human-only actions you can't 
 
 Scan:
 - Docs/ROADMAP.md "Brendan-only list" + every [YOU] marker.
-- The newest Operations/handoffs/ doc (its "Brendan to-do" section), and Docs/GHL_SETUP.md, Docs/PERSONA_SETUP.md, Docs/FORM_ROUTING.md.
+- The newest Operations/handoffs/ doc (its "Brendan to-do" section), and SOP/GHL_SETUP.md, SOP/PERSONA_SETUP.md, Docs/FORM_ROUTING.md.
 - Memory feedback notes (provisioning rules, phone-collision rule, no-prompt-edits rule, env-var audits, test-phone permission).
 - Current blockers on me: GHL forms/automations/tags wiring; Retell/Twilio agent + number provisioning; prompt/persona content (Duplicate + "Modify with AI"); activating cadences (e.g. the Try-Gary persona campaigns are cloned + INACTIVE with TODO voice sentinels); phone / ghl_location_id collision remediation; Railway + Trigger.dev env vars; end-to-end tests.
 

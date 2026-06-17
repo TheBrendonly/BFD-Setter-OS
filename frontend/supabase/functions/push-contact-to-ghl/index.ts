@@ -29,7 +29,7 @@ const corsHeaders = {
 // D-M5 — per-client custom field id, read from clients.ghl_last_synced_from_field_id.
 // Phase 11a migration backfilled BFD's existing field id on the BFD row, so
 // behaviour is unchanged for BFD; new clients have their field id minted at
-// onboarding time per the Docs/CLIENT_ONBOARDING_SOP.md §4.2 click-path.
+// onboarding time per the SOP/CLIENT_ONBOARDING_SOP.md §4.2 click-path.
 //
 // The legacy hardcoded constant `PQNTqtTnIw9Uu0XLLE5M` is gone — kept only as
 // a fallback if the column is somehow null on a row that already worked

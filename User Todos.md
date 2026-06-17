@@ -860,9 +860,9 @@ Once BFD has been live cleanly for ≥ 14 days.
 - **Webhooks (every URL in the system):** `Docs/WEBHOOKS.md`
 - **Master plan:** `Docs/MASTER_PLAN.md`
 - **Master state-of-play (handoff):** `Operations/handoffs/2026-04-30-1prompt-master-rebuild-handoff.md`
-- **Onboarding SOP:** `Docs/CLIENT_ONBOARDING_SOP.md`
+- **Onboarding SOP:** `SOP/CLIENT_ONBOARDING_SOP.md`
 - **Changes log (every shipped phase + revert command):** `Docs/CHANGES_LOG.md`
-- **Runbook (deploys, rollback, incident playbooks):** `Docs/RUNBOOK.md`
+- **Runbook (deploys, rollback, incident playbooks):** `SOP/RUNBOOK.md`
 - **Cadence design + tone notes:** `Docs/CADENCE_DESIGN.md`
 - **Tracking funnel SQL:** `Docs/TRACKING.md`
 - **Future / out-of-scope items:** `Docs/FUTURE.md`

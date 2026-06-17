@@ -259,7 +259,7 @@ Items in this section are NOT shipped today. Each maps to a `User Todos.md` line
 - `User Todos.md` Phase B — the queued list of cadence improvements
 - `Docs/CADENCE_DESIGN.md` — the design philosophy and Phase 4a-4d details
 - `Docs/TRACKING.md` — funnel SQL + how to query `cadence_funnel`
-- `Docs/RUNBOOK.md` — incident playbooks for `runEngagement` failures and quiet-hours misconfigurations
+- `SOP/RUNBOOK.md` — incident playbooks for `runEngagement` failures and quiet-hours misconfigurations
 - §H below — cadence-v2 (2026-05-13 onward) + the operator-level "how to change a cadence per client" reference
 
 ---

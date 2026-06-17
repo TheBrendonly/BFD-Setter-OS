@@ -55,7 +55,7 @@ Dashboard  (frontend/src/)
 - **Edge functions + platform Postgres** → Supabase (`bjgrgbgykvjrsuwwruoh`)
 - **Background tasks** → Trigger.dev cloud (`proj_fdozaybvhgxnzopabtse`)
 
-Lovable hosts nothing for BFD. Canonical env reference: [`Docs/RAILWAY_ENV.md`](./Docs/RAILWAY_ENV.md). Operational runbook: [`Docs/RUNBOOK.md`](./Docs/RUNBOOK.md).
+Lovable hosts nothing for BFD. Canonical env reference: [`Docs/RAILWAY_ENV.md`](./Docs/RAILWAY_ENV.md). Operational runbook: [`SOP/RUNBOOK.md`](./SOP/RUNBOOK.md).
 
 ---
 
@@ -138,7 +138,7 @@ You also need a second Supabase project per client (for their leads, chat histor
 
 ## High-Level Setup Steps
 
-See [SETUP_OVERVIEW.md](./SETUP_OVERVIEW.md) for the full technical reference, and [Docs/GHL_SETUP.md](./Docs/GHL_SETUP.md) for the GoHighLevel operator guide (forms, tags, automations, webhooks + verification checklist).
+See [SETUP_OVERVIEW.md](./SETUP_OVERVIEW.md) for the full technical reference, and [SOP/GHL_SETUP.md](./SOP/GHL_SETUP.md) for the GoHighLevel operator guide (forms, tags, automations, webhooks + verification checklist).
 
 ---
 

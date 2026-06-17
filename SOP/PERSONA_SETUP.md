@@ -23,7 +23,14 @@ Do this once per persona, for **voice** and (if the persona replies by text) **t
 1. **Duplicate the base setter.** Go to Prompts / setter management, find the base Gary setter (voice: a `Voice-Setter-N` slot; text: a `Setter-N` slot), click the **Copy** icon, and pick an empty target slot. This clones the prompts + config into the new slot, set inactive. (Edge function: `duplicate-setter-config`.)
 2. **Open the new slot** and rename it for the persona (e.g. "Mortgage Broker").
 3. **Modify with AI.** In the prompt editor, click **MODIFY WITH AI** (Sparkles icon) on the section(s) you want to re-shape (typically "WHO YOU ARE" and "PERSONA RULES"). Type a natural-language instruction (see templates below). The AI rewrites that section while preserving the prompt's structure. Review the diff, apply.
-4. **Save Setter.** This provisions the Retell agent (voice) or triggers the text-setter sync. Note the slot id (`Voice-Setter-N` / `Setter-N`) — you'll select it in the campaign next.
+4. **Save Setter.** This provisions the Retell agent (voice) or triggers the text-setter sync. Note the slot id (`Voice-Setter-N` / `Setter-N`); you'll select it in the campaign next.
+
+   > **Confirm the agent is bookable.** After Save, check the agent has the 5 voice-booking tools
+   > (`get-available-slots`, `book-appointments`, `get-contact-appointments`, `update-appointment`,
+   > `cancel-appointments`). If a new/cloned setter comes through without them, turn the **Booking
+   > Function** toggle ON and Save/Push (see CLIENT_ONBOARDING_SOP.md section 4.3 for the known
+   > create-setter bug + workaround). If you see a `get_contact` tool on the agent, that is a known
+   > phantom: report it to Brendan and do not rely on it (live booking uses the 5 tools above).
 5. **Voice only:** assign a Twilio number to the agent if it places outbound calls (see [GHL_SETUP.md](GHL_SETUP.md) / FORM_ROUTING voice provisioning).
 
 ### "Modify with AI" instruction templates (edit to taste — final wording is yours)
@@ -64,4 +71,4 @@ from engagement_executions order by started_at desc limit 5;
 ```
 `form_source` should be the persona tag and `workflow_id` the persona's campaign. Once you confirm routing and the agent is set, activate and run a real test.
 
-See also: [GHL_SETUP.md](GHL_SETUP.md) (forms/automations), [FORM_ROUTING.md](FORM_ROUTING.md) (routing internals + voice provisioning).
+See also: [GHL_SETUP.md](GHL_SETUP.md) (forms/automations), [FORM_ROUTING.md](../Docs/FORM_ROUTING.md) (routing internals + voice provisioning).
