@@ -186,6 +186,55 @@ A/B promise). Cheap interim = run cadence/setter A vs B manually for ~2 weeks ea
 booking rate; sell the promise without building the feature. When triggered, build Phase 1 / 3.1a
 (campaign-level) first.
 
+## Future feature — inbound multi-channel (Instagram / Facebook DM + WhatsApp replies)
+
+**Want (Brendan, 2026-06-17):** support inbound DM (Instagram/Facebook) + WhatsApp conversations,
+where a lead messages on a social channel and the AI setter replies on that same channel. This is a
+real long-term goal. **Outbound on these channels is NOT needed** (outbound stays SMS/voice); the
+requirement is two-way conversational on the channel the lead chose.
+
+**What the 2026-06-17 GHL send-path migration did (and did NOT break) — read before building:**
+The migration made BFD SMS-only by delivering every outbound message DIRECT via Twilio and cutting
+GHL out of the send path. It deliberately did NOT remove the multi-channel scaffolding, so this
+feature is still buildable. Preserved on purpose:
+- **DB columns kept** (only the Credentials UI fields were removed): `send_engagement_webhook_url`,
+  `send_message_webhook_url`, `ghl_send_setter_reply_webhook_url`, `stop_bot_webhook_url`,
+  `send_followup_webhook_url` all still exist on `clients`.
+- **The WhatsApp outbound branch is kept** in `trigger/runEngagement.ts` (the engage-node `whatsapp`
+  path still posts to `send_engagement_webhook_url`); it just throws a clear error if invoked without
+  the field. WhatsApp is not deleted, only un-surfaced in the UI.
+- **The GHL conversations mirror infra is intact** (`_shared/ghl-conversations.ts` `pushSmsToGhl`
+  supports `inbound`/`outbound` direction; a Custom Conversation Provider is the GHL-side hook).
+
+**The ONE clean re-enable point:** `trigger/processMessages.ts` — the inbound AI-reply path. The
+2026-06-17 change removed STEP 6 (which used to forward ALL channels to the GHL "Send Setter Reply"
+webhook for delivery) and added a **loud no-send guard**: if a reply is generated on a non-SMS
+channel (or with missing Twilio creds), it now THROWS + writes an `error_logs` row (`no_send_path`)
+rather than silently completing. So inbound DM/WhatsApp replies currently hard-fail loudly. To build
+this feature, replace that guard with a **per-channel deliverer dispatch** (sms → Twilio 6.1b, which
+already exists; instagram/facebook/whatsapp → the channel's provider send). Do NOT re-add the old
+blanket GHL webhook; build a channel→sender map so SMS stays direct-Twilio and DM/WhatsApp route to
+their own providers.
+
+**Design (when built):**
+- A `channelSenders` dispatch in `processMessages` keyed by `message_queue.channel`: `sms` →
+  existing Twilio 6.1b; `whatsapp` → Twilio WhatsApp API (separate from SMS) or GHL conversations
+  outbound; `instagram`/`facebook` → GHL conversations API outbound (or Unipile if going direct).
+- Inbound ingestion already partly exists: `receive-dm-webhook` stamps `message_queue` with the
+  social channel; confirm/extend it + the inbound webhook wiring per provider (Meta Graph API for
+  IG/FB, Twilio or GHL for WhatsApp, Unipile for LinkedIn).
+- Keep the per-channel mirror to GHL so the owner sees the thread (already supported).
+- Surface the relevant provider creds on the Credentials page again (the DB columns are still there).
+
+**Constraint to NOT violate now:** keep `message_queue.channel` populated on every inbound row
+(receive-twilio-sms sets `sms`, receive-dm-webhook sets the social channel) so the future dispatch
+has the signal it needs. Don't hardcode "sms" anywhere the channel should be read. The current
+SMS-only guard is intentionally the seam where multi-channel re-enters.
+
+**Difficulty: MODERATE-LARGE** (per-provider inbound webhooks + outbound senders + creds UI +
+testing per channel). **Recommendation: DEFER** until there's a client who needs it; the architecture
+above keeps it fully buildable. Outbound-on-these-channels remains out of scope (SMS/voice only).
+
 ## UI holes — implementation plan (next session)
 
 Frontend-only; deploys via Railway on push. Suggested order:
