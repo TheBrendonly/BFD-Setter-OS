@@ -140,6 +140,120 @@ async function ghlSend(method: "POST" | "PUT" | "DELETE", path: string, apiKey: 
   return { status: r.status, body: respBody };
 }
 
+// Fetch the raw GHL free-slots map for a window:
+//   { "YYYY-MM-DD": { slots: ["<ISO with +offset>"] }, ..., "traceId": "..." }
+// The slot strings are GHL's own canonical, correctly-offset times — the source of truth we book
+// against. The voice model hand-builds its datetime from a bare "HH:MM" and frequently omits or
+// mangles the timezone offset, which makes GHL reject a wide-open slot as "no longer available"
+// (proven live: same slot books with +10:00, 400s without). Returns {} on any failure.
+async function fetchSlotsRaw(
+  client: ClientRow,
+  calendarId: string,
+  startMs: number,
+  endMs: number,
+): Promise<Record<string, { slots?: unknown }>> {
+  const sp = new URLSearchParams();
+  sp.set("startDate", String(startMs));
+  sp.set("endDate", String(endMs));
+  if (client.timezone) sp.set("timezone", client.timezone);
+  const r = await ghlGet(`/calendars/${calendarId}/free-slots?${sp.toString()}`, client.ghl_api_key as string);
+  const raw = r.body;
+  if (r.status >= 400 || !raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+  return raw as Record<string, { slots?: unknown }>;
+}
+
+// Compact a raw free-slots map to { "YYYY-MM-DD": ["HH:MM", ...] } — the shape the agent already
+// reads from {{available_time_slots}} (mirrors make-retell-outbound-call's compactSlots).
+function compactRawSlots(raw: Record<string, { slots?: unknown }>): Record<string, string[]> {
+  const out: Record<string, string[]> = {};
+  for (const [key, val] of Object.entries(raw)) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(key)) continue; // skip traceId and other noise
+    const slots = (val as { slots?: unknown } | null)?.slots;
+    if (!Array.isArray(slots)) continue;
+    out[key] = slots.map((s) => {
+      if (typeof s !== "string") return String(s);
+      const m = s.match(/T(\d{2}:\d{2})/); // local HH:MM from the ISO timestamp
+      return m ? m[1] : s;
+    });
+  }
+  return out;
+}
+
+// Add minutes to an ISO datetime, preserving its timezone offset suffix (or Z).
+function addMinutesPreserveOffset(iso: string, mins: number): string {
+  const off = iso.match(/([+-]\d{2}:\d{2}|Z)$/)?.[1] ?? "+00:00";
+  const ms = new Date(iso).getTime() + mins * 60 * 1000;
+  if (Number.isNaN(ms)) return iso;
+  if (off === "Z") return new Date(ms).toISOString().replace(/\.\d{3}Z$/, "Z");
+  const sign = off.startsWith("-") ? -1 : 1;
+  const oh = parseInt(off.slice(1, 3), 10);
+  const om = parseInt(off.slice(4, 6), 10);
+  const shifted = new Date(ms + sign * (oh * 60 + om) * 60 * 1000);
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${shifted.getUTCFullYear()}-${p(shifted.getUTCMonth() + 1)}-${p(shifted.getUTCDate())}`
+    + `T${p(shifted.getUTCHours())}:${p(shifted.getUTCMinutes())}:${p(shifted.getUTCSeconds())}${off}`;
+}
+
+// Match the agent's intended local day + HH:MM against GHL's own free-slot strings and return the
+// canonical, correctly-offset slot string. We deliberately IGNORE any offset the model attached to
+// startDateTime (it is frequently wrong/missing) and trust only the wall-clock it picked — the agent
+// always works in the lead's timezone and reads HH:MM straight from availability. Returns
+// { parsed, canonical }: parsed=false means we couldn't read a day+time (caller falls back to the
+// raw string); parsed=true with canonical=null means that time is genuinely not an open slot.
+async function resolveCanonicalSlot(
+  client: ClientRow,
+  calendarId: string,
+  startDateTime: string,
+): Promise<{ parsed: boolean; canonical: string | null }> {
+  const dayM = startDateTime.match(/^(\d{4}-\d{2}-\d{2})/);
+  const timeM = startDateTime.match(/T(\d{2}:\d{2})/);
+  if (!dayM || !timeM) return { parsed: false, canonical: null };
+  const day = dayM[1];
+  const hhmm = timeM[1];
+  // Window straddles the local day on both sides so it covers any timezone offset; GHL keys the
+  // returned map by local date in the requested timezone, so we just read the [day] bucket.
+  const base = Date.parse(`${day}T00:00:00Z`);
+  const raw = await fetchSlotsRaw(client, calendarId, base - 86400000, base + 2 * 86400000);
+  const slots = Array.isArray(raw[day]?.slots) ? (raw[day].slots as unknown[]) : [];
+  const canonical = slots.find((s) => typeof s === "string" && s.match(/T(\d{2}:\d{2})/)?.[1] === hhmm);
+  return { parsed: true, canonical: (canonical as string) ?? null };
+}
+
+// Build the recoverable "slot_unavailable" result carrying REAL alternative open times the agent
+// can read back. Window: now (or the requested day, whichever is earlier) through requested day + 10
+// days, widened once to +21 if empty. Never throws — degrades to a soft message.
+async function buildSlotUnavailable(client: ClientRow, calendarId: string, startDateTime: string) {
+  try {
+    const reqMs = Date.parse(startDateTime);
+    const nowMs = Date.now();
+    const anchorMs = Number.isNaN(reqMs) ? nowMs : reqMs;
+    const startMs = Math.min(nowMs, anchorMs);
+    let available_slots = compactRawSlots(await fetchSlotsRaw(client, calendarId, startMs, anchorMs + 10 * 86400000));
+    if (Object.keys(available_slots).length === 0) {
+      available_slots = compactRawSlots(await fetchSlotsRaw(client, calendarId, startMs, anchorMs + 21 * 86400000));
+    }
+    const dates = Object.keys(available_slots);
+    return {
+      booked: false,
+      status: "slot_unavailable",
+      available_slots,
+      message: dates.length
+        ? "That time isn't available. Here are the real open times, only offer one of these: "
+          + dates.map((d) => `${d}: ${available_slots[d].join(", ")}`).join(" | ")
+        : "That time isn't available, and I couldn't find open times in the next few weeks. Ask the caller for a different week and I'll re-check.",
+      retry_with_available_slots: true,
+    };
+  } catch (slotErr) {
+    console.warn("voice-booking-tools: inline slot recovery failed (non-fatal)", slotErr);
+    return {
+      booked: false,
+      status: "slot_unavailable",
+      message: "That time isn't available anymore. Let me check the calendar for the current open times and offer you one of those.",
+      retry_with_available_slots: true,
+    };
+  }
+}
+
 // Resolve a GHL contact for a voice-booking request.
 //
 // Lookup order:
@@ -337,22 +451,28 @@ async function toolBookAppointments(args: {
 }) {
   const { client, body, supabase } = args;
   const startDateTime = typeof body.startDateTime === "string" ? body.startDateTime : null;
-  let endDateTime = typeof body.endDateTime === "string" ? body.endDateTime : null;
   const calendarId = (typeof body.calendarId === "string" && body.calendarId) || client.ghl_calendar_id;
 
   if (!startDateTime) throw new ToolError(400, "startDateTime is required");
   if (!calendarId) throw new ToolError(400, "No calendar id available");
 
-  // Default endDateTime to startDateTime + 30 min when the agent didn't supply one
-  if (!endDateTime) {
-    const start = new Date(startDateTime);
-    if (Number.isNaN(start.getTime())) {
-      throw new ToolError(400, `Invalid startDateTime: ${startDateTime}`);
-    }
-    endDateTime = new Date(start.getTime() + 30 * 60 * 1000).toISOString();
-  }
-
   const { contactId } = await resolveContactId({ client, body, createIfMissing: true, supabase });
+
+  // Resolve the canonical, correctly-offset slot string GHL itself returns, by matching the agent's
+  // intended local day + HH:MM. This is the load-bearing fix: GHL rejects an open slot when the
+  // model omits/mangles the timezone offset (proven live — same slot books with +10:00, 400s "no
+  // longer available" without). Matching also validates availability in one step: a parsed time with
+  // no matching open slot is simply not available, so we return real alternatives instead of firing
+  // a doomed POST. If we can't parse a day+time at all, fall back to the raw string (last resort).
+  let bookStart = startDateTime;
+  const match = await resolveCanonicalSlot(client, calendarId, startDateTime);
+  if (match.parsed) {
+    if (!match.canonical) return await buildSlotUnavailable(client, calendarId, startDateTime);
+    bookStart = match.canonical;
+  } else if (Number.isNaN(new Date(startDateTime).getTime())) {
+    throw new ToolError(400, `Invalid startDateTime: ${startDateTime}`);
+  }
+  const bookEnd = addMinutesPreserveOffset(bookStart, 30);
 
   // Body shape mirrors the canonical 1prompt-os n8n workflow's bookAppointment
   // node: meetingLocationType + ignoreDateRange + toNotify + ignoreFreeSlotValidation
@@ -362,8 +482,8 @@ async function toolBookAppointments(args: {
     calendarId,
     locationId: client.ghl_location_id,
     contactId,
-    startTime: startDateTime,
-    endTime: endDateTime,
+    startTime: bookStart,
+    endTime: bookEnd,
     title: (typeof body.title === "string" && body.title) || client.gohighlevel_booking_title || "Appointment",
     meetingLocationType: "default",
     appointmentStatus: "confirmed",
@@ -376,20 +496,12 @@ async function toolBookAppointments(args: {
 
   const r = await ghlSend("POST", "/calendars/events/appointments", client.ghl_api_key as string, ghlBody);
   if (r.status >= 400) {
-    // GHL rejects a slot that isn't actually free (e.g. the agent offered a time
-    // that wasn't returned by get-available-slots, or it was taken since) with
-    // 400 "The slot you have selected is no longer available." Return a clean,
-    // recoverable result (HTTP 200 wrapper, booked:false) so the voice agent
-    // re-checks availability and offers a real slot, instead of seeing an opaque
-    // 502 Axios error. Other GHL errors still surface as a 502.
+    // We already canonicalised + availability-matched above, so a slot rejection here is almost
+    // always a genuine race (the slot was taken between our match and this POST). Return real
+    // alternatives rather than an opaque error. Non-slot GHL errors still surface as a 502.
     const bodyStr = JSON.stringify(r.body);
     if (r.status === 400 && /no longer available|not available|slot/i.test(bodyStr)) {
-      return {
-        booked: false,
-        status: "slot_unavailable",
-        message: "That time isn't available anymore. Let me check the calendar for the current open times and offer you one of those.",
-        retry_with_available_slots: true,
-      };
+      return await buildSlotUnavailable(client, calendarId, startDateTime);
     }
     throw new ToolError(502, `GHL book-appointments failed ${r.status}: ${bodyStr.slice(0, 300)}`);
   }
@@ -406,8 +518,8 @@ async function toolBookAppointments(args: {
             lead_id: contactId,
             ghl_appointment_id: appointmentId,
             ghl_calendar_id: calendarId,
-            appointment_time: startDateTime,
-            appointment_end_time: endDateTime,
+            appointment_time: bookStart,
+            appointment_end_time: bookEnd,
             source: "voice_call",
             status: "confirmed",
             raw_payload: appt,
@@ -501,10 +613,29 @@ async function toolUpdateAppointment(args: {
     || (typeof body.eventId === "string" && body.eventId)
     || null;
   if (!appointmentId) throw new ToolError(400, "appointmentId or eventId is required");
+  const calendarId = (typeof body.calendarId === "string" && body.calendarId) || client.ghl_calendar_id;
 
   const updateBody: Record<string, unknown> = {};
-  if (typeof body.startDateTime === "string") updateBody.startTime = body.startDateTime;
-  if (typeof body.endDateTime === "string") updateBody.endTime = body.endDateTime;
+  // Reschedule has the same offset hazard as booking: canonicalise the new startTime against GHL's
+  // own free-slot strings so the timezone offset is always correct (otherwise GHL rejects an open
+  // slot as "no longer available"). A parsed-but-unmatched time means it isn't open — return real
+  // alternatives instead of pushing a doomed PUT.
+  let newStart: string | null = null;
+  if (typeof body.startDateTime === "string") {
+    if (calendarId) {
+      const match = await resolveCanonicalSlot(client, calendarId, body.startDateTime);
+      if (match.parsed && !match.canonical) return await buildSlotUnavailable(client, calendarId, body.startDateTime);
+      newStart = match.canonical ?? body.startDateTime;
+    } else {
+      newStart = body.startDateTime;
+    }
+    updateBody.startTime = newStart;
+    updateBody.endTime = (typeof body.endDateTime === "string")
+      ? body.endDateTime
+      : addMinutesPreserveOffset(newStart, 30);
+  } else if (typeof body.endDateTime === "string") {
+    updateBody.endTime = body.endDateTime;
+  }
   if (typeof body.title === "string") updateBody.title = body.title;
   if (typeof body.appointmentStatus === "string") updateBody.appointmentStatus = body.appointmentStatus;
   if (Object.keys(updateBody).length === 0) {
@@ -517,7 +648,7 @@ async function toolUpdateAppointment(args: {
   // Mirror the change locally so /bookings stays current
   try {
     const mirrorPatch: Record<string, unknown> = { raw_payload: r.body };
-    if (typeof body.startDateTime === "string") mirrorPatch.appointment_time = body.startDateTime;
+    if (newStart) mirrorPatch.appointment_time = newStart;
     if (typeof body.endDateTime === "string") mirrorPatch.appointment_end_time = body.endDateTime;
     if (typeof body.appointmentStatus === "string") mirrorPatch.status = body.appointmentStatus;
     await supabase
