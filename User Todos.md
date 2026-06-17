@@ -8,6 +8,27 @@ Effort: S = under 30 min, M = 30 min - 2 hr, L = half day+.
 
 ---
 
+## 🆕 VOICE BOOKING/CALLBACK + V2 + WIZARD BUG (2026-06-16, late) — see `Docs/SESSION_CLOSEOUT_2026-06-16_voice-v2-and-wizard-bug.md`
+
+Diagnosed two live-call issues + shipped fixes + delivered a new "Main Outbound V2" prompt. Brendan stood V2 up but it surfaced a build bug.
+
+**Shipped (live in prod, but UNCOMMITTED in git):**
+- [x] Booking diagnosis: root cause = prompt-flow (agent invented times on a 0-slot day); backend proven healthy. "endDateTime bug" refuted.
+- [x] Callback verdict: first AI callback (row `522be766`) WILL fire 2026-06-17 10am AEST (FROZEN prod Trigger run verified).
+- [x] Double-dial dedup (migration `20260616120000` + webhook v22 guard + in-call 23505 handling) + graceful `slot_unavailable` in book-appointments (voice-booking-tools **v15**). All verified live.
+- [x] Research: prompt size-vs-structure (compaction / states / Conversation Flow) + Eddie/Steven prompt analysis. Reports in Docs.
+- [x] **Main Outbound V2** draft (`Docs/MAIN_OUTBOUND_V2_PROMPT_2026-06-16.md`); Brendan stood it up (setter "Voice Setter 8" / agent "Main Outbound V2" `agent_088a9ed…`). Prompt verified good (18.6k, 1 slot ref, published clean).
+
+**Brendan — to do:**
+- [ ] **🔴 Fix V2 before testing:** turn ON the booking function on "Voice Setter 8" + Save/Push — V2 currently has only 3 tools (no booking tools), so it can't book. Then send call_id for re-verify.
+- [ ] Tomorrow: V2 booking test (send call_id) + callback live-verify (row `522be766` → `placed` + call to +61405482446).
+
+**Claude — next-build code items:**
+- [ ] **🔴 Create-New-Setter skips the setup wizard** → new setters get NO booking tools + default to model gpt-5.2. Root cause: `PromptManagement.tsx handleCreateNewSetter:5528`. Copy-paste build prompt in the closeout doc. Fix: route through the wizard (or seed booking+tools+sane-model defaults) so a new setter is bookable; fix the gpt-5.2 default.
+- [ ] **Commit the shipped backend fixes** (B1/B2 above are deployed-but-uncommitted = prod-ahead-of-repo drift); branch off main, leave concurrent retell-proxy v39 WIP out.
+
+---
+
 ## ✅ P0-P2 CLUSTER BUILD (2026-06-16) — HEAD `eb158e3`, all live
 
 Cleared the critical voice-publish path + the P1/P2 cluster. Full record: `Operations/handoffs/2026-06-16-p0-p2-cluster-build.md`. Staged A-F, each verified + deployed + pushed; 8-agent adversarial review (2 medium fixes applied).
