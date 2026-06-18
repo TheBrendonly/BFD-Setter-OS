@@ -756,7 +756,7 @@ async function toolLookupContact(args: {
   // Internal-first: resolve deterministic survivor from our leads table.
   let contactId: string | null = null;
   let matchQuality: "phone" | "email" | "none" = "none";
-  if (phone) {
+  if (phone && supabase) {
     const normalizedPhone = normalizePhone(phone);
     if (normalizedPhone) {
       const internalLead = await resolveLeadByPhone(supabase, client.id, normalizedPhone);
