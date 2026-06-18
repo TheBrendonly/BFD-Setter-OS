@@ -1315,8 +1315,8 @@ const ContactDetail = () => {
           <div className="p-6">
             <p className="text-sm text-muted-foreground leading-relaxed mb-5" style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '13px' }}>
               {setterStopped
-                ? 'Are you sure you want to activate the setter for this lead? The AI setter will resume replying to this contact.'
-                : 'Are you sure you want to stop the setter for this lead? Once stopped, the AI setter will no longer reply to this contact.'}
+                ? 'Are you sure you want to activate the setter for this contact? The AI setter will resume replying to all leads on this phone number.'
+                : 'Are you sure you want to stop the setter for this contact? Once stopped, the AI setter will no longer reply to any lead sharing this phone number.'}
             </p>
             <div className="flex gap-3">
               <Button
@@ -1342,10 +1342,10 @@ const ContactDetail = () => {
                     if (data?.error) throw new Error(data.error);
                     if (requestType === 'Stop') {
                       setSetterStopped(true);
-                      toast.success('Setter stopped for this lead');
+                      toast.success('Setter stopped for all leads on this number');
                     } else {
                       setSetterStopped(false);
-                      toast.success('Setter activated for this lead');
+                      toast.success('Setter activated for all leads on this number');
                     }
                   } catch (err: any) {
                     toast.error(err.message || `Failed to ${requestType.toLowerCase()} setter`);
