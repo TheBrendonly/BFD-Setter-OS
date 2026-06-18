@@ -28,6 +28,8 @@
 import { schedules } from "@trigger.dev/sdk";
 import { createClient } from "@supabase/supabase-js";
 import { aiGenerateEngagementCopy } from "./_shared/aiGenerateEngagementCopy";
+import { normalizePhone } from "./_shared/phone";
+import { isPhoneOptedOut } from "./_shared/optout";
 
 const getMainSupabase = () =>
   createClient(
@@ -230,6 +232,17 @@ export const nudgeColdReply = schedules.task({
       if (freshLead?.setter_stopped) {
         stats.skipped++;
         continue;
+      }
+      // By-phone opt-out gate: belt-and-braces against the race window where
+      // STOP arrives but setter_stopped has not been stamped yet.
+      const normalizedNudgePhone = normalizePhone(lead.phone);
+      if (normalizedNudgePhone) {
+        const nudgePhoneOptedOut = await isPhoneOptedOut(supabase, lead.client_id!, normalizedNudgePhone);
+        if (nudgePhoneOptedOut) {
+          console.log(`nudgeColdReply: phone ${normalizedNudgePhone} is in lead_optouts for lead ${lead.lead_id} — skipping.`);
+          stats.skipped++;
+          continue;
+        }
       }
 
       // Send via direct Twilio. Mirrors sendTwilioSmsAndStamp's shape so
