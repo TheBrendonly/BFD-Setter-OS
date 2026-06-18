@@ -36,6 +36,14 @@ Deno.serve(async (req) => {
       );
     }
 
+    // Additional guard: reject empty contact_id to prevent undefined in later queries
+    if (typeof contact_id === "string" && contact_id.trim() === "") {
+      return new Response(
+        JSON.stringify({ error: "Missing client_id or contact_id" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     // Verify the caller's JWT AND that they own client_id. Previously the token was
     // atob-decoded without verification and ownership was never checked → a forged
     // token + any client_id could trigger the stop-bot webhook for any tenant.
@@ -91,6 +99,12 @@ Deno.serve(async (req) => {
 
     if (leadError) {
       console.error("Failed to resolve lead:", leadError);
+      // Return early on lookup error to avoid proceeding with writes when the
+      // lead resolution failed (a real Postgres/RLS error should not silently fall through).
+      return new Response(
+        JSON.stringify({ success: true, note: "lookup_error" }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
     const setterStopped = requestType === "Stop";
@@ -102,6 +116,9 @@ Deno.serve(async (req) => {
 
     if (resolvedNormalizedPhone) {
       // Fan-out: set setter_stopped on ALL leads sharing (client_id, normalized_phone).
+      // Note: the following two writes (setter_stopped update + lead_optouts upsert/delete)
+      // are not transactional (edge functions have no transaction support), so a failure
+      // between them leaves partial state. The next STOP/START retry will attempt both again.
       const { error: updateError } = await supabase
         .from("leads")
         .update({ setter_stopped: setterStopped })
