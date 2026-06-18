@@ -32,6 +32,8 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.101.0";
 import { pushSmsToGhl } from "../_shared/ghl-conversations.ts";
 import { parseCallbackTime } from "../_shared/parseCallbackTime.ts";
+import { normalizePhone } from "../_shared/phone.ts";
+import { resolveLeadByPhone } from "../_shared/leadResolve.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -283,6 +285,19 @@ async function resolveContactId(args: {
   const email = typeof body.email === "string" ? body.email.trim() : "";
   if (!phone && !email) throw new ToolError(400, "phone, email, or contactId is required");
   if (!client.ghl_location_id) throw new ToolError(409, "Client has no GHL locationId configured");
+
+  // Internal-first: resolve against our leads table to get the deterministic
+  // survivor lead_id, bypassing the non-deterministic GHL contacts[0] pick that
+  // would attach bookings to an arbitrary duplicate contact.
+  if (phone && supabase) {
+    const normalizedPhone = normalizePhone(phone);
+    if (normalizedPhone) {
+      const internalLead = await resolveLeadByPhone(supabase, client.id, normalizedPhone);
+      if (internalLead && typeof internalLead.lead_id === "string" && internalLead.lead_id) {
+        return { contactId: internalLead.lead_id, createdNew: false };
+      }
+    }
+  }
 
   const tryQuery = async (term: string): Promise<string | null> => {
     const path = `/contacts/?locationId=${encodeURIComponent(client.ghl_location_id!)}&limit=1&query=${encodeURIComponent(term)}`;
@@ -738,7 +753,21 @@ async function toolLookupContact(args: {
   }
   if (!client.ghl_location_id) throw new ToolError(409, "Client has no GHL locationId configured");
 
-  // Phone-first, then email — same precedence as resolveContactId reads
+  // Internal-first: resolve deterministic survivor from our leads table.
+  let contactId: string | null = null;
+  let matchQuality: "phone" | "email" | "none" = "none";
+  if (phone) {
+    const normalizedPhone = normalizePhone(phone);
+    if (normalizedPhone) {
+      const internalLead = await resolveLeadByPhone(supabase, client.id, normalizedPhone);
+      if (internalLead && typeof internalLead.lead_id === "string" && internalLead.lead_id) {
+        contactId = internalLead.lead_id;
+        matchQuality = "phone";
+      }
+    }
+  }
+
+  // Phone-first, then email — GHL fallback when no internal lead found
   const tryQuery = async (term: string): Promise<string | null> => {
     const path = `/contacts/?locationId=${encodeURIComponent(client.ghl_location_id!)}&limit=1&query=${encodeURIComponent(term)}`;
     const r = await ghlGet(path, client.ghl_api_key as string);
@@ -753,9 +782,7 @@ async function toolLookupContact(args: {
     return null;
   };
 
-  let contactId: string | null = null;
-  let matchQuality: "phone" | "email" | "none" = "none";
-  if (phone) {
+  if (!contactId && phone) {
     contactId = await tryQuery(phone);
     if (contactId) matchQuality = "phone";
   }
