@@ -230,14 +230,15 @@ Deno.serve(async (req) => {
     if (normalizedPhoneForOptOut) {
       const optedOut = await isPhoneOptedOut(supabase, client_id, normalizedPhoneForOptOut);
       if (optedOut) {
-        console.info(`trigger-engagement: phone ${normalizedPhoneForOptOut} is opted out for client ${client_id}; skipping enrolment`);
+        console.warn(`trigger-engagement: phone ${normalizedPhoneForOptOut} is opted out for client ${client_id}; skipping enrolment`);
         // Stamp the lead setter_stopped=true so the row reflects the standing opt-out.
         if (lead_id) {
-          await supabase
+          const { error: stopErr } = await supabase
             .from("leads")
             .update({ setter_stopped: true })
             .eq("client_id", client_id)
             .eq("lead_id", lead_id);
+          if (stopErr) console.error(`trigger-engagement: failed to stamp setter_stopped for lead ${lead_id}:`, stopErr.message);
         }
         return new Response(
           JSON.stringify({ enrolled: false, reason: "opted_out" }),

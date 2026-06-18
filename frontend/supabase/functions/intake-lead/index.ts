@@ -161,19 +161,20 @@ async function enrollLeadInEngagement(args: {
   }
 
   // Opt-out guard: do not arm a cadence for a phone with a standing opt-out.
-  // contactPhone is the normalisePhone() form; normalizePhone() produces the E.164 key used in lead_optouts.
+  // contactPhone may already be normalized; normalizePhone() is called to get the canonical E.164 form either way.
   const normalizedPhoneForOptOut = normalizePhone(contactPhone ?? undefined);
   if (normalizedPhoneForOptOut) {
     const optedOut = await isPhoneOptedOut(supabase, clientId, normalizedPhoneForOptOut);
     if (optedOut) {
-      console.info(`intake-lead: phone ${normalizedPhoneForOptOut} is opted out for client ${clientId}; skipping enrolment`);
+      console.warn(`intake-lead: phone ${normalizedPhoneForOptOut} is opted out for client ${clientId}; skipping enrolment`);
       // Stamp the lead setter_stopped=true so the row reflects the standing opt-out.
       if (leadId) {
-        await supabase
+        const { error: stopErr } = await supabase
           .from("leads")
           .update({ setter_stopped: true })
           .eq("client_id", clientId)
           .eq("lead_id", leadId);
+        if (stopErr) console.error(`intake-lead: failed to stamp setter_stopped for lead ${leadId}:`, stopErr.message);
       }
       return null;
     }
