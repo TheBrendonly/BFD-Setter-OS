@@ -24,6 +24,7 @@ import { createClient } from "npm:@supabase/supabase-js@2.101.0";
 import { fetchActiveNewLeadsWorkflows, resolveWorkflow } from "../_shared/resolve-workflow.ts";
 import { normalizePhone } from "../_shared/phone.ts";
 import { resolveLeadByPhone } from "../_shared/leadResolve.ts";
+import { isPhoneOptedOut } from "../_shared/optout.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -157,6 +158,25 @@ async function enrollLeadInEngagement(args: {
   if (!wf) {
     console.warn(`intake-lead: workflow ${workflowId} not found for client ${clientId}, skipping enroll`);
     return null;
+  }
+
+  // Opt-out guard: do not arm a cadence for a phone with a standing opt-out.
+  // contactPhone is the normalisePhone() form; normalizePhone() produces the E.164 key used in lead_optouts.
+  const normalizedPhoneForOptOut = normalizePhone(contactPhone ?? undefined);
+  if (normalizedPhoneForOptOut) {
+    const optedOut = await isPhoneOptedOut(supabase, clientId, normalizedPhoneForOptOut);
+    if (optedOut) {
+      console.info(`intake-lead: phone ${normalizedPhoneForOptOut} is opted out for client ${clientId}; skipping enrolment`);
+      // Stamp the lead setter_stopped=true so the row reflects the standing opt-out.
+      if (leadId) {
+        await supabase
+          .from("leads")
+          .update({ setter_stopped: true })
+          .eq("client_id", clientId)
+          .eq("lead_id", leadId);
+      }
+      return null;
+    }
   }
 
   const { data: execution, error: execErr } = await supabase

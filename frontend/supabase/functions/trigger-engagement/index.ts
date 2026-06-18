@@ -1,5 +1,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2.101.0";
 import { authorizeClientRequest, AssertAccessError } from "../_shared/authorize-client-request.ts";
+import { normalizePhone } from "../_shared/phone.ts";
+import { isPhoneOptedOut } from "../_shared/optout.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -221,6 +223,28 @@ Deno.serve(async (req) => {
     const resolvedName = contact_name || `${leadData.first_name} ${leadData.last_name}`.trim() || null;
     const resolvedPhone = contact_phone || leadData.phone || null;
     const resolvedEmail = contact_email || leadData.email || null;
+
+    // Opt-out guard: do not arm a cadence for a phone that has a standing opt-out.
+    // This closes the re-arm hole where a re-ingested duplicate lead is born setter_stopped=false.
+    const normalizedPhoneForOptOut = normalizePhone(resolvedPhone);
+    if (normalizedPhoneForOptOut) {
+      const optedOut = await isPhoneOptedOut(supabase, client_id, normalizedPhoneForOptOut);
+      if (optedOut) {
+        console.info(`trigger-engagement: phone ${normalizedPhoneForOptOut} is opted out for client ${client_id}; skipping enrolment`);
+        // Stamp the lead setter_stopped=true so the row reflects the standing opt-out.
+        if (lead_id) {
+          await supabase
+            .from("leads")
+            .update({ setter_stopped: true })
+            .eq("client_id", client_id)
+            .eq("lead_id", lead_id);
+        }
+        return new Response(
+          JSON.stringify({ enrolled: false, reason: "opted_out" }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    }
 
     // Insert engagement execution with resolved contact data
     const { data: execution, error: insertError } = await supabase
