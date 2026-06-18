@@ -10,6 +10,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.101.0";
 import { fetchActiveNewLeadsWorkflows, resolveWorkflow } from "../_shared/resolve-workflow.ts";
+import { buildExistingLeadUpdatePayload } from "../_shared/sync-identity-guard.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -432,12 +433,11 @@ Deno.serve(async (req) => {
     // BFD-wins rule: for an EXISTING lead, identity fields (first_name, last_name,
     // email, phone) are owned by BFD and must NOT be overwritten by a GHL
     // contact.update echo. The CREATE branch (below) still sets them from GHL on
-    // first ingress — that is the initial seed, not an overwrite. The echo-guard
+    // first ingress -- that is the initial seed, not an overwrite. The echo-guard
     // (60s+stamp) remains in place but is no longer the sole protection for these
     // fields; they are simply excluded from the UPDATE payload regardless.
-    const updatePayload: Record<string, any> = {
-      updated_at: new Date().toISOString(),
-    };
+    // buildExistingLeadUpdatePayload() is the tested factory for this payload.
+    const updatePayload: Record<string, any> = buildExistingLeadUpdatePayload();
     // Identity fields (first_name, last_name, email, phone) are intentionally
     // omitted from updatePayload. GHL contact.update must not overwrite BFD edits.
 

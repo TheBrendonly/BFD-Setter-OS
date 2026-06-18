@@ -34,6 +34,7 @@ import { pushSmsToGhl } from "../_shared/ghl-conversations.ts";
 import { parseCallbackTime } from "../_shared/parseCallbackTime.ts";
 import { normalizePhone } from "../_shared/phone.ts";
 import { resolveLeadByPhone } from "../_shared/leadResolve.ts";
+import { isPhoneOptedOut } from "../_shared/optout.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -899,6 +900,13 @@ async function toolSendSms(args: { client: ClientRow; body: Record<string, unkno
     throw new ToolError(409, "Twilio is not configured for this client.");
   }
   if (!toNumber) throw new ToolError(400, "No phone number for the lead.");
+
+  // By-phone opt-out gate (lead_optouts table). Complements the setter_stopped
+  // guard above; catches leads who opted out via any SMS path, not just STOP.
+  const optNp = normalizePhone(toNumber);
+  if (optNp && await isPhoneOptedOut(supabase, client.id, optNp)) {
+    return { sent: false, reason: "Contact has opted out; SMS not sent." };
+  }
 
   // 1) Send via Twilio.
   const twilioRes = await fetch(
