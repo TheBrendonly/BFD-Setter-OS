@@ -3,72 +3,165 @@
 // Run with Node 22+:
 //   node --experimental-strip-types --test trigger/_shared/sendTwilioSmsAndStamp.test.ts
 //
-// Strategy: the gate is the composition of normalizePhone + isPhoneOptedOut.
-// Both helpers are already unit-testable (pure function + a thin supabase
-// query). We test the composed gate directly — the same logic that runs
-// inside sendTwilioSmsAndStamp before the Twilio fetch — rather than trying
-// to load the whole module graph (which requires ghl-conversations).
+// Strategy: exercise the REAL sendTwilioSmsAndStamp function with a fake supabase
+// and a stubbed globalThis.fetch. This proves the actual Twilio fetch is blocked
+// (never called) when the number is opted out, and IS called when it is not. (The test has teeth:
+// disabling the gate causes tests 1 and 4 to fail.)
 import test from "node:test";
 import { strict as assert } from "node:assert";
-import { normalizePhone } from "./phone.ts";
-import { isPhoneOptedOut } from "./optout.ts";
+import { sendTwilioSmsAndStamp } from "./sendTwilioSmsAndStamp.ts";
 
 // ── Minimal supabase mock ──────────────────────────────────────────────────
-// Mirrors the query inside isPhoneOptedOut:
-//   supabase.from("lead_optouts").select("phone").eq(...).eq(...).maybeSingle()
+// Mirrors the two queries sendTwilioSmsAndStamp needs:
+//   1. isPhoneOptedOut: .from("lead_optouts").select("phone").eq(...).eq(...).maybeSingle()
+//   2. post-send stamp:  .from("message_queue").insert(...)
+//   3. post-send bump:   .from("leads").update(...).eq(...).eq(...)
 function makeSupabase(optoutRow: { phone: string } | null) {
-  const chain: any = {
-    select: () => chain,
-    eq: () => chain,
+  const optoutChain: any = {
+    select: () => optoutChain,
+    eq: () => optoutChain,
     maybeSingle: async () => ({ data: optoutRow }),
   };
-  return { from: (_table: string) => chain };
+  const stampChain: any = {
+    insert: async () => ({ error: null }),
+  };
+  const leadsChain: any = {
+    update: () => leadsChain,
+    eq: () => leadsChain,
+    then: undefined, // not a promise; callers await the insert/update shape
+  };
+  // Return an update chain that resolves cleanly
+  leadsChain.eq = () => ({ data: null, error: null });
+
+  return {
+    from: (table: string) => {
+      if (table === "lead_optouts") return optoutChain;
+      if (table === "message_queue") return stampChain;
+      if (table === "leads") {
+        return {
+          update: () => ({
+            eq: () => ({
+              eq: async () => ({ data: null, error: null }),
+            }),
+          }),
+        };
+      }
+      return stampChain;
+    },
+  };
 }
 
-// ── Gate composite ─────────────────────────────────────────────────────────
-// This is the exact logic copy-pasted from sendTwilioSmsAndStamp so any drift
-// in the impl will cause a test failure here, which is intentional.
-async function gateWouldBlock(
-  supabase: any,
-  clientId: string,
-  toNumber: string,
-): Promise<boolean> {
-  const normalizedTo = normalizePhone(toNumber);
-  if (!normalizedTo) return false; // unnormalisable — gate skips
-  return isPhoneOptedOut(supabase, clientId, normalizedTo);
-}
+// Shared minimal args (all fields sendTwilioSmsAndStamp requires)
+const BASE_ARGS = {
+  twilioSid: "AC_fake_sid",
+  twilioAuth: "fake_auth",
+  fromNumber: "+61400000001",
+  toNumber: "+61400000002",
+  body: "Test message",
+  clientId: "client-abc",
+  leadId: "lead-xyz",
+  ghlAccountId: "ghl-acct-1",
+  contactName: "Test Lead",
+  contactEmail: "test@example.com",
+  ghlApiKey: null,
+  ghlLocationId: null,
+  ghlContactId: null,
+  ghlConversationProviderId: null,
+};
 
 // ── Tests ──────────────────────────────────────────────────────────────────
 
-test("opted-out number: gate returns true (blocks Twilio call)", async () => {
+test("opted-out number: Twilio fetch is NEVER called and result is no-send opted_out", async () => {
+  // supabase returns an optout row: this number is blocked
   const supabase = makeSupabase({ phone: "+61400000002" });
-  const blocked = await gateWouldBlock(supabase, "client-abc", "+61400000002");
-  assert.equal(blocked, true, "gate must return true for a number in lead_optouts");
+
+  let fetchCallCount = 0;
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (..._args: any[]) => {
+    fetchCallCount++;
+    // Should never reach here
+    return new Response(JSON.stringify({ sid: "SM_fake" }), { status: 200 });
+  };
+
+  try {
+    const result = await sendTwilioSmsAndStamp({ supabase, ...BASE_ARGS });
+
+    assert.equal(fetchCallCount, 0, "fetch must NOT be called when number is opted out");
+    assert.equal(result.ok, false, "result.ok must be false for opted-out number");
+    assert.equal(result.sid, null, "result.sid must be null for opted-out number");
+    assert.equal(result.errorMessage, "opted_out", "result.errorMessage must equal 'opted_out'");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
-test("non-opted-out number: gate returns false (allows Twilio call)", async () => {
-  const supabase = makeSupabase(null); // no row = not opted out
-  const blocked = await gateWouldBlock(supabase, "client-abc", "+61400000002");
-  assert.equal(blocked, false, "gate must return false when number not in lead_optouts");
+test("non-opted-out number: Twilio fetch IS called", async () => {
+  // supabase returns null: no optout row, number is clear
+  const supabase = makeSupabase(null);
+
+  let fetchCallCount = 0;
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (_url: string, _init: any) => {
+    fetchCallCount++;
+    // Return a minimal Twilio success shape
+    return new Response(JSON.stringify({ sid: "SMfake123" }), {
+      status: 201,
+      headers: { "Content-Type": "application/json" },
+    });
+  };
+
+  try {
+    await sendTwilioSmsAndStamp({ supabase, ...BASE_ARGS });
+    assert.ok(fetchCallCount > 0, "fetch must be called when number is NOT opted out");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
-test("unnormalisable toNumber: gate returns false (does not block)", async () => {
-  // Even if a row existed, an unrecognisable number can't be normalised so
-  // the gate must NOT block (safe fall-through).
+test("unnormalisable toNumber: gate skips and Twilio fetch IS called (safe fall-through)", async () => {
+  // Even with an optout row present, an unnormalisable number must not block
   const supabase = makeSupabase({ phone: "+61400000002" });
-  const blocked = await gateWouldBlock(supabase, "client-abc", "123");
-  assert.equal(blocked, false, "gate must return false for unnormalisable phone (no block)");
+
+  let fetchCallCount = 0;
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (_url: string, _init: any) => {
+    fetchCallCount++;
+    return new Response(JSON.stringify({ sid: "SMfake456" }), {
+      status: 201,
+      headers: { "Content-Type": "application/json" },
+    });
+  };
+
+  try {
+    await sendTwilioSmsAndStamp({ supabase, ...BASE_ARGS, toNumber: "123" });
+    assert.ok(fetchCallCount > 0, "fetch must be called for unnormalisable phone (gate skips)");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
-test("AU national format normalised and matched in lead_optouts", async () => {
-  // normalizePhone("0400000002") -> "+61400000002"
+test("AU national format: normalised, matched in lead_optouts, Twilio fetch blocked", async () => {
+  // normalizePhone("0400000002") -> "+61400000002"; row exists: blocked
   const supabase = makeSupabase({ phone: "+61400000002" });
-  const blocked = await gateWouldBlock(supabase, "client-abc", "0400000002");
-  assert.equal(blocked, true, "AU national format must normalise and match the lead_optouts row");
-});
 
-test("null phone: gate returns false (safe fall-through)", async () => {
-  const supabase = makeSupabase({ phone: "+61400000002" });
-  const blocked = await gateWouldBlock(supabase, "client-abc", null as any);
-  assert.equal(blocked, false, "null phone must not block");
+  let fetchCallCount = 0;
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (..._args: any[]) => {
+    fetchCallCount++;
+    return new Response(JSON.stringify({ sid: "SM_should_not_appear" }), { status: 201 });
+  };
+
+  try {
+    const result = await sendTwilioSmsAndStamp({
+      supabase,
+      ...BASE_ARGS,
+      toNumber: "0400000002",
+    });
+
+    assert.equal(fetchCallCount, 0, "fetch must NOT be called for AU national format opted-out number");
+    assert.equal(result.ok, false, "result.ok must be false");
+    assert.equal(result.errorMessage, "opted_out", "errorMessage must be opted_out");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });

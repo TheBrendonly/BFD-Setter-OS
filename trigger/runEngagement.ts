@@ -344,7 +344,7 @@ export const runEngagement = task({
               status: "cancelled",
               stop_reason: "setter_stopped",
               completed_at: new Date().toISOString(),
-              stage_description: "Cancelled — phone in lead_optouts.",
+              stage_description: "Cancelled: phone in lead_optouts.",
             })
             .eq("id", execution_id);
           return true;

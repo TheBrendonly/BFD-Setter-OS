@@ -1,6 +1,6 @@
-import { pushSmsToGhl } from "./ghl-conversations";
-import { normalizePhone } from "./phone";
-import { isPhoneOptedOut } from "./optout";
+import { pushSmsToGhl } from "./ghl-conversations.ts";
+import { normalizePhone } from "./phone.ts";
+import { isPhoneOptedOut } from "./optout.ts";
 
 // ── Shared Twilio SMS sender + message_queue stamp + GHL mirror ───────────
 // Extracted from runEngagement.ts so processMessages/sendFollowup can reuse the
@@ -74,7 +74,7 @@ export async function sendTwilioSmsAndStamp(args: {
     const optedOut = await isPhoneOptedOut(args.supabase, args.clientId, normalizedTo);
     if (optedOut) {
       console.log(
-        `sendTwilioSmsAndStamp: BLOCKED — ${normalizedTo} is in lead_optouts for client ${args.clientId} (lead ${args.leadId})`,
+        `sendTwilioSmsAndStamp: BLOCKED: ${normalizedTo} is in lead_optouts for client ${args.clientId} (lead ${args.leadId})`,
       );
       return { ok: false, sid: null, errorMessage: "opted_out" };
     }

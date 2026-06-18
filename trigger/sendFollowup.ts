@@ -125,7 +125,7 @@ export const sendFollowup = task({
     if (normalizedFollowupPhone) {
       const phoneOptedOut = await isPhoneOptedOut(supabase, client_id, normalizedFollowupPhone);
       if (phoneOptedOut) {
-        console.log(`Follow-up timer ${timer_id}: phone ${normalizedFollowupPhone} in lead_optouts — cancelling timers.`);
+        console.log(`Follow-up timer ${timer_id}: phone ${normalizedFollowupPhone} in lead_optouts, cancelling timers.`);
         await supabase
           .from("followup_timers")
           .update({ status: "cancelled", updated_at: new Date().toISOString() })

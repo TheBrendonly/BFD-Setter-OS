@@ -239,7 +239,7 @@ export const nudgeColdReply = schedules.task({
       if (normalizedNudgePhone) {
         const nudgePhoneOptedOut = await isPhoneOptedOut(supabase, lead.client_id!, normalizedNudgePhone);
         if (nudgePhoneOptedOut) {
-          console.log(`nudgeColdReply: phone ${normalizedNudgePhone} is in lead_optouts for lead ${lead.lead_id} — skipping.`);
+          console.log(`nudgeColdReply: phone ${normalizedNudgePhone} is in lead_optouts for lead ${lead.lead_id}, skipping.`);
           stats.skipped++;
           continue;
         }
