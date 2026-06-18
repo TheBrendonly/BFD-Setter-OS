@@ -878,6 +878,11 @@ Deno.serve(async (req) => {
       const { data: lc } = await supabase
         .from("engagement_executions").select("id")
         .eq("ghl_contact_id", contactId).eq("client_id", client.id)
+        // Only a still-running engagement counts as a live call. A terminal
+        // engagement with a never-cleared active_call_id would otherwise keep
+        // voiceCallActive=true and wrongly suppress stop-on-reply (same
+        // stranded-hold class as processMessages, fixed 2026-06-18).
+        .eq("status", "running")
         .not("active_call_id", "is", null).limit(1).maybeSingle();
       voiceCallActive = !!lc;
     }

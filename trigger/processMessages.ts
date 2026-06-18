@@ -174,6 +174,12 @@ export const processMessages = task({
             .eq("ghl_contact_id", lead_id)
             .eq("ghl_account_id", ghl_account_id)
             .not("active_call_id", "is", null)
+            // Only a still-running engagement is a genuinely live call. A
+            // terminal engagement (completed/cancelled/failed/stopped) that
+            // never got its active_call_id cleared would otherwise pin this
+            // loop to the full 15-min ceiling on every inbound SMS — the
+            // stranded-hold bug found 2026-06-18.
+            .eq("status", "running")
             .limit(1)
             .maybeSingle();
           if (!liveCall || Date.now() >= holdDeadline) break;
