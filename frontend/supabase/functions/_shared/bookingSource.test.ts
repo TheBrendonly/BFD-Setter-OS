@@ -24,3 +24,7 @@ Deno.test("resolveBookingSource: empty string existing => incomingSource used", 
 Deno.test("resolveBookingSource: default incomingSource is ghl_calendar", () => {
   assertEquals(resolveBookingSource(null), "ghl_calendar");
 });
+
+Deno.test("resolveBookingSource: ANY non-null non-ghl source wins", () => {
+  assertEquals(resolveBookingSource("manual", "ghl_calendar"), "manual");
+});

@@ -204,12 +204,16 @@ Deno.serve(async (req) => {
     // Read the existing booking source (if any) so we can preserve a
     // higher-fidelity origin (e.g. voice_call) when GHL fires a confirm/attend
     // event for an appointment that was already created by the voice agent.
-    const { data: existingBooking } = await supabase
+    const { data: existingBooking, error: selectErr } = await supabase
       .from("bookings")
       .select("source")
       .eq("client_id", client.id)
       .eq("ghl_appointment_id", appointmentId)
       .maybeSingle();
+    if (selectErr) {
+      console.error("bookings-webhook: failed to read existing booking source", selectErr);
+      return jsonResponse({ ok: false, error: "existing booking read failed" }, 500);
+    }
     const existingSource = existingBooking?.source as string | null | undefined;
 
     // Upsert bookings row (idempotent on UNIQUE (client_id, ghl_appointment_id))
