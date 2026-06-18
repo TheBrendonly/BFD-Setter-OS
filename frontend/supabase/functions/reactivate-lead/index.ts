@@ -19,6 +19,7 @@
 
 import { createClient } from "npm:@supabase/supabase-js@2.101.0";
 import { assertClientAccess, AssertAccessError } from "../_shared/assert-client-access.ts";
+import { enrollAndFire } from "../_shared/enroll-execution.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -85,103 +86,57 @@ Deno.serve(async (req) => {
       .eq("lead_id", lead_id)
       .maybeSingle();
 
-    const ghl_account_id = (leadRow?.ghl_account_id as string | null)
-      ?? (typeof body.ghl_account_id === "string" ? body.ghl_account_id : null)
+    // leads has no ghl_account_id column (not in the select above), so this
+    // resolves from the request body, else the client_id. Matches prior runtime.
+    const ghl_account_id = (typeof body.ghl_account_id === "string" ? body.ghl_account_id : null)
       ?? client_id;
     const first_name = (leadRow?.first_name as string | null) ?? "";
     const last_name = (leadRow?.last_name as string | null) ?? "";
     const phone = (leadRow?.phone as string | null) ?? (typeof body.phone === "string" ? body.phone : "");
     const email = (leadRow?.email as string | null) ?? (typeof body.email === "string" ? body.email : "");
 
-    // Insert engagement_executions row in pending state.
-    const { data: execution, error: insertError } = await supabase
-      .from("engagement_executions")
-      .insert({
-        client_id,
-        workflow_id,
-        ghl_contact_id: lead_id,
-        ghl_account_id,
-        contact_name: `${first_name} ${last_name}`.trim() || null,
-        contact_phone: phone || null,
-        contact_email: email || null,
-        status: "pending",
-        started_at: new Date().toISOString(),
-        campaign_id,
-        enrollment_source: kind,
-        is_new_lead: kind === "new_lead",
-        kind,
-      })
-      .select("id")
-      .single();
+    // Enrol + fire via the shared primitive (see _shared/enroll-execution.ts).
+    // enrollment_source carries `kind`; the old code also wrote a separate
+    // `kind` column that no migration backs and that duplicated
+    // enrollment_source — dropped here. enrollment_source is canonical.
+    const result = await enrollAndFire({
+      supabase,
+      supabaseUrl,
+      serviceKey,
+      triggerSecretKey,
+      client_id,
+      workflow_id,
+      lead_id,
+      ghl_account_id,
+      contact_name: `${first_name} ${last_name}`.trim(),
+      contact_phone: phone,
+      contact_email: email,
+      // leads.custom_fields is not hydrated here (not selected); make-retell-
+      // outbound-call re-derives dynamic vars at call time. Matches prior runtime.
+      contact_fields: {},
+      enrollment_source: kind,
+      is_new_lead: kind === "new_lead",
+      campaign_id,
+    });
 
-    if (insertError || !execution) {
-      console.error("[reactivate-lead] insert failed", insertError);
-      return json({ error: "insert_failed", detail: insertError?.message }, 500);
+    if (!result.ok) {
+      if (result.error === "trigger_failed") {
+        // Leave the engagement_executions row at pending so the operator can
+        // see what happened. Sweeper / manual retry can re-fire.
+        return json({
+          error: "trigger_failed",
+          status: result.status,
+          detail: result.detail,
+          execution_id: result.execution_id,
+        }, 502);
+      }
+      return json({ error: "insert_failed", detail: result.detail }, 500);
     }
-
-    const execution_id = execution.id as string;
-
-    // Fire trigger.dev runEngagement.
-    const makeRetellCallUrl = `${supabaseUrl}/functions/v1/make-retell-outbound-call`;
-    const triggerResp = await fetch(
-      "https://api.trigger.dev/api/v1/tasks/run-engagement/trigger",
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${triggerSecretKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          payload: {
-            execution_id,
-            Lead_ID: lead_id,
-            GHL_Account_ID: ghl_account_id,
-            client_id,
-            workflow_id: workflow_id ?? null,
-            campaign_id,
-            Name: `${first_name} ${last_name}`.trim() || first_name || "",
-            Email: email || "",
-            Phone: phone || "",
-            make_retell_call_url: makeRetellCallUrl,
-            supabase_service_key: serviceKey,
-            contact_fields: (leadRow?.custom_fields as Record<string, unknown> | null) ?? {},
-          },
-        }),
-      },
-    );
-
-    if (!triggerResp.ok) {
-      const txt = await triggerResp.text().catch(() => "");
-      console.error("[reactivate-lead] trigger.dev failed", triggerResp.status, txt);
-      // Leave the engagement_executions row at pending so the operator can
-      // see what happened. Sweeper / manual retry can re-fire.
-      return json({
-        error: "trigger_failed",
-        status: triggerResp.status,
-        detail: txt.slice(0, 200),
-        execution_id,
-      }, 502);
-    }
-
-    const triggerData = await triggerResp.json().catch(() => null) as Record<string, unknown> | null;
-    const trigger_run_id =
-      (triggerData?.id as string | undefined)
-      ?? (triggerData?.run as Record<string, unknown> | undefined)?.id as string | undefined
-      ?? null;
-
-    await supabase
-      .from("engagement_executions")
-      .update({
-        trigger_run_id,
-        status: "running",
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", execution_id);
 
     return json({
       ok: true,
-      execution_id,
-      trigger_run_id,
+      execution_id: result.execution_id,
+      trigger_run_id: result.trigger_run_id,
       kind,
     });
   } catch (e) {

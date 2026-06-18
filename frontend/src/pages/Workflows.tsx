@@ -14,6 +14,7 @@ import { toast } from 'sonner';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 import { Pencil, Trash2, Plus, GripVertical, Save, Power, PowerOff, Crown } from '@/components/icons';
 import { Switch } from '@/components/ui/switch';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import type { Workflow } from '@/types/workflow';
 import RetroLoader from '@/components/RetroLoader';
 import { insertDefaultCampaignWidgets } from '@/lib/campaignWidgets';
@@ -42,12 +43,96 @@ interface EngagementWorkflow {
   is_new_leads_campaign?: boolean;
   new_leads_tag?: string | null;
   client_id?: string;
+  // 3.5 lead-lifecycle state machine (opt-in; null = legacy single-stage).
+  lifecycle_role?: string | null;
+  on_sequence_complete_workflow_id?: string | null;
+  on_silent_workflow_id?: string | null;
+}
+
+// 3.5 — the lifecycle stages a campaign can play. 'none' clears the role.
+const LIFECYCLE_ROLE_OPTIONS: { value: string; label: string }[] = [
+  { value: 'none', label: 'None' },
+  { value: 'hot_pursuit', label: 'Hot Pursuit' },
+  { value: 'cool_down', label: 'Cool Down' },
+  { value: 'long_tail', label: 'Long-Tail' },
+  { value: 're_engage', label: 'Re-engage' },
+];
+
+type LifecyclePatch = Partial<Pick<
+  EngagementWorkflow,
+  'lifecycle_role' | 'on_sequence_complete_workflow_id' | 'on_silent_workflow_id'
+>>;
+
+// 3.5 — per-campaign lifecycle wiring. Pick a role, then chain this stage to the
+// next workflow on sequence-complete and/or on silent. Opt-in: with role 'None'
+// the row sets nothing and the cadence behaves exactly as before.
+function LifecycleRow({ ew, allWorkflows, onLifecycleChange }: {
+  ew: EngagementWorkflow;
+  allWorkflows: EngagementWorkflow[];
+  onLifecycleChange: (ew: EngagementWorkflow, patch: LifecyclePatch) => void;
+}) {
+  const role = ew.lifecycle_role ?? 'none';
+  const hasRole = role !== 'none';
+  const targets = allWorkflows.filter(w => w.id !== ew.id);
+  // A lifecycle TARGET stage (cool_down/long_tail/re_engage) should not also be
+  // a New Leads campaign — its inbound tag would be stripped on completion.
+  const targetRoleConflict = hasRole && role !== 'hot_pursuit' && !!ew.is_new_leads_campaign;
+
+  return (
+    <div className="flex items-center gap-3 flex-wrap pl-7" onClick={(e) => e.stopPropagation()}>
+      <div className="flex items-center gap-1.5">
+        <span className="field-text text-muted-foreground uppercase" style={{ fontSize: 11 }}>Lifecycle</span>
+        <Select value={role} onValueChange={(v) => onLifecycleChange(ew, { lifecycle_role: v === 'none' ? null : v })}>
+          <SelectTrigger className="field-text h-8 w-36"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {LIFECYCLE_ROLE_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+          </SelectContent>
+        </Select>
+      </div>
+      {hasRole && (
+        <>
+          <div className="flex items-center gap-1.5">
+            <span className="field-text text-muted-foreground" style={{ fontSize: 11 }}>On complete →</span>
+            <Select
+              value={ew.on_sequence_complete_workflow_id ?? 'none'}
+              onValueChange={(v) => onLifecycleChange(ew, { on_sequence_complete_workflow_id: v === 'none' ? null : v })}
+            >
+              <SelectTrigger className="field-text h-8 w-40"><SelectValue placeholder="None" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">None</SelectItem>
+                {targets.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="field-text text-muted-foreground" style={{ fontSize: 11 }}>On silent →</span>
+            <Select
+              value={ew.on_silent_workflow_id ?? 'none'}
+              onValueChange={(v) => onLifecycleChange(ew, { on_silent_workflow_id: v === 'none' ? null : v })}
+            >
+              <SelectTrigger className="field-text h-8 w-40"><SelectValue placeholder="None" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">None</SelectItem>
+                {targets.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+        </>
+      )}
+      {targetRoleConflict && (
+        <span className="field-text text-amber-500" style={{ fontSize: 10 }}>
+          A lifecycle target stage shouldn't be a New Leads campaign
+        </span>
+      )}
+    </div>
+  );
 }
 
 function SortableCampaignRow({
   ew,
   clientId,
   defaultWorkflowId,
+  allWorkflows,
   navigate,
   onEdit,
   onDelete,
@@ -55,10 +140,12 @@ function SortableCampaignRow({
   onNewLeadsTagChange,
   onActivateToggle,
   onSetDefault,
+  onLifecycleChange,
 }: {
   ew: EngagementWorkflow;
   clientId: string;
   defaultWorkflowId: string | null;
+  allWorkflows: EngagementWorkflow[];
   navigate: (path: string) => void;
   onEdit: (ew: EngagementWorkflow) => void;
   onDelete: (id: string, name: string, e: React.MouseEvent) => void;
@@ -66,6 +153,7 @@ function SortableCampaignRow({
   onNewLeadsTagChange: (ew: EngagementWorkflow, tag: string) => void;
   onActivateToggle: (ew: EngagementWorkflow) => void;
   onSetDefault: (ew: EngagementWorkflow) => void;
+  onLifecycleChange: (ew: EngagementWorkflow, patch: LifecyclePatch) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: ew.id });
   const { cb } = useCreatorMode();
@@ -99,9 +187,10 @@ function SortableCampaignRow({
     <div
       ref={setNodeRef}
       style={style}
-      className="groove-border bg-card flex items-center gap-4 px-4 py-3 cursor-pointer hover:bg-muted/30 transition-colors"
+      className="groove-border bg-card flex flex-col gap-3 px-4 py-3 cursor-pointer hover:bg-muted/30 transition-colors"
       onClick={() => navigate(`/client/${clientId}/workflows/engagement?wf=${ew.id}`)}
     >
+      <div className="flex items-center gap-4">
       <div
         className="shrink-0 cursor-grab touch-none text-muted-foreground hover:text-foreground transition-colors"
         {...attributes}
@@ -222,6 +311,8 @@ function SortableCampaignRow({
           <Trash2 className="h-4 w-4" />
         </button>
       </div>
+      </div>
+      <LifecycleRow ew={ew} allWorkflows={allWorkflows} onLifecycleChange={onLifecycleChange} />
     </div>
   );
 }
@@ -239,6 +330,7 @@ function CampaignsDndList({
   onNewLeadsTagChange,
   onActivateToggle,
   onSetDefault,
+  onLifecycleChange,
 }: {
   engagementWorkflows: EngagementWorkflow[];
   setEngagementWorkflows: React.Dispatch<React.SetStateAction<EngagementWorkflow[]>>;
@@ -251,6 +343,7 @@ function CampaignsDndList({
   onNewLeadsTagChange: (ew: EngagementWorkflow, tag: string) => void;
   onActivateToggle: (ew: EngagementWorkflow) => void;
   onSetDefault: (ew: EngagementWorkflow) => void;
+  onLifecycleChange: (ew: EngagementWorkflow, patch: LifecyclePatch) => void;
 }) {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
@@ -290,6 +383,7 @@ function CampaignsDndList({
               ew={ew}
               clientId={clientId}
               defaultWorkflowId={defaultWorkflowId}
+              allWorkflows={engagementWorkflows}
               navigate={navigate}
               onEdit={onEdit}
               onDelete={onDelete}
@@ -297,6 +391,7 @@ function CampaignsDndList({
               onNewLeadsTagChange={onNewLeadsTagChange}
               onActivateToggle={onActivateToggle}
               onSetDefault={onSetDefault}
+              onLifecycleChange={onLifecycleChange}
             />
           ))}
         </div>
@@ -356,7 +451,7 @@ export default function Workflows() {
         .order('created_at', { ascending: false }),
       (supabase as any)
         .from('engagement_workflows')
-        .select('id, name, is_active, nodes, sort_order, is_new_leads_campaign, new_leads_tag, client_id')
+        .select('id, name, is_active, nodes, sort_order, is_new_leads_campaign, new_leads_tag, client_id, lifecycle_role, on_sequence_complete_workflow_id, on_silent_workflow_id')
         .eq('client_id', clientId)
         .order('sort_order', { ascending: true })
         .order('created_at', { ascending: false }),
@@ -532,6 +627,30 @@ export default function Workflows() {
     toast.success(`Tag updated to '${tag}'`);
   }
 
+  // 3.5 — persist a lifecycle wiring change (role, or a transition target).
+  // Optimistic; rolls back on error. Mirrors handleNewLeadsTagChange.
+  async function handleLifecycleChange(ew: EngagementWorkflow, patch: LifecyclePatch) {
+    const previousState = engagementWorkflows;
+    setEngagementWorkflows(prev => prev.map(w => w.id === ew.id ? { ...w, ...patch } : w));
+    const { error } = await (supabase as any)
+      .from('engagement_workflows')
+      .update(patch)
+      .eq('id', ew.id);
+    if (error) {
+      console.error('handleLifecycleChange failed', error);
+      toast.error('Failed to update lifecycle settings');
+      setEngagementWorkflows(previousState);
+      return;
+    }
+    if ('lifecycle_role' in patch) {
+      toast.success(patch.lifecycle_role
+        ? `Lifecycle role set to '${patch.lifecycle_role}'`
+        : 'Lifecycle role cleared');
+    } else {
+      toast.success('Lifecycle transition updated');
+    }
+  }
+
   // Activate/disable a campaign from the list row (confirmed). Mirrors the
   // is_active toggle pattern in Engagement.tsx.
   async function confirmActivateToggle() {
@@ -646,6 +765,7 @@ export default function Workflows() {
             onNewLeadsTagChange={handleNewLeadsTagChange}
             onActivateToggle={(ew) => setActivateTarget(ew)}
             onSetDefault={handleSetDefault}
+            onLifecycleChange={handleLifecycleChange}
           />
         )}
 

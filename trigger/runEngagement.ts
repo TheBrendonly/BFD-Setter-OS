@@ -441,6 +441,10 @@ export const runEngagement = task({
       voicemail_config?: unknown;
       is_new_leads_campaign?: boolean;
       new_leads_tag?: string | null;
+      // 3.5 lifecycle wiring (nullable; null = legacy single-stage workflow).
+      lifecycle_role?: string | null;
+      on_sequence_complete_workflow_id?: string | null;
+      on_silent_workflow_id?: string | null;
     } | null = null;
     let clientRow: {
       send_engagement_webhook_url?: string | null;
@@ -688,7 +692,7 @@ export const runEngagement = task({
       // ── Load workflow ─────────────────────────────────────────────────────
       const { data: workflow } = await supabase
         .from("engagement_workflows")
-        .select("nodes, name, quiet_hours_override, voicemail_config, is_new_leads_campaign, new_leads_tag, schedule")
+        .select("nodes, name, quiet_hours_override, voicemail_config, is_new_leads_campaign, new_leads_tag, schedule, lifecycle_role, on_sequence_complete_workflow_id, on_silent_workflow_id")
         .eq("id", workflow_id)
         .single();
 
@@ -1634,6 +1638,37 @@ export const runEngagement = task({
       });
 
       await writeCadenceMetrics("sequence_complete");
+
+      // 3.5 lifecycle — if this workflow chains to a next stage on completion,
+      // hand the lead off (Hot Pursuit -> Cool Down / Long-Tail). Opt-in: when
+      // on_sequence_complete_workflow_id is null this is a no-op, so legacy
+      // single-stage workflows behave exactly as before. Non-fatal: a transition
+      // failure must not fail the (already-completed) cadence.
+      if (workflowRow?.on_sequence_complete_workflow_id) {
+        try {
+          await fetch(`${process.env.SUPABASE_URL}/functions/v1/transition-lead`, {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              client_id,
+              lead_id,
+              from_execution_id: execution_id,
+              from_workflow_id: workflow_id,
+              target_workflow_id: workflowRow.on_sequence_complete_workflow_id,
+              entry_reason: "sequence_complete",
+            }),
+          });
+        } catch (transitionErr) {
+          console.warn(
+            "transition-lead (sequence_complete) failed (non-fatal):",
+            (transitionErr as Error).message,
+          );
+        }
+      }
+
       return { status: "completed", stop_reason: "sequence_complete" };
 
     } catch (error) {

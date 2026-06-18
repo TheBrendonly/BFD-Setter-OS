@@ -88,7 +88,7 @@ export const nudgeColdReply = schedules.task({
     }
 
     type Candidate = NonNullable<typeof candidates>[number];
-    const stats = { scanned: 0, nudged: 0, tagged_silent: 0, skipped: 0, errors: 0 };
+    const stats = { scanned: 0, nudged: 0, tagged_silent: 0, transitioned: 0, skipped: 0, errors: 0 };
 
     for (const lead of (candidates ?? []) as Candidate[]) {
       stats.scanned++;
@@ -126,7 +126,7 @@ export const nudgeColdReply = schedules.task({
         continue;
       }
 
-      // Tier 3 — give up + tag. No SMS sent.
+      // Tier 3 — give up on SMS nudging + tag. No SMS sent.
       if (tier >= 2) {
         await supabase
           .from("leads")
@@ -134,6 +134,55 @@ export const nudgeColdReply = schedules.task({
           .eq("client_id", lead.client_id!)
           .eq("lead_id", lead.lead_id!);
         stats.tagged_silent++;
+
+        // 3.5 lifecycle — hand the silent lead off to its workflow's long-tail /
+        // cool-down stage instead of just dropping it. We resolve the lead's
+        // workflow from its most recent execution (works for any lead, no
+        // pre-existing enrollment row needed). Opt-in: no on_silent target =
+        // no-op. Non-fatal. The tagged_silent flag above stops nudgeColdReply
+        // from re-touching the lead; the long-tail cadence runs independently.
+        try {
+          const { data: lastExec } = await supabase
+            .from("engagement_executions")
+            .select("id, workflow_id")
+            .eq("client_id", lead.client_id!)
+            .eq("ghl_contact_id", lead.lead_id!)
+            .order("started_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          if (lastExec?.workflow_id) {
+            const { data: wf } = await supabase
+              .from("engagement_workflows")
+              .select("on_silent_workflow_id")
+              .eq("id", lastExec.workflow_id)
+              .maybeSingle();
+            const target = (wf as { on_silent_workflow_id?: string | null } | null)
+              ?.on_silent_workflow_id;
+            if (target) {
+              await fetch(`${process.env.SUPABASE_URL}/functions/v1/transition-lead`, {
+                method: "POST",
+                headers: {
+                  Authorization: `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`,
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                  client_id: lead.client_id,
+                  lead_id: lead.lead_id,
+                  from_execution_id: lastExec.id,
+                  from_workflow_id: lastExec.workflow_id,
+                  target_workflow_id: target,
+                  entry_reason: "silent",
+                }),
+              });
+              stats.transitioned++;
+            }
+          }
+        } catch (transErr) {
+          console.warn(
+            "nudgeColdReply: silent transition failed (non-fatal):",
+            (transErr as Error).message,
+          );
+        }
         continue;
       }
 
@@ -306,7 +355,7 @@ export const nudgeColdReply = schedules.task({
 
     const durationMs = Date.now() - startedAt;
     console.log(
-      `nudgeColdReply done in ${durationMs}ms: scanned=${stats.scanned} nudged=${stats.nudged} tagged_silent=${stats.tagged_silent} skipped=${stats.skipped} errors=${stats.errors}`,
+      `nudgeColdReply done in ${durationMs}ms: scanned=${stats.scanned} nudged=${stats.nudged} tagged_silent=${stats.tagged_silent} transitioned=${stats.transitioned} skipped=${stats.skipped} errors=${stats.errors}`,
     );
     return { ok: true, duration_ms: durationMs, ...stats };
   },
