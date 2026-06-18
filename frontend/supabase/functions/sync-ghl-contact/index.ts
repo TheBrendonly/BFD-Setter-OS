@@ -429,13 +429,17 @@ Deno.serve(async (req) => {
       lastName = parts.length > 1 ? parts.slice(1).join(" ") : "";
     }
 
+    // BFD-wins rule: for an EXISTING lead, identity fields (first_name, last_name,
+    // email, phone) are owned by BFD and must NOT be overwritten by a GHL
+    // contact.update echo. The CREATE branch (below) still sets them from GHL on
+    // first ingress — that is the initial seed, not an overwrite. The echo-guard
+    // (60s+stamp) remains in place but is no longer the sole protection for these
+    // fields; they are simply excluded from the UPDATE payload regardless.
     const updatePayload: Record<string, any> = {
       updated_at: new Date().toISOString(),
     };
-    if (firstName) updatePayload.first_name = firstName;
-    if (lastName) updatePayload.last_name = lastName;
-    if (email) updatePayload.email = email;
-    if (phone) updatePayload.phone = phone;
+    // Identity fields (first_name, last_name, email, phone) are intentionally
+    // omitted from updatePayload. GHL contact.update must not overwrite BFD edits.
 
     if (existingContact) {
       const { error: updateErr } = await supabase
