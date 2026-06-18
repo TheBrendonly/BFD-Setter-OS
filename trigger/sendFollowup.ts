@@ -1,6 +1,8 @@
 import { task, wait } from "@trigger.dev/sdk";
 import { createClient } from "@supabase/supabase-js";
 import { sendTwilioSmsAndStamp } from "./_shared/sendTwilioSmsAndStamp";
+import { normalizePhone } from "./_shared/phone";
+import { isPhoneOptedOut } from "./_shared/optout";
 
 const getMainSupabase = () =>
   createClient(
@@ -115,6 +117,23 @@ export const sendFollowup = task({
         .eq("ghl_account_id", ghl_account_id)
         .in("status", ["pending", "firing"]);
       return { status: "skipped", reason: "setter_stopped" };
+    }
+    // By-phone opt-out gate: belt-and-braces check against lead_optouts so
+    // a follow-up never fires into an opted-out number even if setter_stopped
+    // hasn't been stamped yet.
+    const normalizedFollowupPhone = normalizePhone(leadRow?.phone as string | null);
+    if (normalizedFollowupPhone) {
+      const phoneOptedOut = await isPhoneOptedOut(supabase, client_id, normalizedFollowupPhone);
+      if (phoneOptedOut) {
+        console.log(`Follow-up timer ${timer_id}: phone ${normalizedFollowupPhone} in lead_optouts, cancelling timers.`);
+        await supabase
+          .from("followup_timers")
+          .update({ status: "cancelled", updated_at: new Date().toISOString() })
+          .eq("lead_id", lead_id)
+          .eq("ghl_account_id", ghl_account_id)
+          .in("status", ["pending", "firing"]);
+        return { status: "skipped", reason: "opted_out" };
+      }
     }
 
     // Optimistic lock

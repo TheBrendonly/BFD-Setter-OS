@@ -3,6 +3,8 @@ import { createClient } from "@supabase/supabase-js";
 import { sendFollowup } from "./sendFollowup";
 import { processSetterReply } from "./processSetterReply";
 import { pushSmsToGhl } from "./_shared/ghl-conversations";
+import { normalizePhone } from "./_shared/phone";
+import { isPhoneOptedOut } from "./_shared/optout";
 
 const getMainSupabase = () =>
   createClient(
@@ -203,6 +205,23 @@ export const processMessages = task({
         });
         await cleanup(supabase, lead_id, ghl_account_id, triggerRunId);
         return { status: "opted_out" };
+      }
+      // By-phone opt-out gate: belt-and-braces against the race window where
+      // STOP arrives but setter_stopped has not been stamped yet.
+      const normalizedContactPhone = normalizePhone(contact_phone);
+      if (normalizedContactPhone) {
+        const phoneOptedOut = await isPhoneOptedOut(supabase, client.id, normalizedContactPhone);
+        if (phoneOptedOut) {
+          console.log(`Lead ${lead_id} phone ${normalizedContactPhone} is in lead_optouts, cancelling before send.`);
+          await updateExecution({
+            status: "cancelled",
+            stage_description: "Lead opted out (phone in lead_optouts): cadence cancelled before reply.",
+            completed_at: new Date().toISOString(),
+            resume_at: null,
+          });
+          await cleanup(supabase, lead_id, ghl_account_id, triggerRunId);
+          return { status: "opted_out" };
+        }
       }
 
       // ── STEP 2: Fetch all unprocessed messages ──────────────────────────────

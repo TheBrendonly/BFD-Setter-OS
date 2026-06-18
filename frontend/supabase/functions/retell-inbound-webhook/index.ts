@@ -3,6 +3,8 @@ import { createClient } from "npm:@supabase/supabase-js@2.101.0";
 // 5-min window). Shared across the 3 Retell webhooks. Verify-if-present; the
 // stored secret value is the Retell API key.
 import { verifyRetellSignature } from "../_shared/verify-webhook.ts";
+import { normalizePhone } from "../_shared/phone.ts";
+import { resolveLeadByPhone } from "../_shared/leadResolve.ts";
 
 // retell-inbound-webhook — phone-first inbound contact load (B5).
 //
@@ -96,32 +98,30 @@ Deno.serve(async (req) => {
     }
 
     // Look up the contact by phone (TRUST the phone match — decision B5 2026-06-14).
-    // Exact E.164 first; fall back to a last-9-digit suffix match to bridge +61 vs 0
-    // local-format storage. Scoped to the resolved client.
-    const digits = fromNumber.replace(/\D/g, "");
-    const last9 = digits.slice(-9);
+    // PRIMARY: normalize the caller number and resolve to the single deterministic
+    // survivor via normalized_phone index (handles repeat callers with duplicate rows).
+    // FALLBACK: if normalization returns null (unusual format) or the normalized lookup
+    // misses (pre-backfill rows), do a raw exact match ordered by updated_at desc so we
+    // always get one row rather than silently returning nothing when >1 row matches.
+    const normalizedFrom = normalizePhone(fromNumber);
     let lead: Record<string, unknown> | null = null;
 
-    const { data: exact } = await supabase
-      .from("leads")
-      .select("lead_id, first_name, last_name, phone, email, business_name")
-      .eq("client_id", client.id)
-      .eq("phone", fromNumber)
-      .limit(1)
-      .maybeSingle();
-    lead = exact ?? null;
+    if (normalizedFrom) {
+      lead = await resolveLeadByPhone(supabase, client.id, normalizedFrom);
+    }
 
-    if (!lead && last9.length >= 7) {
-      const { data: suffixRows } = await supabase
+    if (!lead) {
+      // Raw-phone fallback: deterministic (most-recently-updated row) so we never hit
+      // the old ">1 match returns empty" dead-end even before the backfill is applied.
+      const { data: rawMatch } = await supabase
         .from("leads")
         .select("lead_id, first_name, last_name, phone, email, business_name")
         .eq("client_id", client.id)
-        .ilike("phone", `%${last9}`)
-        .limit(2);
-      // Only trust the suffix match when it is UNAMBIGUOUS. If two leads share the
-      // last 9 digits (e.g. different country codes within one client), do NOT guess —
-      // fall through to empty vars (the prompt's empty-vars guidance handles it).
-      lead = Array.isArray(suffixRows) && suffixRows.length === 1 ? suffixRows[0] : null;
+        .eq("phone", fromNumber)
+        .order("updated_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      lead = rawMatch ?? null;
     }
 
     // current_time in the client's timezone (cheap, always useful on inbound).

@@ -20,6 +20,7 @@
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.101.0";
+import { resolveBookingSource } from "../_shared/bookingSource.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -200,6 +201,21 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Read the existing booking source (if any) so we can preserve a
+    // higher-fidelity origin (e.g. voice_call) when GHL fires a confirm/attend
+    // event for an appointment that was already created by the voice agent.
+    const { data: existingBooking, error: selectErr } = await supabase
+      .from("bookings")
+      .select("source")
+      .eq("client_id", client.id)
+      .eq("ghl_appointment_id", appointmentId)
+      .maybeSingle();
+    if (selectErr) {
+      console.error("bookings-webhook: failed to read existing booking source", selectErr);
+      return jsonResponse({ ok: false, error: "existing booking read failed" }, 500);
+    }
+    const existingSource = existingBooking?.source as string | null | undefined;
+
     // Upsert bookings row (idempotent on UNIQUE (client_id, ghl_appointment_id))
     const upsertRow: Record<string, unknown> = {
       client_id: client.id,
@@ -215,7 +231,7 @@ Deno.serve(async (req) => {
     if (startIso) upsertRow.appointment_time = startIso;
     if (endIso) upsertRow.appointment_end_time = endIso;
     if (mappedStatus === "confirmed" || mappedStatus === "attended") {
-      upsertRow.source = "ghl_calendar";
+      upsertRow.source = resolveBookingSource(existingSource, "ghl_calendar");
     }
 
     const { error: upsertErr } = await supabase

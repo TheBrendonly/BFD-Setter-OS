@@ -5,6 +5,8 @@ import { pushEmailToGhl } from "./_shared/ghl-conversations";
 import { sendTwilioSmsAndStamp } from "./_shared/sendTwilioSmsAndStamp";
 import { aiGenerateEngagementCopy } from "./_shared/aiGenerateEngagementCopy";
 import { classifyCallOutcome } from "./_shared/classifyCallOutcome";
+import { normalizePhone } from "./_shared/phone";
+import { isPhoneOptedOut } from "./_shared/optout";
 
 const getMainSupabase = () =>
   createClient(
@@ -329,6 +331,24 @@ export const runEngagement = task({
           })
           .eq("id", execution_id);
         return true;
+      }
+      // By-phone opt-out gate: check lead_optouts even if setter_stopped hasn't
+      // been stamped yet (race window between STOP arriving and the flag write).
+      const normalizedPhone = normalizePhone(payload.Phone);
+      if (normalizedPhone) {
+        const optedOut = await isPhoneOptedOut(supabase, client_id, normalizedPhone);
+        if (optedOut) {
+          await supabase
+            .from("engagement_executions")
+            .update({
+              status: "cancelled",
+              stop_reason: "setter_stopped",
+              completed_at: new Date().toISOString(),
+              stage_description: "Cancelled: phone in lead_optouts.",
+            })
+            .eq("id", execution_id);
+          return true;
+        }
       }
       return false;
     };

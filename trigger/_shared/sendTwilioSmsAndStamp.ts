@@ -1,4 +1,6 @@
-import { pushSmsToGhl } from "./ghl-conversations";
+import { pushSmsToGhl } from "./ghl-conversations.ts";
+import { normalizePhone } from "./phone.ts";
+import { isPhoneOptedOut } from "./optout.ts";
 
 // ── Shared Twilio SMS sender + message_queue stamp + GHL mirror ───────────
 // Extracted from runEngagement.ts so processMessages/sendFollowup can reuse the
@@ -60,6 +62,22 @@ export async function sendTwilioSmsAndStamp(args: {
     } catch { /* non-fatal */ }
     console.log(`sendTwilioSmsAndStamp: SMS dispatch SKIPPED (system/probe client) for lead ${args.leadId}; message_queue row written (sid=${syntheticSid})`);
     return { ok: true, sid: syntheticSid };
+  }
+
+  // ── Final chokepoint: by-phone lead_optouts gate ──────────────────────────
+  // Every send path already has an upstream setter_stopped / opt-out check,
+  // but this is the last line of defence before spending Twilio credits.
+  // If normalizePhone returns null (unrecognised format) we fall through so
+  // we never silently block a legitimate send due to a bad normalisation.
+  const normalizedTo = normalizePhone(args.toNumber);
+  if (normalizedTo) {
+    const optedOut = await isPhoneOptedOut(args.supabase, args.clientId, normalizedTo);
+    if (optedOut) {
+      console.log(
+        `sendTwilioSmsAndStamp: BLOCKED: ${normalizedTo} is in lead_optouts for client ${args.clientId} (lead ${args.leadId})`,
+      );
+      return { ok: false, sid: null, errorMessage: "opted_out" };
+    }
   }
 
   const statusCallbackUrl = `${supabaseUrl}/functions/v1/twilio-status-webhook`;

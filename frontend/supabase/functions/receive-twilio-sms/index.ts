@@ -18,6 +18,8 @@
 
 import { createClient } from "npm:@supabase/supabase-js@2.101.0";
 import { pushSmsToGhl } from "../_shared/ghl-conversations.ts";
+import { normalizePhone } from "../_shared/phone.ts";
+import { resolveLeadByPhone } from "../_shared/leadResolve.ts";
 
 // Schedule a fire-and-forget GHL mirror that completes after the TwiML response
 // returns. EdgeRuntime.waitUntil keeps the runtime alive past the response so
@@ -410,6 +412,8 @@ Deno.serve(async (req) => {
     const toPhone = params["To"];
     const messageBody = params["Body"];
     const messageSid = params["MessageSid"];
+    // Normalize once; null means malformed (fall back to raw-phone behavior below).
+    const normalizedFrom = normalizePhone(fromPhone) ?? null;
 
     if (!fromPhone || !toPhone || messageBody == null) {
       console.warn("receive-twilio-sms missing params", { fromPhone, toPhone, hasBody: messageBody != null });
@@ -491,31 +495,43 @@ Deno.serve(async (req) => {
 
       // Resolve matching lead rows once — used by STOP cadence cancellation
       // and by the GHL mirror for both STOP and START.
-      const { data: matchedLeads } = await supabase
-        .from("leads")
-        .select("lead_id")
-        .eq("client_id", client.id)
-        .eq("phone", fromPhone);
+      // Use normalized phone for the lookup when available (so leads stored by
+      // normalized_phone are found regardless of raw format). Fall back to raw
+      // fromPhone only when normalization failed (malformed number).
+      const stopLookupPhone = normalizedFrom ?? fromPhone;
+      const stopQuery = normalizedFrom
+        ? supabase.from("leads").select("lead_id").eq("client_id", client.id).eq("normalized_phone", normalizedFrom)
+        : supabase.from("leads").select("lead_id").eq("client_id", client.id).eq("phone", fromPhone);
+      const { data: matchedLeads } = await stopQuery;
 
       if (isStop) {
-        // Record opt-out
+        // Record opt-out using normalized phone so the send-path gate
+        // (which reads lead_optouts by normalized phone) fires correctly.
         await supabase
           .from("lead_optouts")
           .upsert(
             {
               client_id: client.id,
-              phone: fromPhone,
+              phone: stopLookupPhone,
               source: "sms_stop",
               raw_keyword: trimmedBody.toUpperCase().slice(0, 32),
             },
             { onConflict: "client_id,phone" },
           );
-        // Mark setter_stopped on any matching lead row
-        await supabase
-          .from("leads")
-          .update({ setter_stopped: true })
-          .eq("client_id", client.id)
-          .eq("phone", fromPhone);
+        // Mark setter_stopped on all matching lead rows (normalized or raw match).
+        if (normalizedFrom) {
+          await supabase
+            .from("leads")
+            .update({ setter_stopped: true })
+            .eq("client_id", client.id)
+            .eq("normalized_phone", normalizedFrom);
+        } else {
+          await supabase
+            .from("leads")
+            .update({ setter_stopped: true })
+            .eq("client_id", client.id)
+            .eq("phone", fromPhone);
+        }
         // Cancel active cadences for any matching ghl_contact_id under this client
         if (matchedLeads && client.ghl_location_id) {
           for (const lead of matchedLeads) {
@@ -530,17 +546,25 @@ Deno.serve(async (req) => {
           }
         }
       } else if (isStart) {
-        // Symmetric resubscribe
+        // Symmetric resubscribe: remove from lead_optouts + clear setter_stopped.
         await supabase
           .from("lead_optouts")
           .delete()
           .eq("client_id", client.id)
-          .eq("phone", fromPhone);
-        await supabase
-          .from("leads")
-          .update({ setter_stopped: false })
-          .eq("client_id", client.id)
-          .eq("phone", fromPhone);
+          .eq("phone", stopLookupPhone);
+        if (normalizedFrom) {
+          await supabase
+            .from("leads")
+            .update({ setter_stopped: false })
+            .eq("client_id", client.id)
+            .eq("normalized_phone", normalizedFrom);
+        } else {
+          await supabase
+            .from("leads")
+            .update({ setter_stopped: false })
+            .eq("client_id", client.id)
+            .eq("phone", fromPhone);
+        }
       }
 
       // Compliance reply (single send, no AI loop)
@@ -608,38 +632,61 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Find or create GHL contact
-    let contactId: string;
-    let contactName: string;
-    let contactEmail: string;
-    try {
-      const c = await findOrCreateGhlContact(
-        client.ghl_api_key,
-        client.ghl_location_id,
-        fromPhone,
-        messageBody,
-      );
-      contactId = c.contactId;
-      contactName = c.name;
-      contactEmail = c.email;
-    } catch (e) {
-      console.error("GHL contact resolve failed", e);
-      // REL-03: this drops the inbound reply (no contact, no execution) —
-      // record it so the operator can see the dead lead.
-      try {
-        await supabase.from("error_logs").insert({
-          client_id: client.id,
-          severity: "error",
-          source: "receive_twilio_sms",
-          error_type: "ghl_contact_resolve_failed",
-          error_message: e instanceof Error ? e.message : String(e),
-          context: { messageSid, fromPhone },
+    // Identity resolution: internal-first to avoid minting duplicate GHL contacts.
+    // When a lead already exists in our DB for this phone number, reuse its lead_id
+    // (GHL contact id) directly without touching GHL. Only fall back to
+    // findOrCreateGhlContact (GHL lookup/create) when no internal lead exists.
+    let contactId = "";
+    let contactName = "";
+    let contactEmail = "";
+
+    if (normalizedFrom) {
+      const existingLead = await resolveLeadByPhone(supabase, client.id, normalizedFrom);
+      if (existingLead?.lead_id) {
+        // Reuse the known GHL contact id — do NOT call findOrCreateGhlContact.
+        contactId = existingLead.lead_id;
+        contactName = [existingLead.first_name, existingLead.last_name]
+          .filter(Boolean).join(" ") || "SMS Lead";
+        contactEmail = (existingLead.email as string | null) ?? "";
+        console.info("receive-twilio-sms: internal lead resolved by normalized_phone", {
+          clientId: client.id,
+          leadId: existingLead.id,
+          contactId,
         });
-      } catch (_logErr) { /* non-fatal */ }
-      return new Response(TWIML_EMPTY, {
-        status: 200,
-        headers: { ...corsHeaders, "Content-Type": "text/xml" },
-      });
+      }
+    }
+
+    if (!contactId) {
+      // No internal lead (or normalization failed): mirror/create in GHL.
+      try {
+        const c = await findOrCreateGhlContact(
+          client.ghl_api_key,
+          client.ghl_location_id,
+          fromPhone,
+          messageBody,
+        );
+        contactId = c.contactId;
+        contactName = c.name;
+        contactEmail = c.email;
+      } catch (e) {
+        console.error("GHL contact resolve failed", e);
+        // REL-03: this drops the inbound reply (no contact, no execution) —
+        // record it so the operator can see the dead lead.
+        try {
+          await supabase.from("error_logs").insert({
+            client_id: client.id,
+            severity: "error",
+            source: "receive_twilio_sms",
+            error_type: "ghl_contact_resolve_failed",
+            error_message: e instanceof Error ? e.message : String(e),
+            context: { messageSid, fromPhone },
+          });
+        } catch (_logErr) { /* non-fatal */ }
+        return new Response(TWIML_EMPTY, {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "text/xml" },
+        });
+      }
     }
 
     // Stamp contact.channel = "SMS" so the Send Setter Reply workflow's
@@ -699,6 +746,7 @@ Deno.serve(async (req) => {
           first_name: stoppedNameParts[0] ?? null,
           last_name: stoppedNameParts.slice(1).join(" ") || null,
           phone: fromPhone || null,
+          normalized_phone: normalizedFrom || null,
           email: contactEmail || null,
           last_message_at: nowTs,
           last_message_preview: (messageBody || "").substring(0, 200),
@@ -809,6 +857,7 @@ Deno.serve(async (req) => {
         first_name: nameParts[0] ?? null,
         last_name: nameParts.slice(1).join(" ") || null,
         phone: fromPhone || null,
+        normalized_phone: normalizedFrom || null,
         email: contactEmail || null,
         last_message_at: nowISO,
         last_message_preview: (messageBody || "").substring(0, 200),

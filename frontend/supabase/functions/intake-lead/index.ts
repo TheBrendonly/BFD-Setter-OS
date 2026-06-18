@@ -22,6 +22,9 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.101.0";
 import { fetchActiveNewLeadsWorkflows, resolveWorkflow } from "../_shared/resolve-workflow.ts";
+import { normalizePhone } from "../_shared/phone.ts";
+import { resolveLeadByPhone } from "../_shared/leadResolve.ts";
+import { isPhoneOptedOut } from "../_shared/optout.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -155,6 +158,26 @@ async function enrollLeadInEngagement(args: {
   if (!wf) {
     console.warn(`intake-lead: workflow ${workflowId} not found for client ${clientId}, skipping enroll`);
     return null;
+  }
+
+  // Opt-out guard: do not arm a cadence for a phone with a standing opt-out.
+  // contactPhone may already be normalized; normalizePhone() is called to get the canonical E.164 form either way.
+  const normalizedPhoneForOptOut = normalizePhone(contactPhone ?? undefined);
+  if (normalizedPhoneForOptOut) {
+    const optedOut = await isPhoneOptedOut(supabase, clientId, normalizedPhoneForOptOut);
+    if (optedOut) {
+      console.warn(`intake-lead: phone ${normalizedPhoneForOptOut} is opted out for client ${clientId}; skipping enrolment`);
+      // Stamp the lead setter_stopped=true so the row reflects the standing opt-out.
+      if (leadId) {
+        const { error: stopErr } = await supabase
+          .from("leads")
+          .update({ setter_stopped: true })
+          .eq("client_id", clientId)
+          .eq("lead_id", leadId);
+        if (stopErr) console.error(`intake-lead: failed to stamp setter_stopped for lead ${leadId}:`, stopErr.message);
+      }
+      return null;
+    }
   }
 
   const { data: execution, error: execErr } = await supabase
@@ -294,29 +317,50 @@ Deno.serve(async (req) => {
 
     const firstName = (body.first_name || "").trim() || null;
     const lastName = (body.last_name || "").trim() || null;
+    // normalisePhone (local) is used for the stored `phone` field and GHL — it passes through
+    // ambiguous/short numbers that the shared normalizer would null-out, keeping GHL behaviour
+    // unchanged. normalizePhone (shared) is used only for the lookup key and normalized_phone col.
     const phone = normalisePhone(body.phone);
+    const normalizedPhone = normalizePhone(body.phone);
     const email = (body.email || "").trim().toLowerCase() || null;
 
     if (!phone && !email) {
       throw new IntakeError(400, "At least one of phone or email is required");
     }
 
-    // Resolve / create GHL contact (skipped for is_system: no creds → synthetic id).
-    let contactId: string;
-    if (isSystem) {
-      const synthetic = `probe-${phone || email || clientId}`.replace(/[^a-zA-Z0-9_-]/g, "");
-      contactId = synthetic.slice(0, 64) || `probe-${clientId}`;
-    } else {
-      ({ contactId } = await findOrCreateGhlContact({
-        ghlApiKey: client.ghl_api_key as string,
-        ghlLocationId: client.ghl_location_id as string,
-        firstName,
-        lastName,
-        phone,
-        email,
-        source: body.source || "intake-lead",
-        tags: Array.isArray(body.tags) ? body.tags : [],
-      }));
+    // Internal-first reuse: if we have a normalized phone, check for an existing lead
+    // before touching GHL. This avoids creating a duplicate GHL contact for a re-entrant
+    // form fill by the same person.
+    // contactId is guaranteed to be set by one of: reuse path, isSystem path, or findOrCreateGhlContact.
+    let contactId!: string;
+    let reusingExistingLead = false;
+    if (!isSystem && normalizedPhone) {
+      const existingLead = await resolveLeadByPhone(supabase, client.id as string, normalizedPhone);
+      if (existingLead?.lead_id) {
+        contactId = existingLead.lead_id;
+        reusingExistingLead = true;
+        console.log(`intake-lead: reusing existing lead ${existingLead.id} (lead_id=${contactId}) for phone ${normalizedPhone}`);
+      }
+    }
+
+    // Resolve / create GHL contact (skipped for is_system: no creds -> synthetic id,
+    // and skipped when we already resolved an internal lead above).
+    if (!reusingExistingLead) {
+      if (isSystem) {
+        const synthetic = `probe-${phone || email || clientId}`.replace(/[^a-zA-Z0-9_-]/g, "");
+        contactId = synthetic.slice(0, 64) || `probe-${clientId}`;
+      } else {
+        ({ contactId } = await findOrCreateGhlContact({
+          ghlApiKey: client.ghl_api_key as string,
+          ghlLocationId: client.ghl_location_id as string,
+          firstName,
+          lastName,
+          phone,
+          email,
+          source: body.source || "intake-lead",
+          tags: Array.isArray(body.tags) ? body.tags : [],
+        }));
+      }
     }
 
     // Upsert into platform leads
@@ -343,6 +387,7 @@ Deno.serve(async (req) => {
           first_name: firstName,
           last_name: lastName,
           phone,
+          normalized_phone: normalizedPhone,
           email,
           form_source: routed.matchedTag,
         },
