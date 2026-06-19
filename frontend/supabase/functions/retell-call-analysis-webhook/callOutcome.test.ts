@@ -1,5 +1,5 @@
 import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { buildCallOutcomeStamp, stampLastCallOutcome } from "./callOutcome.ts";
+import { buildCallOutcomeStamp, buildOutcomeFieldWrites, stampLastCallOutcome } from "./callOutcome.ts";
 import { classifyCallOutcome } from "./classifyCallOutcome.ts";
 
 const ENDED = "2026-06-19T04:00:00.000Z";
@@ -114,4 +114,78 @@ Deno.test("buildCallOutcomeStamp: reads in_voicemail + duration aliases + status
   assertEquals(stamp.in_voicemail, true);
   // in_voicemail short-circuits to voicemail regardless of disconnect_reason
   assertEquals(classifyCallOutcome(stamp), "voicemail");
+});
+
+// ── buildOutcomeFieldWrites (6.12b) ───────────────────────────────────────────
+
+const ALL_IDS = {
+  outcome: "id_outcome",
+  summary: "id_summary",
+  intent: "id_intent",
+  qualified: "id_qualified",
+  lastCallDate: "id_lastcall",
+  callbackRequested: "id_cbreq",
+  callbackDatetime: "id_cbdt",
+  appointmentDatetime: "id_apptdt",
+  sentiment: "id_sentiment",
+  appointmentBooked: "id_apptbooked",
+};
+
+function find(writes: { id: string; value: string }[], id: string) {
+  return writes.find((w) => w.id === id);
+}
+
+Deno.test("buildOutcomeFieldWrites: maps a full answered call to all configured fields", () => {
+  const writes = buildOutcomeFieldWrites({
+    callHistoryClass: "human_pickup",
+    callSummary: "Discussed the offer.",
+    callIntent: "interested",
+    qualified: true,
+    lastCallDate: "2026-06-19T04:00:00.000Z",
+    callbackRequested: false,
+    callbackDatetime: null,
+    appointmentDatetime: "2026-06-22T00:00:00.000Z",
+    sentiment: "positive",
+    appointmentBooked: true,
+  }, ALL_IDS);
+  assertEquals(find(writes, "id_outcome")?.value, "Answered");
+  assertEquals(find(writes, "id_summary")?.value, "Discussed the offer.");
+  assertEquals(find(writes, "id_intent")?.value, "interested");
+  assertEquals(find(writes, "id_qualified")?.value, "true");
+  assertEquals(find(writes, "id_lastcall")?.value, "2026-06-19T04:00:00.000Z");
+  assertEquals(find(writes, "id_cbreq")?.value, "false"); // false is meaningful
+  assertEquals(find(writes, "id_cbdt"), undefined);        // null datetime dropped
+  assertEquals(find(writes, "id_apptdt")?.value, "2026-06-22T00:00:00.000Z");
+  assertEquals(find(writes, "id_sentiment")?.value, "positive");
+  assertEquals(find(writes, "id_apptbooked")?.value, "true");
+});
+
+Deno.test("buildOutcomeFieldWrites: outcome enum → human labels", () => {
+  const lbl = (cls: string) => find(buildOutcomeFieldWrites({ callHistoryClass: cls }, { outcome: "id_outcome" }), "id_outcome")?.value;
+  assertEquals(lbl("human_pickup"), "Answered");
+  assertEquals(lbl("voicemail"), "Voicemail");
+  assertEquals(lbl("no_connect"), "No Answer");
+  assertEquals(lbl("error"), "Error");
+  assertEquals(lbl("unknown"), "Unknown");
+});
+
+Deno.test("buildOutcomeFieldWrites: a null field id drops that write", () => {
+  const writes = buildOutcomeFieldWrites(
+    { callHistoryClass: "voicemail", callSummary: "vm" },
+    { outcome: null, summary: "id_summary" },
+  );
+  assertEquals(find(writes, "id_summary")?.value, "vm");
+  assertEquals(writes.length, 1); // outcome dropped (null id)
+});
+
+Deno.test("buildOutcomeFieldWrites: null source values are dropped even when the id is set", () => {
+  const writes = buildOutcomeFieldWrites(
+    { callHistoryClass: "no_connect", callSummary: null, qualified: null, sentiment: null },
+    ALL_IDS,
+  );
+  // only the outcome label is present; null summary/qualified/sentiment dropped
+  assertEquals(find(writes, "id_outcome")?.value, "No Answer");
+  assertEquals(find(writes, "id_summary"), undefined);
+  assertEquals(find(writes, "id_qualified"), undefined);
+  assertEquals(find(writes, "id_sentiment"), undefined);
 });

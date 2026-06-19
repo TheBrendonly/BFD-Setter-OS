@@ -58,6 +58,76 @@ type SupabaseUpdateLike = {
   };
 };
 
+// ── 6.12b: map analyzed-call outcome data → GHL custom-field writes ──
+
+export type OutcomeValues = {
+  callHistoryClass: string | null;
+  callSummary?: string | null;
+  callIntent?: string | null;
+  qualified?: boolean | null;
+  lastCallDate?: string | null;
+  callbackRequested?: boolean | null;
+  callbackDatetime?: string | null;
+  appointmentDatetime?: string | null;
+  sentiment?: string | null;
+  appointmentBooked?: boolean | null;
+};
+
+export type OutcomeFieldIds = {
+  outcome?: string | null;
+  summary?: string | null;
+  intent?: string | null;
+  qualified?: string | null;
+  lastCallDate?: string | null;
+  callbackRequested?: string | null;
+  callbackDatetime?: string | null;
+  appointmentDatetime?: string | null;
+  sentiment?: string | null;
+  appointmentBooked?: string | null;
+};
+
+const OUTCOME_LABELS: Record<string, string> = {
+  human_pickup: "Answered",
+  voicemail: "Voicemail",
+  no_connect: "No Answer",
+  error: "Error",
+  unknown: "Unknown",
+};
+
+/**
+ * Build the GHL contact custom-field writes from the analyzed-call outcome data.
+ * Each write is included only when BOTH its field id is configured AND the
+ * source value is meaningful (booleans render true/false; null/empty drop).
+ * Returns id/value pairs ready for writeGhlContactFields().
+ */
+export function buildOutcomeFieldWrites(
+  values: OutcomeValues,
+  fieldIds: OutcomeFieldIds,
+): Array<{ id: string; value: string }> {
+  const writes: Array<{ id: string; value: string }> = [];
+  const push = (id: string | null | undefined, value: string | null | undefined) => {
+    if (id && typeof value === "string" && value.trim() !== "") {
+      writes.push({ id, value });
+    }
+  };
+  const boolStr = (b: boolean | null | undefined) =>
+    b === true ? "true" : b === false ? "false" : null;
+
+  if (values.callHistoryClass) {
+    push(fieldIds.outcome, OUTCOME_LABELS[values.callHistoryClass] ?? values.callHistoryClass);
+  }
+  push(fieldIds.summary, values.callSummary ?? null);
+  push(fieldIds.intent, values.callIntent ?? null);
+  push(fieldIds.qualified, boolStr(values.qualified));
+  push(fieldIds.lastCallDate, values.lastCallDate ?? null);
+  push(fieldIds.callbackRequested, boolStr(values.callbackRequested));
+  push(fieldIds.callbackDatetime, values.callbackDatetime ?? null);
+  push(fieldIds.appointmentDatetime, values.appointmentDatetime ?? null);
+  push(fieldIds.sentiment, values.sentiment ?? null);
+  push(fieldIds.appointmentBooked, boolStr(values.appointmentBooked));
+  return writes;
+}
+
 /**
  * 6.11 — stamp the cadence-critical last_call_outcome on the placing execution
  * and clear the voice-call hold signal so runEngagement.waitForCallOutcome
