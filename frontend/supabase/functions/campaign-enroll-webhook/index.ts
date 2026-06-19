@@ -1,4 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2.101.0";
+import { buildLeadInsert } from "../_shared/lead-insert.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -211,14 +212,14 @@ Deno.serve(async (req) => {
       const leadIdentifierToStore = lead_id_input.trim();
       const { data: newLead, error: leadErr } = await supabase
         .from("leads")
-        .insert({
-          client_id: clientId,
-          lead_id: leadIdentifierToStore || null,
-          first_name: firstName,
-          last_name: lastName,
-          phone: phone || null,
+        .insert(buildLeadInsert({
+          clientId,
+          leadId: leadIdentifierToStore || null,
+          firstName,
+          lastName,
+          phone,
           email: email || null,
-        })
+        }))
         .select("id")
         .single();
 

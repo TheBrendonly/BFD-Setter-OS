@@ -11,6 +11,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.101.0";
 import { fetchActiveNewLeadsWorkflows, resolveWorkflow } from "../_shared/resolve-workflow.ts";
 import { buildExistingLeadUpdatePayload } from "../_shared/sync-identity-guard.ts";
+import { buildLeadInsert } from "../_shared/lead-insert.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -510,15 +511,15 @@ Deno.serve(async (req) => {
 
       const { data: newContact, error: createErr } = await supabase
         .from("leads")
-        .insert({
-          client_id: clientId,
-          lead_id: contactId,
-          first_name: firstName || null,
-          last_name: lastName || null,
-          phone: phone || null,
+        .insert(buildLeadInsert({
+          clientId,
+          leadId: contactId,
+          firstName: firstName || null,
+          lastName: lastName || null,
+          phone,
           email: email || null,
-          form_source: routed.matchedTag,
-        })
+          formSource: routed.matchedTag,
+        }))
         .select("id")
         .single();
 
