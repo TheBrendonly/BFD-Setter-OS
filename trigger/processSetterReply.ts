@@ -23,6 +23,15 @@
 
 import { task } from "@trigger.dev/sdk";
 import { createClient } from "@supabase/supabase-js";
+import { SETTER_TOOLS, SETTER_TOOL_NAMES, TOOL_USAGE_INSTRUCTION } from "./_shared/setterTools.ts";
+import {
+  runSetterToolLoop,
+  ToolsUnsupportedError,
+  type CallLlm,
+  type CallTool,
+  type LlmTurn,
+  type SetterToolCall,
+} from "./_shared/setterToolLoop.ts";
 
 const getMainSupabase = () =>
   createClient(
@@ -32,7 +41,11 @@ const getMainSupabase = () =>
 
 const MAX_HISTORY_ROWS = 30;
 const DEFAULT_MODEL = "openai/gpt-4.1-nano";
-const RESPONSE_TIMEOUT_MS = 5 * 60 * 1000;
+// Per-call timeouts. The tool loop caps iterations (default 4), so the worst
+// case is ~4 × (LLM_TIMEOUT + TOOL_TIMEOUT) + a final LLM wrap-up, which stays
+// well under the task's 600s maxDuration.
+const LLM_TIMEOUT_MS = 60 * 1000;
+const TOOL_TIMEOUT_MS = 30 * 1000;
 
 // Reuse the n8n-style human-content extractor so chat_history written by older
 // n8n turns still parses cleanly when the new task reads it.
@@ -113,7 +126,7 @@ export const processSetterReply = task({
     // ── STEP 1: Resolve client by GHL location id ──
     const { data: client, error: clientError } = await supabase
       .from("clients")
-      .select("id, llm_model, openrouter_api_key, supabase_url, supabase_service_key")
+      .select("id, llm_model, openrouter_api_key, supabase_url, supabase_service_key, intake_lead_secret, timezone")
       .eq("ghl_location_id", payload.GHL_Account_ID)
       .single();
 
@@ -160,11 +173,14 @@ export const processSetterReply = task({
       setterPrompt && setterPrompt.trim(),
       `## Lead Context\nName: ${payload.Name || "(unknown)"}\nEmail: ${payload.Email || "(none)"}\nPhone: ${payload.Phone || "(none)"}`,
       MULTI_MESSAGE_INSTRUCTION,
+      // §3.12 — code-side tool-usage guidance (NOT a stored-prompt edit). Must
+      // come after MULTI_MESSAGE_INSTRUCTION since it references that JSON shape.
+      TOOL_USAGE_INSTRUCTION,
     ]
       .filter(Boolean)
       .join("\n\n");
 
-    const messages: Array<{ role: "system" | "user" | "assistant"; content: string }> = [];
+    const messages: LlmTurn[] = [];
     messages.push({ role: "system", content: systemContent });
 
     for (const row of chatHistory) {
@@ -184,45 +200,124 @@ export const processSetterReply = task({
       content: payload.Message_Body || "",
     });
 
-    // ── STEP 4: Call OpenRouter ──
-    console.log(`processSetterReply: calling ${model} for lead ${payload.Lead_ID} (slot ${slotId}, history ${chatHistory.length} rows)`);
+    // ── STEP 4: Run the agentic tool loop (§3.12) ──
+    // The LLM can now invoke the voice-booking-tools edge fn (check slots,
+    // book, reschedule, cancel, callback) over the course of the reply. The
+    // loop folds tool results back into the conversation; identity is injected
+    // by the engine (below) so the model can't misroute a booking.
+    console.log(`processSetterReply: calling ${model} for lead ${payload.Lead_ID} (slot ${slotId}, history ${chatHistory.length} rows, tools on)`);
 
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), RESPONSE_TIMEOUT_MS);
+    const supabaseUrl = process.env.SUPABASE_URL!;
+    const toolEndpoint = `${supabaseUrl}/functions/v1/voice-booking-tools`;
 
-    let rawText = "";
-    try {
-      const aiResp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${client.openrouter_api_key}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model,
-          messages,
-          temperature: 0.5,
-        }),
-        signal: controller.signal,
-      });
+    // Engine-injected identity — overrides anything the model supplies so the
+    // booking always attaches to THIS lead (contactId = the GHL/internal lead
+    // id) and is stamped source="sms".
+    const identity: Record<string, unknown> = {
+      contactId: payload.Lead_ID,
+      source: "sms",
+    };
+    if (payload.Phone) identity.phone = payload.Phone;
+    if (payload.Email) identity.email = payload.Email;
+    if (client.timezone) identity.timeZone = client.timezone as string;
+
+    const callLlm: CallLlm = async ({ messages: llmMessages, tools: llmTools, toolChoice }) => {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), LLM_TIMEOUT_MS);
+      let aiResp: Response;
+      try {
+        const reqBody: Record<string, unknown> = { model, messages: llmMessages, temperature: 0.5 };
+        if (llmTools && llmTools.length > 0) {
+          reqBody.tools = llmTools;
+          reqBody.tool_choice = toolChoice;
+        }
+        aiResp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${client.openrouter_api_key}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(reqBody),
+          signal: controller.signal,
+        });
+      } catch (err) {
+        if ((err as Error).name === "AbortError") {
+          throw new Error(`processSetterReply: OpenRouter call timed out after ${Math.round(LLM_TIMEOUT_MS / 1000)}s`);
+        }
+        throw err;
+      } finally {
+        clearTimeout(timeoutId);
+      }
       if (!aiResp.ok) {
         const errBody = await aiResp.text();
+        // Some OpenRouter models reject the tools param — degrade to reply-only.
+        if (llmTools && llmTools.length > 0 && [400, 404, 422].includes(aiResp.status) && /tool|function/i.test(errBody)) {
+          throw new ToolsUnsupportedError(`OpenRouter ${aiResp.status}: ${errBody.slice(0, 200)}`);
+        }
         throw new Error(`OpenRouter error ${aiResp.status}: ${errBody.slice(0, 300)}`);
       }
       const aiJson = (await aiResp.json()) as {
-        choices?: Array<{ message?: { content?: string } }>;
+        choices?: Array<{
+          message?: {
+            content?: string | null;
+            tool_calls?: Array<{ id?: string; type?: string; function?: { name?: string; arguments?: string } }>;
+          };
+        }>;
       };
-      rawText = aiJson?.choices?.[0]?.message?.content?.trim() ?? "";
-      if (!rawText) {
-        throw new Error("OpenRouter returned empty content");
+      const aiMsg = aiJson?.choices?.[0]?.message;
+      const toolCalls: SetterToolCall[] = (aiMsg?.tool_calls ?? [])
+        .filter((tc) => tc?.function?.name)
+        .map((tc) => ({
+          id: tc.id || crypto.randomUUID(),
+          type: "function" as const,
+          function: { name: tc.function!.name as string, arguments: tc.function!.arguments ?? "{}" },
+        }));
+      return { content: aiMsg?.content ?? null, toolCalls };
+    };
+
+    const callTool: CallTool = async (name, toolArgs) => {
+      const url = `${toolEndpoint}?tool=${encodeURIComponent(name)}&clientId=${encodeURIComponent(client.id)}`;
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (client.intake_lead_secret) headers.Authorization = `Bearer ${client.intake_lead_secret}`;
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), TOOL_TIMEOUT_MS);
+      let resp: Response;
+      try {
+        resp = await fetch(url, {
+          method: "POST",
+          headers,
+          body: JSON.stringify(toolArgs),
+          signal: controller.signal,
+        });
+      } finally {
+        clearTimeout(timeoutId);
       }
-    } catch (err: unknown) {
-      if ((err as Error).name === "AbortError") {
-        throw new Error(`processSetterReply: OpenRouter call timed out after ${Math.round(RESPONSE_TIMEOUT_MS / 1000)}s`);
+      const json = (await resp.json().catch(() => null)) as { ok?: boolean; result?: unknown; error?: string } | null;
+      if (!resp.ok || (json && json.ok === false)) {
+        const msg = (json && (json.error || JSON.stringify(json))) || `HTTP ${resp.status}`;
+        throw new Error(`voice-booking-tools ${name} failed: ${String(msg).slice(0, 300)}`);
       }
-      throw err;
-    } finally {
-      clearTimeout(timeoutId);
+      // Unwrap the { ok, tool, result } envelope so the model sees the payload.
+      return json && typeof json === "object" && "result" in json ? json.result : json;
+    };
+
+    const loopResult = await runSetterToolLoop({
+      messages,
+      tools: SETTER_TOOLS,
+      validToolNames: SETTER_TOOL_NAMES,
+      identity,
+      callLlm,
+      callTool,
+    });
+    if (loopResult.toolInvocations.length > 0) {
+      console.log(
+        `processSetterReply: lead ${payload.Lead_ID} tool invocations: ` +
+        loopResult.toolInvocations.map((t) => `${t.name}${t.error ? "(err)" : "(ok)"}`).join(", "),
+      );
+    }
+    const rawText = (loopResult.finalText || "").trim();
+    if (!rawText) {
+      throw new Error("processSetterReply: tool loop produced empty content");
     }
 
     // ── STEP 5: Parse + return n8n-shaped response ──
