@@ -9,7 +9,9 @@ import { strict as assert } from "node:assert";
 import {
   runSetterToolLoop,
   ToolsUnsupportedError,
+  type LlmResult,
   type LlmTurn,
+  type RunSetterToolLoopArgs,
   type SetterToolCall,
 } from "./setterToolLoop.ts";
 import { SETTER_TOOLS, SETTER_TOOL_NAMES } from "./setterTools.ts";
@@ -26,7 +28,11 @@ const IDENTITY = {
   source: "sms",
 };
 
-function baseArgs(overrides: Record<string, unknown>) {
+type LoopOverrides =
+  & Partial<RunSetterToolLoopArgs>
+  & Pick<RunSetterToolLoopArgs, "callLlm" | "callTool">;
+
+function baseArgs(overrides: LoopOverrides): RunSetterToolLoopArgs {
   return {
     messages: [
       { role: "system", content: "sys" },
@@ -58,7 +64,7 @@ test("(a) no tool_calls => returns content unchanged, callTool never invoked", a
 });
 
 test("(b) one tool_call => executes, folds result, re-calls, returns final content", async () => {
-  const seq = [
+  const seq: LlmResult[] = [
     { content: null, toolCalls: [toolCall("1", "book-appointments", { startDateTime: "2026-06-20T14:00:00" })] },
     { content: '{"messages":["You are booked for Sat 2pm"]}', toolCalls: [] },
   ];
@@ -80,7 +86,7 @@ test("(b) one tool_call => executes, folds result, re-calls, returns final conte
 });
 
 test("(c) tool throws => loop does NOT throw, folds error, model recovers gracefully", async () => {
-  const seq = [
+  const seq: LlmResult[] = [
     { content: null, toolCalls: [toolCall("1", "book-appointments", { startDateTime: "x" })] },
     { content: '{"messages":["Sorry, I hit a snag booking that, let me try again"]}', toolCalls: [] },
   ];
@@ -121,7 +127,7 @@ test("(c-variant) tools unsupported => retry without tools, reply-only, callTool
 });
 
 test("(d) engine-injected identity overrides model-supplied phone/contactId/email/source", async () => {
-  const seq = [
+  const seq: LlmResult[] = [
     {
       content: null,
       toolCalls: [
@@ -182,7 +188,7 @@ test("(f) slot_unavailable result is forwarded verbatim, not treated as success/
     available_slots: { "2026-06-21": ["10:00", "11:00"] },
     retry_with_available_slots: true,
   };
-  const seq = [
+  const seq: LlmResult[] = [
     { content: null, toolCalls: [toolCall("1", "book-appointments", { startDateTime: "2026-06-20T14:00:00" })] },
     { content: '{"messages":["That time is taken — 10am or 11am on the 21st?"]}', toolCalls: [] },
   ];
@@ -197,7 +203,7 @@ test("(f) slot_unavailable result is forwarded verbatim, not treated as success/
 });
 
 test("unknown tool name => folded as an error result, callTool not invoked for it", async () => {
-  const seq = [
+  const seq: LlmResult[] = [
     { content: null, toolCalls: [toolCall("1", "delete-everything", { foo: "bar" })] },
     { content: '{"messages":["I can\'t do that, but I can book you in"]}', toolCalls: [] },
   ];
