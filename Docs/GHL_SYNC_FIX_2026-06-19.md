@@ -138,5 +138,9 @@ Verified this session (read-only): `tsc --noEmit` exit 0; `deno test` 26/26 gree
 8. **[B] model fix**: set `clients.llm_model` to `google/gemini-flash-latest` (drop the stray `~`).
 9. **[B] ~101-field cleanup** (hit-list), after confirming no workflow refs.
 
+## Notes for Brendan (report-only)
+- **"Lead Qualified" source**: written from the agent's `success_rate` boolean (live agent defines it as "user asked ≥3 questions"), falling back to `call_successful`. Functional; refine the source later if a different qualification signal is preferred.
+- Code review (adversarial, full diff) returned **no Critical/Important issues**; isolation contract verified clean; 26/26 deno tests green; `tsc` exit 0.
+
 ## Decisions (defaults, documented)
 - Stamp clears `active_call_id`; narrow 500-on-write-failure retry; dedicated SMS fields (no clobbering call outcomes); typed appt-booked `nMV3jNAZIZyrclc6H5N3` left untouched (keep dedicated TEXT `IJVbAhkWv94dRW6Ddnze`).
