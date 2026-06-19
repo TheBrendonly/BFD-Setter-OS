@@ -35,6 +35,7 @@ import { parseCallbackTime } from "../_shared/parseCallbackTime.ts";
 import { normalizePhone } from "../_shared/phone.ts";
 import { resolveLeadByPhone } from "../_shared/leadResolve.ts";
 import { isPhoneOptedOut } from "../_shared/optout.ts";
+import { bookingSourceFromBody } from "../_shared/toolBookingSource.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -536,7 +537,9 @@ async function toolBookAppointments(args: {
             ghl_calendar_id: calendarId,
             appointment_time: bookStart,
             appointment_end_time: bookEnd,
-            source: "voice_call",
+            // §3.12: the SMS engine passes source="sms"; voice/Retell callers
+            // never send a source, so this defaults to "voice_call" unchanged.
+            source: bookingSourceFromBody(body),
             status: "confirmed",
             raw_payload: appt,
           },
