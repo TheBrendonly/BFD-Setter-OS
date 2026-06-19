@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
+import { FunctionsHttpError } from '@supabase/supabase-js';
 import { format } from 'date-fns';
 import { Loader2, MessageSquare, Send, ExternalLink, Phone, Play, Pause, ExternalLink as LinkIcon, X, Calendar, ChevronLeft, ChevronRight } from '@/components/icons';
 import { Input } from '@/components/ui/input';
@@ -794,34 +795,28 @@ export const ContactConversationHistory: React.FC<ContactConversationHistoryProp
           continue;
         }
 
-        const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
-        const response = await fetch(
-          `https://${projectId}.supabase.co/functions/v1/crm-send-message`,
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${session.access_token}`,
-              apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-            },
-            body: JSON.stringify({
-              client_id: clientId,
-              contact_id: contactId,
-              message: item.text,
-              channel: item.channel,
-            }),
-          }
-        );
+        const { data: result, error } = await supabase.functions.invoke('crm-send-message', {
+          body: {
+            client_id: clientId,
+            contact_id: contactId,
+            message: item.text,
+            channel: item.channel,
+          },
+        });
 
-        const result = await response.json();
-
-        if (!response.ok) {
-          // If rate limited by server, wait and retry (don't remove from queue)
-          if (response.status === 429 && result.wait_seconds) {
-            await new Promise(resolve => setTimeout(resolve, result.wait_seconds * 1000));
-            continue; // retry same message
+        if (error) {
+          // FunctionsHttpError carries the raw Response on .context; read the
+          // body once so we can both honour the 429 backoff and surface errors.
+          let errBody: any = {};
+          if (error instanceof FunctionsHttpError) {
+            errBody = await error.context.json().catch(() => ({}));
+            // If rate limited by server, wait and retry (don't remove from queue)
+            if (error.context.status === 429 && errBody?.wait_seconds) {
+              await new Promise(resolve => setTimeout(resolve, errBody.wait_seconds * 1000));
+              continue; // retry same message
+            }
           }
-          throw new Error(result.error || 'Failed to send SMS');
+          throw new Error(errBody?.error || error.message || 'Failed to send SMS');
         }
 
         lastSentAtRef.current = Date.now();

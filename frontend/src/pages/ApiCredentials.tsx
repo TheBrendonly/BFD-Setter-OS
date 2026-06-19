@@ -345,22 +345,11 @@ const ApiCredentials = () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.access_token) return;
 
-      const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
-      const res = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/sync-external-credentials`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${session.access_token}`,
-            apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-          },
-          body: JSON.stringify({ clientId }),
-        }
-      );
-      const result = await res.json();
-      if (!res.ok) {
-        console.error('External sync failed:', result.error);
+      const { data: result, error } = await supabase.functions.invoke('sync-external-credentials', {
+        body: { clientId },
+      });
+      if (error) {
+        console.error('External sync failed:', error);
       } else {
         console.log('External Supabase credentials synced:', result);
       }
