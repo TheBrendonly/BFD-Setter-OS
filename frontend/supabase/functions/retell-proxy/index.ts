@@ -5,6 +5,7 @@ import {
   BFD_SEND_SMS_TOOL,
   BFD_SCHEDULE_CALLBACK_TOOL,
 } from "../_shared/bfdVoiceTools.ts";
+import { buildVoiceSetterDeactivatePayload } from "../_shared/voice-setter.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -1581,6 +1582,21 @@ Deno.serve(async (req) => {
           console.log(`[delete-voice-setter] Cleared ${agentColumn} on client ${clientId}`);
         } else {
           console.log(`[delete-voice-setter] No Retell agent found for slot ${slotNumber}, skipping`);
+        }
+
+        // Soft-delete the voice_setters row so it can't linger as an orphan
+        // pointing at the now-deleted agent (delete-setter bug). Runs even when
+        // no agent was found, so a pre-existing orphan is cleaned too. Keyed on
+        // (client_id, legacy_slot) like dualWriteVoiceSetter. Non-blocking.
+        try {
+          await supabaseAdmin
+            .from("voice_setters")
+            .update(buildVoiceSetterDeactivatePayload())
+            .eq("client_id", clientId)
+            .eq("legacy_slot", slotNumber);
+          console.log(`[delete-voice-setter] Deactivated voice_setters row for slot ${slotNumber}`);
+        } catch (vsErr) {
+          console.warn(`[delete-voice-setter] Failed to deactivate voice_setters row for slot ${slotNumber}:`, vsErr);
         }
 
         result = { success: true, action: "deleted", slot: slotNumber, agent_id: existingAgentId || null };
