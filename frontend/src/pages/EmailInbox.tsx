@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { FunctionsHttpError } from "@supabase/supabase-js";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -78,23 +79,22 @@ export default function EmailInbox() {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) throw new Error("Not authenticated");
     const searchParams = new URLSearchParams({ action, ...params });
-    const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
-    const url = `https://${projectId}.supabase.co/functions/v1/unipile-proxy?${searchParams}`;
-    const res = await fetch(url, {
-      method: body ? "POST" : "GET",
-      headers: {
-        Authorization: `Bearer ${session.access_token}`,
-        "Content-Type": "application/json",
-        apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-      },
-      ...(body ? { body: JSON.stringify(body) } : {}),
-    });
-    if (!res.ok) {
-      const errBody = await res.json().catch(() => ({}));
-      const msg = errBody.error || errBody.title || errBody.detail || `Request failed: ${res.status}`;
+    // functions.invoke uses the canonical client URL (VITE_SUPABASE_URL); the
+    // query string rides in the function name. Avoids the undefined.supabase.co
+    // failure when VITE_SUPABASE_PROJECT_ID is unset (6.3).
+    const { data, error } = await supabase.functions.invoke(
+      `unipile-proxy?${searchParams}`,
+      body ? { method: "POST", body } : { method: "GET" },
+    );
+    if (error) {
+      const errBody: any = error instanceof FunctionsHttpError
+        ? await error.context.json().catch(() => ({}))
+        : {};
+      const status = error instanceof FunctionsHttpError ? error.context.status : undefined;
+      const msg = errBody.error || errBody.title || errBody.detail || `Request failed: ${status ?? error.message}`;
       throw new Error(msg);
     }
-    return res.json();
+    return data;
   };
 
   const loadCached = (accountId: string): EmailItem[] | null => {

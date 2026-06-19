@@ -44,20 +44,14 @@ export default function AttendeeProfileDialog({ open, onOpenChange, attendeeId, 
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return;
 
-      const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
-      const url = `https://${projectId}.supabase.co/functions/v1/unipile-proxy?action=get-attendee&attendee_id=${id}`;
+      // functions.invoke uses the canonical client URL (6.3); query rides in name.
+      const { data, error } = await supabase.functions.invoke(
+        `unipile-proxy?action=get-attendee&attendee_id=${id}`,
+        { method: "GET" },
+      );
 
-      const res = await fetch(url, {
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-          "Content-Type": "application/json",
-          apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-        },
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        setProfile(data);
+      if (!error && data) {
+        setProfile(data as AttendeeProfile);
       }
     } catch (err) {
       console.error("Failed to fetch attendee profile:", err);
