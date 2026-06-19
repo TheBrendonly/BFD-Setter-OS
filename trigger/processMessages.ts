@@ -322,6 +322,35 @@ export const processMessages = task({
       }
       await updateExecution({ setter_messages: setterMessages });
 
+      // ── STEP 5.5: Opt-out re-check after reply generation (§3.12) ───────────
+      // The booking tool loop in processSetterReply can take tens of seconds
+      // (LLM + GHL round-trips), widening the window for a STOP to land while
+      // the reply is being generated. Re-read the opt-out gate (mirrors STEP
+      // 1.5) and skip the send if the lead opted out in the meantime.
+      {
+        const { data: lateOptOut } = await supabase
+          .from("leads")
+          .select("setter_stopped")
+          .eq("client_id", client.id)
+          .eq("lead_id", lead_id)
+          .maybeSingle();
+        const lateNormalizedPhone = normalizePhone(contact_phone);
+        const latePhoneOptedOut = lateNormalizedPhone
+          ? await isPhoneOptedOut(supabase, client.id, lateNormalizedPhone)
+          : false;
+        if (lateOptOut?.setter_stopped || latePhoneOptedOut) {
+          console.log(`Lead ${lead_id} opted out during reply generation — skipping send.`);
+          await updateExecution({
+            status: "cancelled",
+            stage_description: "Lead opted out (STOP) during reply generation — reply not sent.",
+            completed_at: new Date().toISOString(),
+            resume_at: null,
+          });
+          await cleanup(supabase, lead_id, ghl_account_id, triggerRunId);
+          return { status: "opted_out" };
+        }
+      }
+
       // ── STEP 6: Send setter reply ───────────────────────────────────────────
       await updateExecution({
         status: "sending",
