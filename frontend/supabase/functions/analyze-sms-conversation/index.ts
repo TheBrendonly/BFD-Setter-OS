@@ -23,6 +23,7 @@ import {
   buildSmsAnalysisMessages,
   buildSmsConversationText,
   buildSmsFieldWrites,
+  normalizeModel,
   parseSmsAnalysis,
   type SmsMsg,
 } from "./smsAnalysis.ts";
@@ -126,7 +127,7 @@ async function analyzeOne(supabase: Supa, client: ClientRow, leadId: string): Pr
 
     const apiKey = client.openrouter_api_key as string | null;
     if (messages.length >= MIN_MESSAGES && apiKey) {
-      const analysis = await classify(messages, apiKey, (client.llm_model as string | null) || DEFAULT_MODEL);
+      const analysis = await classify(messages, apiKey, normalizeModel(client.llm_model as string | null) || DEFAULT_MODEL);
       if (analysis) {
         const writes = buildSmsFieldWrites(analysis, {
           sentiment: client.ghl_sms_sentiment_field_id as string | null,

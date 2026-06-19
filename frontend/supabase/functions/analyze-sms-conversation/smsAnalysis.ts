@@ -28,6 +28,18 @@ const SMS_ANALYSIS_SYSTEM_PROMPT =
   '"summary" (1-2 sentence summary of the conversation). ' +
   "If the conversation is too short or empty to judge a field, use null for that field.";
 
+/**
+ * Normalise a free-text clients.llm_model value before sending to OpenRouter.
+ * Strips a stray leading "~" (a live data anomaly — the model field is free
+ * text and someone saved "~google/gemini-flash-latest") and whitespace.
+ * Returns null when nothing usable remains so the caller falls back to a default.
+ */
+export function normalizeModel(raw: string | null | undefined): string | null {
+  if (typeof raw !== "string") return null;
+  const cleaned = raw.replace(/^[~\s]+/, "").trim();
+  return cleaned === "" ? null : cleaned;
+}
+
 /** Render the SMS thread as a labelled transcript for the analyser. */
 export function buildSmsConversationText(messages: SmsMsg[]): string {
   return messages

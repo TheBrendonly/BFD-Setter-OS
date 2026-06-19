@@ -3,8 +3,21 @@ import {
   buildSmsAnalysisMessages,
   buildSmsConversationText,
   buildSmsFieldWrites,
+  normalizeModel,
   parseSmsAnalysis,
 } from "./smsAnalysis.ts";
+
+Deno.test("normalizeModel: strips a stray leading ~ and whitespace (live data anomaly)", () => {
+  assertEquals(normalizeModel("~google/gemini-flash-latest"), "google/gemini-flash-latest");
+  assertEquals(normalizeModel("  openai/gpt-4.1-nano "), "openai/gpt-4.1-nano");
+  assertEquals(normalizeModel("~~ google/gemini "), "google/gemini");
+});
+
+Deno.test("normalizeModel: empty / null / only-noise → null (caller falls back to default)", () => {
+  assertEquals(normalizeModel(null), null);
+  assertEquals(normalizeModel(""), null);
+  assertEquals(normalizeModel("  ~ "), null);
+});
 
 Deno.test("buildSmsConversationText: labels inbound=Lead, outbound=Setter, in order", () => {
   const text = buildSmsConversationText([
