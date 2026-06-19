@@ -50,12 +50,25 @@ Self-contained; never touches the SMS engine. Reconstructs the thread from `mess
 
 Driver: `trigger/analyzeSmsConversations.ts` — hourly `schedules.task`, POSTs the edge fn in scan mode (leads with SMS activity since `last_sms_analyzed_at`, last msg > 10 min ago).
 
-### GHL field-type check (build-time, read-only) — FINDINGS
-`GET /locations/xo0XjmenBBJxJgSnAdyM/customFields` (Version 2021-07-28). Rule: TEXT/LARGE_TEXT → wire id directly; DATE/SINGLE_OPTIONS/CHECKBOX/RADIO → mint a dedicated `Setter *` TEXT field (2026-06-19 precedent).
+### GHL field-type check (read-only) — FINDINGS ✅
+Verified live 2026-06-19 (`GET /locations/xo0XjmenBBJxJgSnAdyM/customFields`, HTTP 200, 116 fields, key from `clients.ghl_api_key`). Rule: TEXT/LARGE_TEXT → wire id directly; SINGLE_OPTIONS/CHECKBOX/DATE/RADIO → mint a dedicated `Setter *` TEXT field (2026-06-19 precedent — plain-string writes to typed fields silently fail).
 
-| field id | name | dataType | decision |
+| GHL field | id | dataType | wire decision |
 |---|---|---|---|
-| _(filled at build)_ | | | |
+| AI Call Summary | `sbwpZdkcp1OxoAwffLEA` | **LARGE_TEXT** | ✅ wire id directly → `ghl_call_summary_field_id` |
+| Callback Datetime | `hZxMXCpQM1JTvdSbsV79` | **TEXT** | ✅ wire id directly → `ghl_callback_datetime_field_id` |
+| Appointment Datetime | `Yu0pBpa0X99NjJbiWa2X` | **TEXT** | ✅ wire id directly → `ghl_appointment_datetime_field_id` |
+| Call Outcome | `YD9wo2UYpfsewexEExb6` | SINGLE_OPTIONS | ⚠️ [B] mint dedicated TEXT `Setter Call Outcome` → `ghl_call_outcome_field_id` |
+| Call Intent | `ZOpyG5eQLYdNeXA7UW9w` | SINGLE_OPTIONS | ⚠️ [B] mint dedicated TEXT `Setter Call Intent` → `ghl_call_intent_field_id` |
+| Lead Qualified | `zoNSLEjOucDtumqREGoG` | CHECKBOX | ⚠️ [B] mint dedicated TEXT `Setter Lead Qualified` → `ghl_lead_qualified_field_id` |
+| Last Call Date | `9rtxGevOeSiJZpD3zFfi` | DATE | ⚠️ [B] mint dedicated TEXT `Setter Last Call Date` → `ghl_last_call_date_field_id` |
+| Callback Requested | `qvA1ZKUP2QcwffoTR8DS` | CHECKBOX | ⚠️ [B] mint dedicated TEXT `Setter Callback Requested` → `ghl_callback_requested_field_id` |
+| (wired) Setter Call Sentiment | `jWPaRl6ysDgR7KWzW89d` | TEXT | already wired |
+| (wired) Setter Appointment Booked | `IJVbAhkWv94dRW6Ddnze` | TEXT | already wired |
+
+**Net wiring (coordinated step 4):** 3 existing fields wire directly; **5 dedicated `Setter *` TEXT fields are [B] to create** then wire. The code writes plain strings/ISO/labels, so it is correct once TEXT-safe ids are in the columns. SMS fields (`Setter SMS *`) are also [B] to create.
+
+**Model-config anomaly (report-only, [B]):** live `clients.llm_model = "~google/gemini-flash-latest"` (free-text field, stray leading `~`). The SMS analyzer normalizes it (`normalizeModel`); but `processSetterReply` + `aiGenerateEngagementCopy` pass `llm_model` **raw** to OpenRouter — the `~` likely breaks those LLM calls too. Brendan should fix the value in the UI (Api Credentials → LLM model) to `google/gemini-flash-latest`.
 
 ---
 
@@ -77,8 +90,11 @@ Code (`pushSmsToGhl`) is **already correct**: posts to `/conversations/messages/
 
 Fields: `6uO14dISilgbMcn35Ne4` **Supabase Service Role Key**, `eRGxS6OZhW20KLxP2c1n` **Supabase Project URL**. Code grep: **no code reads/writes either id** → deletion is code-safe.
 
-### Verification — FINDINGS
-_(filled at build: field present? dataType? any contact holds a real value? exposure severity.)_
+### Verification — FINDINGS ✅ (read-only, 2026-06-19)
+- Both field **definitions exist** on location `xo0XjmenBBJxJgSnAdyM`, dataType **TEXT** (`6uO14dISilgbMcn35Ne4` Supabase Service Role Key; `eRGxS6OZhW20KLxP2c1n` Supabase Project URL).
+- **No contact holds a value** for either field (contacts scanned = 0 after the clean-slate wipe — so no live secret value found; caveat: 0 contacts means the scan can't disprove future population, but the definitions are the risk surface).
+- **No code reads or writes** either field id (grep over `*.ts`/`*.sql`). Deleting them is code-safe.
+- **Exposure: LOW today** (definitions only, unpopulated, code-unused) but the names invite a workflow to store a service-role key in a CRM field → delete the definitions.
 
 ### [B] action
 Delete both field definitions in GHL after confirming no live GHL **workflow** references them. **If a real service-role key value is found, rotate the Supabase service-role key out-of-band regardless of deletion.**
@@ -87,16 +103,40 @@ Delete both field definitions in GHL after confirming no live GHL **workflow** r
 
 ## 5. ~101-field cleanup ([B])
 
-See `Docs/GHL_CUSTOM_FIELDS_HITLIST.md` for the full grouped list + action order. Gate: confirm no live GHL workflow references a field before deleting; run **after** §2 finalizes the KEEP/wire set. No live deletion this session.
+Live total confirmed: **116** custom fields (matches the hit-list estimate). See `Docs/GHL_CUSTOM_FIELDS_HITLIST.md` for the full grouped delete list + action order. Gate: confirm no live GHL workflow references a field before deleting. No live deletion this session.
+
+**Finalized KEEP/wire set after §2 type-check:**
+- **KEEP + wire directly (3):** AI Call Summary `sbwpZdkcp1OxoAwffLEA`, Callback Datetime `hZxMXCpQM1JTvdSbsV79`, Appointment Datetime `Yu0pBpa0X99NjJbiWa2X` (all TEXT/LARGE_TEXT).
+- **KEEP (already wired, TEXT):** Setter Call Sentiment `jWPaRl6ysDgR7KWzW89d`, Setter Appointment Booked `IJVbAhkWv94dRW6Ddnze`.
+- **SUPERSEDED by new dedicated `Setter *` TEXT fields (5):** Call Outcome `YD9wo2UYpfsewexEExb6` (SINGLE_OPTIONS), Call Intent `ZOpyG5eQLYdNeXA7UW9w` (SINGLE_OPTIONS), Lead Qualified `zoNSLEjOucDtumqREGoG` (CHECKBOX), Last Call Date `9rtxGevOeSiJZpD3zFfi` (DATE), Callback Requested `qvA1ZKUP2QcwffoTR8DS` (CHECKBOX). BFD will no longer write these; they are **deletable IF no live GHL workflow references them** (else leave — harmless).
+- **DELETE (2, security):** `6uO14dISilgbMcn35Ne4`, `eRGxS6OZhW20KLxP2c1n` (see §4).
+- **CREATE (9 new TEXT, [B]):** 5 `Setter Call Outcome / Setter Call Intent / Setter Lead Qualified / Setter Last Call Date / Setter Callback Requested` + 4 `Setter SMS Sentiment / Setter SMS Intent / Setter SMS Qualified / Setter SMS Summary`.
 
 ---
 
 ## 6. Coordinated-deploy list (post-merge)
-1. Apply migration `20260619120000_ghl_outcome_field_ids.sql` (additive nullable columns on `clients` + `leads.last_sms_analyzed_at`).
-2. Redeploy edge fn `retell-call-analysis-webhook` (6.11 + 6.12b-calls).
-3. Deploy edge fn `analyze-sms-conversation` + Trigger deploy `analyzeSmsConversations` (coordinate the single Trigger deploy with the feature session).
-4. [B] wire the new `ghl_*_field_id` columns on the BFD client row (per the §2 type-check) + create dedicated `Setter *` / `Setter SMS *` TEXT fields where required.
-5. [B] 6.12a marketplace conversation provider + set `ghl_conversation_provider_id`; 6.13 delete + key rotation if exposed; ~101-field cleanup.
+
+Verified this session (read-only): `tsc --noEmit` exit 0; `deno test` 26/26 green; webhook `deno check` = only the pre-existing GenericStringError + callDirectionForConv classes (no new class); migration columns not yet live; GHL field types + 6.13 confirmed live.
+
+1. **Apply migration** `20260619120000_ghl_outcome_field_ids.sql` (additive nullable columns on `clients` + `leads.last_sms_analyzed_at` — backward-compatible).
+2. **Redeploy edge fn** `retell-call-analysis-webhook` (6.11 stamp + 6.12b call outcome writes). Deploy with `--use-api --no-verify-jwt` like the others.
+3. **Deploy edge fn** `analyze-sms-conversation` (`--use-api --no-verify-jwt`) + **one Trigger deploy** for `analyzeSmsConversations` — coordinate this single Trigger deploy with the feature session (shared deploy surface).
+4. **Wire TEXT-safe ids now** (no field creation needed) on the BFD client `e467dabc-57ee-416c-8831-83ecd9c7c925`:
+   ```sql
+   update clients set
+     ghl_call_summary_field_id='sbwpZdkcp1OxoAwffLEA',
+     ghl_callback_datetime_field_id='hZxMXCpQM1JTvdSbsV79',
+     ghl_appointment_datetime_field_id='Yu0pBpa0X99NjJbiWa2X'
+   where id='e467dabc-57ee-416c-8831-83ecd9c7c925';
+   ```
+5. **[B] Create 9 dedicated TEXT custom fields** in GHL, then wire their ids:
+   - Call path (5): `Setter Call Outcome` → `ghl_call_outcome_field_id`; `Setter Call Intent` → `ghl_call_intent_field_id`; `Setter Lead Qualified` → `ghl_lead_qualified_field_id`; `Setter Last Call Date` → `ghl_last_call_date_field_id`; `Setter Callback Requested` → `ghl_callback_requested_field_id`.
+   - SMS path (4): `Setter SMS Sentiment/Intent/Qualified/Summary` → `ghl_sms_*_field_id`.
+   (Existing typed fields stay untouched; they're superseded — delete only if no workflow references them, see §5.)
+6. **[B] 6.12a** marketplace conversation provider (runbook §3) + set `ghl_conversation_provider_id`.
+7. **[B] 6.13** delete the 2 security field definitions (low exposure, code-unused); rotate the Supabase service-role key only if a value is ever found populated.
+8. **[B] model fix**: set `clients.llm_model` to `google/gemini-flash-latest` (drop the stray `~`).
+9. **[B] ~101-field cleanup** (hit-list), after confirming no workflow refs.
 
 ## Decisions (defaults, documented)
 - Stamp clears `active_call_id`; narrow 500-on-write-failure retry; dedicated SMS fields (no clobbering call outcomes); typed appt-booked `nMV3jNAZIZyrclc6H5N3` left untouched (keep dedicated TEXT `IJVbAhkWv94dRW6Ddnze`).
