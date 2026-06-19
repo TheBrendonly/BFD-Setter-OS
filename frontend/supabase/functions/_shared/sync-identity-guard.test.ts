@@ -1,4 +1,4 @@
-import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
+import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
   buildExistingLeadUpdatePayload,
   identityFieldsInPayload,
@@ -50,4 +50,31 @@ Deno.test("identityFieldsInPayload: cleared field (null) detected as identity fi
   };
   const leaked = identityFieldsInPayload(payloadWithNull);
   assertEquals(leaked, ["email"], "Null identity field still counts as a leak");
+});
+
+// BUG 6.4 regression: phone-REMOVAL must stick. When a phone is cleared in the
+// BFD UI, push-contact-to-ghl clears it in GHL (phone null !== undefined, so it
+// IS pushed); a subsequent GHL contact.update echo must NOT re-introduce the old
+// phone. The existing-lead path proves this by never carrying phone at all.
+
+Deno.test("BUG 6.4: existing-lead update payload never carries phone (cleared phone stays cleared)", () => {
+  const payload = buildExistingLeadUpdatePayload();
+  assertEquals(
+    identityFieldsInPayload(payload),
+    [],
+    "phone must never appear on the existing-lead update path",
+  );
+  assert(!("phone" in payload), "phone key must be absent so a GHL echo can't rewrite it");
+});
+
+Deno.test("BUG 6.4: a cleared phone (null) is still flagged as a leak if it ever appears", () => {
+  const buggy: Record<string, unknown> = {
+    updated_at: new Date().toISOString(),
+    phone: null,
+  };
+  assertEquals(
+    identityFieldsInPayload(buggy),
+    ["phone"],
+    "null phone in the payload still counts as a BFD-overwrite leak",
+  );
 });
