@@ -1,6 +1,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2.101.0";
 import { resolveContactId } from "./contactId.ts";
 import { classifyCallOutcome } from "./classifyCallOutcome.ts";
+import { buildCallOutcomeStamp, stampLastCallOutcome } from "./callOutcome.ts";
 import { pushCallEventToGhl } from "../_shared/ghl-conversations.ts";
 import { parseCallbackTime } from "../_shared/parseCallbackTime.ts";
 // Retell signature verification (correct v={ts},d=HMAC(body+ts, API_KEY) scheme,
@@ -741,10 +742,52 @@ Deno.serve(async (req) => {
       console.log(`ℹ️ Received ${eventType} for call ${callId}; waiting for call_analyzed before persisting full call history`);
     }
 
+    // ── Step 5.5 (6.11): stamp last_call_outcome on call_ended ──
+    // The live agents post to THIS webhook (not retell-call-webhook), so the
+    // cadence-critical outcome stamp must happen here too. Without it,
+    // runEngagement.waitForCallOutcome polls its full 600s ceiling for
+    // voicemail / no-answer calls before sending the missed-call fallback SMS
+    // (answered calls already complete via Step 6's human-pickup path). Fires on
+    // call_ended only (earliest signal); the Step 6 completion stays intact and
+    // idempotent. Clearing active_call_id also releases the processMessages HOLD
+    // loop for inbound SMS sent during the call.
+    const executionId: string | null = dynamicVars.execution_id || null;
+    if (eventType === "call_ended" && executionId) {
+      const stamp = buildCallOutcomeStamp(call, new Date().toISOString());
+      const stampRes = await stampLastCallOutcome(supabase, executionId, stamp);
+      if (!stampRes.ok) {
+        // CRITICAL: runEngagement polls last_call_outcome to break its wait loop
+        // and decide advance-vs-terminate. A lost write hangs / mis-classifies
+        // the cadence — surface it and ask Retell to retry. Narrow, deliberate
+        // exception to this handler's otherwise always-200 contract.
+        console.error(
+          `retell-call-analysis-webhook: CRITICAL last_call_outcome write failed for exec ${executionId}: ${stampRes.error}`,
+        );
+        try {
+          await supabase.from("error_logs").insert({
+            client_id: clientId,
+            lead_id: contactId || null,
+            execution_id: executionId,
+            severity: "error",
+            source: "retell-call-analysis-webhook",
+            error_type: "last_call_outcome_write_failed",
+            error_message: stampRes.error ?? "unknown",
+            context: { call_id: callId, event: eventType },
+          });
+        } catch (_logErr) { /* non-fatal */ }
+        return new Response(
+          JSON.stringify({ error: "Failed to persist call outcome", retry: true }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+      console.log(
+        `📞 last_call_outcome stamped on exec ${executionId} (call_id=${stamp.call_id}, reason=${stamp.disconnect_reason ?? "?"})`,
+      );
+    }
+
     // ── Step 6: Handle engagement workflow integration ──
 
     const treatPickupAsReply = dynamicVars.treat_pickup_as_reply === "true";
-    const executionId: string | null = dynamicVars.execution_id || null;
 
     if (treatPickupAsReply && executionId) {
       const disconnectReason = call.disconnection_reason || "";
