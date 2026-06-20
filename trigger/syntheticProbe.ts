@@ -16,6 +16,7 @@
 
 import { schedules } from "@trigger.dev/sdk";
 import { createClient } from "@supabase/supabase-js";
+import { hasOutboundRow, pollUntil } from "./_shared/probePoll.ts";
 
 const getSupabase = () =>
   createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -175,15 +176,25 @@ export const syntheticProbe = schedules.task({
       });
     }
 
-    // Step 3 — assert at least one outbound message_queue row.
-    const { data: mqRows } = await supabase
-      .from("message_queue")
-      .select("id, channel, twilio_message_sid, created_at")
-      .eq("lead_id", leadId)
-      .gte("created_at", new Date(startedAt).toISOString())
-      .order("created_at", { ascending: false })
-      .limit(5);
-    const sawOutbound = Array.isArray(mqRows) && mqRows.some((r: any) => r.channel === "sms_outbound");
+    // Step 3 — poll for at least one outbound message_queue row. The SMS node
+    // enqueues the row shortly AFTER the execution enters `running`, and on a
+    // cold Trigger.dev worker that can lag, so poll on a deadline rather than
+    // asserting once the instant status flips (Bug 6.7 canary race). Cancelling
+    // mid-cadence (Step 4) is intentional, so we do NOT wait for `completed`.
+    const { ok: sawOutbound, value: mqRows } = await pollUntil(
+      async () => {
+        const { data } = await supabase
+          .from("message_queue")
+          .select("id, channel, twilio_message_sid, created_at")
+          .eq("lead_id", leadId)
+          .gte("created_at", new Date(startedAt).toISOString())
+          .order("created_at", { ascending: false })
+          .limit(5);
+        return data;
+      },
+      hasOutboundRow,
+      { deadlineMs: 60_000, sleepMs: 2_500 },
+    );
     if (!sawOutbound) {
       // Still cancel before returning.
       await supabase
@@ -193,7 +204,7 @@ export const syntheticProbe = schedules.task({
       return persistAndMaybeAlert({
         passed: false,
         duration_ms: Date.now() - startedAt,
-        error_message: "no outbound message_queue row after cadence ran",
+        error_message: "no outbound message_queue row after cadence ran (60s poll)",
         raw: { stage: "assert-outbound", execution_id: executionId, mqRows },
       });
     }

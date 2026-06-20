@@ -47,29 +47,18 @@ export async function fetchTwilioPhoneNumbers(
     throw new Error('No active session');
   }
 
-  const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
   const payload = 'clientId' in params
     ? { client_id: params.clientId }
     : { account_sid: params.accountSid, auth_token: params.authToken };
 
-  const response = await fetch(
-    `https://${projectId}.supabase.co/functions/v1/twilio-list-numbers`,
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${session.access_token}`,
-        apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-      },
-      body: JSON.stringify(payload),
-    }
-  );
+  // Use supabase.functions.invoke so the URL + auth come from the canonical
+  // client (VITE_SUPABASE_URL/anon key) instead of a separate VITE_SUPABASE_
+  // PROJECT_ID that silently became `https://undefined.supabase.co` when unset.
+  const { data, error } = await supabase.functions.invoke('twilio-list-numbers', {
+    body: payload,
+  });
+  if (error) throw error;
+  if (data?.error) throw new Error(data.error);
 
-  const result = await response.json().catch(() => ({}));
-
-  if (!response.ok) {
-    throw new Error(result?.error || 'Failed to fetch Twilio numbers');
-  }
-
-  return normalizeTwilioNumbers(result?.numbers ?? result?.phone_numbers);
+  return normalizeTwilioNumbers(data?.numbers ?? data?.phone_numbers);
 }

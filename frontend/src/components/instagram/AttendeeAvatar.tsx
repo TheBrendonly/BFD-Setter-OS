@@ -23,19 +23,15 @@ export default function AttendeeAvatar({ attendeeId, displayName, className = "w
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return;
 
-      const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
-      const url = `https://${projectId}.supabase.co/functions/v1/unipile-proxy?action=get-attendee-picture&attendee_id=${id}`;
+      // functions.invoke decodes an image content-type response to a Blob; the
+      // query string rides in the function name (6.3: avoids undefined.supabase.co).
+      const { data, error } = await supabase.functions.invoke(
+        `unipile-proxy?action=get-attendee-picture&attendee_id=${id}`,
+        { method: "GET" },
+      );
 
-      const res = await fetch(url, {
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-          apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-        },
-      });
-
-      if (res.ok) {
-        const blob = await res.blob();
-        setPictureUrl(URL.createObjectURL(blob));
+      if (!error && data instanceof Blob) {
+        setPictureUrl(URL.createObjectURL(data));
       }
     } catch {
       // silently fail - will show fallback

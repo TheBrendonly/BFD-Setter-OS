@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { FunctionsHttpError } from "@supabase/supabase-js";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -87,24 +88,22 @@ export default function InstagramDMs() {
     if (!session) throw new Error("Not authenticated");
 
     const searchParams = new URLSearchParams({ action, ...params });
-    const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
-    const url = `https://${projectId}.supabase.co/functions/v1/unipile-proxy?${searchParams}`;
+    // functions.invoke uses the canonical client URL (VITE_SUPABASE_URL); the
+    // query string rides in the function name. Avoids the undefined.supabase.co
+    // failure when VITE_SUPABASE_PROJECT_ID is unset (6.3).
+    const { data, error } = await supabase.functions.invoke(
+      `unipile-proxy?${searchParams}`,
+      body ? { method: "POST", body } : { method: "GET" },
+    );
 
-    const res = await fetch(url, {
-      method: body ? "POST" : "GET",
-      headers: {
-        Authorization: `Bearer ${session.access_token}`,
-        "Content-Type": "application/json",
-        apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-      },
-      ...(body ? { body: JSON.stringify(body) } : {}),
-    });
-
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.error || `Request failed: ${res.status}`);
+    if (error) {
+      const errBody: any = error instanceof FunctionsHttpError
+        ? await error.context.json().catch(() => ({}))
+        : {};
+      const status = error instanceof FunctionsHttpError ? error.context.status : undefined;
+      throw new Error(errBody.error || `Request failed: ${status ?? error.message}`);
     }
-    return res.json();
+    return data;
   };
 
   const getCacheKey = (accountId: string) => `${CACHE_KEY_PREFIX}${accountId}`;

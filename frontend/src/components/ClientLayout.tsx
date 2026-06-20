@@ -962,21 +962,13 @@ function ClientSidebar() {
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               )}
-              {/* Sub-Account Config → /client/<id>/settings (ClientSettings.tsx)
-                  Per-client deep config: Timezone, Contact hours, Voicemail, Logo,
-                  cost ceilings, menu + field-access governance. AGENCY ONLY — clients
-                  self-serve the governed subset via My Account instead (2026-06-17
-                  account-access restructure). Route is also guarded by RequireAgency. */}
-              {isAgency && (
-                <SidebarMenuItem>
-                  <SidebarMenuButton asChild>
-                    <NavLink to={`/client/${clientId}/settings`} className="flex items-center gap-3 px-3 py-2 transition-colors hover:bg-muted/50 sidebar-nav-item" activeClassName="bg-primary/10 text-primary border-l-2 border-primary">
-                      <span className="w-4 text-center text-foreground" style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '14px' }}>⚑</span>
-                      <span>Sub-Account Config</span>
-                    </NavLink>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              )}
+              {/* Sub-Account Config (per-client deep config: Timezone, Contact hours,
+                  Voicemail, Logo, cost ceilings, menu + field-access governance) is no
+                  longer a top-level sidebar item (6.1). Agency reaches it by clicking a
+                  sub-account inside Manage Sub-Accounts → /client/<id>/settings
+                  (ClientSettings.tsx, still RequireAgency-guarded). Clients self-serve
+                  the governed subset via My Account (2026-06-17 account-access
+                  restructure). */}
               {/* Account Settings → /client/<id>/account-settings (AccountSettings.tsx)
                   User-level config: email, password, theme. Visible to both roles. */}
               <SidebarMenuItem>

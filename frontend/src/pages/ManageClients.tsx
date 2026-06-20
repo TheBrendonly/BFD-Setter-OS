@@ -425,7 +425,21 @@ export default function ManageClients() {
               {clients.map((client) => (
                 <Card key={client.id}>
                   <CardContent className="flex items-center justify-between py-4 px-5">
-                    <div className="min-w-0">
+                    {/* Click the sub-account to open its config page (6.1):
+                        /client/<id>/settings = ClientSettings, scoped to this row. */}
+                    <div
+                      className="min-w-0 cursor-pointer"
+                      role="button"
+                      tabIndex={0}
+                      title="Open sub-account config"
+                      onClick={() => navigate(`/client/${client.id}/settings`)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          navigate(`/client/${client.id}/settings`);
+                        }
+                      }}
+                    >
                       <p className={`font-medium truncate field-text ${cb}`}>{client.name}</p>
                       {client.email && (
                         <p className={`text-muted-foreground truncate field-text ${cb}`}>{client.email}</p>

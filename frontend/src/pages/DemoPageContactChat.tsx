@@ -144,29 +144,16 @@ export default function DemoPageContactChat() {
         return;
       }
 
-      const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
-      const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/twilio-send-sms`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${session.access_token}`,
-            apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-          },
-          body: JSON.stringify({
-            client_id: clientId,
-            contact_id: contactId,
-            message: messageText,
-          }),
-        }
-      );
+      const { data: result, error } = await supabase.functions.invoke('twilio-send-sms', {
+        body: {
+          client_id: clientId,
+          contact_id: contactId,
+          message: messageText,
+        },
+      });
 
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result.error || 'Failed to send SMS');
-      }
+      if (error) throw error;
+      if (result?.error) throw new Error(result.error);
 
       // Message will appear via realtime, but add it immediately for UX
       if (result.message) {
