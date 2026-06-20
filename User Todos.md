@@ -8,6 +8,17 @@ Effort: S = under 30 min, M = 30 min - 2 hr, L = half day+.
 
 ---
 
+## 🆕 2026-06-19 MAJOR FEATURE REQUESTED: SMS setter tool parity — see `FEATURE_ROADMAP.md` §3.12 + §6.9
+
+Brendan (2026-06-19): port ALL voice-setter tool functionality to the SMS/text setter, ASAP. Today the text engine (`trigger/processMessages.ts`) is reply-only (confirmed: no booking/callback/appointment tools), so SMS can't book, reschedule, cancel, check slots, or schedule a callback — the AI just converses.
+
+**Claude — next-build:**
+- [ ] **3.12 SMS tool parity (MAJOR / asap):** add a tool-calling layer to the text setter so an inbound SMS can book / reschedule / cancel / check-slots / schedule-callback by invoking the existing `voice-booking-tools` edge fn (clientId-scoped — no new booking backend). Multi-turn across the `processMessages` debounce window; write booking `source='sms'`; honor the by-phone opt-out gate + the report-only prompt rule. Full scope in `FEATURE_ROADMAP.md` §3.12; gap logged at §6.9. Effort: L.
+- [ ] **🟡 6.10 LATENT (masked): `sync-ghl-contact` creates leads with `normalized_phone=NULL`** (found 2026-06-19 clean-slate E2E). The GHL-contact intake path inserts the leads row without `normalized_phone`; `resolveLeadByPhone` matches only on `normalized_phone`. **Currently masked** by the GHL fallback + allow-dup-off: first inbound resolves via the single GHL contact AND backfills `normalized_phone` — verified live, NO dupe, lead self-healed. Still fix it (1-liner): blocks §6.5 (drop GHL lookup) + leaves a null window. `intake-lead` sets it; `sync-ghl-contact` (~L512) was missed. Fix = add `normalized_phone: normalizePhone(phone)` to that insert + redeploy. Effort: S. Detail `FEATURE_ROADMAP.md` §6.10.
+- [ ] **6.11 Missed-call fallback SMS is ~10 min late (cadence waits the full 600s poll ceiling).** Found 2026-06-19 Run 2: voicemail call's `last_call_outcome` never stamped on `engagement_executions` → `runEngagement.waitForCallOutcome` ran its 10-min ceiling before advancing (fallback fired 04:06 for a 03:56 call). Scope = voicemail/no-answer only (answered calls stamp human_pickup + advance promptly, confirmed Run 1 + A3; only missed/voicemail calls eat the 10-min ceiling). Investigate `retell-call-webhook` stamping vs the agent posting to `retell-call-analysis-webhook`. Effort: M. Speed-to-lead impact on missed calls. Detail `FEATURE_ROADMAP.md` §6.11.
+
+---
+
 ## 🆕 VOICE BOOKING/CALLBACK + V2 + WIZARD BUG (2026-06-16, late) — see `Docs/SESSION_CLOSEOUT_2026-06-16_voice-v2-and-wizard-bug.md`
 
 Diagnosed two live-call issues + shipped fixes + delivered a new "Main Outbound V2" prompt. Brendan stood V2 up but it surfaced a build bug.
