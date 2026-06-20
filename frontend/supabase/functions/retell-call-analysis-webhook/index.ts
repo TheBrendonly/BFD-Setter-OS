@@ -1,7 +1,8 @@
 import { createClient } from "npm:@supabase/supabase-js@2.101.0";
 import { resolveContactId } from "./contactId.ts";
 import { classifyCallOutcome } from "./classifyCallOutcome.ts";
-import { pushCallEventToGhl } from "../_shared/ghl-conversations.ts";
+import { buildCallOutcomeStamp, buildOutcomeFieldWrites, stampLastCallOutcome } from "./callOutcome.ts";
+import { pushCallEventToGhl, writeGhlContactFields } from "../_shared/ghl-conversations.ts";
 import { parseCallbackTime } from "../_shared/parseCallbackTime.ts";
 // Retell signature verification (correct v={ts},d=HMAC(body+ts, API_KEY) scheme,
 // 5-min window). Shared across the 3 Retell webhooks. Verify-if-present; the
@@ -335,6 +336,10 @@ Deno.serve(async (req) => {
       // Build contact name from dynamic vars
       const contactName = [dynamicVars.first_name, dynamicVars.last_name].filter(Boolean).join(" ") || null;
 
+      // 6.12b: captured when a callback is parsed below, for the GHL
+      // "Callback Datetime" outcome field.
+      let callbackScheduledForIso: string | null = null;
+
       // ── Callback scheduling: lead asked to be called back later (NOT a booking) ──
       // Agent should emit custom_analysis_data.requested_callback_time (preferred) or
       // callback_intent; we also fall back to scanning the result text. Dormant until
@@ -365,6 +370,7 @@ Deno.serve(async (req) => {
             const { data: clientTz } = await supabase.from("clients").select("timezone").eq("id", clientId).maybeSingle();
             const tz = (clientTz?.timezone as string | null) || "Australia/Brisbane";
             const parsed = parseCallbackTime(String(requestedCallbackRaw || callResultStr || "later"), new Date(), tz);
+            callbackScheduledForIso = toIsoTimestamp(parsed.scheduledFor);
             const { data: cbRow } = await supabase.from("scheduled_callbacks").insert({
               client_id: clientId, ghl_contact_id: contactId, ghl_account_id: resolvedGhlAccountId,
               voice_setter_id: setterId, call_id: callId, contact_name: contactName, contact_phone: toPhone,
@@ -472,6 +478,8 @@ Deno.serve(async (req) => {
             .select(
               "ghl_api_key, ghl_location_id, ghl_call_sentiment_field_id, ghl_call_appt_booked_field_id, " +
               "ghl_conversation_provider_id, " +
+              "ghl_call_outcome_field_id, ghl_call_summary_field_id, ghl_call_intent_field_id, ghl_lead_qualified_field_id, " +
+              "ghl_last_call_date_field_id, ghl_callback_requested_field_id, ghl_callback_datetime_field_id, ghl_appointment_datetime_field_id, " +
               "twilio_account_sid, twilio_auth_token, twilio_default_phone, retell_phone_1, timezone",
             )
             .eq("id", clientId)
@@ -521,27 +529,41 @@ Deno.serve(async (req) => {
               console.log(`✅ GHL gap-1 note pushed for contact ${contactId}`);
             }
 
-            // 2. PATCH custom fields (only for fields that are configured)
-            const customFields: { id: string; field_value: string }[] = [];
-            if (sentimentFieldId && record.user_sentiment) {
-              customFields.push({ id: sentimentFieldId, field_value: String(record.user_sentiment) });
-            }
-            if (apptBookedFieldId) {
-              customFields.push({ id: apptBookedFieldId, field_value: record.appointment_booked ? "true" : "false" });
-            }
-
-            if (customFields.length > 0) {
-              const patchRes = await fetch(`${ghlBase}/contacts/${contactId}`, {
-                method: "PUT",
-                headers: ghlHeaders,
-                body: JSON.stringify({ customFields }),
-              });
-              if (!patchRes.ok) {
-                const patchRespBody = await patchRes.text().catch(() => "");
-                console.warn(`⚠️ GHL gap-1 custom fields failed ${patchRes.status}: ${patchRespBody.slice(0, 200)}`);
-              } else {
-                console.log(`✅ GHL gap-1 custom fields patched for contact ${contactId}`);
-              }
+            // 2. PATCH the full outcome suite (6.12b) in one PUT. The mapper
+            // drops any field whose client column is unset or whose source value
+            // is empty, so this supersets the old sentiment + appt-booked write.
+            const outcomeWrites = buildOutcomeFieldWrites({
+              callHistoryClass,
+              callSummary: record.call_summary as string | null,
+              callIntent: typeof customAnalysis.interested_status === "string" ? customAnalysis.interested_status : null,
+              qualified: typeof customAnalysis.success_rate === "boolean"
+                ? customAnalysis.success_rate
+                : (typeof record.call_successful === "boolean" ? record.call_successful : null),
+              lastCallDate: (record.end_timestamp as string | null) ?? (record.start_timestamp as string | null),
+              callbackRequested: wantsCallback,
+              callbackDatetime: callbackScheduledForIso,
+              appointmentDatetime: record.appointment_time as string | null,
+              sentiment: record.user_sentiment as string | null,
+              appointmentBooked: appointmentBooked === true,
+            }, {
+              outcome: ghlClientRow?.ghl_call_outcome_field_id as string | null,
+              summary: ghlClientRow?.ghl_call_summary_field_id as string | null,
+              intent: ghlClientRow?.ghl_call_intent_field_id as string | null,
+              qualified: ghlClientRow?.ghl_lead_qualified_field_id as string | null,
+              lastCallDate: ghlClientRow?.ghl_last_call_date_field_id as string | null,
+              callbackRequested: ghlClientRow?.ghl_callback_requested_field_id as string | null,
+              callbackDatetime: ghlClientRow?.ghl_callback_datetime_field_id as string | null,
+              appointmentDatetime: ghlClientRow?.ghl_appointment_datetime_field_id as string | null,
+              sentiment: sentimentFieldId,
+              appointmentBooked: apptBookedFieldId,
+            });
+            const fieldRes = await writeGhlContactFields({ ghlApiKey, contactId, fields: outcomeWrites });
+            if (fieldRes.skipped) {
+              console.log(`ℹ️ GHL outcome fields: none configured/none to write for contact ${contactId}`);
+            } else if (!fieldRes.ok) {
+              console.warn(`⚠️ GHL outcome fields PATCH failed ${fieldRes.status ?? "-"}: ${fieldRes.error ?? ""}`);
+            } else {
+              console.log(`✅ GHL outcome fields patched (${outcomeWrites.length}) for contact ${contactId}`);
             }
 
             // Bug 16 — push the call as a Call/Voicemail event on the GHL
@@ -741,10 +763,52 @@ Deno.serve(async (req) => {
       console.log(`ℹ️ Received ${eventType} for call ${callId}; waiting for call_analyzed before persisting full call history`);
     }
 
+    // ── Step 5.5 (6.11): stamp last_call_outcome on call_ended ──
+    // The live agents post to THIS webhook (not retell-call-webhook), so the
+    // cadence-critical outcome stamp must happen here too. Without it,
+    // runEngagement.waitForCallOutcome polls its full 600s ceiling for
+    // voicemail / no-answer calls before sending the missed-call fallback SMS
+    // (answered calls already complete via Step 6's human-pickup path). Fires on
+    // call_ended only (earliest signal); the Step 6 completion stays intact and
+    // idempotent. Clearing active_call_id also releases the processMessages HOLD
+    // loop for inbound SMS sent during the call.
+    const executionId: string | null = dynamicVars.execution_id || null;
+    if (eventType === "call_ended" && executionId) {
+      const stamp = buildCallOutcomeStamp(call, new Date().toISOString());
+      const stampRes = await stampLastCallOutcome(supabase, executionId, stamp);
+      if (!stampRes.ok) {
+        // CRITICAL: runEngagement polls last_call_outcome to break its wait loop
+        // and decide advance-vs-terminate. A lost write hangs / mis-classifies
+        // the cadence — surface it and ask Retell to retry. Narrow, deliberate
+        // exception to this handler's otherwise always-200 contract.
+        console.error(
+          `retell-call-analysis-webhook: CRITICAL last_call_outcome write failed for exec ${executionId}: ${stampRes.error}`,
+        );
+        try {
+          await supabase.from("error_logs").insert({
+            client_id: clientId,
+            lead_id: contactId || null,
+            execution_id: executionId,
+            severity: "error",
+            source: "retell-call-analysis-webhook",
+            error_type: "last_call_outcome_write_failed",
+            error_message: stampRes.error ?? "unknown",
+            context: { call_id: callId, event: eventType },
+          });
+        } catch (_logErr) { /* non-fatal */ }
+        return new Response(
+          JSON.stringify({ error: "Failed to persist call outcome", retry: true }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+      console.log(
+        `📞 last_call_outcome stamped on exec ${executionId} (call_id=${stamp.call_id}, reason=${stamp.disconnect_reason ?? "?"})`,
+      );
+    }
+
     // ── Step 6: Handle engagement workflow integration ──
 
     const treatPickupAsReply = dynamicVars.treat_pickup_as_reply === "true";
-    const executionId: string | null = dynamicVars.execution_id || null;
 
     if (treatPickupAsReply && executionId) {
       const disconnectReason = call.disconnection_reason || "";

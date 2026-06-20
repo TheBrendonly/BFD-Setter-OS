@@ -306,3 +306,65 @@ export async function pushSmsToGhl(args: PushSmsToGhlArgs): Promise<PushSmsToGhl
     return { ok: false, via: "notes", error: (e as Error).message };
   }
 }
+
+// 6.12b — write a batch of GHL contact custom fields in a single PUT.
+//
+// Used by the call-outcome writeback (retell-call-analysis-webhook) and the SMS
+// conversation analyzer (analyze-sms-conversation). Replaces ad-hoc inline
+// customFields PATCHes so every outcome write goes through one place.
+//
+// Entries with an empty/missing id or value are dropped; if nothing remains no
+// request is made (returns { ok:true, skipped:true }). Never throws — returns a
+// result object; callers log on non-ok but should not block business logic.
+
+export type GhlFieldWrite = { id: string; value: string };
+
+export type WriteGhlContactFieldsArgs = {
+  ghlApiKey: string;
+  contactId: string;
+  fields: GhlFieldWrite[];
+};
+
+export type WriteGhlContactFieldsResult = {
+  ok: boolean;
+  status?: number;
+  skipped?: boolean;
+  error?: string;
+};
+
+export async function writeGhlContactFields(
+  args: WriteGhlContactFieldsArgs,
+): Promise<WriteGhlContactFieldsResult> {
+  const { ghlApiKey, contactId, fields } = args;
+
+  const valid = (fields ?? []).filter(
+    (f) => f && typeof f.id === "string" && f.id.trim() !== "" &&
+      f.value !== null && f.value !== undefined && String(f.value).trim() !== "",
+  );
+
+  if (!ghlApiKey || !contactId || valid.length === 0) {
+    return { ok: true, skipped: true };
+  }
+
+  try {
+    const r = await fetch(`${GHL_API_BASE}/contacts/${contactId}`, {
+      method: "PUT",
+      headers: {
+        Authorization: `Bearer ${ghlApiKey}`,
+        "Content-Type": "application/json",
+        Version: "2021-07-28",
+        Accept: "application/json",
+      },
+      body: JSON.stringify({
+        customFields: valid.map((f) => ({ id: f.id, field_value: f.value })),
+      }),
+    });
+    if (r.ok) return { ok: true, status: r.status };
+    const errText = await r.text().catch(() => "");
+    console.warn(`writeGhlContactFields non-OK ${r.status}: ${errText.slice(0, 200)}`);
+    return { ok: false, status: r.status, error: errText.slice(0, 200) };
+  } catch (e) {
+    console.warn("writeGhlContactFields threw", e);
+    return { ok: false, error: (e as Error).message };
+  }
+}
