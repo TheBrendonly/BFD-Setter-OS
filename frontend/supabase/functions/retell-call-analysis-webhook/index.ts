@@ -516,17 +516,24 @@ Deno.serve(async (req) => {
               callSummary,
             ].join("\n");
 
-            // 1. Write Note (always when ghl_api_key is present)
-            const noteRes = await fetch(`${ghlBase}/contacts/${contactId}/notes`, {
-              method: "POST",
-              headers: ghlHeaders,
-              body: JSON.stringify({ body: noteContent }),
-            });
-            if (!noteRes.ok) {
-              const noteRespBody = await noteRes.text().catch(() => "");
-              console.warn(`⚠️ GHL gap-1 note failed ${noteRes.status}: ${noteRespBody.slice(0, 200)}`);
-            } else {
-              console.log(`✅ GHL gap-1 note pushed for contact ${contactId}`);
+            // 1. Write Note — ONLY when there is no Conversations provider. When
+            // a provider IS configured, pushCallEventToGhl (below) logs the call to
+            // the Conversations timeline instead; writing this note too would
+            // double-post (fix: double GHL note when ghl_conversation_provider_id
+            // is NULL — the legacy note and pushCallEventToGhl's note fallback both
+            // fired). These two paths are now mutually exclusive.
+            if (!conversationProviderId) {
+              const noteRes = await fetch(`${ghlBase}/contacts/${contactId}/notes`, {
+                method: "POST",
+                headers: ghlHeaders,
+                body: JSON.stringify({ body: noteContent }),
+              });
+              if (!noteRes.ok) {
+                const noteRespBody = await noteRes.text().catch(() => "");
+                console.warn(`⚠️ GHL gap-1 note failed ${noteRes.status}: ${noteRespBody.slice(0, 200)}`);
+              } else {
+                console.log(`✅ GHL gap-1 note pushed for contact ${contactId}`);
+              }
             }
 
             // 2. PATCH the full outcome suite (6.12b) in one PUT. The mapper
@@ -567,29 +574,32 @@ Deno.serve(async (req) => {
             }
 
             // Bug 16 — push the call as a Call/Voicemail event on the GHL
-            // Conversations timeline (alongside the Note above). Idempotent
-            // via altId = Retell call_id. Falls back to a Note if the
-            // client hasn't provisioned a Custom Conversation Provider.
-            const callDirectionForConv: "inbound" | "outbound" = (typeof record.direction === "string" && record.direction.toLowerCase().includes("inbound"))
-              ? "inbound"
-              : "outbound";
-            const callTypeForConv: "Call" | "Voicemail" = callHistoryClass === "voicemail" ? "Voicemail" : "Call";
-            const occurredAt = (record.end_timestamp as string | null) || (record.start_timestamp as string | null) || new Date().toISOString();
-            const convPush = await pushCallEventToGhl({
-              ghlApiKey,
-              contactId,
-              conversationProviderId,
-              callType: callTypeForConv,
-              direction: callDirectionForConv,
-              durationSeconds: (record.duration_seconds as number | null) ?? null,
-              callId: (record.call_id as string | null) ?? callId,
-              recordingUrl: (record.recording_url as string | null) ?? null,
-              outcomeSummary: (record.call_summary as string | null) ?? null,
-              outcomeClass: callHistoryClass,
-              altId: (record.call_id as string | null) ?? callId,
-              occurredAt,
-            });
-            console.log(`📞 Bug-16 conversations push → ${convPush.ok ? "OK" : "FAIL"} via=${convPush.via} status=${convPush.status ?? "-"}`);
+            // Conversations timeline. Only when a Custom Conversation Provider is
+            // configured; without one, the legacy Note above is the single artifact
+            // (so we don't double-post a note via this helper's fallback).
+            // Idempotent via altId = Retell call_id.
+            if (conversationProviderId) {
+              const callDirectionForConv: "inbound" | "outbound" = (typeof record.direction === "string" && record.direction.toLowerCase().includes("inbound"))
+                ? "inbound"
+                : "outbound";
+              const callTypeForConv: "Call" | "Voicemail" = callHistoryClass === "voicemail" ? "Voicemail" : "Call";
+              const occurredAt = (record.end_timestamp as string | null) || (record.start_timestamp as string | null) || new Date().toISOString();
+              const convPush = await pushCallEventToGhl({
+                ghlApiKey,
+                contactId,
+                conversationProviderId,
+                callType: callTypeForConv,
+                direction: callDirectionForConv,
+                durationSeconds: (record.duration_seconds as number | null) ?? null,
+                callId: (record.call_id as string | null) ?? callId,
+                recordingUrl: (record.recording_url as string | null) ?? null,
+                outcomeSummary: (record.call_summary as string | null) ?? null,
+                outcomeClass: callHistoryClass,
+                altId: (record.call_id as string | null) ?? callId,
+                occurredAt,
+              });
+              console.log(`📞 Bug-16 conversations push → ${convPush.ok ? "OK" : "FAIL"} via=${convPush.via} status=${convPush.status ?? "-"}`);
+            }
           } else {
             console.log(`ℹ️ GHL gap-1 skipped for client ${clientId}: no ghl_api_key`);
           }

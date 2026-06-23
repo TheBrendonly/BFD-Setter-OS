@@ -95,23 +95,40 @@ Deno.serve(async (req) => {
       });
     }
 
-    // The trigger will create profile with agency role. We need to:
+    // The trigger creates the profile with the agency role. We must:
     // 1. Update profile with client_id and correct agency_id
     // 2. Change role from agency to client
-    
-    await adminClient
+    // If EITHER write fails we'd otherwise return success with a user left at the
+    // default agency role + no client_id (a privilege-escalated orphan), so roll
+    // back by deleting the just-created auth user and fail the request.
+    const { error: profileErr } = await adminClient
       .from("profiles")
-      .update({ 
+      .update({
         client_id: client_id,
-        agency_id: callerProfile.agency_id 
+        agency_id: callerProfile.agency_id,
       })
       .eq("id", newUser.user.id);
 
-    // Update role to client
-    await adminClient
-      .from("user_roles")
-      .update({ role: "client" })
-      .eq("user_id", newUser.user.id);
+    let roleErr: { message?: string } | null = null;
+    if (!profileErr) {
+      const res = await adminClient
+        .from("user_roles")
+        .update({ role: "client" })
+        .eq("user_id", newUser.user.id);
+      roleErr = res.error;
+    }
+
+    if (profileErr || roleErr) {
+      await adminClient.auth.admin.deleteUser(newUser.user.id).catch((e) =>
+        console.error("rollback deleteUser failed", e)
+      );
+      const detail = profileErr?.message || roleErr?.message || "unknown";
+      console.error("create-client-user: profile/role update failed, rolled back", detail);
+      return new Response(
+        JSON.stringify({ error: `Failed to finalize sub-account user: ${detail}` }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
 
     return new Response(
       JSON.stringify({ 

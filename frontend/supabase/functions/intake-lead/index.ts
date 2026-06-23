@@ -180,6 +180,22 @@ async function enrollLeadInEngagement(args: {
     }
   }
 
+  // Dedup: a website snippet that posts the same form twice (double-click, retry,
+  // refresh re-fire) would otherwise arm two parallel cadences for the same lead.
+  // Skip if an active enrollment already exists (mirrors sync-ghl-contact).
+  const { data: activeExec } = await supabase
+    .from("engagement_executions")
+    .select("id")
+    .eq("client_id", clientId)
+    .eq("ghl_contact_id", leadId)
+    .eq("workflow_id", workflowId)
+    .in("status", ["pending", "running"])
+    .limit(1);
+  if (activeExec && activeExec.length > 0) {
+    console.info("intake-lead: active enrollment already exists, skipping re-enroll", { leadId, workflowId });
+    return (activeExec[0] as { id: string }).id;
+  }
+
   const { data: execution, error: execErr } = await supabase
     .from("engagement_executions")
     .insert({

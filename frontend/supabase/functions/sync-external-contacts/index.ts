@@ -1,5 +1,6 @@
 import { createClient } from "npm:@supabase/supabase-js@2.101.0";
 import { authorizeClientRequest, AssertAccessError } from "../_shared/authorize-client-request.ts";
+import { normalizePhone } from "../_shared/phone.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -162,6 +163,9 @@ Deno.serve(async (req) => {
           first_name: derivedFirst || null,
           last_name: derivedLast || null,
           phone: phone || null,
+          // Phone-keyed lookups (resolveLeadByPhone) match only on normalized_phone;
+          // set it on synced leads too so they aren't invisible to inbound-by-phone.
+          normalized_phone: normalizePhone(phone) || null,
           email: email || null,
           business_name: businessName || null,
           custom_fields: Object.keys(customFields).length > 0 ? customFields : {},

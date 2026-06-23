@@ -174,7 +174,10 @@ function buildCompactConversations(conversations: Conversation[]): string {
 
 function getDateFilter(timeRange: string, startDate?: string | null, endDate?: string | null) {
   if (timeRange === "custom" && startDate && endDate) {
-    return { from: startDate, to: endDate };
+    // Normalize a date-only upper bound to end-of-day so the last selected day's
+    // conversations/calls are included (matches the non-custom branch below);
+    // otherwise `to = "2026-06-23"` excludes everything after midnight that day.
+    return { from: startDate, to: endDate.length === 10 ? endDate + "T23:59:59" : endDate };
   }
   const days = parseInt(timeRange) || 7;
   const to = new Date();

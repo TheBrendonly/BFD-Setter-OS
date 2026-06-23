@@ -196,23 +196,42 @@ async function fetchGhlContactDetails(
   return { details: contact, debug };
 }
 
+// History lives in the client's EXTERNAL Supabase `chat_history` table (LangChain
+// shape: session_id = lead_id, message = { type: "human"|"ai", content }, timestamp).
+// The old code queried a non-existent platform `messages` table, so this was always
+// empty (S3b-4).
 async function fetchChatHistory(
-  supabase: ReturnType<typeof createClient>,
+  externalUrl: string | null | undefined,
+  externalKey: string | null | undefined,
   leadId: string,
   clientId: string,
 ): Promise<{ history: string; debug: DebugStep["debug"] }> {
   const start = Date.now();
+  const requestUrl = `external/chat_history?session_id=${leadId}`;
+  if (!externalUrl || !externalKey) {
+    return {
+      history: "",
+      debug: {
+        request_url: requestUrl,
+        request_method: "SELECT",
+        response_status: 0,
+        error: "external supabase_url/service_key not configured for client",
+        metadata: { lead_id: leadId, client_id: clientId },
+      } as DebugStep["debug"],
+    };
+  }
   try {
-    const { data, error } = await supabase
-      .from("messages")
-      .select("role, body, created_at")
-      .eq("lead_id", leadId)
-      .order("created_at", { ascending: true })
+    const ext = createClient(externalUrl, externalKey);
+    const { data, error } = await ext
+      .from("chat_history")
+      .select("message, timestamp")
+      .eq("session_id", leadId)
+      .order("timestamp", { ascending: true })
       .limit(50);
 
     const duration_ms = Date.now() - start;
     const debug: DebugStep["debug"] = {
-      request_url: `supabase/messages?lead_id=${leadId}`,
+      request_url: requestUrl,
       request_method: "SELECT",
       response_status: error ? 500 : 200,
       response_body: { row_count: data?.length ?? 0, error: error?.message },
@@ -224,7 +243,15 @@ async function fetchChatHistory(
       return { history: "", debug };
     }
 
-    const history = data.map((m: any) => `[${m.role}] ${m.body}`).join("\n");
+    const history = data
+      .map((row: { message?: { type?: string; content?: unknown } }) => {
+        const m = row.message || {};
+        const role = m.type === "ai" ? "assistant" : m.type === "human" ? "user" : (m.type || "unknown");
+        const content = typeof m.content === "string" ? m.content : JSON.stringify(m.content ?? "");
+        return content ? `[${role}] ${content}` : "";
+      })
+      .filter(Boolean)
+      .join("\n");
     return { history, debug };
   } catch (err: unknown) {
     const duration_ms = Date.now() - start;
@@ -232,7 +259,7 @@ async function fetchChatHistory(
     return {
       history: "",
       debug: {
-        request_url: `supabase/messages?lead_id=${leadId}`,
+        request_url: requestUrl,
         request_method: "SELECT",
         response_status: 0,
         duration_ms,
@@ -324,7 +351,7 @@ Deno.serve(async (req) => {
     const { data: client, error: clientErr } = await supabase
       .from("clients")
       .select(
-        "retell_api_key, retell_inbound_agent_id, retell_outbound_agent_id, retell_outbound_followup_agent_id, retell_agent_id_4, retell_agent_id_5, retell_agent_id_6, retell_agent_id_7, retell_agent_id_8, retell_agent_id_9, retell_agent_id_10, retell_phone_1, retell_phone_2, retell_phone_3, ghl_location_id, ghl_api_key, ghl_calendar_id",
+        "retell_api_key, retell_inbound_agent_id, retell_outbound_agent_id, retell_outbound_followup_agent_id, retell_agent_id_4, retell_agent_id_5, retell_agent_id_6, retell_agent_id_7, retell_agent_id_8, retell_agent_id_9, retell_agent_id_10, retell_phone_1, retell_phone_2, retell_phone_3, ghl_location_id, ghl_api_key, ghl_calendar_id, supabase_url, supabase_service_key",
       )
       .eq("id", client_id)
       .single();
@@ -376,7 +403,12 @@ Deno.serve(async (req) => {
             } as DebugStep["debug"],
           }),
       lead_id
-        ? fetchChatHistory(supabase, lead_id, client_id)
+        ? fetchChatHistory(
+            (client as { supabase_url?: string | null }).supabase_url,
+            (client as { supabase_service_key?: string | null }).supabase_service_key,
+            lead_id,
+            client_id,
+          )
         : Promise.resolve({
             history: "",
             debug: { error: "No lead_id provided" } as DebugStep["debug"],

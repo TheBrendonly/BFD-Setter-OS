@@ -306,13 +306,25 @@ async function resolveContactId(args: {
     }
   }
 
-  const tryQuery = async (term: string): Promise<string | null> => {
-    const path = `/contacts/?locationId=${encodeURIComponent(client.ghl_location_id!)}&limit=1&query=${encodeURIComponent(term)}`;
+  // GHL `query` is a FUZZY/partial match, so contacts[0] can be a different
+  // contact whose phone/email merely overlaps the search term (booking would
+  // attach to the wrong contact). Pull a few results and accept only one whose
+  // phone (normalized) or email (lowercased) EXACTLY equals the search term.
+  const tryQuery = async (term: string, kind: "phone" | "email"): Promise<string | null> => {
+    const path = `/contacts/?locationId=${encodeURIComponent(client.ghl_location_id!)}&limit=5&query=${encodeURIComponent(term)}`;
     const r = await ghlGet(path, client.ghl_api_key as string);
     if (r.status >= 200 && r.status < 300) {
       const contacts = (r.body as any)?.contacts;
-      if (Array.isArray(contacts) && contacts.length > 0 && typeof contacts[0]?.id === "string") {
-        return contacts[0].id as string;
+      if (Array.isArray(contacts)) {
+        const wantPhone = kind === "phone" ? normalizePhone(term) : null;
+        const wantEmail = kind === "email" ? term.trim().toLowerCase() : null;
+        const match = contacts.find((c: any) => {
+          if (typeof c?.id !== "string") return false;
+          if (wantPhone) return normalizePhone(c?.phone ?? "") === wantPhone;
+          if (wantEmail) return typeof c?.email === "string" && c.email.trim().toLowerCase() === wantEmail;
+          return false;
+        });
+        if (match) return match.id as string;
       }
     } else if (r.status >= 500) {
       throw new ToolError(502, `GHL contact search failed ${r.status}: ${JSON.stringify(r.body).slice(0, 300)}`);
@@ -322,11 +334,11 @@ async function resolveContactId(args: {
 
   // Phone-first (reliable for inbound), then email fallback
   if (phone) {
-    const found = await tryQuery(phone);
+    const found = await tryQuery(phone, "phone");
     if (found) return { contactId: found, createdNew: false };
   }
   if (email) {
-    const found = await tryQuery(email);
+    const found = await tryQuery(email, "email");
     if (found) return { contactId: found, createdNew: false };
   }
 
@@ -776,14 +788,24 @@ async function toolLookupContact(args: {
     }
   }
 
-  // Phone-first, then email — GHL fallback when no internal lead found
-  const tryQuery = async (term: string): Promise<string | null> => {
-    const path = `/contacts/?locationId=${encodeURIComponent(client.ghl_location_id!)}&limit=1&query=${encodeURIComponent(term)}`;
+  // Phone-first, then email — GHL fallback when no internal lead found. GHL
+  // `query` is fuzzy, so accept only a result whose phone/email EXACTLY matches
+  // the search term (else a booking attaches to an overlapping wrong contact).
+  const tryQuery = async (term: string, kind: "phone" | "email"): Promise<string | null> => {
+    const path = `/contacts/?locationId=${encodeURIComponent(client.ghl_location_id!)}&limit=5&query=${encodeURIComponent(term)}`;
     const r = await ghlGet(path, client.ghl_api_key as string);
     if (r.status >= 200 && r.status < 300) {
       const contacts = (r.body as any)?.contacts;
-      if (Array.isArray(contacts) && contacts.length > 0 && typeof contacts[0]?.id === "string") {
-        return contacts[0].id as string;
+      if (Array.isArray(contacts)) {
+        const wantPhone = kind === "phone" ? normalizePhone(term) : null;
+        const wantEmail = kind === "email" ? term.trim().toLowerCase() : null;
+        const match = contacts.find((c: any) => {
+          if (typeof c?.id !== "string") return false;
+          if (wantPhone) return normalizePhone(c?.phone ?? "") === wantPhone;
+          if (wantEmail) return typeof c?.email === "string" && c.email.trim().toLowerCase() === wantEmail;
+          return false;
+        });
+        if (match) return match.id as string;
       }
     } else if (r.status >= 500) {
       throw new ToolError(502, `GHL contact search failed ${r.status}`);
@@ -792,11 +814,11 @@ async function toolLookupContact(args: {
   };
 
   if (!contactId && phone) {
-    contactId = await tryQuery(phone);
+    contactId = await tryQuery(phone, "phone");
     if (contactId) matchQuality = "phone";
   }
   if (!contactId && email) {
-    contactId = await tryQuery(email);
+    contactId = await tryQuery(email, "email");
     if (contactId) matchQuality = "email";
   }
 

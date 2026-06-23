@@ -31,7 +31,15 @@ async function verifyTwilioSignature(
   const sigBytes = new Uint8Array(sigBuf);
   let bin = "";
   for (const b of sigBytes) bin += String.fromCharCode(b);
-  return btoa(bin) === signatureHeader;
+  return constantTimeEqual(btoa(bin), signatureHeader);
+}
+
+// Constant-time compare (length leak only; base64 signature length is fixed).
+function constantTimeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let mismatch = 0;
+  for (let i = 0; i < a.length; i++) mismatch |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return mismatch === 0;
 }
 
 Deno.serve(async (req) => {

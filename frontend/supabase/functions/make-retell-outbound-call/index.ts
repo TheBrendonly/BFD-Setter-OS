@@ -332,21 +332,36 @@ async function fetchCallHistory(
 
 /**
  * Fetch prior SMS/WhatsApp conversation history for a lead, to feed into the voice agent's context.
+ *
+ * History lives in the client's EXTERNAL Supabase `chat_history` table (LangChain
+ * shape: session_id = lead_id, message = { type: "human"|"ai", content }, timestamp),
+ * written by receive-twilio-sms / runEngagement / processSetterReply / voice-booking-tools.
+ * (The old code queried a non-existent `messages` table on the platform DB, so this
+ * enrichment was always empty — fixed S3b-4.)
  */
 async function fetchChatHistory(
-  supabase: ReturnType<typeof createClient>,
-  leadId: string
+  externalUrl: string | null | undefined,
+  externalKey: string | null | undefined,
+  leadId: string,
 ): Promise<string> {
+  if (!externalUrl || !externalKey || !leadId) return "";
   try {
-    const { data } = await supabase
-      .from("messages")
-      .select("role, body, created_at")
-      .eq("lead_id", leadId)
-      .order("created_at", { ascending: true })
+    const ext = createClient(externalUrl, externalKey);
+    const { data } = await ext
+      .from("chat_history")
+      .select("message, timestamp")
+      .eq("session_id", leadId)
+      .order("timestamp", { ascending: true })
       .limit(50);
     if (!data || data.length === 0) return "";
     return data
-      .map((m: { role: string; body: string }) => `[${m.role}] ${m.body}`)
+      .map((row: { message?: { type?: string; content?: unknown } }) => {
+        const m = row.message || {};
+        const role = m.type === "ai" ? "assistant" : m.type === "human" ? "user" : (m.type || "unknown");
+        const content = typeof m.content === "string" ? m.content : JSON.stringify(m.content ?? "");
+        return content ? `[${role}] ${content}` : "";
+      })
+      .filter(Boolean)
       .join("\n");
   } catch (err) {
     console.warn("⚠️ Failed to fetch chat history:", err);
@@ -519,7 +534,7 @@ Deno.serve(async (req) => {
     const { data: client, error: clientErr } = await supabase
       .from("clients")
       .select(
-        "retell_api_key, retell_inbound_agent_id, retell_outbound_agent_id, retell_outbound_followup_agent_id, retell_agent_id_4, retell_agent_id_5, retell_agent_id_6, retell_agent_id_7, retell_agent_id_8, retell_agent_id_9, retell_agent_id_10, retell_phone_1, retell_phone_2, retell_phone_3, ghl_location_id, ghl_api_key, ghl_calendar_id, timezone, voicemail_config",
+        "retell_api_key, retell_inbound_agent_id, retell_outbound_agent_id, retell_outbound_followup_agent_id, retell_agent_id_4, retell_agent_id_5, retell_agent_id_6, retell_agent_id_7, retell_agent_id_8, retell_agent_id_9, retell_agent_id_10, retell_phone_1, retell_phone_2, retell_phone_3, ghl_location_id, ghl_api_key, ghl_calendar_id, timezone, voicemail_config, supabase_url, supabase_service_key",
       )
       .eq("id", client_id)
       .single();
@@ -719,7 +734,11 @@ Deno.serve(async (req) => {
       ghlApiKey && ghl_contact_id
         ? fetchGhlContactDetails(ghlApiKey, ghl_contact_id, locationId).then(r => r.contactData)
         : Promise.resolve(""),
-      fetchChatHistory(supabase, leadLookupId),
+      fetchChatHistory(
+        (client as { supabase_url?: string | null }).supabase_url,
+        (client as { supabase_service_key?: string | null }).supabase_service_key,
+        leadLookupId,
+      ),
       fetchCallHistory(supabase, leadLookupId),
     ]);
 

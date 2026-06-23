@@ -247,6 +247,15 @@ async function triggerProcessMessages(p: TriggerProcessMessagesParams) {
 // Twilio signature: HMAC-SHA1 of (full URL + sorted concatenation of
 // form param key+value pairs), base64-encoded. Compare against
 // X-Twilio-Signature header.
+// Constant-time string compare (length leak only, which is not secret — the
+// base64 signature length is fixed). Mirrors voice-booking-tools/kb-ingest.
+function constantTimeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let mismatch = 0;
+  for (let i = 0; i < a.length; i++) mismatch |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return mismatch === 0;
+}
+
 async function verifyTwilioSignature(
   url: string,
   params: Record<string, string>,
@@ -271,7 +280,7 @@ async function verifyTwilioSignature(
   let bin = "";
   for (const b of sigBytes) bin += String.fromCharCode(b);
   const expected = btoa(bin);
-  return expected === signatureHeader;
+  return constantTimeEqual(expected, signatureHeader);
 }
 
 // PATCH a single custom field on a GHL contact. Used to set
@@ -491,6 +500,30 @@ Deno.serve(async (req) => {
     const isStart = START_KEYWORDS_RE.test(trimmedBody);
 
     if (isStop || isStart) {
+      // Idempotency — BEFORE any side effect. This branch sends a BILLED Twilio
+      // compliance SMS + toggles opt-out + cancels cadences, then returns before
+      // the normal-path message_queue dedup. Twilio retries on transient errors,
+      // and a captured (validly-signed) request can be replayed, so dedup on
+      // MessageSid here so a replay can't re-bill / re-toggle. (The normal path
+      // keeps its end-of-handler message_queue dedup so a mid-processing failure
+      // there still retries.)
+      if (messageSid) {
+        const { error: stopDedupErr } = await supabase
+          .from("processed_webhook_sids")
+          .insert({ client_id: client.id, provider: "twilio", message_sid: messageSid });
+        if (stopDedupErr) {
+          if ((stopDedupErr as { code?: string }).code === "23505") {
+            console.info("receive-twilio-sms STOP/START dedup: replay/retry for sid", { messageSid });
+            return new Response(TWIML_EMPTY, {
+              status: 200,
+              headers: { ...corsHeaders, "Content-Type": "text/xml" },
+            });
+          }
+          // Don't drop a real STOP on a non-duplicate insert error; log + continue.
+          console.warn("processed_webhook_sids insert failed (continuing)", stopDedupErr);
+        }
+      }
+
       const triggerKey = Deno.env.get("TRIGGER_SECRET_KEY") ?? null;
 
       // Resolve matching lead rows once — used by STOP cadence cancellation

@@ -4,7 +4,7 @@ import { buildLeadInsert } from "../_shared/lead-insert.ts";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
+    "authorization, x-client-info, apikey, content-type, x-wh-token",
 };
 
 Deno.serve(async (req) => {
@@ -15,8 +15,14 @@ Deno.serve(async (req) => {
   try {
     const url = new URL(req.url);
 
-    // Accept token from query param or body
-    let token = url.searchParams.get("token");
+    // Auth token, header-first. Prefer x-wh-token / Authorization: Bearer so the
+    // secret doesn't leak via URL-query access logs, browser history, or Referer.
+    // Query/body are kept as a DEPRECATED fallback for existing GHL configs that
+    // still post the token in the body; migrate those to the header.
+    const bearer = req.headers.get("authorization");
+    let token: string | null =
+      req.headers.get("x-wh-token") ||
+      (bearer && bearer.toLowerCase().startsWith("bearer ") ? bearer.slice(7).trim() : null);
     let body: Record<string, unknown> = {};
 
     try {
@@ -25,13 +31,14 @@ Deno.serve(async (req) => {
       // Body may not be JSON
     }
 
+    if (!token) token = url.searchParams.get("token"); // deprecated
     if (!token && body.token) {
-      token = String(body.token);
+      token = String(body.token); // deprecated
     }
 
     if (!token) {
       return new Response(
-        JSON.stringify({ error: "token is required (query param or body field)" }),
+        JSON.stringify({ error: "token is required (x-wh-token header, or deprecated query/body field)" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
