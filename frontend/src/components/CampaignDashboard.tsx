@@ -91,6 +91,11 @@ export function CampaignDashboard({ workflowId, onHeaderActions }: CampaignDashb
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
       const anonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
+      // get-campaign-stats authorizes the caller by their user JWT, not the anon
+      // key; sending the anon key returns 401 and the dashboard renders all zeros.
+      const { data: { session } } = await supabase.auth.getSession();
+      const accessToken = session?.access_token ?? anonKey;
+
       let statsUrl = `${supabaseUrl}/functions/v1/get-campaign-stats?workflow_id=${workflowId}`;
       const days = parseInt(datePreset);
       if (days > 0) {
@@ -101,7 +106,7 @@ export function CampaignDashboard({ workflowId, onHeaderActions }: CampaignDashb
 
       const [statsResponse, campaignsRes] = await Promise.all([
         fetch(statsUrl, {
-          headers: { 'Authorization': `Bearer ${anonKey}`, 'apikey': anonKey },
+          headers: { 'Authorization': `Bearer ${accessToken}`, 'apikey': anonKey },
         }),
         (supabase as any).from('engagement_campaigns').select('id').eq('workflow_id', workflowId),
       ]);

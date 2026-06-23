@@ -18,6 +18,14 @@ export default function AttendeeAvatar({ attendeeId, displayName, className = "w
     loadPicture(attendeeId);
   }, [attendeeId]);
 
+  // Revoke the object URL when it changes (cleanup runs with the previous value)
+  // and on unmount, so blob-backed image bytes aren't leaked per list row.
+  useEffect(() => {
+    return () => {
+      if (pictureUrl) URL.revokeObjectURL(pictureUrl);
+    };
+  }, [pictureUrl]);
+
   const loadPicture = async (id: string) => {
     try {
       const { data: { session } } = await supabase.auth.getSession();

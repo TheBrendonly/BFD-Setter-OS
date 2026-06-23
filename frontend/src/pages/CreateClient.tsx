@@ -95,6 +95,15 @@ export default function CreateClient() {
 
       const newClientId = crypto.randomUUID();
 
+      // Auto-mint the tenant secrets so the sub-account is bookable from day one.
+      // Without intake_lead_secret, intake-lead 403s every web-form submission.
+      // Mirrors Onboarding.tsx:94-104 and scripts/onboard-client.mjs.
+      const mintSecret = () => {
+        const b = new Uint8Array(24);
+        crypto.getRandomValues(b);
+        return btoa(String.fromCharCode(...b));
+      };
+
       const { error: createError } = await supabase.from("clients").insert({
         id: newClientId,
         name: clientData.name,
@@ -103,6 +112,8 @@ export default function CreateClient() {
         image_url: imageUrl,
         agency_id: profile?.agency_id,
         subscription_status: "free",
+        intake_lead_secret: mintSecret(),
+        ghl_webhook_secret: mintSecret(),
       });
 
       if (createError) throw createError;

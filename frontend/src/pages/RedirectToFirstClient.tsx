@@ -41,7 +41,15 @@ export default function RedirectToFirstClient() {
     // Agency users: check onboarding first, then redirect to first client
     if (role === 'agency') {
       checkOnboardingAndRedirect();
+      return;
     }
+
+    // Terminal fallback: role is null (transient role-read error in AuthProvider,
+    // which leaves role null WITHOUT signing out) or a client login without a
+    // client_id. None of the branches above matched, so clear `checking` instead
+    // of pinning the user on RetroLoader forever. The effect re-runs when `role`
+    // resolves, so a transient null self-corrects.
+    setChecking(false);
   }, [user, authLoading, role, userClientId]);
 
   const checkOnboardingAndRedirect = async () => {
