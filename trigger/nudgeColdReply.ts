@@ -75,7 +75,7 @@ export const nudgeColdReply = schedules.task({
     const { data: candidates, error: queryErr } = await supabase
       .from("leads")
       .select(
-        "client_id, lead_id, phone, email, first_name, last_name, last_inbound_at, last_outbound_at, nudge_count, clients ( id, twilio_account_sid, twilio_auth_token, twilio_default_phone, retell_phone_1, openrouter_api_key, llm_model, supabase_url, supabase_service_key, timezone )",
+        "client_id, lead_id, phone, email, first_name, last_name, business_name, custom_fields, last_inbound_at, last_outbound_at, nudge_count, clients ( id, twilio_account_sid, twilio_auth_token, twilio_default_phone, retell_phone_1, openrouter_api_key, llm_model, supabase_url, supabase_service_key, timezone )",
       )
       .eq("setter_stopped", false)
       .eq("tagged_silent_after_engagement", false)

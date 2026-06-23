@@ -912,7 +912,11 @@ export const runEngagement = task({
           await updateExecution({ stage_description: "Drip: claiming batch slot..." });
 
           // Atomically claim a position in this campaign's drip queue.
-          // The RPC handles concurrent enrollments safely via row-level locking.
+          // The RPC handles concurrent enrollments safely via row-level locking,
+          // and is idempotent per execution (S3a-6): passing p_execution_id makes a
+          // retry that replays this node reuse the SAME position instead of
+          // claiming a new, later one (which would push this lead to a later batch
+          // and inflate the shared batch counter for every later lead).
           const { data: dripResult, error: dripError } = await supabase
             .rpc("claim_drip_position", {
               p_client_id: client_id,
@@ -921,6 +925,7 @@ export const runEngagement = task({
               p_campaign_id: campaign_id,
               p_batch_size: node.batch_size,
               p_interval_seconds: node.interval_seconds,
+              p_execution_id: execution_id,
             });
 
           if (dripError) {
@@ -1026,6 +1031,12 @@ export const runEngagement = task({
                 stage_description: `Engage: waiting ${formatDuration(ch.delay_seconds)} before ${ch.type}...`,
               });
               await wait.until({ date: chResumeAt });
+              // S3a-3 — re-gate quiet hours after the inter-channel delay. The
+              // node-entry gate (L974) ran BEFORE this wait, so a channel delayed
+              // across the boundary (e.g. SMS now + call +6h) would otherwise
+              // send/dial in the middle of the night. enforceQuietHoursBeforeSend
+              // waits until the next allowed window when outside it.
+              await enforceQuietHoursBeforeSend(`engage node ${i} channel ${ci} (${ch.type})`);
             }
 
             if (await isCancelled()) {
