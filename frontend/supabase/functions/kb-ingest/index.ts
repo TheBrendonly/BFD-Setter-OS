@@ -91,11 +91,16 @@ Deno.serve(async (req) => {
       .maybeSingle();
     if (clientErr || !client) throw new KbError(404, "Client not found");
 
+    // Fail CLOSED: ingest writes to the client's knowledge base, so a client with
+    // no intake_lead_secret configured must not be writable by an unauthenticated
+    // caller (previously a NULL secret skipped auth entirely).
     if (client.intake_lead_secret) {
       if (!presented) throw new KbError(401, "Authorization Bearer required for this client");
       if (!constantTimeEqual(presented, client.intake_lead_secret as string)) {
         throw new KbError(403, "Invalid bearer token");
       }
+    } else {
+      throw new KbError(401, "Client not configured for ingest (no intake_lead_secret set).");
     }
 
     if (!client.supabase_url || !client.supabase_service_key) {

@@ -7,6 +7,7 @@ import { aiGenerateEngagementCopy } from "./_shared/aiGenerateEngagementCopy";
 import { classifyCallOutcome } from "./_shared/classifyCallOutcome";
 import { normalizePhone } from "./_shared/phone";
 import { isPhoneOptedOut } from "./_shared/optout";
+import { normalizeLlmModel } from "./_shared/llmModel";
 
 const getMainSupabase = () =>
   createClient(
@@ -237,6 +238,17 @@ async function waitForCallOutcome(args: {
 // Bug 33 — call outcome classifier moved to ./_shared/classifyCallOutcome.ts.
 // Byte-identical clone at frontend/supabase/functions/retell-call-analysis-webhook/classifyCallOutcome.ts.
 // If you change one, change the other.
+
+// make-retell-outbound-call URL resolver. Every enroller (sync-ghl-contact,
+// intake-lead, etc.) is supposed to pass make_retell_call_url, but a caller that
+// omits it would make the phone_call nodes hard-throw and silently kill the call
+// (the ghl-tag-webhook bug). Fall back to SUPABASE_URL so a missing field can never
+// take down outbound calling.
+function resolveMakeRetellCallUrl(p: { make_retell_call_url?: string }): string | undefined {
+  if (p.make_retell_call_url) return p.make_retell_call_url;
+  const base = process.env.SUPABASE_URL;
+  return base ? `${base}/functions/v1/make-retell-outbound-call` : undefined;
+}
 
 export const runEngagement = task({
   id: "run-engagement",
@@ -1028,7 +1040,8 @@ export const runEngagement = task({
               // each call). The legacy Twilio AMD voicemail-drop branch was
               // removed. voicemail_config (workflow-level) flows through
               // placeOutboundCall → make-retell-outbound-call.
-              if (!payload.make_retell_call_url) {
+              const makeRetellCallUrl = resolveMakeRetellCallUrl(payload);
+              if (!makeRetellCallUrl) {
                 throw new Error("phone_call channel requires make_retell_call_url in payload");
               }
               if (!ch.voice_setter_id) {
@@ -1045,7 +1058,7 @@ export const runEngagement = task({
               const effectiveVoiceSetterId = overrideVoiceSetterId || ch.voice_setter_id;
               await updateExecution({ stage_description: "Queued for outbound call..." });
               const callRun = await placeOutboundCall.triggerAndWait({
-                make_retell_call_url: payload.make_retell_call_url,
+                make_retell_call_url: makeRetellCallUrl,
                 client_id,
                 voice_setter_id: effectiveVoiceSetterId,
                 ghl_contact_id: lead_id,
@@ -1166,7 +1179,7 @@ export const runEngagement = task({
                 try {
                   const ai = await aiGenerateEngagementCopy({
                     openrouterApiKey: orKey,
-                    model: (client as any).llm_model as string | undefined,
+                    model: normalizeLlmModel((client as any).llm_model) ?? undefined,
                     externalSupabaseUrl: (client as any).supabase_url as string | null,
                     externalSupabaseServiceKey: (client as any).supabase_service_key as string | null,
                     clientId: client_id,
@@ -1471,7 +1484,8 @@ export const runEngagement = task({
         } else if (node.type === "phone_call") {
           await enforceQuietHoursBeforeSend(`phone_call node ${i}`);
           if (await isCancelled()) { await writeCadenceMetrics("cancelled"); return { status: "cancelled", node_index: i }; }
-          if (!payload.make_retell_call_url) {
+          const legacyMakeRetellCallUrl = resolveMakeRetellCallUrl(payload);
+          if (!legacyMakeRetellCallUrl) {
             throw new Error("phone_call node requires make_retell_call_url in payload");
           }
           const legacyVoiceSetter = (node as unknown as { voice_setter_id?: string }).voice_setter_id;
@@ -1487,7 +1501,7 @@ export const runEngagement = task({
           const effectiveLegacyVoiceSetter = legacyOverrideVoiceSetterId || legacyVoiceSetter;
           await updateExecution({ stage_description: "Queued for outbound call..." });
           const legacyCallRun = await placeOutboundCall.triggerAndWait({
-            make_retell_call_url: payload.make_retell_call_url,
+            make_retell_call_url: legacyMakeRetellCallUrl,
             client_id,
             voice_setter_id: effectiveLegacyVoiceSetter,
             ghl_contact_id: lead_id,

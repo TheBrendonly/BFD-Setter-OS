@@ -67,11 +67,17 @@ export const placeOutboundCall = task({
 
     if (!resp.ok || data?.call_failed) {
       const errMsg = data?.error || `make-retell-outbound-call returned ${resp.status}`;
-      // REL-01: the edge fn classifies Retell failures. retryable === false
-      // means a permanent 4xx (bad number, missing agent, account issue) —
-      // retrying re-bills the paid create-phone-call endpoint and can never
-      // succeed, so abort instead of throwing into the retry policy.
-      if (data?.call_failed && data?.retryable === false) {
+      // REL-01: permanent failures must NOT retry — retrying re-bills the paid
+      // create-phone-call endpoint and can never succeed. The edge fn signals
+      // permanent two ways:
+      //   1. Retell-API 4xx → 200 body with call_failed:true, retryable:false.
+      //   2. Pre-flight config/resolution errors (no setter/agent/api-key/phone,
+      //      retired slot, bad client) → a plain 4xx (400/404/409) with no
+      //      call_failed field. These were previously mis-treated as retryable,
+      //      burning all 3 attempts then failing the cadence with an opaque error.
+      // 429 (rate limit) and 5xx (transient) DO retry.
+      const permanentStatus = resp.status >= 400 && resp.status < 500 && resp.status !== 429;
+      if ((data?.call_failed && data?.retryable === false) || permanentStatus) {
         throw new AbortTaskRunError(`Phone call failed permanently (no retry): ${errMsg}`);
       }
       throw new Error(`Phone call failed: ${errMsg}`);

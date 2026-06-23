@@ -305,6 +305,10 @@ async function enrollLeadInEngagement(args: {
     }
   }
 
+  // make-retell-outbound-call URL — REQUIRED by runEngagement for any phone_call
+  // node (it hard-throws without it, killing the call). Mirror sync-ghl-contact / intake-lead.
+  const makeRetellCallUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/make-retell-outbound-call`;
+
   const triggerResp = await fetch(
     "https://api.trigger.dev/api/v1/tasks/run-engagement/trigger",
     {
@@ -324,6 +328,7 @@ async function enrollLeadInEngagement(args: {
           Name: contactName ?? undefined,
           Email: contactEmail ?? undefined,
           Phone: contactPhone ?? undefined,
+          make_retell_call_url: makeRetellCallUrl,
           contact_fields: Object.keys(cleanedExtras).length > 0 ? cleanedExtras : undefined,
         },
       }),

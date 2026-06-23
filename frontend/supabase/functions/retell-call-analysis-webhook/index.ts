@@ -775,7 +775,7 @@ Deno.serve(async (req) => {
     const executionId: string | null = dynamicVars.execution_id || null;
     if (eventType === "call_ended" && executionId) {
       const stamp = buildCallOutcomeStamp(call, new Date().toISOString());
-      const stampRes = await stampLastCallOutcome(supabase, executionId, stamp);
+      const stampRes = await stampLastCallOutcome(supabase, executionId, stamp, clientId);
       if (!stampRes.ok) {
         // CRITICAL: runEngagement polls last_call_outcome to break its wait loop
         // and decide advance-vs-terminate. A lost write hangs / mis-classifies

@@ -45,6 +45,21 @@ function inboundResponse(eventKey: "call_inbound" | "chat_inbound", dynamicVaria
   );
 }
 
+// Always emit the lead-context keys (defaulting to empty strings) on EVERY response
+// path. An unset dynamic variable makes Retell leave the literal "{{first_name}}" in
+// the prompt/begin_message; an empty string renders as nothing. So for an unknown
+// caller (no lead match) the agent omits the name instead of speaking the raw token.
+function leadVars(lead: Record<string, unknown> | null, fromNumber: string | null): Record<string, string> {
+  return {
+    first_name: String(lead?.first_name ?? ""),
+    last_name: String(lead?.last_name ?? ""),
+    email: String(lead?.email ?? ""),
+    phone: String(lead?.phone ?? fromNumber ?? ""),
+    business_name: String(lead?.business_name ?? ""),
+    contact_id: String(lead?.lead_id ?? ""),
+  };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -64,10 +79,10 @@ Deno.serve(async (req) => {
 
     // Agent id is interpolated into a PostgREST .or() filter — validate its shape.
     if (typeof agentId !== "string" || !/^agent_[A-Za-z0-9]+$/.test(agentId)) {
-      return inboundResponse(eventKey, {});
+      return inboundResponse(eventKey, leadVars(null, fromNumber));
     }
     if (!fromNumber) {
-      return inboundResponse(eventKey, {});
+      return inboundResponse(eventKey, leadVars(null, null));
     }
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -84,7 +99,7 @@ Deno.serve(async (req) => {
     const client = clients?.[0];
     if (!client) {
       console.log(`retell-inbound-webhook: ${eventKey} no client for agent=${agentId} from=${redactPhone(fromNumber)} — returning empty vars`);
-      return inboundResponse(eventKey, {});
+      return inboundResponse(eventKey, leadVars(null, fromNumber));
     }
 
     // Verify-if-present (inert until the client stamps retell_webhook_secret).
@@ -137,21 +152,14 @@ Deno.serve(async (req) => {
     const dv: Record<string, string> = {
       current_time: currentTime,
       current_timezone: tz,
+      ...leadVars(lead, fromNumber),
     };
-    if (lead) {
-      dv.first_name = String(lead.first_name ?? "");
-      dv.last_name = String(lead.last_name ?? "");
-      dv.email = String(lead.email ?? "");
-      dv.phone = String(lead.phone ?? fromNumber);
-      dv.business_name = String(lead.business_name ?? "");
-      dv.contact_id = String(lead.lead_id ?? "");
-    }
 
     console.log(`retell-inbound-webhook: ${eventKey} agent=${agentId} from=${redactPhone(fromNumber)} client=${client.id} matched=${!!lead} verified=${!!client.retell_webhook_secret}`);
     return inboundResponse(eventKey, dv);
   } catch (err) {
     console.error("retell-inbound-webhook error:", err);
-    // Never block the call — return an empty (but valid) override.
-    return inboundResponse(eventKey, {});
+    // Never block the call — return safe empty-string vars (never literal tokens).
+    return inboundResponse(eventKey, leadVars(null, null));
   }
 });

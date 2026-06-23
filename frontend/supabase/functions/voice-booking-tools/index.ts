@@ -117,7 +117,10 @@ async function resolveClient(supabase: any, clientId: string, authHeader: string
   if (error || !client) throw new ToolError(404, "Client not found");
   if (!client.ghl_api_key) throw new ToolError(409, "Client has no GHL API key configured");
 
-  // Optional bearer auth — required if the client has a secret set
+  // Bearer auth. These tools place calls, send SMS and book on the client's
+  // behalf, so they FAIL CLOSED: a client with no intake_lead_secret configured
+  // is not actionable by an unauthenticated caller (onboarding provisions the
+  // secret). Previously a NULL secret skipped auth entirely (fail-open).
   if (client.intake_lead_secret) {
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
       throw new ToolError(401, "Authorization Bearer required for this client");
@@ -126,6 +129,8 @@ async function resolveClient(supabase: any, clientId: string, authHeader: string
     if (!constantTimeEqual(presented, client.intake_lead_secret)) {
       throw new ToolError(403, "Invalid bearer token");
     }
+  } else {
+    throw new ToolError(401, "Client not configured for tool access (no intake_lead_secret set).");
   }
   return client as ClientRow;
 }

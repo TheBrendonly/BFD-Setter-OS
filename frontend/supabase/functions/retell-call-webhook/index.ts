@@ -169,7 +169,13 @@ Deno.serve(async (req) => {
       const executionId: string | null = (dynamicVars.execution_id as string | undefined) || null;
       if (executionId) {
         const callId = call.call_id || call.id || null;
-        const { error: execErr } = await internalSupabase
+        // Scope the mutation to the resolved tenant AND bind it to the real
+        // in-flight call. execution_id and agent_id both come from the (public,
+        // currently-unsigned) webhook body, so without this a forged POST with a
+        // guessed execution_id could clear another tenant's hold / pollute its
+        // outcome. The legit row always satisfies both (runEngagement stamps
+        // active_call_id=callId at placement and owns client_id).
+        let execUpdate = internalSupabase
           .from("engagement_executions")
           .update({
             last_call_outcome: {
@@ -182,7 +188,10 @@ Deno.serve(async (req) => {
             // can release any SMS the lead sent during the call.
             active_call_id: null,
           })
-          .eq("id", executionId);
+          .eq("id", executionId)
+          .eq("client_id", client.id);
+        if (callId) execUpdate = execUpdate.eq("active_call_id", callId);
+        const { error: execErr } = await execUpdate;
         if (execErr) {
           // CRITICAL: runEngagement polls last_call_outcome to break its wait loop
           // and decide advance-vs-terminate. If this write is lost, the cadence

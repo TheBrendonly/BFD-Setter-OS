@@ -49,19 +49,24 @@ Deno.test("buildCallOutcomeStamp: max_duration_reached classifies as human_picku
   assertEquals(classifyCallOutcome(stamp), "human_pickup");
 });
 
-// Records the update payload + filter so we can assert the write shape.
+// Records the update payload + filters so we can assert the write shape. The
+// builder is chainable (.eq returns itself) and awaitable (thenable) so multi-
+// column scoping (.eq("id").eq("client_id")) can be exercised.
 function fakeSb(updateError: { message: string } | null = null) {
-  const calls: Record<string, unknown> = {};
+  const calls: Record<string, unknown> = { eqs: [] as Array<[string, unknown]> };
   const builder: Record<string, unknown> = {
     update: (payload: unknown) => {
       calls.updatePayload = payload;
       return builder;
     },
     eq: (col: string, val: unknown) => {
+      (calls.eqs as Array<[string, unknown]>).push([col, val]);
       calls.eqCol = col;
       calls.eqVal = val;
-      return Promise.resolve({ error: updateError });
+      return builder;
     },
+    then: (resolve: (v: { error: { message: string } | null }) => unknown) =>
+      resolve({ error: updateError }),
   };
   const sb = {
     from: (table: string) => {
@@ -84,6 +89,17 @@ Deno.test("stampLastCallOutcome: writes last_call_outcome + clears active_call_i
   const payload = calls.updatePayload as Record<string, unknown>;
   assertEquals(payload.last_call_outcome, stamp);
   assertEquals(payload.active_call_id, null);
+});
+
+Deno.test("stampLastCallOutcome: scopes the update by client_id when provided", async () => {
+  const stamp = buildCallOutcomeStamp({ call_id: "call_z", disconnection_reason: "dial_no_answer" }, ENDED);
+  const { sb, calls } = fakeSb();
+  // deno-lint-ignore no-explicit-any
+  const res = await stampLastCallOutcome(sb as any, "exec_789", stamp, "client_abc");
+  assertEquals(res.ok, true);
+  const eqs = calls.eqs as Array<[string, unknown]>;
+  assertEquals(eqs[0], ["id", "exec_789"]);
+  assertEquals(eqs[1], ["client_id", "client_abc"]);
 });
 
 Deno.test("stampLastCallOutcome: surfaces a write error as { ok: false }", async () => {

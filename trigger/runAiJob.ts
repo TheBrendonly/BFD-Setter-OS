@@ -1,5 +1,6 @@
 import { task } from "@trigger.dev/sdk";
 import { createClient } from "@supabase/supabase-js";
+import { normalizeLlmModel } from "./_shared/llmModel";
 
 const getMainSupabase = () =>
   createClient(
@@ -280,7 +281,7 @@ export const runAiJob = task({
         throw new Error("OpenRouter API key is not configured. Please add it in API Credentials.");
       }
 
-      const model = clientData.llm_model ?? "google/gemini-2.5-pro";
+      const model = normalizeLlmModel(clientData.llm_model) || "google/gemini-2.5-pro";
       const ghlAccountId = clientData.ghl_location_id ?? client_id;
       const startedAt = Date.now();
       resetUsage();

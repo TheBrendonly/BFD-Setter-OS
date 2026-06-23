@@ -47,14 +47,15 @@ export function buildCallOutcomeStamp(
 }
 
 // Minimal supabase surface used by the stamp write (keeps this module I/O-pure
-// for tests while matching the real supabase-js builder shape).
+// for tests while matching the real supabase-js builder shape). The filter builder
+// is both chainable (.eq returns itself) and awaitable (PromiseLike), so callers
+// can scope the update by more than one column.
+type EqBuilder =
+  & PromiseLike<{ error: { message: string } | null }>
+  & { eq: (col: string, val: string) => EqBuilder };
 type SupabaseUpdateLike = {
   from: (table: string) => {
-    update: (payload: Record<string, unknown>) => {
-      // PromiseLike (not Promise) so the real supabase-js PostgrestFilterBuilder
-      // — a thenable lacking catch/finally — is assignable here.
-      eq: (col: string, val: string) => PromiseLike<{ error: { message: string } | null }>;
-    };
+    update: (payload: Record<string, unknown>) => EqBuilder;
   };
 };
 
@@ -140,11 +141,18 @@ export async function stampLastCallOutcome(
   supabase: SupabaseUpdateLike,
   executionId: string,
   stamp: CallOutcomeStamp,
+  clientId?: string | null,
 ): Promise<{ ok: boolean; error?: string }> {
-  const { error } = await supabase
+  // Tenant-scope the write. execution_id is read from the (unsigned) webhook body;
+  // without client_id a forged outcome for another tenant's execution_id could
+  // clear its hold / pollute its outcome. The legit row always has matching
+  // client_id (resolved from the same agent), so this never drops a real write.
+  let q = supabase
     .from("engagement_executions")
     .update({ last_call_outcome: stamp, active_call_id: null })
     .eq("id", executionId);
+  if (clientId) q = q.eq("client_id", clientId);
+  const { error } = await q;
   if (error) return { ok: false, error: error.message };
   return { ok: true };
 }

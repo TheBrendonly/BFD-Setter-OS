@@ -24,6 +24,7 @@
 import { task } from "@trigger.dev/sdk";
 import { createClient } from "@supabase/supabase-js";
 import { SETTER_TOOLS, SETTER_TOOL_NAMES, TOOL_USAGE_INSTRUCTION } from "./_shared/setterTools.ts";
+import { normalizeLlmModel } from "./_shared/llmModel.ts";
 import {
   runSetterToolLoop,
   ToolsUnsupportedError,
@@ -137,7 +138,7 @@ export const processSetterReply = task({
       throw new Error(`processSetterReply: client ${client.id} has no openrouter_api_key`);
     }
 
-    const model = (client.llm_model as string | null)?.trim() || DEFAULT_MODEL;
+    const model = normalizeLlmModel(client.llm_model as string | null) || DEFAULT_MODEL;
 
     // ── STEP 2: Open client's external Supabase (where prompts + history live) ──
     let setterPrompt = "";

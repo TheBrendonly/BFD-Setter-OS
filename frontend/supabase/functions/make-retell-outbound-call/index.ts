@@ -1,5 +1,6 @@
 import { createClient } from "npm:@supabase/supabase-js@2.101.0";
 import { authorizeClientRequest, AssertAccessError } from "../_shared/authorize-client-request.ts";
+import { normalizePhone } from "../_shared/phone.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -637,8 +638,11 @@ Deno.serve(async (req) => {
       fromNumber = slotPhone || null;
     }
 
-    // 3. Get destination phone number (the lead we're calling)
-    const phone = contact_fields?.phone || body.phone;
+    // 3. Get destination phone number (the lead we're calling). Normalize to
+    // E.164 (Retell rejects national/loosely-formatted numbers with a 4xx);
+    // passthrough on null so an odd-but-valid format isn't dropped here.
+    const rawPhone = contact_fields?.phone || body.phone;
+    const phone = rawPhone ? (normalizePhone(rawPhone) || rawPhone) : rawPhone;
     if (!phone) {
       return ok({
         error: "No phone number provided for the contact.",
@@ -648,8 +652,9 @@ Deno.serve(async (req) => {
     }
 
     // 4. Fallback chain for from-number when not set by setter path above.
+    // Prefer slot 1 (the primary/"Main Outbound" number) before 2/3.
     if (!fromNumber) {
-      fromNumber = client.retell_phone_2 || client.retell_phone_1 || client.retell_phone_3;
+      fromNumber = client.retell_phone_1 || client.retell_phone_2 || client.retell_phone_3;
     }
 
     if (!fromNumber) {

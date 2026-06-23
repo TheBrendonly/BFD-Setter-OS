@@ -686,6 +686,18 @@ function buildAgentUpdatesFromVoiceSettings(voiceSettings?: Record<string, unkno
       agentUpdates.pii_config = voiceSettings.pii_config;
     }
   }
+  // Agent-level safety net for lead dynamic variables. Without an agent default,
+  // an unset {{first_name}} (e.g. an inbound call from an unknown number, or an
+  // outbound call missing the field) is spoken/rendered as the literal token. Empty
+  // string defaults make Retell substitute nothing instead. Set unconditionally so
+  // every pushed/created agent carries it; real call-time values still override these.
+  agentUpdates.default_dynamic_variables = {
+    first_name: "",
+    last_name: "",
+    email: "",
+    phone: "",
+    business_name: "",
+  };
   return agentUpdates;
 }
 

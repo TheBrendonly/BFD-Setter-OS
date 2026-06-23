@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { sendTwilioSmsAndStamp } from "./_shared/sendTwilioSmsAndStamp";
 import { normalizePhone } from "./_shared/phone";
 import { isPhoneOptedOut } from "./_shared/optout";
+import { normalizeLlmModel } from "./_shared/llmModel";
 
 const getMainSupabase = () =>
   createClient(
@@ -215,7 +216,7 @@ export const sendFollowup = task({
     }
 
     // ── STEP 7: Ask AI to decide + generate follow-up ─────────────────────────
-    const model = (client.llm_model as string | null) ?? "google/gemini-2.5-pro";
+    const model = normalizeLlmModel(client.llm_model as string | null) || "google/gemini-2.5-pro";
 
     // Build cancellation conditions list (defaults + user-defined)
     const customConditions = cancellationInstructions

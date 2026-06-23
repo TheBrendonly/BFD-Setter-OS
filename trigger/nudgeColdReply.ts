@@ -30,6 +30,7 @@ import { createClient } from "@supabase/supabase-js";
 import { aiGenerateEngagementCopy } from "./_shared/aiGenerateEngagementCopy";
 import { normalizePhone } from "./_shared/phone";
 import { isPhoneOptedOut } from "./_shared/optout";
+import { normalizeLlmModel } from "./_shared/llmModel";
 
 const getMainSupabase = () =>
   createClient(
@@ -195,7 +196,7 @@ export const nudgeColdReply = schedules.task({
       try {
         const ai = await aiGenerateEngagementCopy({
           openrouterApiKey: cl.openrouter_api_key,
-          model: cl.llm_model ?? undefined,
+          model: normalizeLlmModel(cl.llm_model) ?? undefined,
           externalSupabaseUrl: cl.supabase_url,
           externalSupabaseServiceKey: cl.supabase_service_key,
           clientId: lead.client_id!,

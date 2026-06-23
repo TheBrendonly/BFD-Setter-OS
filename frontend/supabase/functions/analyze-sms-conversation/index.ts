@@ -121,7 +121,13 @@ async function analyzeOne(supabase: Supa, client: ClientRow, leadId: string): Pr
     const messages: SmsMsg[] = (rows ?? [])
       .filter((r: { message_body?: string | null }) => typeof r.message_body === "string" && r.message_body.trim() !== "")
       .map((r: { message_body: string; channel: string | null }) => ({
-        direction: (r.channel ?? "").includes("inbound") ? "inbound" : "outbound",
+        // message_queue stores inbound LEAD sms as channel "sms" and outbound SETTER
+        // sms as "sms_outbound" (see receive-twilio-sms vs sendTwilioSmsAndStamp/
+        // crm-send-message). Testing includes("inbound") mislabelled every inbound
+        // "sms" row as the Setter, so the analyser scored a role-swapped, one-sided
+        // transcript. Only an "*outbound" channel is the Setter; everything else
+        // ("sms", "sms_inbound") is the Lead.
+        direction: (r.channel ?? "").includes("outbound") ? "outbound" : "inbound",
         body: r.message_body,
       }));
 
