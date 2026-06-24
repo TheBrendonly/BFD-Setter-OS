@@ -9,7 +9,9 @@ import { toast } from "sonner";
 import { usePageHeader } from "@/contexts/PageHeaderContext";
 import { useAuth } from "@/hooks/useAuth";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
-import { Plus, Trash2, Pencil, X, Wrench, Lock, Save, Loader2 } from "@/components/icons";
+import { Plus, Trash2, Pencil, X, Wrench, Lock, Save, Loader2, CheckCircle, XCircle } from "@/components/icons";
+import { StatusTag } from "@/components/StatusTag";
+import { computeClientReadiness, READINESS_FIELDS } from "@/lib/clientReadiness";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -25,7 +27,21 @@ interface Client {
   description: string | null;
   image_url: string | null;
   created_at: string;
+  // Provisioning columns (presence-only) for the readiness badge — S6-2.
+  // Index signature keeps the readiness column list DRY (see CLIENT_SELECT).
+  [col: string]: string | null;
 }
+
+// Single source of truth for the SELECT: display fields + the readiness columns.
+const CLIENT_SELECT = [
+  "id",
+  "name",
+  "email",
+  "description",
+  "image_url",
+  "created_at",
+  ...READINESS_FIELDS.map((field) => field.column),
+].join(", ");
 
 export default function ManageClients() {
   const { clientId } = useParams();
@@ -35,6 +51,7 @@ export default function ManageClients() {
 
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
+  const [readinessTarget, setReadinessTarget] = useState<Client | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Client | null>(null);
   const [deleteConfirmName, setDeleteConfirmName] = useState("");
   const [deleting, setDeleting] = useState(false);
@@ -155,11 +172,11 @@ export default function ManageClients() {
     try {
       const { data, error } = await supabase
         .from("clients")
-        .select("id, name, email, description, image_url, created_at")
+        .select(CLIENT_SELECT)
         .eq("is_system", false)
         .order("sort_order");
       if (error) throw error;
-      setClients(data || []);
+      setClients((data as unknown as Client[]) || []);
     } catch (error) {
       console.error("Error fetching clients:", error);
       toast.error("Failed to load sub-accounts");
@@ -422,7 +439,11 @@ export default function ManageClients() {
             </Card>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-              {clients.map((client) => (
+              {clients.map((client) => {
+                const readiness = computeClientReadiness(client);
+                const readinessVariant =
+                  readiness.level === "green" ? "positive" : readiness.level === "amber" ? "warning" : "negative";
+                return (
                 <Card key={client.id}>
                   <CardContent className="flex items-center justify-between py-4 px-5">
                     {/* Click the sub-account to open its config page (6.1):
@@ -446,6 +467,15 @@ export default function ManageClients() {
                       )}
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
+                      <StatusTag
+                        variant={readinessVariant}
+                        className="cursor-pointer"
+                        onClick={() => setReadinessTarget(client)}
+                      >
+                        {readiness.level === "green"
+                          ? "Live"
+                          : `${readiness.label} (${readiness.requiredSet}/${readiness.requiredTotal})`}
+                      </StatusTag>
                       <button
                         onClick={() => startEditing(client)}
                         className="groove-btn !h-8 !w-8 !p-0 !min-h-[32px] !min-w-[32px] flex items-center justify-center bg-muted/50 cursor-pointer"
@@ -463,9 +493,47 @@ export default function ManageClients() {
                     </div>
                   </CardContent>
                 </Card>
-              ))}
+                );
+              })}
             </div>
           )}
+
+          {/* Readiness detail — pure read of provisioning columns (S6-2) */}
+          <Dialog open={!!readinessTarget} onOpenChange={() => setReadinessTarget(null)}>
+            <DialogContent className="!p-0">
+              <DialogHeader>
+                <DialogTitle>Readiness — {readinessTarget?.name}</DialogTitle>
+                <DialogDescription>
+                  Which provisioning fields are set for this sub-account. Red = required for go-live;
+                  amber = recommended hardening / external DB.
+                </DialogDescription>
+              </DialogHeader>
+              {readinessTarget && (
+                <div className="px-6 pb-6 space-y-4">
+                  {(["required", "recommended"] as const).map((tier) => (
+                    <div key={tier} className="space-y-1.5">
+                      <p className="text-xs uppercase tracking-wide text-muted-foreground field-text">
+                        {tier === "required" ? "Required" : "Recommended"}
+                      </p>
+                      {READINESS_FIELDS.filter((field) => field.tier === tier).map((field) => {
+                        const configured = Boolean(readinessTarget[field.column]?.trim());
+                        return (
+                          <div key={field.column} className="flex items-center gap-2 field-text">
+                            {configured ? (
+                              <CheckCircle className="h-4 w-4 text-green-500 shrink-0" />
+                            ) : (
+                              <XCircle className={`h-4 w-4 shrink-0 ${tier === "required" ? "text-red-500" : "text-amber-500"}`} />
+                            )}
+                            <span className={configured ? "" : "text-muted-foreground"}>{field.label}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </DialogContent>
+          </Dialog>
 
           {/* Delete Confirmation */}
           <Dialog open={!!deleteTarget} onOpenChange={() => { setDeleteTarget(null); setDeleteConfirmName(""); }}>
