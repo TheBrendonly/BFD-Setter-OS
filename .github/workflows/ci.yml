@@ -1,0 +1,38 @@
+# CI: runs the repo's test suites on every push + PR.
+#
+# Runs on the GitHub mirror (github remote, TheBrendonly/1prompt-os) because its
+# runners are free and reachable; the `origin` Forgejo remote is Tailscale-only.
+# This file is Forgejo/Gitea-Actions compatible (same YAML schema), so it will
+# also run unchanged if a self-hosted runner is later enabled on Forgejo.
+#
+# Two test runtimes:
+#   - Node (>=22.6 for --experimental-strip-types) over the 7 Trigger.dev tests in trigger/_shared/
+#   - Deno over the 17 edge-function tests in frontend/supabase/functions/
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    name: tests (node + deno)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Node tests (trigger/_shared)
+        run: node --experimental-strip-types --test trigger/_shared/*.test.ts
+
+      - name: Set up Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Deno tests (frontend/supabase/functions)
+        run: deno test --no-check frontend/supabase/functions/
