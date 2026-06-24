@@ -167,8 +167,14 @@ Deno.serve(async (req) => {
         const customers = await stripe.customers.list({ email: emailToSearch, limit: 5 });
         for (const cust of customers.data) {
           const subs = await stripe.subscriptions.list({ customer: cust.id, limit: 5 });
-          const activeSub = subs.data.find((s) => (s.status === "active" || s.status === "trialing") && !s.cancel_at_period_end);
-          const anySub = subs.data.find((s) => s.status === "active" || s.status === "trialing");
+          // B2.3: only accept a sub explicitly bound to THIS client (metadata
+          // stamped at checkout via subscription_data.metadata). A bare email
+          // match can belong to a different client/agency sharing the email,
+          // which would activate the wrong client. Kept as a recovery path for
+          // when stripe_customer_id was lost, but now client-scoped.
+          const boundSubs = subs.data.filter((s) => s.metadata?.client_id === client_id);
+          const activeSub = boundSubs.find((s) => (s.status === "active" || s.status === "trialing") && !s.cancel_at_period_end);
+          const anySub = boundSubs.find((s) => s.status === "active" || s.status === "trialing");
           const latestSub = activeSub || anySub || null;
 
           if (latestSub) {
@@ -189,26 +195,22 @@ Deno.serve(async (req) => {
         const sessions = await stripe.checkout.sessions.list({ limit: 100 });
         const paidSessions = sessions.data.filter((s) => s.payment_status === "paid");
 
+        // B2.3: only an EXACT client-bound session activates this client. The old
+        // fallback matched unbound paid sessions by metadata.user_id/email, which
+        // could activate the WRONG client for an agency user who owns several
+        // clients (their sessions all share user_id/email). Dropped entirely; the
+        // normal flow binds via client_reference_id (set at checkout).
         const exactMatch = paidSessions.find((s) =>
           s.client_reference_id === client_id || s.metadata?.client_id === client_id
         );
 
-        const fallbackCandidates = paidSessions.filter((s) => {
-          const sessionEmail = normalizeEmail(s.customer_details?.email || s.customer_email || null);
-          const matchesEmail = !!sessionEmail && targetEmails.includes(sessionEmail);
-          const matchesUserMeta = s.metadata?.user_id === user.id;
-          const hasNoClientBinding = !s.client_reference_id && !s.metadata?.client_id;
-          return hasNoClientBinding && (matchesEmail || matchesUserMeta);
-        });
-
-        const matchedSession = exactMatch || fallbackCandidates[0];
-        if (matchedSession?.subscription) {
-          const subId = typeof matchedSession.subscription === "string" ? matchedSession.subscription : null;
+        if (exactMatch?.subscription) {
+          const subId = typeof exactMatch.subscription === "string" ? exactMatch.subscription : null;
           if (subId) {
             const sub = await stripe.subscriptions.retrieve(subId);
-            customerId = typeof matchedSession.customer === "string" ? matchedSession.customer : customerId;
+            customerId = typeof exactMatch.customer === "string" ? exactMatch.customer : customerId;
             foundSub = sub;
-            matchSource = exactMatch ? "checkout_exact" : "checkout_fallback";
+            matchSource = "checkout_exact";
           }
         }
       } catch (sessionError) {
