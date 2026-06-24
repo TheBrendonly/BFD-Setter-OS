@@ -71,7 +71,7 @@ Deno.serve(async (req) => {
     const LIVE_PRODUCT_ID = "prod_UGkEJ0TvzIgHRd";
 
     const clientResult = client_id && type === "client"
-      ? await supabase.from("clients").select("email").eq("id", client_id).single()
+      ? await supabase.from("clients").select("email, stripe_customer_id").eq("id", client_id).single()
       : null;
 
     // For client subscriptions, strictly use the sub-account email
@@ -89,14 +89,39 @@ Deno.serve(async (req) => {
       }
     }
 
-    const customersResult = await stripe.customers.list({ email: customerEmail, limit: 1 });
-
+    // Resolve the Stripe customer deterministically so downstream
+    // (stripe-webhook / check-client-subscription) can match by a per-client
+    // stripe_customer_id rather than a fuzzy email lookup (B2.4, pairs with B2.3).
     let customerId: string;
-    if (customersResult.data.length > 0) {
-      customerId = customersResult.data[0].id;
+    const storedCustomerId = type === "client" ? (clientResult?.data?.stripe_customer_id ?? null) : null;
+
+    if (storedCustomerId) {
+      // Already bound to this client — reuse it directly.
+      customerId = storedCustomerId;
     } else {
-      const customer = await stripe.customers.create({ email: customerEmail, metadata });
-      customerId = customer.id;
+      const customersResult = await stripe.customers.list({ email: customerEmail, limit: 1 });
+      const found = customersResult.data[0];
+      // A customer matched by email may belong to a DIFFERENT client (shared
+      // email). Reusing it would mix subscriptions across entities, so only reuse
+      // when it's unbound or already bound to this client; otherwise create fresh.
+      const boundElsewhere =
+        type === "client" && !!found?.metadata?.client_id && found.metadata.client_id !== client_id;
+
+      if (found && !boundElsewhere) {
+        customerId = found.id;
+        // Stamp our metadata so the customer is bound for future lookups.
+        await stripe.customers.update(customerId, { metadata });
+      } else {
+        const customer = await stripe.customers.create({ email: customerEmail, metadata });
+        customerId = customer.id;
+      }
+    }
+
+    // Persist the resolved customer id back to the client row so the webhook /
+    // verifier can find it deterministically. Safe pre-payment: it identifies a
+    // customer, not a paid subscription; the gate only flips via the webhook.
+    if (type === "client" && client_id && customerId !== storedCustomerId) {
+      await supabase.from("clients").update({ stripe_customer_id: customerId }).eq("id", client_id);
     }
 
     // Find the active price for the live product
@@ -135,7 +160,7 @@ Deno.serve(async (req) => {
     });
   } catch (error) {
     console.error("Checkout error:", error);
-    return new Response(JSON.stringify({ error: error.message }), {
+    return new Response(JSON.stringify({ error: error instanceof Error ? error.message : String(error) }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
