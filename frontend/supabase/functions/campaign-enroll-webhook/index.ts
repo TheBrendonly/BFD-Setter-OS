@@ -1,5 +1,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2.101.0";
 import { buildLeadInsert } from "../_shared/lead-insert.ts";
+import { assertActiveSubscription } from "../_shared/assertActiveSubscription.ts";
+import { AssertAccessError } from "../_shared/assert-client-access.ts";
 import { isPhoneRecentDuplicate } from "./dedup.ts";
 
 const corsHeaders = {
@@ -107,6 +109,22 @@ Deno.serve(async (req) => {
     }
 
     const clientId = campaign.client_id;
+
+    // B1 — server-side subscription gate (dormant unless ENFORCE_SUBSCRIPTION_GATE
+    // =true). This webhook is token-authed only, so it's the path that most needs a
+    // server gate: blocks billable enrolment (lead create + trigger-engagement) for
+    // a non-active client.
+    try {
+      await assertActiveSubscription(clientId);
+    } catch (e) {
+      if (e instanceof AssertAccessError) {
+        return new Response(JSON.stringify({ error: e.message }), {
+          status: e.status, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      throw e;
+    }
+
     const allHeaders: Record<string, string> = {};
     req.headers.forEach((value, key) => {
       allHeaders[key] = value;

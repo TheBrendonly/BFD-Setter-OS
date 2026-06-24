@@ -25,6 +25,8 @@ import { fetchActiveNewLeadsWorkflows, resolveWorkflow } from "../_shared/resolv
 import { normalizePhone } from "../_shared/phone.ts";
 import { resolveLeadByPhone } from "../_shared/leadResolve.ts";
 import { isPhoneOptedOut } from "../_shared/optout.ts";
+import { assertActiveSubscription } from "../_shared/assertActiveSubscription.ts";
+import { AssertAccessError } from "../_shared/assert-client-access.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -322,6 +324,18 @@ Deno.serve(async (req) => {
     if (mismatch !== 0) {
       throw new IntakeError(403, "Invalid intake secret");
     }
+
+    // B1 — server-side subscription gate (dormant unless ENFORCE_SUBSCRIPTION_GATE
+    // =true). Blocks billable intake (lead create + auto-enrolment) for a non-active
+    // client. The helper exempts is_system (the probe) and the default client, so the
+    // canary still runs. Translate to IntakeError to fit this function's error model.
+    try {
+      await assertActiveSubscription(clientId);
+    } catch (e) {
+      if (e instanceof AssertAccessError) throw new IntakeError(e.status, e.message);
+      throw e;
+    }
+
     // is_system clients (the synthetic probe / canary) have no GHL credentials.
     // Mirror the B3 verify-only pattern in runEngagement: skip the GHL contact
     // create/find entirely and synthesize a lead_id so the canary still exercises

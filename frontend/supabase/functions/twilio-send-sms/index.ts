@@ -1,5 +1,6 @@
 import { createClient } from "npm:@supabase/supabase-js@2.101.0";
 import { authorizeClientRequest, AssertAccessError } from "../_shared/authorize-client-request.ts";
+import { assertActiveSubscription } from "../_shared/assertActiveSubscription.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -50,6 +51,8 @@ Deno.serve(async (req) => {
     // owns this client before reading its Twilio credentials / sending SMS.
     try {
       await authorizeClientRequest(authHeader, client_id);
+      // B1 — server-side subscription gate (dormant unless ENFORCE_SUBSCRIPTION_GATE=true).
+      await assertActiveSubscription(client_id);
     } catch (e) {
       if (e instanceof AssertAccessError) {
         return new Response(JSON.stringify({ error: e.message }), {

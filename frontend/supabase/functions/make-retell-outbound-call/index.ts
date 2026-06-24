@@ -1,5 +1,6 @@
 import { createClient } from "npm:@supabase/supabase-js@2.101.0";
 import { authorizeClientRequest, AssertAccessError } from "../_shared/authorize-client-request.ts";
+import { assertActiveSubscription } from "../_shared/assertActiveSubscription.ts";
 import { normalizePhone } from "../_shared/phone.ts";
 
 const corsHeaders = {
@@ -458,6 +459,10 @@ Deno.serve(async (req) => {
 
     try {
       await authorizeClientRequest(req.headers.get("Authorization"), client_id);
+      // B1 — server-side subscription gate (dormant: no-op unless
+      // ENFORCE_SUBSCRIPTION_GATE=true). Blocks billable outbound calls for a
+      // non-active client; this is the fan-in choke point for all outbound voice.
+      await assertActiveSubscription(client_id);
     } catch (e) {
       if (e instanceof AssertAccessError) {
         return new Response(JSON.stringify({ error: e.message }), { status: e.status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
