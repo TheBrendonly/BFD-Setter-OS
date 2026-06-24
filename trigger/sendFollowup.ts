@@ -1,6 +1,7 @@
 import { task, wait } from "@trigger.dev/sdk";
 import { createClient } from "@supabase/supabase-js";
 import { sendTwilioSmsAndStamp } from "./_shared/sendTwilioSmsAndStamp";
+import { claimSend, releaseSend } from "./_shared/sendClaim";
 import { normalizePhone } from "./_shared/phone";
 import { isPhoneOptedOut } from "./_shared/optout";
 import { normalizeLlmModel } from "./_shared/llmModel";
@@ -371,33 +372,46 @@ export const sendFollowup = task({
       throw new Error(`Follow-up not sent, missing ${missing}`);
     }
 
-    const sendResult = await sendTwilioSmsAndStamp({
-      supabase,
-      twilioSid,
-      twilioAuth,
-      fromNumber,
-      toNumber,
-      body: followupMessage,
-      clientId: client_id,
-      leadId: lead_id,
-      ghlAccountId: ghl_account_id,
-      contactName: null,
-      contactEmail: null,
-      ghlApiKey: (client.ghl_api_key as string | null) ?? null,
-      ghlLocationId: (client.ghl_location_id as string | null) ?? null,
-      ghlContactId: lead_id,
-      ghlConversationProviderId: (client.ghl_conversation_provider_id as string | null) ?? null,
-    });
+    // B4 send-idempotency: claim this follow-up before sending so a Trigger
+    // retry that fires after a successful send (but before the timer is marked
+    // fired) doesn't re-send the SMS. A false claim means a prior attempt already
+    // sent it; fall through and finish marking the timer fired so the task stops
+    // retrying.
+    const sendKey = `followup:${timer_id}`;
+    const claimed = await claimSend(supabase, sendKey, "send-followup", lead_id);
 
-    if (!sendResult.ok) {
-      await supabase
-        .from("followup_timers")
-        .update({ status: "failed", updated_at: new Date().toISOString() })
-        .eq("id", timer_id);
-      throw new Error(`Follow-up Twilio send failed: ${sendResult.errorCode} ${sendResult.errorMessage}`);
+    if (claimed) {
+      const sendResult = await sendTwilioSmsAndStamp({
+        supabase,
+        twilioSid,
+        twilioAuth,
+        fromNumber,
+        toNumber,
+        body: followupMessage,
+        clientId: client_id,
+        leadId: lead_id,
+        ghlAccountId: ghl_account_id,
+        contactName: null,
+        contactEmail: null,
+        ghlApiKey: (client.ghl_api_key as string | null) ?? null,
+        ghlLocationId: (client.ghl_location_id as string | null) ?? null,
+        ghlContactId: lead_id,
+        ghlConversationProviderId: (client.ghl_conversation_provider_id as string | null) ?? null,
+      });
+
+      if (!sendResult.ok) {
+        await releaseSend(supabase, sendKey); // allow a retry to re-attempt
+        await supabase
+          .from("followup_timers")
+          .update({ status: "failed", updated_at: new Date().toISOString() })
+          .eq("id", timer_id);
+        throw new Error(`Follow-up Twilio send failed: ${sendResult.errorCode} ${sendResult.errorMessage}`);
+      }
+
+      console.log(`Follow-up #${sequenceIndex} sent: "${followupMessage.slice(0, 100)}"`);
+    } else {
+      console.log(`Follow-up #${sequenceIndex} already sent on a prior attempt (idempotency claim present); skipping re-send`);
     }
-
-    console.log(`Follow-up #${sequenceIndex} sent: "${followupMessage.slice(0, 100)}"`);
 
     // Update last_message_preview for conversation list
     await supabase

@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { sendFollowup } from "./sendFollowup";
 import { processSetterReply } from "./processSetterReply";
 import { pushSmsToGhl } from "./_shared/ghl-conversations";
+import { claimSend, releaseSend } from "./_shared/sendClaim";
 import { normalizePhone } from "./_shared/phone";
 import { isPhoneOptedOut } from "./_shared/optout";
 
@@ -375,8 +376,18 @@ export const processMessages = task({
       const sendPathFired =
         channel === "sms" && !!twilioSid && !!twilioAuth && !!twilioFrom && !!contact_phone;
       if (sendPathFired) {
-        for (const msg of setterMessages) {
+        for (let i = 0; i < setterMessages.length; i++) {
+          const msg = setterMessages[i];
           if (!msg?.trim()) continue;
+          // B4 send-idempotency: claim this bubble before sending so a Trigger
+          // retry (after a successful send but before the execution is marked
+          // complete) doesn't re-send already-delivered setter replies. A false
+          // claim means a prior attempt already sent bubble i -> skip it.
+          const sendKey = `dm:${execution_id}:${i}`;
+          if (!(await claimSend(supabase, sendKey, "process-messages", lead_id))) {
+            console.log(`processMessages: bubble #${i} already sent (idempotency claim present); skipping re-send`);
+            continue;
+          }
           const params: Record<string, string> = {
             From: twilioFrom,
             To: contact_phone,
@@ -399,6 +410,7 @@ export const processMessages = task({
           // `error_message`. See runEngagement.ts sendTwilioSmsAndStamp note.
           const twilioJson = (await twilioRes.json()) as { sid?: string; code?: number; message?: string };
           if (!twilioRes.ok) {
+            await releaseSend(supabase, sendKey); // failed send -> allow a retry to re-attempt this bubble
             await logError("twilio_sms_error", `Twilio SMS failed: ${twilioJson.code} ${twilioJson.message}`, { to: redactPhone(contact_phone), error_code: twilioJson.code });
             console.warn(`Twilio SMS failed for msg: ${twilioJson.code} ${twilioJson.message}`);
           } else {
