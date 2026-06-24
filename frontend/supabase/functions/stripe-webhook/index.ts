@@ -93,6 +93,35 @@ Deno.serve(async (req) => {
 
     log("Event received", { type: event.type, id: event.id });
 
+    // ── Idempotency claim (B2.1) ──
+    // Claim the event id BEFORE processing. The insert succeeds exactly once; a
+    // 23505 unique violation means a prior delivery already processed it -> return
+    // 200 without reprocessing (protects the non-idempotent invoice.payment_failed
+    // retry_count increment from Stripe retries / replays). If the handler body
+    // below throws, we DELETE this claim before returning 500 so Stripe's retry is
+    // not dedup-swallowed.
+    {
+      const { error: claimError } = await supabase
+        .from("stripe_webhook_events")
+        .insert({ event_id: event.id, type: event.type });
+      if (claimError) {
+        if (claimError.code === "23505") {
+          log("Duplicate event — already processed, skipping", { id: event.id, type: event.type });
+          return new Response(JSON.stringify({ received: true, duplicate: true }), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+        // A non-dedup insert failure (e.g. table missing / transient DB error)
+        // must not silently process without a claim. Fail closed -> Stripe retries.
+        log("ERROR: failed to claim event id", { id: event.id, error: claimError.message });
+        return new Response(JSON.stringify({ error: "Failed to record event" }), {
+          status: 500,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+    }
+
     // ── Helpers ──
 
     const logAttempt = async (
@@ -148,6 +177,10 @@ Deno.serve(async (req) => {
       }
     };
 
+    // Wrap handling so a throw releases the idempotency claim (B2.1) before the
+    // outer catch returns 500 and Stripe retries — otherwise the retry would be
+    // dedup-swallowed and the event lost.
+    try {
     switch (event.type) {
       // ─── CHECKOUT COMPLETED ───
       case "checkout.session.completed": {
@@ -415,6 +448,12 @@ Deno.serve(async (req) => {
 
       default:
         log("Unhandled event type", { type: event.type });
+    }
+    } catch (handlerErr) {
+      // Release the claim so Stripe's retry of this event is processed, not deduped.
+      await supabase.from("stripe_webhook_events").delete().eq("event_id", event.id);
+      log("Handler threw — released event claim for retry", { id: event.id });
+      throw handlerErr;
     }
 
     return new Response(JSON.stringify({ received: true }), {
