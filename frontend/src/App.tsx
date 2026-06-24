@@ -261,7 +261,7 @@ const App = () => {
               <Route path="chat-analytics" element={<Navigate to="analytics/chatbot/dashboard" replace />} />
               
               <Route path="what-to-do" element={<WhatToDo />} />
-              <Route path="credentials" element={<ApiCredentials />} />
+              <Route path="credentials" element={<AgencyRoute><ApiCredentials /></AgencyRoute>} />
               <Route path="text-ai-rep" element={<Navigate to="setup" replace />} />
               <Route path="text-ai-rep/setup" element={<TextAIRepSetup />} />
               {/* Legacy alias — kept so existing bookmarks + the previously-shipped
@@ -275,7 +275,7 @@ const App = () => {
               <Route path="api" element={<TextAIRepSetup />} />
               <Route path="api/configuration" element={<TextAIRepSetup />} />
               <Route path="api/workflow-imports" element={<TextAIRepTemplates />} />
-              <Route path="api/credentials" element={<ApiCredentials />} />
+              <Route path="api/credentials" element={<AgencyRoute><ApiCredentials /></AgencyRoute>} />
               {/* Webinar routes archived 2026-05-18 (product dormant per Brendan).
                   Pages moved to frontend/src/pages/_archived/. To revive: restore
                   the 6 lazy imports + 7 routes + move pages back. */}
