@@ -4,7 +4,7 @@ Canonical list of **open bugs / issues that need addressing.** Consolidated 2026
 
 - **Feature roadmap** (what to build next) lives in `FEATURE_ROADMAP.md` — not here.
 - Status: `[ ]` open · `[x]` fixed/verified · `[B]` needs a Brendan decision/input · `[~]` partially fixed.
-- Last updated: 2026-06-24 (Session-1 hardening: B3/B4/B5/S2b-5 shipped — see the dated block below).
+- Last updated: 2026-06-24 (Billing: B2 Stripe cluster + B1 server-side gate (dormant) shipped — see the dated block below).
 
 ---
 
@@ -23,7 +23,19 @@ A fresh adversarially-verified system audit (32 confirmed, 6 refuted) drove thes
 **Session-1 hardening SHIPPED 2026-06-24** (branch `fix/session1-hardening-2026-06-24`, deployed live):
 **B3** receive-dm-webhook now fails CLOSED — client lookup + webhook-auth hoisted ahead of all side-effects; a NULL `ghl_webhook_secret` 403s unless `DM_WEBHOOK_REQUIRE_SECRET=false` (kill-switch). receive-dm-webhook v18. **B4** sendFollowup + processMessages send-idempotency via the new `outbound_send_claims` table (claim-before-send, release-on-fail); Trigger `20260624.1`. **B5/S6-5** ApiCredentials route wrapped in AgencyRoute. **S2b-5/E** campaign-enroll-webhook per-token rate-limit (`webhook_rate_limits` + `bump_rate_limit`, 429 over `ENROLL_RATE_LIMIT_PER_MIN`=60) + `normalized_phone` dedup (v13). See those rows below.
 
-**Still planned (NEW audit findings, NOT yet built — need a Brendan nod):** B1 SubscriptionGate is cosmetic-only (no server-side `subscription_status` enforcement — billing bypass); B2 Stripe cluster (webhook no idempotency, immediate cancel-lock, wrong-client activation, customer-by-email); B5/S1-1 secret columns to browser (architectural). Full detail: `tasks/wpmukq2mg.output`. **Top features to build:** S6-3 CI/test runner, S6-2 readiness dashboard, S6-4 onboarding automation.
+**Still planned (NEW audit findings, NOT yet built — need a Brendan nod):** B5/S1-1 secret columns to browser (architectural). **Top features to build:** S6-3 CI/test runner, S6-2 readiness dashboard, S6-4 onboarding automation.
+
+---
+
+## 2026-06-24 Billing — B2 Stripe cluster + B1 server-side gate SHIPPED (branch `fix/billing-b2-b1-2026-06-24`)
+
+Stripe is NOT live for BFD yet (`STRIPE_SECRET_KEY`/`STRIPE_WEBHOOK_SECRET` unset, verified) and `subscription_status` is managed manually, so the entire change set is zero-behavior-change today and activates at go-live. All deployed live + deno-type-checked.
+
+- [x] **B2.1 — stripe-webhook event idempotency.** New `stripe_webhook_events` table (event_id PK, RLS on / no policies; migration `20260624140000`, applied live). Claim the event id right after signature verify; a 23505 → `200 {duplicate:true}` without reprocessing. Handler body wrapped so a throw DELETEs the claim before the 500 (Stripe's retry is processed, not dedup-swallowed). Protects the non-idempotent `invoice.payment_failed` retry_count increment. **stripe-webhook v17.**
+- [x] **B2.2 — cancel_at_period_end immediate-lock.** A pending cancel (status still active/trialing) was OR'd into the terminal-cancel branch (webhook) + short-circuited to 'cancelled' (check-sub `resolveSubStatus`), so the gate paywalled a user who'd paid through period end. Now: terminal branch fires only on canceled/unpaid; the pending-cancel keeps 'active' + stamps `subscription_end_date`; the real cancel lands at period end via `customer.subscription.deleted`. Coupled basil-API fix: `current_period_end` lives on subscription items under the pinned apiVersion (confirmed TS2339), so it was silently storing null — added `subPeriodEnd()` reading `items.data[0].current_period_end`. **stripe-webhook v17 + check-client-subscription v16.**
+- [x] **B2.3 — check-client-subscription wrong-client activation.** Step-3 `fallbackCandidates` matched unbound paid sessions by `metadata.user_id`/email → an agency user owning many clients could activate the wrong client. Restricted to client-BOUND evidence: Step 2 (email) now requires the sub's `metadata.client_id === client_id`; Step 3 keeps only the exact `client_reference_id`/`metadata.client_id` match (fallback dropped). **check-client-subscription v16.**
+- [x] **B2.4 — stripe-checkout customer-by-email.** Reused the first email-matched customer without binding/persisting it (shared email → cross-entity mixing; no `metadata.client_id` → forced downstream fuzzy matching). Now: prefer the client's stored `stripe_customer_id`; else email lookup that reuses only an unbound/same-client customer (stamps metadata) or creates fresh for a different-client collision; persist the resolved id back to the clients row (makes B2.3 Step-1 deterministic). Drive-by: catch block `error.message` on unknown → `instanceof Error` guard. **stripe-checkout v16.**
+- [x] **B1 — server-side subscription gate (SHIPPED DORMANT).** Frontend SubscriptionGate was cosmetic-only (billing bypass). New `_shared/assertActiveSubscription.ts` wired into the billable leaves: `make-retell-outbound-call` (v26, the outbound-voice choke point), `twilio-send-sms` (v13), `campaign-enroll-webhook` (v14), `intake-lead` (v12). **No-op unless `ENFORCE_SUBSCRIPTION_GATE="true"` (env absent today, verified).** Exemptions mirror the frontend useSubscription: `is_system` clients (probe) + the globally-oldest client; passing statuses `active`/`grace_period`; throws 402. **Go-live order:** backfill real clients to active/grace_period → confirm `is_system` on the probe + 'active' on the default/oldest client → set `ENFORCE_SUBSCRIPTION_GATE=true` in the Supabase edge-fn env.
 
 ---
 
