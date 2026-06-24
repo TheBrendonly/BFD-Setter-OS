@@ -19,7 +19,7 @@ export const useWhatToDoAcknowledged = (clientId: string | undefined) => {
     const fetchAcknowledged = async () => {
       try {
         const { data, error } = await supabase
-          .from('clients')
+          .from('clients_public')
           .select('what_to_do_acknowledged')
           .eq('id', clientId)
           .maybeSingle();

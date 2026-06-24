@@ -38,7 +38,7 @@ export const useSubscription = (): UseSubscriptionReturn => {
 
     try {
       const { data: clients, error } = await supabase
-        .from('clients')
+        .from('clients_public')
         .select('id, subscription_status, created_at')
         .order('created_at', { ascending: true });
 

@@ -46,7 +46,7 @@ export const ClientTimezoneCard: React.FC<Props> = ({ clientId, title, descripti
       setLoading(true);
       try {
         const { data, error } = await supabase
-          .from('clients')
+          .from('clients_public')
           .select('timezone')
           .eq('id', clientId)
           .maybeSingle();

@@ -4837,7 +4837,124 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      clients_public: {
+        Row: {
+          agency_id: string | null
+          ai_chat_webhook_url: string | null
+          ai_meta_prompt: string | null
+          analytics_webhook_url: string | null
+          api_webhook_url: string | null
+          auto_engagement_workflow_id: string | null
+          brand_voice: string | null
+          cadence_quiet_hours: Json | null
+          campaign_webhook_url: string | null
+          chat_analytics_webhook_url: string | null
+          created_at: string
+          crm_column_widths: Json | null
+          crm_filter_config: Json | null
+          crm_page_size: number
+          database_reactivation_inbound_webhook_url: string | null
+          debounce_seconds: number | null
+          description: string | null
+          dm_debounce_seconds: number | null
+          dm_enabled: boolean | null
+          elevenlabs_agent_config: Json | null
+          elevenlabs_agent_id: string | null
+          elevenlabs_kb_doc_id: string | null
+          elevenlabs_phone_number_id: string | null
+          email: string | null
+          ghl_assignee_id: string | null
+          ghl_calendar_id: string | null
+          ghl_call_appt_booked_field_id: string | null
+          ghl_call_sentiment_field_id: string | null
+          ghl_channel_field_id: string | null
+          ghl_conversation_provider_id: string | null
+          ghl_last_synced_from_field_id: string | null
+          ghl_last_synced_from_field_value: string | null
+          ghl_location_id: string | null
+          ghl_send_setter_reply_webhook_url: string | null
+          gohighlevel_booking_title: string | null
+          id: string
+          image_url: string | null
+          knowledge_base_add_webhook_url: string | null
+          knowledge_base_delete_webhook_url: string | null
+          last_retry_date: string | null
+          lead_score_webhook_url: string | null
+          llm_model: string | null
+          log_column_widths: Json | null
+          name: string
+          outbound_caller_webhook_1_url: string | null
+          outbound_caller_webhook_2_url: string | null
+          outbound_caller_webhook_3_url: string | null
+          payment_failed_date: string | null
+          phone_call_webhook_url: string | null
+          presentation_only_mode: boolean | null
+          prompt_webhook_url: string | null
+          retell_agent_id_10: string | null
+          retell_agent_id_4: string | null
+          retell_agent_id_5: string | null
+          retell_agent_id_6: string | null
+          retell_agent_id_7: string | null
+          retell_agent_id_8: string | null
+          retell_agent_id_9: string | null
+          retell_inbound_agent_id: string | null
+          retell_outbound_agent_id: string | null
+          retell_outbound_followup_agent_id: string | null
+          retell_phone_1: string | null
+          retell_phone_1_country_code: string | null
+          retell_phone_2: string | null
+          retell_phone_2_country_code: string | null
+          retell_phone_3: string | null
+          retell_phone_3_country_code: string | null
+          retry_count: number | null
+          save_reply_webhook_url: string | null
+          send_engagement_webhook_url: string | null
+          send_followup_webhook_url: string | null
+          send_message_webhook_url: string | null
+          send_whatsapp_webhook_url: string | null
+          setter_config_last_generated_at: string | null
+          setter_display_names: Json | null
+          setup_guide_completed_steps: Json | null
+          simulation_webhook: string | null
+          sort_order: number | null
+          stop_bot_webhook_url: string | null
+          stripe_customer_id: string | null
+          stripe_subscription_id: string | null
+          subscription_end_date: string | null
+          subscription_start_date: string | null
+          subscription_status: string
+          supabase_table_name: string | null
+          supabase_url: string | null
+          sync_ghl_booking_enabled: boolean | null
+          sync_ghl_enabled: boolean | null
+          system_prompt: string | null
+          timezone: string
+          transfer_to_human_webhook_url: string | null
+          twilio_account_sid: string | null
+          twilio_default_phone: string | null
+          update_pipeline_webhook_url: string | null
+          updated_at: string
+          use_native_text_engine: boolean
+          user_details_webhook_url: string | null
+          voicemail_audio_url: Json | null
+          voicemail_config: Json | null
+          what_to_do_acknowledged: boolean | null
+          has_supabase_service_key: boolean | null
+          has_supabase_access_token: boolean | null
+          has_twilio_auth_token: boolean | null
+          has_openrouter_api_key: boolean | null
+          has_openrouter_management_key: boolean | null
+          has_openai_api_key: boolean | null
+          has_retell_api_key: boolean | null
+          has_retell_webhook_secret: boolean | null
+          has_ghl_api_key: boolean | null
+          has_ghl_webhook_secret: boolean | null
+          has_intake_lead_secret: boolean | null
+          has_elevenlabs_api_key: boolean | null
+          has_unipile_webhook_secret: boolean | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       claim_drip_position: {

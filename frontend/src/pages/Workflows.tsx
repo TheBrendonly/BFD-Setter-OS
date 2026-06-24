@@ -361,7 +361,7 @@ export default function Workflows() {
         .order('sort_order', { ascending: true })
         .order('created_at', { ascending: false }),
       (supabase as any)
-        .from('clients')
+        .from('clients_public')
         .select('auto_engagement_workflow_id')
         .eq('id', clientId)
         .maybeSingle(),
@@ -488,7 +488,7 @@ export default function Workflows() {
       // Additional campaigns are tag-routed only.
       if (on) {
         const { data: clientRow } = await (supabase as any)
-          .from('clients').select('auto_engagement_workflow_id').eq('id', clientId).maybeSingle();
+          .from('clients_public').select('auto_engagement_workflow_id').eq('id', clientId).maybeSingle();
         if (!clientRow?.auto_engagement_workflow_id) {
           await (supabase as any).from('clients')
             .update({ auto_engagement_workflow_id: ew.id }).eq('id', clientId);

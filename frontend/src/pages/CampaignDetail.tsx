@@ -163,7 +163,7 @@ const CampaignDetail = () => {
           data: clientData,
           error: clientError
         } = await (supabase
-          .from('clients')
+          .from('clients_public')
           .select('name, campaign_webhook_url' as any)
           .eq('id', campaignData.client_id)
           .maybeSingle() as any);

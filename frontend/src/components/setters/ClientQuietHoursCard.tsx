@@ -95,7 +95,7 @@ export const ClientQuietHoursCard: React.FC<Props> = ({ clientId, readOnly, init
       setLoading(true);
       try {
         const { data, error } = await supabase
-          .from('clients')
+          .from('clients_public')
           .select('cadence_quiet_hours, timezone')
           .eq('id', clientId)
           .maybeSingle();

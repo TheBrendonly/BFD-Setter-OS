@@ -2185,7 +2185,7 @@ export const AgentConfigBuilder: React.FC<AgentConfigBuilderProps> = ({
     (async () => {
       try {
         const { data } = await supabase
-          .from('clients')
+          .from('clients_public')
           .select('timezone')
           .eq('id', clientId)
           .maybeSingle();

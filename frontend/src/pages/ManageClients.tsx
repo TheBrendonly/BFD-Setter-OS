@@ -40,7 +40,9 @@ const CLIENT_SELECT = [
   "description",
   "image_url",
   "created_at",
-  ...READINESS_FIELDS.map((field) => field.column),
+  // Secret columns are read as their non-secret has_<column> presence boolean
+  // from clients_public (the value never reaches the browser, B5/S1-1).
+  ...READINESS_FIELDS.map((field) => (field.secret ? `has_${field.column}` : field.column)),
 ].join(", ");
 
 export default function ManageClients() {
@@ -171,7 +173,7 @@ export default function ManageClients() {
   const fetchClients = async () => {
     try {
       const { data, error } = await supabase
-        .from("clients")
+        .from("clients_public")
         .select(CLIENT_SELECT)
         .eq("is_system", false)
         .order("sort_order");

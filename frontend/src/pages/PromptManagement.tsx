@@ -4990,7 +4990,7 @@ const PromptManagement = () => {
     const col = SLOT_TO_AGENT_COLUMN[slotNum];
     if (!col) return;
     (async () => {
-      const { data } = await supabase.from('clients').select(col).eq('id', clientId).single();
+      const { data } = await supabase.from('clients_public').select(col).eq('id', clientId).single();
       const agentId = (data as any)?.[col];
       setSlotAgentId(agentId ?? null);
       if (agentId) fetchRetellCost(agentId);
@@ -5323,7 +5323,7 @@ const PromptManagement = () => {
       if (isFresh(cacheKey)) return;
     }
     try {
-      const { data, error } = await (supabase as any).from('clients').select('ai_meta_prompt, system_prompt').eq('id', clientId).maybeSingle();
+      const { data, error } = await (supabase as any).from('clients_public').select('ai_meta_prompt, system_prompt').eq('id', clientId).maybeSingle();
       if (error) throw error;
       if (data) {
         // If ai_meta_prompt equals system_prompt it is the pre-split backfill artifact
@@ -6172,7 +6172,7 @@ const PromptManagement = () => {
     void (async () => {
       // Client timezone for the call-time DYNAMIC VARIABLES preview — same source +
       // default as retell-proxy (clients.timezone, Australia/Sydney).
-      const { data } = await supabase.from('clients').select('timezone').eq('id', clientId).maybeSingle();
+      const { data } = await supabase.from('clients_public').select('timezone').eq('id', clientId).maybeSingle();
       setDocClientTimezone((data as { timezone?: string } | null)?.timezone || 'Australia/Sydney');
     })();
     try {
@@ -6404,7 +6404,7 @@ const PromptManagement = () => {
       const {
         data: accessibleClient,
         error: accessError
-      } = await supabase.from('clients').select('id').eq('id', clientId).maybeSingle();
+      } = await supabase.from('clients_public').select('id').eq('id', clientId).maybeSingle();
       if (accessError) throw accessError;
       if (!accessibleClient) {
         console.warn('Access denied or client not found for clientId:', clientId);

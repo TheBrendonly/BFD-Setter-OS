@@ -154,7 +154,7 @@ export const AIPromptDialog: React.FC<AIPromptDialogProps> = ({
         // full setter prompt on every save, so the meta prompt lives in its own column.
         // system_prompt fallback covers rows created before the split migration.
         const { data, error } = await (supabase as any)
-          .from('clients')
+          .from('clients_public')
           .select('ai_meta_prompt, system_prompt')
           .eq('id', clientId)
           .maybeSingle();

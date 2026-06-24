@@ -95,7 +95,7 @@ export const CrmSettingsDialog: React.FC<CrmSettingsDialogProps> = ({
   const fetchCustomTagColors = useCallback(async () => {
     try {
       const { data } = await (supabase as any)
-        .from('clients')
+        .from('clients_public')
         .select('crm_filter_config')
         .eq('id', clientId)
         .single();
@@ -108,7 +108,7 @@ export const CrmSettingsDialog: React.FC<CrmSettingsDialogProps> = ({
     setCustomTagColors(colors);
     try {
       const { data } = await (supabase as any)
-        .from('clients')
+        .from('clients_public')
         .select('crm_filter_config')
         .eq('id', clientId)
         .single();

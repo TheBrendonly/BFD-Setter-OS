@@ -497,7 +497,7 @@ export default function SyncGHLContacts() {
     (async () => {
       setLoading(true);
       const { data, error } = await supabase
-        .from('clients')
+        .from('clients_public')
         .select('sync_ghl_enabled')
         .eq('id', clientId)
         .single();

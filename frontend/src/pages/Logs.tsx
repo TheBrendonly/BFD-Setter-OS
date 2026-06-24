@@ -769,7 +769,7 @@ const Logs = () => {
     hasLoadedWidthsRef.current = true;
     (async () => {
       const { data } = await supabase
-        .from('clients')
+        .from('clients_public')
         .select('log_column_widths')
         .eq('id', clientId)
         .single();
@@ -913,7 +913,7 @@ const Logs = () => {
   useEffect(() => {
     if (!clientId) return;
     (async () => {
-      const { data } = await supabase.from('clients').select('ghl_location_id').eq('id', clientId).single();
+      const { data } = await supabase.from('clients_public').select('ghl_location_id').eq('id', clientId).single();
       setGhlAccountId(data?.ghl_location_id || null);
       setGhlLoaded(true);
     })();

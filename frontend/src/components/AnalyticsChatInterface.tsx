@@ -274,7 +274,7 @@ export const AnalyticsChatInterface: React.FC<AnalyticsChatInterfaceProps> = ({
         const {
           data: client
         } = await supabase
-          .from('clients')
+          .from('clients_public')
           .select('chat_analytics_webhook_url, analytics_webhook_url')
           .eq('id', clientId)
           .single();

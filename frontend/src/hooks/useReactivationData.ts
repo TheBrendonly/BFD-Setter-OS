@@ -242,7 +242,7 @@ export function useReactivationData(clientId: string | undefined) {
 
         // Multi-client breakdown — fetch the client name from clients table.
         const { data: clientRow } = await (supabase
-          .from('clients')
+          .from('clients_public')
           .select('name')
           .eq('id', clientId)
           .maybeSingle() as any);

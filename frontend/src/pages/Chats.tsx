@@ -747,7 +747,7 @@ export default function Chats() {
     // even on RLS denial / network error, or render hangs forever on RetroLoader.
     if (clientId) {
       supabase
-        .from('clients')
+        .from('clients_public')
         .select('crm_filter_config')
         .eq('id', clientId)
         .single()
@@ -832,7 +832,7 @@ export default function Chats() {
             .not('workflow_id', 'is', null)
             .order('created_at', { ascending: false }),
           (supabase as any)
-            .from('clients')
+            .from('clients_public')
             .select('crm_filter_config')
             .eq('id', clientId)
             .single(),
@@ -910,7 +910,7 @@ export default function Chats() {
     if (!clientId) return;
     try {
       const { data } = await (supabase as any)
-        .from('clients')
+        .from('clients_public')
         .select('crm_filter_config')
         .eq('id', clientId)
         .single();
@@ -926,7 +926,7 @@ export default function Chats() {
     if (!clientId) return;
     try {
       const { data } = await (supabase as any)
-        .from('clients')
+        .from('clients_public')
         .select('crm_filter_config')
         .eq('id', clientId)
         .single();
@@ -1781,7 +1781,7 @@ export default function Chats() {
               chatFilterSaveRef.current = setTimeout(async () => {
                 if (!clientId) return;
                 const { data } = await supabase
-                  .from('clients')
+                  .from('clients_public')
                   .select('crm_filter_config')
                   .eq('id', clientId)
                   .single();
@@ -2119,7 +2119,7 @@ function ChatContactDetailsPanel({
     (async () => {
       try {
         const { data } = await supabase
-          .from('clients')
+          .from('clients_public')
           .select('crm_filter_config')
           .eq('id', clientId)
           .single();
@@ -2145,7 +2145,7 @@ function ChatContactDetailsPanel({
     setSectionsOpen(newState);
     try {
       const { data } = await supabase
-        .from('clients')
+        .from('clients_public')
         .select('crm_filter_config')
         .eq('id', clientId)
         .single();

@@ -69,7 +69,7 @@ const ClientManagement = () => {
       const {
         data: agencyClients,
         error: clientsError
-      } = await supabase.from('clients').select('id, created_at').order('created_at', {
+      } = await supabase.from('clients_public').select('id, created_at').order('created_at', {
         ascending: false
       });
       if (clientsError) throw clientsError;
@@ -92,7 +92,7 @@ const ClientManagement = () => {
       const {
         data,
         error
-      } = await supabase.from('clients').select('*').order('created_at', {
+      } = await supabase.from('clients_public').select('*').order('created_at', {
         ascending: false
       });
       if (error) throw error;
