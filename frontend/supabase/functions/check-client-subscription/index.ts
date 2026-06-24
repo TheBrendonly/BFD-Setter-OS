@@ -14,12 +14,23 @@ const logStep = (step: string, details?: any) => {
 
 const normalizeEmail = (value?: string | null) => value?.trim().toLowerCase() || null;
 
+// Basil API (2025-08-27) moved current_period_end off the Subscription onto its
+// items. Read it from items.data[0] (single-item subs); ISO string or null.
+const subPeriodEnd = (sub: Stripe.Subscription): string | null => {
+  const ts = sub.items?.data?.[0]?.current_period_end;
+  return ts ? new Date(ts * 1000).toISOString() : null;
+};
+
 /**
  * Maps a Stripe subscription to our app-level status.
  * Uses "locked" instead of "past_due" for locked accounts.
+ *
+ * B2.2: a pending cancel_at_period_end is NOT treated as 'cancelled' while the
+ * subscription is still active/trialing — the user keeps access through the paid
+ * period. The cancel flag is surfaced separately in the response so the UI can
+ * show a "cancels on <date>" banner without gating.
  */
 function resolveSubStatus(sub: Stripe.Subscription): string {
-  if (sub.cancel_at_period_end) return "cancelled";
   switch (sub.status) {
     case "active":
     case "trialing":
@@ -211,9 +222,7 @@ Deno.serve(async (req) => {
     if (foundSub && customerId) {
       const appStatus = resolveSubStatus(foundSub);
       const subscriptionId = foundSub.id;
-      const endDate = foundSub.current_period_end
-        ? new Date(foundSub.current_period_end * 1000).toISOString()
-        : null;
+      const endDate = subPeriodEnd(foundSub);
 
       const updateFields: Record<string, any> = {
         stripe_customer_id: customerId,

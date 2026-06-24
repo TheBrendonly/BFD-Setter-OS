@@ -6,6 +6,16 @@ const log = (step: string, details?: any) => {
   console.log(`[STRIPE-WEBHOOK] ${step}${d}`);
 };
 
+// Basil API (2025-08-27) moved current_period_end off the Subscription onto its
+// items. Our subscriptions are single-item, so read it from items.data[0];
+// returns an ISO string or null. (Reading subscription.current_period_end
+// directly is undefined under this apiVersion -> subscription_end_date would
+// silently store null.)
+const subPeriodEnd = (sub: Stripe.Subscription): string | null => {
+  const ts = sub.items?.data?.[0]?.current_period_end;
+  return ts ? new Date(ts * 1000).toISOString() : null;
+};
+
 Deno.serve(async (req) => {
   // Log every incoming request immediately (do NOT dump headers — they carry the
   // stripe-signature / authorization secrets).
@@ -342,18 +352,21 @@ Deno.serve(async (req) => {
         const currentStatus = client.subscription_status;
         const hasPaymentIssue = currentStatus === "grace_period" || currentStatus === "locked";
 
+        // B2.2: only TERMINAL states cancel the account here. A pending
+        // cancel_at_period_end (status still active/trialing) must NOT flip to
+        // 'cancelled' — that would paywall a user who has paid through
+        // current_period_end. It falls through to the active branch below, which
+        // keeps 'active' and stamps subscription_end_date. The actual cancel
+        // lands later via customer.subscription.deleted at period end.
         if (
           subscription.status === "canceled" ||
-          subscription.status === "unpaid" ||
-          subscription.cancel_at_period_end
+          subscription.status === "unpaid"
         ) {
           await supabase
             .from("clients")
             .update({
               subscription_status: "cancelled",
-              subscription_end_date: subscription.current_period_end
-                ? new Date(subscription.current_period_end * 1000).toISOString()
-                : null,
+              subscription_end_date: subPeriodEnd(subscription),
             })
             .eq("id", client.id);
 
@@ -383,9 +396,7 @@ Deno.serve(async (req) => {
               payment_failed_date: null,
               retry_count: 0,
               last_retry_date: null,
-              subscription_end_date: subscription.current_period_end
-                ? new Date(subscription.current_period_end * 1000).toISOString()
-                : null,
+              subscription_end_date: subPeriodEnd(subscription),
             })
             .eq("id", client.id);
 
