@@ -60,8 +60,8 @@ const RetellPhoneNumbersTab: React.FC<RetellPhoneNumbersTabProps> = ({ clientId 
 
   // Check if Twilio credentials are configured
   useEffect(() => {
-    supabase.from('clients').select('twilio_account_sid, twilio_auth_token').eq('id', clientId).single().then(({ data }) => {
-      setTwilioConfigured(!!(data?.twilio_account_sid && data?.twilio_auth_token));
+    supabase.from('clients_public').select('twilio_account_sid, has_twilio_auth_token').eq('id', clientId).single().then(({ data }) => {
+      setTwilioConfigured(!!(data?.twilio_account_sid && data?.has_twilio_auth_token));
     });
   }, [clientId]);
 

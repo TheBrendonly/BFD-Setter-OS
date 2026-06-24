@@ -144,9 +144,9 @@ export const RetellPhoneNumberSelector: React.FC<RetellPhoneNumberSelectorProps>
     };
     const col = SLOT_COLUMNS[slotNumber];
     if (!col) return;
-    supabase.from('clients').select(`${col},twilio_account_sid,twilio_auth_token`).eq('id', clientId).single().then(({ data }) => {
+    supabase.from('clients_public').select(`${col},twilio_account_sid,has_twilio_auth_token`).eq('id', clientId).single().then(({ data }) => {
       setCurrentAgentId((data as any)?.[col] || null);
-      setTwilioConfigured(!!((data as any)?.twilio_account_sid && (data as any)?.twilio_auth_token));
+      setTwilioConfigured(!!((data as any)?.twilio_account_sid && (data as any)?.has_twilio_auth_token));
     });
   }, [clientId, slotNumber]);
 
