@@ -22,7 +22,7 @@ export const useSetupGuideProgress = (clientId: string | undefined) => {
     const fetchProgress = async () => {
       try {
         const { data, error } = await supabase
-          .from('clients')
+          .from('clients_public')
           .select('setup_guide_completed_steps')
           .eq('id', clientId)
           .single();
@@ -148,7 +148,7 @@ export const useSetupGuideProgress = (clientId: string | undefined) => {
     
     try {
       const { data, error } = await supabase
-        .from('clients')
+        .from('clients_public')
         .select('setup_guide_completed_steps')
         .eq('id', clientId)
         .single();

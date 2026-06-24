@@ -48,7 +48,7 @@ export async function fetchSnapshotData(
   if (clientId) {
     try {
       const [clientRes, promptsRes] = await Promise.all([
-        supabase.from('clients').select('name, ghl_location_id').eq('id', clientId).maybeSingle(),
+        supabase.from('clients_public').select('name, ghl_location_id').eq('id', clientId).maybeSingle(),
         supabase
           .from('prompts')
           .select('slot_id, name, category')

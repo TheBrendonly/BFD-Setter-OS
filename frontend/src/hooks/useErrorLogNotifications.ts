@@ -18,7 +18,7 @@ export function useErrorLogNotifications() {
     let cancelled = false;
 
     (async () => {
-      const { data } = await supabase.from('clients').select('ghl_location_id').eq('id', clientId).single();
+      const { data } = await supabase.from('clients_public').select('ghl_location_id').eq('id', clientId).single();
       if (cancelled || !data?.ghl_location_id) return;
       ghlRef.current = data.ghl_location_id;
 

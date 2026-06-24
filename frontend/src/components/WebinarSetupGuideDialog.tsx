@@ -2148,7 +2148,7 @@ const WebinarSetupGuideDialog: React.FC<WebinarSetupGuideDialogProps> = ({
       const loadFromDatabase = async () => {
         try {
           const { data, error } = await supabase
-            .from('clients')
+            .from('clients_public')
             .select('setup_guide_completed_steps')
             .eq('id', clientId)
             .single();
@@ -2227,7 +2227,7 @@ const WebinarSetupGuideDialog: React.FC<WebinarSetupGuideDialogProps> = ({
     try {
       // First, get current steps from database to merge (preserve non-webinar steps)
       const { data: currentData } = await supabase
-        .from('clients')
+        .from('clients_public')
         .select('setup_guide_completed_steps')
         .eq('id', clientId)
         .single();

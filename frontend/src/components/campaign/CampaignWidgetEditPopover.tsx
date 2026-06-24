@@ -49,7 +49,7 @@ export function CampaignWidgetEditPopover({ title, internalName, color, onUpdate
     if (!clientId) return;
     try {
       const { data } = await (supabase as any)
-        .from('clients')
+        .from('clients_public')
         .select('crm_filter_config')
         .eq('id', clientId)
         .single();
@@ -63,7 +63,7 @@ export function CampaignWidgetEditPopover({ title, internalName, color, onUpdate
     setCustomColors(colors);
     try {
       const { data } = await (supabase as any)
-        .from('clients')
+        .from('clients_public')
         .select('crm_filter_config')
         .eq('id', clientId)
         .single();

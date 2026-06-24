@@ -1449,7 +1449,7 @@ export default function ProcessDMs() {
       const requestedExecutionId = searchParams.get('execution');
       const [{ data: clientData, error: clientError }, { data: agentSettings, error: agentSettingsError }, { data: executionData }] = await Promise.all([
         supabase
-          .from('clients')
+          .from('clients_public')
           .select('dm_enabled, ghl_location_id')
           .eq('id', clientId)
           .single(),

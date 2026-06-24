@@ -250,7 +250,7 @@ const ContactDetail = () => {
   const [ghlLocationId, setGhlLocationId] = useState<string | null>(null);
   useEffect(() => {
     if (!clientId) return;
-    supabase.from('clients').select('ghl_location_id').eq('id', clientId).single().then(({ data }) => {
+    supabase.from('clients_public').select('ghl_location_id').eq('id', clientId).single().then(({ data }) => {
       setGhlLocationId(data?.ghl_location_id || null);
     });
   }, [clientId]);
@@ -375,7 +375,7 @@ const ContactDetail = () => {
           setNotesOpen(next);
           if (clientId) {
             supabase
-              .from('clients')
+              .from('clients_public')
               .select('crm_filter_config')
               .eq('id', clientId)
               .single()
@@ -524,7 +524,7 @@ const ContactDetail = () => {
     (async () => {
       try {
         const { data } = await supabase
-          .from('clients')
+          .from('clients_public')
           .select('crm_filter_config')
           .eq('id', clientId)
           .single();
@@ -671,7 +671,7 @@ const ContactDetail = () => {
     if (!clientId) return;
     try {
       const { data } = await supabase
-        .from('clients')
+        .from('clients_public')
         .select('crm_filter_config')
         .eq('id', clientId)
         .single();

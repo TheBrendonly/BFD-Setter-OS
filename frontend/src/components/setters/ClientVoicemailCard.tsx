@@ -75,7 +75,7 @@ export const ClientVoicemailCard: React.FC<Props> = ({ clientId, title, descript
       setLoading(true);
       try {
         const { data, error } = await supabase
-          .from('clients')
+          .from('clients_public')
           .select('voicemail_config')
           .eq('id', clientId)
           .maybeSingle();

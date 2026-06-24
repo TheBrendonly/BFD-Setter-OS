@@ -2321,7 +2321,7 @@ const ChatAnalytics = () => {
     (async () => {
       try {
         const { data } = await (supabase as any)
-          .from('clients')
+          .from('clients_public')
           .select('crm_filter_config')
           .eq('id', clientId)
           .single();
@@ -2350,7 +2350,7 @@ const ChatAnalytics = () => {
     if (!clientId) return;
     try {
       const { data } = await (supabase as any)
-        .from('clients')
+        .from('clients_public')
         .select('crm_filter_config')
         .eq('id', clientId)
         .single();

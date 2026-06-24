@@ -167,7 +167,7 @@ export default function DemoPageEditor() {
     
     if (clientId) {
       const { data: clientData } = await supabase
-        .from('clients')
+        .from('clients_public')
         .select('image_url, name')
         .eq('id', clientId)
         .single();

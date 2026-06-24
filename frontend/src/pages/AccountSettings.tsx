@@ -525,7 +525,7 @@ function SubAccountOverview() {
 
   const fetchClients = async () => {
     const { data } = await supabase
-      .from('clients')
+      .from('clients_public')
       .select('id, name, subscription_status, stripe_customer_id, subscription_start_date, subscription_end_date, email')
       .order('created_at', { ascending: true });
     setClients(data || []);
@@ -538,7 +538,7 @@ function SubAccountOverview() {
     hasLoadedWidthsRef.current = true;
     (async () => {
       const { data } = await supabase
-        .from('clients')
+        .from('clients_public')
         .select('crm_filter_config')
         .eq('id', clientId)
         .single();
@@ -560,7 +560,7 @@ function SubAccountOverview() {
     saveTimeoutRef.current = setTimeout(async () => {
       if (!clientId) return;
       const { data } = await supabase
-        .from('clients')
+        .from('clients_public')
         .select('crm_filter_config')
         .eq('id', clientId)
         .single();

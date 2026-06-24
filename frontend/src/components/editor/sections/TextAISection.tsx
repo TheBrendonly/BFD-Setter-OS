@@ -143,7 +143,7 @@ export default function TextAISection({ section, isEditor, onUpdateProperty, cli
       const fetchClientDetails = async () => {
         try {
           const { data } = await supabase
-            .from('clients')
+            .from('clients_public')
             .select('image_url')
             .eq('id', clientId)
             .single();

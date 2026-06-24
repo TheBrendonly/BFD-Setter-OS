@@ -66,7 +66,7 @@ const ClientDashboard = () => {
     try {
       // Add timestamp to force fresh data
       const { data, error } = await supabase
-        .from('clients')
+        .from('clients_public')
         .select('*')
         .eq('id', clientId)
         .single();

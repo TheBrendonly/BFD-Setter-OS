@@ -68,7 +68,7 @@ export default function RedirectToFirstClient() {
 
       // Onboarding done — find first client
       const { data, error } = await supabase
-        .from("clients")
+        .from("clients_public")
         .select("id")
         .eq("is_system", false)
         .order("sort_order")

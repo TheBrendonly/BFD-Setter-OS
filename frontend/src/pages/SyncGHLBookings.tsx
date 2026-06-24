@@ -507,7 +507,7 @@ export default function SyncGHLBookings() {
     (async () => {
       setLoading(true);
       const { data, error } = await supabase
-        .from('clients')
+        .from('clients_public')
         .select('sync_ghl_booking_enabled')
         .eq('id', clientId)
         .single();

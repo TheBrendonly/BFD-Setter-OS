@@ -92,7 +92,7 @@ export function CustomMetricDialog({
     if (!clientId) return;
     try {
       const { data } = await (supabase as any)
-        .from('clients')
+        .from('clients_public')
         .select('crm_filter_config')
         .eq('id', clientId)
         .single();
@@ -106,7 +106,7 @@ export function CustomMetricDialog({
     setCustomColors(colors);
     try {
       const { data } = await (supabase as any)
-        .from('clients')
+        .from('clients_public')
         .select('crm_filter_config')
         .eq('id', clientId)
         .single();

@@ -63,7 +63,7 @@ const Onboarding = () => {
 
       // Find and update the default "My First Account" sub-account
       const { data: existingClient, error: fetchError } = await supabase
-        .from('clients')
+        .from('clients_public')
         .select('id')
         .eq('agency_id', profile.agency_id)
         .eq('name', 'My First Account')

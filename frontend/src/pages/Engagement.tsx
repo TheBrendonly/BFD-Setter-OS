@@ -2737,7 +2737,7 @@ export default function Engagement() {
   // Load client GHL account ID
   useEffect(() => {
     if (!clientId) return;
-    (supabase as any).from('clients').select('ghl_location_id, cadence_quiet_hours').eq('id', clientId).single().then(({ data }: any) => {
+    (supabase as any).from('clients_public').select('ghl_location_id, cadence_quiet_hours').eq('id', clientId).single().then(({ data }: any) => {
       if (data?.ghl_location_id) setClientGhlAccountId(data.ghl_location_id);
       if (data?.cadence_quiet_hours && typeof data.cadence_quiet_hours === 'object') {
         const raw = data.cadence_quiet_hours as Record<string, unknown>;

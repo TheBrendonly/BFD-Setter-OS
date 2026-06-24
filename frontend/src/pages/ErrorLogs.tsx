@@ -84,7 +84,7 @@ const ErrorLogs = () => {
     hasLoadedWidthsRef.current = true;
     (async () => {
       const { data } = await supabase
-        .from('clients')
+        .from('clients_public')
         .select('crm_column_widths')
         .eq('id', clientId)
         .single();
@@ -111,7 +111,7 @@ const ErrorLogs = () => {
       if (!clientId) return;
       // Read existing, merge, save
       const { data } = await supabase
-        .from('clients')
+        .from('clients_public')
         .select('crm_column_widths')
         .eq('id', clientId)
         .single();
@@ -170,7 +170,7 @@ const ErrorLogs = () => {
     if (!clientId) return;
     (async () => {
       const { data } = await supabase
-        .from('clients')
+        .from('clients_public')
         .select('ghl_location_id')
         .eq('id', clientId)
         .single();

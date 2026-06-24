@@ -454,7 +454,7 @@ const Contacts = () => {
       const parsedLocalPageSize = localPageSize ? Number(localPageSize) : null;
 
       const { data } = await supabase
-        .from('clients')
+        .from('clients_public')
         .select('crm_filter_config, crm_page_size')
         .eq('id', clientId)
         .single();
@@ -1343,7 +1343,7 @@ const Contacts = () => {
     hasLoadedWidthsRef.current = true;
     (async () => {
       const { data } = await supabase
-        .from('clients')
+        .from('clients_public')
         .select('crm_column_widths')
         .eq('id', clientId)
         .single();

@@ -422,7 +422,7 @@ function ClientSidebar() {
       const {
         data,
         error
-      } = await supabase.from("clients").select("id, name, description, image_url, sort_order, presentation_only_mode").eq("is_system", false).order("sort_order");
+      } = await supabase.from("clients_public").select("id, name, description, image_url, sort_order, presentation_only_mode").eq("is_system", false).order("sort_order");
       if (error) throw error;
       setClients(data || []);
     } catch (error) {

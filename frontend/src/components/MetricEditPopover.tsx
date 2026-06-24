@@ -49,7 +49,7 @@ export function MetricEditPopover({
   const fetchCustomColors = useCallback(async () => {
     try {
       const { data } = await (supabase as any)
-        .from('clients')
+        .from('clients_public')
         .select('crm_filter_config')
         .eq('id', clientId)
         .single();
@@ -62,7 +62,7 @@ export function MetricEditPopover({
     setCustomColors(colors);
     try {
       const { data } = await (supabase as any)
-        .from('clients')
+        .from('clients_public')
         .select('crm_filter_config')
         .eq('id', clientId)
         .single();

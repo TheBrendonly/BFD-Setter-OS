@@ -36,7 +36,7 @@ export const useClientWebhooks = (clientId: string | undefined) => {
 
     try {
       const { data, error } = await supabase
-        .from('clients')
+        .from('clients_public')
         .select('knowledge_base_add_webhook_url, knowledge_base_delete_webhook_url, prompt_webhook_url, analytics_webhook_url, ai_chat_webhook_url, transfer_to_human_webhook_url, user_details_webhook_url')
         .eq('id', clientId)
         .maybeSingle();

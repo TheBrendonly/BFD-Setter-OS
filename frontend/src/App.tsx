@@ -194,7 +194,7 @@ const ConditionalSupportChat = () => {
       }
       
       const { data } = await supabase
-        .from('clients')
+        .from('clients_public')
         .select('presentation_only_mode')
         .eq('id', clientId)
         .single();

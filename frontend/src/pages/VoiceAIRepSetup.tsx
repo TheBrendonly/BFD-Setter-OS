@@ -121,7 +121,7 @@ const VoiceAIRepSetup = () => {
     }
     try {
       const { data, error } = await supabase
-        .from('clients')
+        .from('clients_public')
         .select('setup_guide_completed_steps')
         .eq('id', clientId)
         .single();

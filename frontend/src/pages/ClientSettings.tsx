@@ -74,7 +74,7 @@ export default function ClientSettings() {
   const fetchClientData = async () => {
     try {
       const { data, error } = await supabase
-        .from("clients")
+        .from("clients_public")
         .select("name, email, description, image_url, timezone, brand_voice, weekly_cost_ceiling_cents, monthly_cost_ceiling_cents")
         .eq("id", clientId)
         .single();

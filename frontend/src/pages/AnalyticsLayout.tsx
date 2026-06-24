@@ -55,7 +55,7 @@ export function AnalyticsLayout() {
             .eq('client_id', clientId)
             .order('created_at', { ascending: false }),
           (supabase as any)
-            .from('clients')
+            .from('clients_public')
             .select('crm_filter_config')
             .eq('id', clientId)
             .single(),
@@ -143,7 +143,7 @@ export function AnalyticsLayout() {
 
     try {
       const { data } = await (supabase as any)
-        .from('clients')
+        .from('clients_public')
         .select('crm_filter_config')
         .eq('id', clientId)
         .single();
@@ -163,7 +163,7 @@ export function AnalyticsLayout() {
 
     try {
       const { data } = await (supabase as any)
-        .from('clients')
+        .from('clients_public')
         .select('crm_filter_config')
         .eq('id', clientId)
         .single();
