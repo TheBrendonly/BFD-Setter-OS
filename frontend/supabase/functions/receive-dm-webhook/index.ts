@@ -1,4 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2.101.0";
+import { dmWebhookRequiresSecret } from "./auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -214,6 +215,60 @@ Deno.serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, serviceKey);
 
+    // Resolve the client + verify webhook auth BEFORE any side-effect. The
+    // reply-detection below cancels active engagements + Trigger.dev runs and
+    // writes campaign_events, so auth must gate the WHOLE handler, not just the
+    // message ingest. (Hoisted from after the cancellation block, 2026-06-24.)
+    const { data: client, error: clientError } = await supabase
+      .from("clients")
+      .select("id, dm_enabled, debounce_seconds, supabase_url, supabase_service_key, ghl_webhook_secret")
+      .eq("ghl_location_id", ghlAccountId)
+      .maybeSingle();
+
+    if (clientError || !client) {
+      return new Response(
+        JSON.stringify({ error: "Client not found for GHL_Account_ID: " + ghlAccountId }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Verify-if-present webhook auth. Two accepted proofs (mirrors
+    // sync-ghl-contact): a static `x-wh-token` header equal to the secret
+    // (GHL Workflow Custom-Webhook custom header, SOP §5.3) or an HMAC-SHA256
+    // `x-wh-signature` over the raw body. GHL *native* Webhook V2 signs with
+    // RSA and is NOT supported.
+    //
+    // FAIL-CLOSED (B3, 2026-06-24): a client with NO ghl_webhook_secret used to
+    // skip auth and run every side-effect unauthenticated. It now 403s unless
+    // DM_WEBHOOK_REQUIRE_SECRET is explicitly disabled (kill-switch).
+    if (client.ghl_webhook_secret) {
+      const secret = client.ghl_webhook_secret as string;
+      const tokenOk = ctEqual(req.headers.get("x-wh-token") ?? "", secret);
+      let sigOk = tokenOk;
+      const sigHeader = req.headers.get("x-wh-signature");
+      if (!sigOk && sigHeader) {
+        // V2-style signed JSON body; clone request to read it
+        const rawBody = await req.clone().text().catch(() => "");
+        sigOk = await verifyGhlSignature(rawBody, sigHeader, secret);
+      }
+      if (!sigOk) {
+        console.warn("receive-dm-webhook: webhook auth failed", { clientId: client.id, ghlAccountId });
+        return new Response(JSON.stringify({ error: "Forbidden" }), {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    } else if (dmWebhookRequiresSecret(Deno.env.get("DM_WEBHOOK_REQUIRE_SECRET"))) {
+      console.warn("receive-dm-webhook: rejected — no ghl_webhook_secret set (fail-closed)", {
+        clientId: client.id,
+        ghlAccountId,
+      });
+      return new Response(
+        JSON.stringify({ error: "Client not configured for webhook ingestion (no ghl_webhook_secret set)" }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     // Cancel any pending follow-up timers for this contact
     await supabase
       .from('followup_timers')
@@ -366,44 +421,6 @@ Deno.serve(async (req) => {
             });
           }
         }
-      }
-    }
-
-    const { data: client, error: clientError } = await supabase
-      .from("clients")
-      .select("id, dm_enabled, debounce_seconds, supabase_url, supabase_service_key, ghl_webhook_secret")
-      .eq("ghl_location_id", ghlAccountId)
-      .maybeSingle();
-
-    if (clientError || !client) {
-      return new Response(
-        JSON.stringify({ error: "Client not found for GHL_Account_ID: " + ghlAccountId }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    // Verify-if-present webhook auth. Two accepted proofs (mirrors
-    // sync-ghl-contact): a static `x-wh-token` header equal to the secret
-    // (GHL Workflow Custom-Webhook custom header, SOP §5.3) or an HMAC-SHA256
-    // `x-wh-signature` over the raw body. No secret => skip (backwards-compat,
-    // V1 query-string posts still work). GHL *native* Webhook V2 signs with
-    // RSA and is NOT supported.
-    if (client.ghl_webhook_secret) {
-      const secret = client.ghl_webhook_secret as string;
-      const tokenOk = ctEqual(req.headers.get("x-wh-token") ?? "", secret);
-      let sigOk = tokenOk;
-      const sigHeader = req.headers.get("x-wh-signature");
-      if (!sigOk && sigHeader) {
-        // V2-style signed JSON body; clone request to read it
-        const rawBody = await req.clone().text().catch(() => "");
-        sigOk = await verifyGhlSignature(rawBody, sigHeader, secret);
-      }
-      if (!sigOk) {
-        console.warn("receive-dm-webhook: webhook auth failed", { clientId: client.id, ghlAccountId });
-        return new Response(JSON.stringify({ error: "Forbidden" }), {
-          status: 403,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
       }
     }
 
