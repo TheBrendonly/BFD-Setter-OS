@@ -1,5 +1,6 @@
 import { createClient } from "npm:@supabase/supabase-js@2.101.0";
 import { buildLeadInsert } from "../_shared/lead-insert.ts";
+import { isPhoneRecentDuplicate } from "./dedup.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -65,6 +66,25 @@ Deno.serve(async (req) => {
       return new Response(
         JSON.stringify({ error: "Campaign is not active", campaign_status: campaign.status }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // S2b-5 per-token rate-limit (fixed window, keyed on the campaign id ≡ the
+    // enroll token). Caps how fast a leaked token can create leads + fire billable
+    // engagements. Fail-open on RPC error: the limiter is a safety net, not the
+    // gate (the token + active-campaign checks above are the gate).
+    const RATE_LIMIT = Number(Deno.env.get("ENROLL_RATE_LIMIT_PER_MIN") || "60");
+    const { data: rlCount, error: rlErr } = await supabase.rpc("bump_rate_limit", {
+      p_bucket_key: `enroll:${campaign.id}`,
+      p_window_seconds: 60,
+    });
+    if (rlErr) {
+      console.warn("campaign-enroll-webhook: rate-limit RPC failed (allowing)", rlErr);
+    } else if (typeof rlCount === "number" && rlCount > RATE_LIMIT) {
+      console.warn("campaign-enroll-webhook: rate limited", { campaignId: campaign.id, count: rlCount, limit: RATE_LIMIT });
+      return new Response(
+        JSON.stringify({ error: "rate_limited", limit_per_minute: RATE_LIMIT, retry_after_seconds: 60 }),
+        { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json", "Retry-After": "60" } }
       );
     }
 
@@ -238,6 +258,18 @@ Deno.serve(async (req) => {
         );
       }
       resolvedLeadId = leadIdentifierToStore || newLead.id;
+    }
+
+    // S2b-5 phone-dedup: if this same phone was just enrolled for this client via a
+    // DIFFERENT lead inside the window, skip the (billable) enrolment. The lead row
+    // above is still created/updated for audit; only the trigger-engagement call is
+    // skipped. Mirrors ghl-tag-webhook, keyed on normalized_phone.
+    if (await isPhoneRecentDuplicate(supabase, clientId, phone, resolvedLeadId)) {
+      console.info("campaign-enroll-webhook: skipped duplicate phone enrolment", { clientId, campaignId: campaign.id });
+      return new Response(
+        JSON.stringify({ success: true, skipped: "duplicate_phone", lead_id: resolvedLeadId, campaign_id: campaign.id }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
     // Trigger the engagement via the existing trigger-engagement function
