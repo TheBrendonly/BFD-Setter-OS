@@ -1,0 +1,34 @@
+# BFD-Setter — Deferred List (someday / gated)
+
+Things deliberately not being built now, each with the gate that would un-defer it. Reconciled 2026-06-25.
+
+## ⭐ MAJOR — add soon (next big build)
+
+- [ ] **Lead lifecycle system** = roadmap 3.5 + 3.6 + 3.7, treated as one feature.
+  - **3.5 engine** — multi-workflow enrollment state machine: a lead transitions between workflows (Hot Pursuit → Cool Down → Long-Tail → Re-engage) instead of living in one cadence. **Already partly built** on branch `feat/cadence-v2-lifecycle-wip` (`engagement_enrollments` table + `transition-lead` edge fn + Workflows UI).
+  - **3.6 long-tail nurture** — a slow, email-only drip a lead enters after a cadence completes / goes silent (requires 3.5).
+  - **3.7 re-warm triggers** — email-click + GHL pricing-page-visit events auto-pull a quiet lead back into Re-engage (requires 3.5 + click-tracking/GHL-event infra).
+  - **Gate:** a reliable lead-state classifier (decides hot/cold/silent) + the click-tracking/GHL-event infra for 3.7. This is also the "build a better cadence v2 when needed" direction (the flat 28-node draft `c206da3e` was deleted in favor of this).
+
+## Gated features
+
+- [ ] **2.6 Cost-per-booking analytics dashboard** — `cadence_metrics` + `cadence_funnel` view exist; no chart. **Gate:** ~60 days of real data + the cost-tracking table from 3.9.
+- [ ] **3.1 A/B testing** (campaign / agent / AI-generated) — **Gate:** first paying client with ~50+ leads/week.
+- [ ] **3.2 Agent-by-form-field** (within-cadence agent override) — **Gate:** a client needs same-cadence/different-agent (tag-per-campaign covers ~80%).
+- [ ] **3.3 Campaign-level default voice setter** — **Gate:** per-node selection works today; revisit alongside the F2 UUID-native setter cleanup.
+- [ ] **3.9 Cost-ceiling weekly/monthly aggregates** — **Gate:** needs a per-execution cost-tracking table first (cost is in-memory today).
+- [ ] **3.11 HubSpot + GHL coexistence** `[B]` — **Gate:** a client using HubSpot signs.
+- [ ] **4.1 Pricing model** (cost-plus vs retainer) `[B]` — **Gate:** cost-per-booking data exists.
+- [ ] **4.3 Multi-Twilio failover** — **Gate:** combined volume exceeds one Twilio account's safe ceiling.
+- [ ] **E-1 `fetch-thread-previews` 500-on-throw** — **Gate:** it has no live caller (latent); fix only if it gets wired up.
+- [ ] **Email provider / custom SMTP** — **Gate:** BFD stays SMS-only by decision; build when a client needs email.
+- [ ] **HIBP password-breach check** — **Gate:** Supabase Pro upgrade (flip `password_hibp_enabled=true` via Mgmt API).
+
+## First-paying-client onboarding cluster `[BRENDAN]`
+
+- [ ] **6.6** arm `retell_webhook_secret` (= the Retell API key; one controlled live call, revert to NULL on any 403) + provision the GHL/Retell/Unipile webhook signing secrets.
+- [ ] **AU SMS A2P / Messaging Service registration for `+61481614530`** — Twilio accepts messages but AU handset delivery on the bare long code is slow/unconfirmed; register A2P or confirm the regulatory bundle.
+
+## Other
+
+- [ ] **6.12a GHL custom conversation provider POC** — deferred. Upstream `1prompt-os` never used one (it lets GHL own the channel); the marketplace-app path is bfd-specific and painful. The **F1 deep-link feature** covers the need near-term (link from GHL to BFD's conversation view). Revisit the provider only if branded in-GHL bubbles become a hard requirement.

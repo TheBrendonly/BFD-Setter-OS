@@ -41,3 +41,35 @@ Reconciled all 62 findings of `Docs/AUDIT_2026-06-10_full-system-audit.md` again
 - Run the coordinated deploy once the 3 branches merge (gate check: `git log --oneline d4c5626..main` non-empty + all 3 branch tips reachable from main).
 - BUG_LIST now carries the live-E2E `6.x` items (several being fixed on the branches above) + the new audit-sourced `S…` items (still open; not in any parallel scope). After merge, tick the `6.x` items the branches closed and keep the `S…` backlog.
 - The two PARTIAL items cross-linked to deferred decisions: `S1-3`/`S2b-11` provisioning ↔ 6.6 + the "defer secrets till first paying client" decision; `S4-5` ↔ 6.7.
+
+---
+
+## ⬆️ UPDATE 2026-06-20 — ALL 3 MERGED + PUSHED; backend deploy pending
+
+**Merge done.** Brendan merged bug-sweep + sms-tool-parity himself (`a5d8bad`, pushed to both remotes); Claude merged the 3rd (ghl-sync) + the 2026-06-19 docs. **`main` = `origin` = `github` = `6842aff`.** Zero merge conflicts (the 3 branches touched disjoint files). The feature/worktree branches were NOT pushed (their commits are in main).
+
+**Verified on the merged tree:** `cd frontend && npx tsc --noEmit` → 0 errors; edge-fn deno tests (`_shared` + analyze-sms-conversation + retell-call-analysis-webhook) → **96 passed / 0 failed**; trigger node tests (setterTools/setterToolLoop/probePoll) → **17 / 0**.
+
+**Railway:** the push moved `github/main` a5d8bad→6842aff, but the delta (ghl-sync + docs) has **no `frontend/src/**` changes**, so the Railway frontend build is unchanged. (The bug-sweep + sms-parity frontend already shipped via Brendan's a5d8bad push.)
+
+### What is ALREADY live (deployed by the parallel sessions)
+- sms-tool-parity: `voice-booking-tools v19` + Trigger `20260620.2` (3.12). **Caveat:** that v19 was built BEFORE ghl-sync merged, so it bundles the OLD `_shared/ghl-conversations.ts` → needs a rebundle redeploy (below).
+- bug-sweep frontend: live via Railway (a5d8bad). Its EDGE FNS may NOT be deployed yet (delete-setter handoff said "pending edge-fn deploy").
+
+### REMAINING backend deploy (Brendan — Claude lacks the Trigger.dev deploy login; `trigger.dev whoami` = not logged in)
+Run in order against project `bjgrgbgykvjrsuwwruoh`:
+
+1. **Migration** (additive, idempotent — adds 12 nullable `clients.ghl_*_field_id` cols + `leads.last_sms_analyzed_at`). Apply via the normal runner so migration tracking stays clean: `cd frontend && npx supabase db push` (or `supabase migration up`). Must precede the edge fns that SELECT those columns.
+2. **Edge functions** (`--use-api --no-verify-jwt`). Full set changed in the 2026-06-19 cluster + the `_shared/ghl-conversations.ts` rebundle dependents:
+   - ghl-sync: `analyze-sms-conversation` (new), `retell-call-analysis-webhook`
+   - bug-sweep: `sync-ghl-contact` (6.10), `retell-proxy` (delete-setter), `campaign-enroll-webhook`
+   - **ghl-conversations rebundle (easy to miss):** `_shared/ghl-conversations.ts` changed, and it is imported by **`voice-booking-tools` (→ v20), `receive-twilio-sms`, `crm-send-message`, `analyze-sms-conversation`, `retell-call-analysis-webhook`** — redeploy ALL of these so the live bundle matches main. (voice-booking-tools v19 currently runs the pre-ghl-sync bundle.) Deploy `voice-booking-tools` LAST.
+3. **Trigger.dev** (one deploy, picks up `analyzeSmsConversations` new task + the bug-sweep `syntheticProbe`/`probePoll` fix + sms-parity tasks): `npx trigger.dev@4.4.4 deploy --env prod` → should bump to `20260620.3`.
+4. **Railway**: already current (no frontend delta); no action.
+
+### Live smokes after deploy (Brendan places, Claude verifies read-only)
+- 3.12 SMS booking via the tool loop · 6.11 missed/voicemail-call fallback timing (now ~immediate) · 6.10 a fresh GHL lead has `normalized_phone` set · 6.12 SMS-in-Conversations + outcome fields populate (needs the GHL field IDs provisioned on the client row — `[B]` per the ghl-sync handoff) · 6.7 probe canary.
+
+### `[B]` Brendan items surfaced by the deploy
+- Provision the `clients.ghl_*_field_id` values (the migration only adds the columns; 6.12b writes are skipped while null) + the GHL marketplace-app conversation provider for the Conversations tab (6.12a).
+- Confirm/provide a Trigger.dev deploy token if you want Claude to run the Trigger deploy in future.
