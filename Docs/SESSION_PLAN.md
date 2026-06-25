@@ -74,10 +74,15 @@ Status: `[ ]` not started · `[~]` in progress · `[x]` done. Effort is rough.
   B-1 rename cascades to one name across `prompts.name`/`agent_settings.name`/`voice_setters.name`/Retell `agent_name`
   + card lines (spoken persona untouched; "Title follows name" per Brendan). retell-proxy v45, duplicate-setter-config v8;
   tsc clean. B-1/B-3/B-5 → `TEST_LIST.md`. **PREREQ for TEST:** Brendan re-Saves the 5 setters. → emitted **Session 2**.
-- [ ] **Session 2 — Security/quality sweep (CODE).** `BUG_LIST` G3-1 (fail-closed on NULL intake_lead_secret),
-  G3-2 (S4-10 shared-agent disambiguation), G3-3 (S2b-11 outcome-stamp guard), G3-4 (S4-8 status codes),
-  G3-5 (esbuild ≥0.25), types.ts drift (5 phantom columns). No decisions. **Done when:** all deployed +
-  moved to TEST_LIST. → emits **Session 3**.
+- [x] **Session 2 — Security/quality sweep (CODE).** DONE 2026-06-25. G3-1 was already fixed in `49a594e`
+  (both `voice-booking-tools`/`kb-ingest` fail-closed on NULL `intake_lead_secret`) → COMPLETED_LOG. Shipped:
+  G3-2 shared-master-agent disambiguation (`ghl_account_id`→`ghl_location_id`, logs `ambiguous_agent_match`);
+  G3-3 mandatory `active_call_id` bind (refuse stamp when `call_id` missing); G3-4 real 400/502 status codes
+  (+ 2 UI callers read the body off `error.context` so messages survive); G3-5 esbuild forced to 0.25.12 via
+  npm `overrides` (build+tsc green, advisory cleared); types.ts drift = 5 columns added to live `clients` +
+  appended to `clients_public` (security_invoker preserved, 0 secrets leaked, types.ts already declared them
+  so no frontend change). retell-call-webhook v21, test-external-supabase v17. Found out-of-scope: vite
+  dev-server advisories → new BUG_LIST **G3-7** (needs breaking vite bump). All → TEST_LIST. → emitted **Session 3**.
 - [ ] **Session 3 — Settings + setter cleanup (CODE).** `BUG_LIST` B-4 (client="My Account" only; admin=
   "My Account"+"Sub-Accounts"); `FEATURE_ROADMAP` F2 (UUID-native node picker + single inbound-setter
   binding + remove outbound-direction config), F5 (n8n decommission), F6 (remove setup-guide quizzes),

@@ -21,7 +21,7 @@ Deno.serve(async (req) => {
         success: false,
         error: 'Client ID is required'
       }), {
-        status: 200,
+        status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
@@ -43,7 +43,7 @@ Deno.serve(async (req) => {
         success: false,
         error: 'Supabase Service Key is required. Please provide your service role key.' 
       }), {
-        status: 200,
+        status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
@@ -53,7 +53,7 @@ Deno.serve(async (req) => {
         success: false,
         error: 'Table name is required. Please specify the table containing your chat history data.' 
       }), {
-        status: 200,
+        status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
@@ -63,7 +63,7 @@ Deno.serve(async (req) => {
         success: false,
         error: 'Supabase URL is required. Please provide your Supabase project URL.' 
       }), {
-        status: 200,
+        status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
@@ -74,7 +74,7 @@ Deno.serve(async (req) => {
         success: false,
         error: 'Invalid Supabase URL format. Please provide a valid Supabase project URL (e.g., https://your-project.supabase.co).' 
       }), {
-        status: 200,
+        status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
@@ -91,7 +91,7 @@ Deno.serve(async (req) => {
         success: false,
         error: 'Invalid service key format. Please ensure you are using the service role key (not the anon key) from your Supabase project settings.'
       }), {
-        status: 200,
+        status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
@@ -109,7 +109,7 @@ Deno.serve(async (req) => {
         success: false,
         error: 'Invalid Supabase project URL. Expected https://<project-ref>.supabase.co'
       }), {
-        status: 200,
+        status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
@@ -134,7 +134,7 @@ Deno.serve(async (req) => {
           success: false,
           error: `Table '${supabaseConfig.tableName}' does not exist in your Supabase database. Please check the table name and ensure it exists.` 
         }), {
-          status: 200,
+          status: 502,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
@@ -144,7 +144,7 @@ Deno.serve(async (req) => {
           success: false,
           error: 'Authentication failed. Please verify your service key is correct and has the necessary permissions.' 
         }), {
-          status: 200,
+          status: 502,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
@@ -154,7 +154,7 @@ Deno.serve(async (req) => {
           success: false,
           error: 'Unable to connect to your Supabase instance. Please verify your URL is correct and your project is active.' 
         }), {
-          status: 200,
+          status: 502,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
@@ -164,7 +164,7 @@ Deno.serve(async (req) => {
         success: false,
         error: `Database connection failed: ${error.message}` 
       }), {
-        status: 200,
+        status: 502,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
@@ -189,7 +189,7 @@ Deno.serve(async (req) => {
         success: false,
         error: 'Network error: Unable to reach your Supabase instance. Please check your URL and internet connection.' 
       }), {
-        status: 200,
+        status: 502,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
@@ -200,7 +200,7 @@ Deno.serve(async (req) => {
         success: false,
         error: 'Invalid response from Supabase. Please verify your configuration.' 
       }), {
-        status: 200,
+        status: 502,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
@@ -209,7 +209,7 @@ Deno.serve(async (req) => {
       success: false,
       error: (error as any)?.message || 'An unexpected error occurred while testing the connection.' 
     }), {
-      status: 200,
+      status: 502,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }

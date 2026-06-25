@@ -24,6 +24,14 @@ When an item passes, move it to `Docs/archive/COMPLETED_LOG.md`. When it fails, 
 - [ ] **B-5 default-vars net** — after a re-Save, the agent's latest-published **LLM** reports `default_dynamic_variables = {first_name:"", …}` (was `null`). Mechanism already proven on a throwaway agent; this confirms it on the live agents. Pairs with the `{{first_name}}` retest below.
 - [ ] **B-1 rename cascade** — rename a voice setter inline (and/or via Duplicate). Confirm the one name shows everywhere: card heading + card "Title:"/"Name:" lines, `voice_setters.name`, `prompts.name`/`agent_settings.name`, and Retell `agent_name` all match. The spoken in-prompt persona is intentionally unchanged. A duplicated setter shows its typed name on the new card immediately.
 
+## Session 2 — security/quality sweep (deployed 2026-06-25: retell-call-webhook v21, test-external-supabase v17)
+
+- [ ] **G3-2 shared-agent disambiguation** — only testable once an `agent_id` is shared by >1 client. With one client per agent today it's a no-op (still picks the sole match). When a master agent is shared: an inbound/outbound call routes its outcome to the tenant whose `ghl_location_id == call ghl_account_id`; a genuinely ambiguous match logs `error_logs.error_type='ambiguous_agent_match'` and falls back to the first row. Low priority until multi-tenant master agents exist.
+- [ ] **G3-3 outcome-stamp guard** — a normal outbound voice call still stamps `engagement_executions.last_call_outcome` and clears `active_call_id` on `call_ended` (cadence advances/terminates as before). A `call_ended` with no `call_id` is now refused (logged, no stamp) — verify a real call is unaffected.
+- [ ] **G3-4 status codes** — in the UI, a bad external-Supabase test (bad URL / wrong key / missing table) still shows the **specific** error toast (now sourced from `error.context`), and the network tab shows **HTTP 400** (validation) or **502** (connection) instead of 200. A good config still saves. (Live-confirmed server-side: missing clientId → 400 + `{success:false,...}`.)
+- [ ] **G3-5 esbuild** — `cd frontend && npm ls esbuild` shows `esbuild@0.25.x overridden`; `npm run build` succeeds; `npm audit` no longer lists GHSA-67mh-4wv8-2f99. (All verified at ship; re-confirm after a fresh `npm ci` on a clean checkout.)
+- [ ] **types.ts drift (5 UI-state features now functional)** — hard-refresh, then: Contacts page-size + column widths persist across reload; ErrorLogs/Logs column widths persist; SyncGHLBookings toggle saves + reloads without the "Failed to load config" toast; the onboarding "what to do" acknowledgement sticks. (Live-confirmed: all 5 columns present on `clients` + `clients_public`, view still `security_invoker=on`, 0 secrets leaked.)
+
 ## Retests after the relevant fix ships
 
 - [ ] **B-3 (6.4)** clear a lead's phone, Save → it stays cleared in BFD **and** GHL (only the name case was retested before).

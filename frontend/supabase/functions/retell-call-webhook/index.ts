@@ -37,6 +37,14 @@ Deno.serve(async (req) => {
 
     const call = payload.call || payload.data || payload;
 
+    // Dynamic vars carry the tenant/contact/execution identity Retell echoes back.
+    // Extracted early so we can (a) disambiguate a shared master agent below and
+    // (b) bump leads.last_message_at even when no external Supabase is configured.
+    const dynamicVars = call.retell_llm_dynamic_variables || call.dynamic_variables || {};
+    const setterId: string | null = dynamicVars.voice_setter_id || null;
+    const contactId: string | null =
+      dynamicVars.contact_id || dynamicVars.Contact_ID || dynamicVars.Lead_ID || null;
+
     // Extract agent_id to find the client
     const agentId = call.agent_id;
     if (!agentId) {
@@ -63,7 +71,7 @@ Deno.serve(async (req) => {
     // Find client by matching the agent_id across all 10 agent slots
     const { data: clients, error: clientErr } = await internalSupabase
       .from("clients")
-      .select("id, supabase_url, supabase_service_key, retell_webhook_secret")
+      .select("id, ghl_location_id, supabase_url, supabase_service_key, retell_webhook_secret")
       .or(
         `retell_inbound_agent_id.eq.${agentId},retell_outbound_agent_id.eq.${agentId},retell_outbound_followup_agent_id.eq.${agentId},retell_agent_id_4.eq.${agentId},retell_agent_id_5.eq.${agentId},retell_agent_id_6.eq.${agentId},retell_agent_id_7.eq.${agentId},retell_agent_id_8.eq.${agentId},retell_agent_id_9.eq.${agentId},retell_agent_id_10.eq.${agentId}`
       );
@@ -75,7 +83,44 @@ Deno.serve(async (req) => {
       });
     }
 
-    const client = clients[0];
+    // Disambiguate when one agent_id is shared across tenants (master agent): the
+    // .or() above can return >1 row. Prefer the tenant whose GHL location matches the
+    // call's ghl_account_id dynamic var (ghl_location_id is UNIQUE → 1:1 with a tenant).
+    // Fall back to the first row but LOG the ambiguity so it's visible as clients grow.
+    let client = clients[0];
+    if (clients.length > 1) {
+      const ghlAccountId =
+        typeof dynamicVars.ghl_account_id === "string" && dynamicVars.ghl_account_id
+          ? dynamicVars.ghl_account_id
+          : null;
+      const matched = ghlAccountId
+        ? clients.find((c) => c.ghl_location_id === ghlAccountId)
+        : null;
+      if (matched) {
+        client = matched;
+      } else {
+        console.warn(
+          `retell-call-webhook: agent_id ${agentId} maps to ${clients.length} clients; ` +
+            `ghl_account_id=${ghlAccountId ?? "(none)"} did not disambiguate — falling back to ${clients[0].id}`
+        );
+        try {
+          await internalSupabase.from("error_logs").insert({
+            client_id: clients[0].id,
+            severity: "warning",
+            source: "retell_call_webhook",
+            error_type: "ambiguous_agent_match",
+            error_message: `agent_id ${agentId} matched ${clients.length} clients; ghl_account_id=${ghlAccountId ?? "none"}`,
+            context: {
+              agent_id: agentId,
+              candidate_client_ids: clients.map((c) => c.id),
+              ghl_account_id: ghlAccountId,
+            },
+          });
+        } catch (_logErr) {
+          /* non-fatal */
+        }
+      }
+    }
 
     // Optional Retell signature verification. Inert until the client stamps
     // retell_webhook_secret AND Retell is configured to sign (onboarding BR3).
@@ -95,13 +140,6 @@ Deno.serve(async (req) => {
         });
       }
     }
-
-    // Extract dynamic vars early so we can use contactId for the leads upsert
-    // even when an external Supabase isn't configured.
-    const dynamicVars = call.retell_llm_dynamic_variables || call.dynamic_variables || {};
-    const setterId: string | null = dynamicVars.voice_setter_id || null;
-    const contactId: string | null =
-      dynamicVars.contact_id || dynamicVars.Contact_ID || dynamicVars.Lead_ID || null;
 
     // ── Bump leads.last_message_at so the Chats list reflects voice activity.
     // Same pattern as receive-twilio-sms / receive-dm-webhook / retell-call-analysis-webhook.
@@ -167,8 +205,15 @@ Deno.serve(async (req) => {
     let outcomePersisted = false;
     if (payload.event === "call_ended") {
       const executionId: string | null = (dynamicVars.execution_id as string | undefined) || null;
-      if (executionId) {
-        const callId = call.call_id || call.id || null;
+      const callId = call.call_id || call.id || null;
+      if (executionId && !callId) {
+        // A legit Retell call_ended always carries a call_id. Without it we cannot bind
+        // the stamp to the real in-flight call, so refuse to stamp — a forged call_ended
+        // with a guessed execution_id but no call_id must not clear/pollute a hold.
+        console.warn(
+          `retell-call-webhook: call_ended for exec ${executionId} has no call_id — refusing to stamp outcome.`
+        );
+      } else if (executionId) {
         // Scope the mutation to the resolved tenant AND bind it to the real
         // in-flight call. execution_id and agent_id both come from the (public,
         // currently-unsigned) webhook body, so without this a forged POST with a
@@ -190,7 +235,8 @@ Deno.serve(async (req) => {
           })
           .eq("id", executionId)
           .eq("client_id", client.id);
-        if (callId) execUpdate = execUpdate.eq("active_call_id", callId);
+        // active_call_id bind is mandatory here (callId is non-null in this branch).
+        execUpdate = execUpdate.eq("active_call_id", callId);
         const { error: execErr } = await execUpdate;
         if (execErr) {
           // CRITICAL: runEngagement polls last_call_outcome to break its wait loop

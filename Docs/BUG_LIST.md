@@ -16,15 +16,10 @@ Open bugs and behavior fixes. Reconciled 2026-06-25 with Brendan (one-by-one tri
 ## 🟠 Medium
 
 - [ ] **B-4 (6.1) Settings nav split (client vs admin).** Decided model: a **client** sees only **"My Account"** (their self-serve settings); an **admin** sees **"My Account"** (own login/password/theme) **+ "Sub-Accounts"** (list → click a sub-account → its config page at `/client/<id>/settings`, which already exists). Removes the near-duplicate "Sub-Account Settings"/"Account Settings"/"Manage Sub-Accounts" confusion. `[B]`-minor: decide which workspace settings (brand voice, contact hours…) a client may self-edit in their My Account vs admin-only. Frontend (`ClientLayout.tsx` SYSTEM block, `useClientMenuConfig.ts`). Effort S-M.
-- [ ] **G3-1 (S2b-4) `voice-booking-tools` (+`kb-ingest`) fail-OPEN when `intake_lead_secret` is NULL.** Money/state tools (send-sms, book/cancel, schedule-callback) run for any caller who knows the clientId UUID. Masked today (both live clients have the secret); a new client reopens it. Fix = return 401 when a money/state tool is requested and the secret is NULL. Effort S.
-- [ ] **G3-2 (S4-10) `retell-call-webhook` picks `clients[0]` for a shared master agent.** No disambiguation when an `agent_id` maps to >1 client; latent at single-tenant, integrity hazard as clients grow. Fix = disambiguate via dynamic vars (ghl_account_id / execution owner) + log ambiguous matches. Effort M.
 
 ## 🟢 Low — hardening / cleanup
 
-- [ ] **G3-3 (S2b-11) `retell-call-webhook` stamps outcome from a spoofable `agent_id`.** Require the execution's `active_call_id == call.call_id` before stamping (a forged `call_ended` can mis-route a cadence). Effort S.
-- [ ] **G3-4 (S4-8) `test-external-supabase` returns HTTP 200 on every failure.** Defeats status-based monitoring. Fix = 400 for input/validation, 502 for upstream-connection (keep the `success:false` body for the UI). Effort S.
-- [ ] **G3-5 (S5-7) transitive esbuild still 0.21.5 (dev-server SSRF GHSA-67mh-4wv8-2f99).** Override/resolution to esbuild ≥0.25 (prod is a static build; dev-server only). Effort S.
-- [ ] **types.ts drift — 5 phantom `clients` columns read by the browser.** `crm_page_size`, `crm_column_widths`, `log_column_widths`, `sync_ghl_booking_enabled`, `what_to_do_acknowledged` are read by the frontend but don't exist in the live `clients` table (those reads 400). Remove the reads or add the columns. Effort S.
+- [ ] **G3-7 (found in Session 2) vite dev-server advisories need a major bump.** `npm audit` (frontend) flags vite ≤6.4.2: path-traversal in optimized-deps `.map` handling (GHSA-4w7w-66w2-5vf9, high) + `server.fs.deny` bypass on Windows + launch-editor NTLM disclosure. All **dev-server only** (prod ships a static build). Fix = bump vite 5.4 → 7/8 (a breaking change), its own session. Also pre-existing moderate advisories on `dompurify` and `tar` (the latter via the `supabase` optional dep) are `npm audit fix`-able. Effort M (vite is breaking).
 
 ## 🔵 Large hardening
 
@@ -32,6 +27,8 @@ Open bugs and behavior fixes. Reconciled 2026-06-25 with Brendan (one-by-one tri
 
 ---
 
+> Shipped in **Session 2 (2026-06-25, security/quality sweep)**: **G3-1** was already fixed in `49a594e` (both `voice-booking-tools` + `kb-ingest` fail-closed on NULL `intake_lead_secret`) → `COMPLETED_LOG.md`. **G3-2** shared-master-agent disambiguation (match `ghl_account_id`→`ghl_location_id`, log ambiguous), **G3-3** mandatory `active_call_id` bind (refuse stamp when `call_id` missing), **G3-4** real 400/502 status codes + 2 UI callers read `error.context`, **G3-5** esbuild forced to 0.25.12 (override), **types.ts drift** 5 columns added to live `clients` + `clients_public` (security boundary preserved) → all to `TEST_LIST.md`. retell-call-webhook v21, test-external-supabase v17.
+>
 > Shipped in **Session 1 (2026-06-25, voice reliability)** → moved to `TEST_LIST.md` (need Brendan's re-Save + live verify): **B-1** setter-rename cascade, **B-3** outbound auto-follows `latest_published`, **B-5** default-vars net (root cause found: the field is LLM-level, not agent-level — the v43 agent-level set was a silent no-op; now on `llmPayload`, verified end-to-end on a throwaway agent). retell-proxy v45, duplicate-setter-config v8.
 >
 > Closed in the 2026-06-25 reconciliation: inbound neutral greeting, Trigger latency, 6.8 `{{first_name}}`, F10 key rotation, 6.13 GHL secret-field check — see `Docs/archive/COMPLETED_LOG.md`. Prior shipped clusters (audit waves, billing B1/B2, session-1 hardening, S6, clients_public boundary) are in `Docs/ROADMAP.md` + the dated handoffs.

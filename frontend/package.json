@@ -107,5 +107,8 @@
   },
   "optionalDependencies": {
     "supabase": "^2.95.6"
+  },
+  "overrides": {
+    "esbuild": "^0.25.0"
   }
 }

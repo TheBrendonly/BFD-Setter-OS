@@ -62,9 +62,20 @@ export const SupabaseConfigCard: React.FC<SupabaseConfigCardProps> = ({
 
       if (testResult.error) {
         console.error('Test connection failed:', testResult.error);
+        // The fn now returns 400/502 on failure; supabase-js wraps that as a
+        // FunctionsHttpError with the Response on .context. Pull the specific
+        // {success:false,error} body it still sends so the toast stays helpful.
+        let description = testResult.error.message || "Failed to test connection";
+        try {
+          const ctx = (testResult.error as any)?.context;
+          if (ctx && typeof ctx.json === "function") {
+            const body = await ctx.json();
+            if (body?.error) description = body.error;
+          }
+        } catch { /* keep the generic message */ }
         toast({
           title: "Connection Test Failed",
-          description: testResult.error.message || "Failed to test connection",
+          description,
           variant: "destructive"
         });
         return;

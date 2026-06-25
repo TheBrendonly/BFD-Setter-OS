@@ -3,6 +3,10 @@
 Items closed out of the active lists. Newest first. The active lists are in the repo root + `Docs/`
 (`BUG_LIST.md`, `FEATURE_ROADMAP.md`, `BRENDAN_TODO.md`, `TEST_LIST.md`, `DEFERRED.md`).
 
+## 2026-06-25 — Session 2 (security/quality sweep)
+
+- **G3-1 (S2b-4) fail-closed on NULL `intake_lead_secret`** — was ALREADY fixed in `49a594e` (audit sweep 2026-06-23): both `voice-booking-tools` and `kb-ingest` now return 401 when the client's `intake_lead_secret` is NULL (stricter than asked — covers read tools too). It was simply never moved off `BUG_LIST`. No code change this session; closed here. The other Session-2 items (G3-2 disambiguation, G3-3 outcome-stamp guard, G3-4 status codes, G3-5 esbuild override, types.ts drift) are deployed and live in `TEST_LIST.md` pending Brendan's UI verification.
+
 ## 2026-06-25 — list/doc reconciliation session (with Brendan)
 
 Closed:

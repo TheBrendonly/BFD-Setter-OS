@@ -1272,8 +1272,17 @@ const ChatAnalytics = () => {
         }
       });
       if (testResponse.error) {
-        // When edge function returns non-2xx, Supabase wraps as error
-        throw new Error(testResponse.error.message || 'Failed to connect to external Supabase');
+        // When edge function returns non-2xx, Supabase wraps as error with the
+        // Response on .context — pull the specific {success:false,error} body.
+        let msg = testResponse.error.message || 'Failed to connect to external Supabase';
+        try {
+          const ctx = (testResponse.error as any)?.context;
+          if (ctx && typeof ctx.json === "function") {
+            const body = await ctx.json();
+            if (body?.error) msg = body.error;
+          }
+        } catch { /* keep the generic message */ }
+        throw new Error(msg);
       }
       if (testResponse.data && (testResponse.data as any).success === false) {
         const errMsg = (testResponse.data as any).error || 'Failed to test connection';
