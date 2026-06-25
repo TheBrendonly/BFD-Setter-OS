@@ -4822,7 +4822,7 @@ const PromptManagement = () => {
   // The SetterDisplayNamesCard in VoiceAIRepSetup / TextAIRepSetup is
   // where users edit these. We surface them here so the list-view cards show them.
   const { credentials: clientCredentials } = useClientCredentials(clientId);
-  const { setInboundSetter } = useSetInboundSetter(clientId);
+  const { setInboundSetter, binding: inboundBinding } = useSetInboundSetter(clientId);
   const setterDisplayNames = (clientCredentials?.setter_display_names ?? {}) as Record<string, string>;
 
   // Load retell voice settings from prompt_configurations when editing slot changes
@@ -4899,6 +4899,7 @@ const PromptManagement = () => {
     if (!Number.isNaN(slotNumber)) {
       const ok = await setInboundSetter(slotNumber, next.includes('inbound'));
       if (!ok) setVoiceSetterDirections(prev);
+      else setInboundMapRefresh(c => c + 1); // B-6: refresh list-view inbound badges
     }
   }, [voiceSetterDirections, editingSlotId, markNeedsSync, setInboundSetter]);
 
@@ -5115,6 +5116,15 @@ const PromptManagement = () => {
 
   // Track processing AI jobs per slot for PROCESSING tag on overview cards
   const [processingSlots, setProcessingSlots] = useState<Set<string>>(new Set());
+  // B-6: list-view inbound badges read voice_setters.is_inbound (the SoT), NOT
+  // prompts.directions/is_active (which are Deploy-only and stay false/empty for
+  // the report-only inbound agent). Map keyed by legacy_slot; kept out of the
+  // prompts SWR cache so the badge never shows stale inbound state.
+  const [inboundSlotMap, setInboundSlotMap] = useState<
+    Record<number, { is_inbound: boolean; retell_agent_id: string | null }>
+  >({});
+  const [clientInboundAgentId, setClientInboundAgentId] = useState<string | null>(null);
+  const [inboundMapRefresh, setInboundMapRefresh] = useState(0);
   useEffect(() => {
     if (!clientId || currentView !== 'list') { setProcessingSlots(new Set()); return; }
     // Initial fetch
@@ -5156,6 +5166,38 @@ const PromptManagement = () => {
 
     return () => { supabase.removeChannel(channel); };
   }, [clientId, currentView]);
+  // B-6: load the inbound SoT (voice_setters.is_inbound by legacy_slot) +
+  // clients_public.retell_inbound_agent_id for the list-view status badges.
+  // List-only; refetched on view change and after a toggle (inboundMapRefresh).
+  useEffect(() => {
+    if (!clientId || currentView !== 'list') return;
+    let cancelled = false;
+    (async () => {
+      const [settersRes, clientRes] = await Promise.all([
+        (supabase as any)
+          .from('voice_setters')
+          .select('legacy_slot, is_inbound, retell_agent_id')
+          .eq('client_id', clientId),
+        (supabase as any)
+          .from('clients_public')
+          .select('retell_inbound_agent_id')
+          .eq('id', clientId)
+          .maybeSingle(),
+      ]);
+      if (cancelled) return;
+      const map: Record<number, { is_inbound: boolean; retell_agent_id: string | null }> = {};
+      for (const s of (settersRes?.data as any[]) || []) {
+        if (s.legacy_slot == null) continue;
+        map[s.legacy_slot] = {
+          is_inbound: !!s.is_inbound,
+          retell_agent_id: s.retell_agent_id ?? null,
+        };
+      }
+      setInboundSlotMap(map);
+      setClientInboundAgentId((clientRes?.data as any)?.retell_inbound_agent_id ?? null);
+    })();
+    return () => { cancelled = true; };
+  }, [clientId, currentView, inboundMapRefresh]);
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const autoSavePromptTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const autoSaveConfigs = useCallback((configs: Record<string, { selectedOption: string; customContent: string }>) => {
@@ -7551,6 +7593,7 @@ const PromptManagement = () => {
                   <DirectionsToggle
                     value={voiceSetterDirections}
                     onChange={handleVoiceSetterDirectionsChange}
+                    disabled={inboundBinding}
                   />
                 )}
                 {/* Agent Config Builder - includes Settings + all config layers */}
@@ -8029,10 +8072,12 @@ const PromptManagement = () => {
                               })()}
                               <StatusTag variant="neutral">VOICE CHANNEL</StatusTag>
                               {(() => {
-                                // Inbound-only post-P3a: outbound routing is per-cadence
-                                // (UUID voice setter), so only surface an Inbound badge.
-                                const dirs = prompts.find(p => p.slot_id === slot.id && p.category === 'voice_setter')?.directions;
-                                const isInbound = Array.isArray(dirs) && dirs.includes('inbound');
+                                // B-6: inbound status reads voice_setters.is_inbound (the SoT),
+                                // not prompts.directions (Deploy-only; empty for the report-only
+                                // inbound agent). Inbound-only post-P3a (outbound is per-cadence).
+                                const im = slot.id.match(/Voice-Setter-(\d+)$/);
+                                const sn = im ? parseInt(im[1], 10) : null;
+                                const isInbound = sn != null && !!inboundSlotMap[sn]?.is_inbound;
                                 return isInbound ? (
                                   <StatusTag variant="positive">Inbound</StatusTag>
                                 ) : null;
@@ -8041,11 +8086,31 @@ const PromptManagement = () => {
                             <div className="flex flex-col items-end gap-1.5 shrink-0">
                               {processingSlots.has(slot.id) ? (
                                 <StatusTag variant="warning">Processing</StatusTag>
-                              ) : (
-                                <StatusTag variant={prompt.is_active ? 'positive' : 'negative'}>
-                                  {prompt.is_active ? 'Active' : 'Not Active'}
-                                </StatusTag>
-                              )}
+                              ) : (() => {
+                                // B-6: for the inbound (report-only) agent, prompts.is_active is
+                                // false BY DESIGN (it is never UI-Deployed). Drive its status from
+                                // voice_setters.is_inbound + whether clients.retell_inbound_agent_id
+                                // points at this setter's agent (DB-only; no Retell call).
+                                const im = slot.id.match(/Voice-Setter-(\d+)$/);
+                                const sn = im ? parseInt(im[1], 10) : null;
+                                const inb = sn != null ? inboundSlotMap[sn] : undefined;
+                                if (inb?.is_inbound) {
+                                  const bound =
+                                    !!inb.retell_agent_id &&
+                                    !!clientInboundAgentId &&
+                                    inb.retell_agent_id === clientInboundAgentId;
+                                  return bound ? (
+                                    <StatusTag variant="positive">Bound</StatusTag>
+                                  ) : (
+                                    <StatusTag variant="warning">Inbound · rebind</StatusTag>
+                                  );
+                                }
+                                return (
+                                  <StatusTag variant={prompt.is_active ? 'positive' : 'negative'}>
+                                    {prompt.is_active ? 'Active' : 'Not Active'}
+                                  </StatusTag>
+                                );
+                              })()}
                               <StatusTag variant="neutral">{agentSettings.model ? modelName : 'NO LLM SELECTED'}</StatusTag>
                             </div>
                           </div>

@@ -13,7 +13,7 @@ Testing actions live in `TEST_LIST.md`; first-paying-client onboarding actions l
 
 - [ ] **Re-Save the 5 voice setters** once the B-5/B-3 fix ships (default-vars net + outbound version re-pin) so it takes on the live agents. The 5: Main Outbound (slot 1), Gary Property Coach / Mortgage Broker / Finance Strategist / Crazy Gary. **Never edit the prompts — re-Save/Push only.**
 - [ ] **Apply any report-only prompt tweaks** I surface, via the BFD setter UI (prompt content is hard report-only).
-- [ ] **Flag the inbound setter (activates F2b)** — nothing is flagged inbound yet (the new `is_inbound` flag defaults off). In the "Inbound BFD Agent" setter editor, turn **"INBOUND CALLS — USE THIS SETTER?"** ON. That sets it as the single inbound setter and rebinds the live inbound number (`+61481614530`) to its agent. One setter per client; flipping another moves the flag.
+- [x] **Flag the inbound setter (activates F2b)** — DONE (live DB: "Inbound BFD Agent" `is_inbound=true`; `clients.retell_inbound_agent_id` + Retell `+61481614530` inbound binding both point at `agent_b2f6495…`). Flipping this is what surfaced B-6 (now fixed in Session 3.1: the persistence held; the list badge was reading the wrong table). One setter per client; flipping another moves the flag.
 
 ## Notes
 

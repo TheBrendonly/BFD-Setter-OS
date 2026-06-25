@@ -91,12 +91,17 @@ Status: `[ ]` not started · `[~]` in progress · `[x]` done. Effort is rough.
   deferred via `clients_public` dep); F6 (deleted the two quiz steps + renumbered step-ids); F7 (deleted
   `c206da3e` + its inert companion campaign). Frontend build green; DB via Mgmt API; **no edge deploy**.
   All → `TEST_LIST`. → emitted **Session 3.1** (F2b regression found in live use).
-- [ ] **Session 3.1 — F2b inbound-toggle hotfix (CODE).** `BUG_LIST` B-6: the inbound "use this setter?"
-  toggle doesn't persist `voice_setters.is_inbound` in live use, and the "Not Active" badge confuses
-  (it's prompt-deploy state, and deploying would overwrite the live inbound prompt). Reproduce on the
-  live build first (may already work post-deploy); add explicit toggle success/failure toasts + busy
-  state so no write is silent; decouple the inbound-setter status badge from `prompts.is_active`.
-  **Done when:** deployed + B-6 moved to TEST_LIST. → emits **Session 4**. Recommended mode: PLAN (live path).
+- [x] **Session 3.1 — F2b inbound-toggle hotfix (CODE).** DONE 2026-06-26. Read-only diagnosis proved the
+  persistence path already works on the live build (live DB: slot 8 `is_inbound=true`,
+  `clients.retell_inbound_agent_id=agent_b2f6495…`, Retell `+61481614530` inbound→`agent_b2f6495…` — the
+  whole inbound chain was correctly bound; B-6's original failure was testing mid-Railway-deploy on the
+  old build). Real bug = **split-brain list badges**: they read `prompts.is_active`/`prompts.directions`
+  (Deploy-only, false/empty for the report-only inbound agent) instead of the SoT `voice_setters.is_inbound`.
+  Fix: list badges now read `voice_setters.is_inbound` (uncached) → inbound setter shows green
+  **"Inbound" + "Bound"** (or amber **"Inbound · rebind"** when `clients.retell_inbound_agent_id` doesn't
+  match the setter's agent), not red "Not Active"; toggle made non-silent + race-safe (`disabled` while
+  writing; `.select('id')` 0-row detection in `useSetInboundSetter`). Frontend-only; tsc + build green;
+  **no edge deploy**. B-6 → `TEST_LIST.md`. → emits **Session 4**. (Was PLAN mode — live path.)
 - [ ] **Session 4 — Client visibility + cadence controls (CODE).** `FEATURE_ROADMAP` F1 (GHL→BFD deep-link
   custom field), F3 (pause/resume a running cadence), F4 (per-tenant timezone `nudgeColdReply` cron).
   **Done when:** deployed + moved to TEST_LIST. → emits **Session 5**.

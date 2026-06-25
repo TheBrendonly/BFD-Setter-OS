@@ -42,6 +42,14 @@ When an item passes, move it to `Docs/archive/COMPLETED_LOG.md`. When it fails, 
 - [ ] **F6 setup guides** — walk the **Text AI Rep** and **Voice AI Rep** setup guides: the "Multi Agent Logic" / "Inbound Logic" quiz steps are gone, step counts/progress are correct end-to-end, and saving each prompt marks the right step complete (positional step-ids were renumbered).
 - [ ] **F2a / F7 (DB, already live-verified)** — `voice_setters.is_inbound` + partial unique index present; a second-inbound write errors 23505. Draft cadence `c206da3e` (+ its inert companion campaign `326ea535`) deleted; no dangling refs.
 
+## Session 3.1 — F2b inbound-toggle hotfix / B-6 (shipped 2026-06-26; frontend-only, Railway auto-deploy, NO edge deploy)
+
+> Note: the persistence path was confirmed working read-only at ship (live DB already has slot 8 `is_inbound=true` + the Retell `+61481614530` inbound binding pointing at `agent_b2f6495…`). These tests confirm the **status-badge fix** and the **non-silent / race-safe toggle hardening** on the live UI. Hard-refresh app.buildingflowdigital.com first.
+
+- [ ] **B-6 inbound-setter status badge (the fix)** — on the **Voice** tab list view, the **"Inbound BFD Agent"** card now shows a green **"Inbound"** badge **and** a green **"Bound"** status (NOT red "Not Active"). The other voice setters are unaffected (Garys still show "Active"; a never-deployed non-inbound setter still shows "Not Active"). The badge reads `voice_setters.is_inbound` (SoT), not `prompts.is_active`/`directions`.
+- [ ] **B-6 toggle holds + is non-silent** — open the inbound setter's editor, flip **"INBOUND CALLS — USE THIS SETTER?"** OFF then ON. Each flip: shows a success/error toast, the toggle is briefly **disabled** while the write is in flight (no double-click race), and the state **persists across a reload**. Right after an ON flip, `voice_setters.is_inbound` for that slot is `true` via Mgmt API. A failed/0-row write would now show an explicit error toast and revert the toggle (never a silent "saved").
+- [ ] **B-6 "Bound" vs "rebind"** — flipping inbound ON for a **different** setter moves the green "Bound" to that card (and rebinds the Retell inbound number); the previously-bound card drops back to its normal status. If a setter is flagged inbound but `clients.retell_inbound_agent_id` does not match its agent, the card shows amber **"Inbound · rebind"** (re-bind via API Credentials → Phone Numbers).
+
 ## Retests after the relevant fix ships
 
 - [ ] **B-3 (6.4)** clear a lead's phone, Save → it stays cleared in BFD **and** GHL (only the name case was retested before).

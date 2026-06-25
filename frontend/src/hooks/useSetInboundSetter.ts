@@ -36,11 +36,18 @@ export function useSetInboundSetter(clientId?: string) {
         }
 
         if (!on) {
-          const { error } = await supabase
+          // B-6: .select('id') so a 0-row update (silently RLS-filtered or a
+          // stale id) surfaces instead of looking like a successful save.
+          const { data: offRows, error } = await supabase
             .from('voice_setters')
             .update({ is_inbound: false })
-            .eq('id', setter.id);
+            .eq('id', setter.id)
+            .select('id');
           if (error) throw error;
+          if (!offRows || offRows.length === 0) {
+            toast.error('Could not clear the inbound flag (no row updated). Refresh and try again.');
+            return false;
+          }
           toast.success('Removed the inbound flag from this setter.');
           return true;
         }
@@ -58,11 +65,18 @@ export function useSetInboundSetter(clientId?: string) {
           .eq('client_id', clientId)
           .neq('id', setter.id);
         if (clearErr) throw clearErr;
-        const { error: setErr } = await supabase
+        // B-6: .select('id') so a 0-row update (silently RLS-filtered or a stale
+        // id) surfaces + reverts the toggle instead of looking like a save.
+        const { data: setRows, error: setErr } = await supabase
           .from('voice_setters')
           .update({ is_inbound: true })
-          .eq('id', setter.id);
+          .eq('id', setter.id)
+          .select('id');
         if (setErr) throw setErr;
+        if (!setRows || setRows.length === 0) {
+          toast.error('Could not flag this setter as inbound (no row updated). Refresh and try again.');
+          return false;
+        }
 
         // Find the live inbound number off the current inbound-agent cache.
         const { data: clientRow } = await supabase

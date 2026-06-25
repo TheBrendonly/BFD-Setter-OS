@@ -5,11 +5,14 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 // Voice-Setter inbound toggle. After P3a (2026-06-17) the direction concept is
 // inbound-only: outbound routing is driven by the cadence node's UUID voice
 // setter, so the legacy outbound direction columns + cross-slot fan-out are
-// retired. This control just records whether the slot is the inbound setter
-// (persisted to prompts.directions). State lives in PromptManagement.
+// retired. This control records whether the slot is the inbound setter; the
+// source of truth is voice_setters.is_inbound (B-6). State lives in
+// PromptManagement; `disabled` is held true while the inbound write is in
+// flight so a second toggle can't race it.
 interface DirectionsToggleProps {
   value: string[];
   onChange: (next: string[]) => void;
+  disabled?: boolean;
 }
 
 const TOGGLE_ITEM_CLASS =
@@ -17,7 +20,7 @@ const TOGGLE_ITEM_CLASS =
 const MONO13: React.CSSProperties = { fontFamily: "'IBM Plex Mono', monospace", fontSize: '13px' };
 const MONO12: React.CSSProperties = { fontFamily: "'IBM Plex Mono', monospace", fontSize: '12px' };
 
-export const DirectionsToggle: React.FC<DirectionsToggleProps> = ({ value, onChange }) => {
+export const DirectionsToggle: React.FC<DirectionsToggleProps> = ({ value, onChange, disabled }) => {
   return (
     <div className="space-y-3 p-4" style={{ border: '3px groove hsl(var(--border-groove))' }}>
       <div>
@@ -33,6 +36,7 @@ export const DirectionsToggle: React.FC<DirectionsToggleProps> = ({ value, onCha
         value={value.filter((d) => d === 'inbound')}
         onValueChange={(next) => onChange(next.includes('inbound') ? ['inbound'] : [])}
         className="!justify-start gap-2"
+        disabled={disabled}
       >
         <ToggleGroupItem value="inbound" aria-label="Inbound" className={TOGGLE_ITEM_CLASS} style={MONO13}>
           Inbound
