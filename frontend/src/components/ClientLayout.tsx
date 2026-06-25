@@ -951,13 +951,13 @@ function ClientSidebar() {
           <SidebarGroupContent>
             <div className="section-separator px-3 py-2">SYSTEM</div>
             <SidebarMenu>
-              {/* Sub-Account Settings - agency only */}
+              {/* Sub-Accounts (list → click a sub-account → its config) - agency only */}
               {isAgency && (
                 <SidebarMenuItem>
                   <SidebarMenuButton asChild>
                       <NavLink to={`/client/${clientId}/manage-clients`} className="flex items-center gap-3 px-3 py-2 transition-colors hover:bg-muted/50 sidebar-nav-item" activeClassName="bg-primary/10 text-primary border-l-2 border-primary">
                        <span className="w-4 text-center text-foreground" style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '14px' }}>⚙</span>
-                       <span>Manage Sub-Accounts</span>
+                       <span>Sub-Accounts</span>
                       </NavLink>
                   </SidebarMenuButton>
                 </SidebarMenuItem>

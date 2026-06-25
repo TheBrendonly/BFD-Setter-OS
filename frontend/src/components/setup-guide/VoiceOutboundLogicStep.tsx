@@ -12,7 +12,7 @@ import n8nOutboundPromptRouting from '@/assets/setup-guide/n8n-outbound-prompt-r
 import n8nOutboundAgentNumber from '@/assets/setup-guide/n8n-outbound-agent-number.png';
 import n8nOutboundWorkflowOverview from '@/assets/setup-guide/n8n-outbound-workflow-overview.png';
 
-import { QuizNavigationState } from './VoiceInboundLogicStep';
+import { QuizNavigationState } from './quizNavigationState';
 
 interface VoiceOutboundLogicStepProps {
   clientId: string;

@@ -4575,6 +4575,7 @@ export type Database = {
           created_at: string
           id: string
           is_active: boolean
+          is_inbound: boolean
           legacy_slot: number | null
           name: string
           retell_agent_id: string | null
@@ -4586,6 +4587,7 @@ export type Database = {
           created_at?: string
           id?: string
           is_active?: boolean
+          is_inbound?: boolean
           legacy_slot?: number | null
           name: string
           retell_agent_id?: string | null
@@ -4597,6 +4599,7 @@ export type Database = {
           created_at?: string
           id?: string
           is_active?: boolean
+          is_inbound?: boolean
           legacy_slot?: number | null
           name?: string
           retell_agent_id?: string | null

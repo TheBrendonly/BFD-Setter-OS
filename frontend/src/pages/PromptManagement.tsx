@@ -67,6 +67,7 @@ import {
 } from '@/lib/retellVoiceAgentDefaults';
 import { usePromptConfigurations } from '@/hooks/usePromptConfigurations';
 import { useClientCredentials } from '@/hooks/useClientCredentials';
+import { useSetInboundSetter } from '@/hooks/useSetInboundSetter';
 import { setterKey } from '@/lib/setterLabels';
 import { ClientTimezoneCard } from '@/components/setters/ClientTimezoneCard';
 import { InlineSetterNameEditor } from '@/components/setters/InlineSetterNameEditor';
@@ -4821,6 +4822,7 @@ const PromptManagement = () => {
   // The SetterDisplayNamesCard in VoiceAIRepSetup / TextAIRepSetup is
   // where users edit these. We surface them here so the list-view cards show them.
   const { credentials: clientCredentials } = useClientCredentials(clientId);
+  const { setInboundSetter } = useSetInboundSetter(clientId);
   const setterDisplayNames = (clientCredentials?.setter_display_names ?? {}) as Record<string, string>;
 
   // Load retell voice settings from prompt_configurations when editing slot changes
@@ -4863,23 +4865,42 @@ const PromptManagement = () => {
     }
   }, [editingSlotId, clientId, savedPromptConfigs]);
 
-  // Load the voice-setter direction from the prompts row on slot change.
-  // Inbound-only post-P3a; defaults to [] if the row has no `directions` field.
+  // Load the inbound flag from voice_setters.is_inbound (the F2 source of truth)
+  // on slot change. Inbound-only post-P3a; defaults to [] when the slot has no
+  // setter row or is not flagged inbound.
   useEffect(() => {
-    if (!editingSlotId?.startsWith('Voice-Setter-')) {
+    if (!editingSlotId?.startsWith('Voice-Setter-') || !clientId) {
       setVoiceSetterDirections([]);
       return;
     }
-    const current = prompts.find(
-      p => p.slot_id === editingSlotId && p.category === 'voice_setter',
-    );
-    setVoiceSetterDirections(Array.isArray(current?.directions) ? current!.directions! : []);
-  }, [editingSlotId, prompts]);
+    const slotNumber = parseInt(editingSlotId.replace('Voice-Setter-', ''), 10);
+    if (Number.isNaN(slotNumber)) { setVoiceSetterDirections([]); return; }
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase
+        .from('voice_setters')
+        .select('is_inbound')
+        .eq('client_id', clientId)
+        .eq('legacy_slot', slotNumber)
+        .maybeSingle();
+      if (!cancelled) setVoiceSetterDirections(data?.is_inbound ? ['inbound'] : []);
+    })();
+    return () => { cancelled = true; };
+  }, [editingSlotId, clientId]);
 
-  const handleVoiceSetterDirectionsChange = useCallback((next: string[]) => {
+  const handleVoiceSetterDirectionsChange = useCallback(async (next: string[]) => {
+    const prev = voiceSetterDirections;
     setVoiceSetterDirections(next);
     if (editingSlotId) markNeedsSync(editingSlotId, true);
-  }, [editingSlotId, markNeedsSync]);
+    // voice_setters.is_inbound is the source of truth; toggling also rebinds the
+    // live Retell inbound number to this setter's agent (F2). Revert the toggle
+    // if the inbound update fails so the UI never lies about the bound setter.
+    const slotNumber = editingSlotId ? parseInt(editingSlotId.replace('Voice-Setter-', ''), 10) : NaN;
+    if (!Number.isNaN(slotNumber)) {
+      const ok = await setInboundSetter(slotNumber, next.includes('inbound'));
+      if (!ok) setVoiceSetterDirections(prev);
+    }
+  }, [voiceSetterDirections, editingSlotId, markNeedsSync, setInboundSetter]);
 
   const handleRetellVoiceSettingsChange = useCallback((updates: Partial<RetellVoiceSettings>) => {
     setRetellVoiceSettings(prev => {

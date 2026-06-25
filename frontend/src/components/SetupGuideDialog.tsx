@@ -16,9 +16,8 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { EmbeddedPromptChat } from '@/components/EmbeddedPromptChat';
 import { preserveMarkdownFormatting } from '@/utils/markdownConverter';
-import MultiAgentLogicStep from '@/components/setup-guide/MultiAgentLogicStep';
-import VoiceInboundLogicStep, { type QuizNavigationState } from '@/components/setup-guide/VoiceInboundLogicStep';
 import VoiceOutboundLogicStep from '@/components/setup-guide/VoiceOutboundLogicStep';
+import type { QuizNavigationState } from '@/components/setup-guide/quizNavigationState';
 import { getDefaultPromptForSlot, STATIC_PROMPTS } from '@/data/defaultPromptTemplates';
 import supabaseNewProject from '@/assets/setup-guide/supabase-new-project.png';
 import supabaseCreateAccount from '@/assets/setup-guide/supabase-create-account.png';
@@ -272,14 +271,14 @@ export const SETUP_PHASES = {
   'supabase-setup': 7,  // 5 original steps + 2 connection steps (Project URL + Service Key) - includes Create Account
   'workflows-import': 3,  // Download, Import, Organize workflows
   'n8n-setup': 12,  // Text AI Rep Setup: 12 setup steps starting from Open Workflow
-  'text-prompts-setup': 8,  // Understand Prompts + Multi Agent Logic + Bot Persona + 3 Text Engine prompts + 2 Booking prompts
+  'text-prompts-setup': 7,  // Understand Prompts + Bot Persona + 3 Text Engine prompts + 2 Booking prompts
   'highlevel-credentials': 4,  // API Key, Assignee ID, Location ID, Calendar ID
   'highlevel-setup': 10,  // 10 steps: Connect Channel + 9 workflow steps
   'twilio-setup': 6,  // Create Account, Understand Phone Numbers, Buy Number, Connect to GHL, A2P Brand, A2P Campaign
   'voice-accounts-setup': 6,  // Create Account, Download Templates, Import Agents, Verify Folders, API Key, Phone Numbers
   'voice-inbound-setup': 8,  // Inbound Agent ID, Get Lead Details, Inbound Webhook, Call Finished, Retell Webhook Settings, Booking Workflow, Booking Functions, Publish Agent
   'voice-outbound-setup': 5,  // Outbound Agent ID, Outbound Booking Functions, Make Outbound Call, Outbound Webhook, Activate Workflow
-  'voice-prompts-setup': 7,  // Understand Prompts + Inbound Logic + Outbound Logic + Persona (0) + Main Agent (1,2) + Booking (5)
+  'voice-prompts-setup': 6,  // Understand Prompts + Outbound Logic + Persona (0) + Main Agent (1,2) + Booking (5)
   'knowledgebase-setup': 5,  // 5 steps: Open Workflow, Supabase Nodes, Embeddings, Webhook, Publish
   'live-chat-setup': 8,  // 8 steps: Navigate, Create Widget, Style, Chat Window, Contact Form, Messaging, Save, Get Code & Auto-Connection
   'whatsapp-setup': 8,  // 8 steps: Understand Logic, Subscribe, Get Phone Number, Add to WhatsApp, Configure Number, Verify Status, Enable Workflow Trigger, Test
@@ -3564,17 +3563,6 @@ const [loading, setLoading] = useState(false);
           )
         },
         {
-          id: 'multi-agent-logic',
-          title: 'Multi Agent Logic',
-          description: 'Core concept: How multiple AI reps work together',
-          content: (
-            <MultiAgentLogicStep 
-              clientId={clientId} 
-              onNavigationChange={setLogicNavState}
-            />
-          )
-        },
-        {
           id: 'bot-persona',
           title: 'Prompt 0',
           description: 'Setup the personality and behavior of your AI bot',
@@ -3800,7 +3788,7 @@ const [loading, setLoading] = useState(false);
                 {/* Save Button */}
                 <div className="flex gap-2">
                   <Button
-                    onClick={() => saveNumberedPrompt('text-1', prompt1, setPrompt1Saving, setPrompt1Saved, 'text-prompts-setup-3', '1')}
+                    onClick={() => saveNumberedPrompt('text-1', prompt1, setPrompt1Saving, setPrompt1Saved, 'text-prompts-setup-2', '1')}
                     disabled={prompt1Saving || !prompt1.name.trim() || !prompt1.content.trim()}
                     className="bg-primary text-primary-foreground hover:bg-primary/90"
                   >
@@ -3955,7 +3943,7 @@ const [loading, setLoading] = useState(false);
 
                 <div className="flex gap-2">
                   <Button
-                    onClick={() => saveNumberedPrompt('text-2', prompt2, setPrompt2Saving, setPrompt2Saved, 'text-prompts-setup-4', '2')}
+                    onClick={() => saveNumberedPrompt('text-2', prompt2, setPrompt2Saving, setPrompt2Saved, 'text-prompts-setup-3', '2')}
                     disabled={prompt2Saving || !prompt2.name.trim() || !prompt2.content.trim()}
                     className="bg-primary text-primary-foreground hover:bg-primary/90"
                   >
@@ -4110,7 +4098,7 @@ const [loading, setLoading] = useState(false);
 
                 <div className="flex gap-2">
                   <Button
-                    onClick={() => saveNumberedPrompt('text-3', prompt3, setPrompt3Saving, setPrompt3Saved, 'text-prompts-setup-5', '3')}
+                    onClick={() => saveNumberedPrompt('text-3', prompt3, setPrompt3Saving, setPrompt3Saved, 'text-prompts-setup-4', '3')}
                     disabled={prompt3Saving || !prompt3.name.trim() || !prompt3.content.trim()}
                     className="bg-primary text-primary-foreground hover:bg-primary/90"
                   >
@@ -4282,7 +4270,7 @@ const [loading, setLoading] = useState(false);
 
                 <div className="flex gap-2">
                   <Button
-                    onClick={() => saveNumberedPrompt('booking-1', prompt7, setPrompt7Saving, setPrompt7Saved, 'text-prompts-setup-6', '7')}
+                    onClick={() => saveNumberedPrompt('booking-1', prompt7, setPrompt7Saving, setPrompt7Saved, 'text-prompts-setup-5', '7')}
                     disabled={prompt7Saving || !prompt7.name.trim() || !prompt7.content.trim()}
                     className="bg-primary text-primary-foreground hover:bg-primary/90"
                   >
@@ -4396,7 +4384,7 @@ const [loading, setLoading] = useState(false);
 
                 <div className="flex gap-2">
                   <Button
-                    onClick={() => saveNumberedPrompt('booking-2', prompt8, setPrompt8Saving, setPrompt8Saved, 'text-prompts-setup-7', '8')}
+                    onClick={() => saveNumberedPrompt('booking-2', prompt8, setPrompt8Saving, setPrompt8Saved, 'text-prompts-setup-6', '8')}
                     disabled={prompt8Saving || !prompt8.name.trim() || !prompt8.content.trim()}
                     className="bg-primary text-primary-foreground hover:bg-primary/90"
                   >
@@ -7100,14 +7088,7 @@ const [loading, setLoading] = useState(false);
             </div>
           )
         },
-        // Step 1: Inbound Logic Quiz
-        {
-          id: 'inbound-logic',
-          title: 'Inbound Logic',
-          description: 'Learn how inbound voice calls work',
-          content: <VoiceInboundLogicStep clientId={clientId} onNavigationChange={setLogicNavState} />
-        },
-        // Step 2: Outbound Logic Quiz
+        // Outbound Logic Quiz
         {
           id: 'outbound-logic',
           title: 'Outbound Logic',
@@ -7195,7 +7176,7 @@ const [loading, setLoading] = useState(false);
 
                 <div className="flex gap-2">
                   <Button
-                    onClick={() => saveNumberedPrompt('voice-persona', voicePrompt0, setVoicePrompt0Saving, setVoicePrompt0Saved, 'voice-prompts-setup-3', 'Voice Persona')}
+                    onClick={() => saveNumberedPrompt('voice-persona', voicePrompt0, setVoicePrompt0Saving, setVoicePrompt0Saved, 'voice-prompts-setup-2', 'Voice Persona')}
                     disabled={voicePrompt0Saving || !voicePrompt0.name.trim() || !voicePrompt0.content.trim()}
                     className="bg-primary text-primary-foreground hover:bg-primary/90"
                   >
@@ -7311,7 +7292,7 @@ const [loading, setLoading] = useState(false);
 
                 <div className="flex gap-2">
                   <Button
-                    onClick={() => saveNumberedPrompt('voice-1', voicePrompt1, setVoicePrompt1Saving, setVoicePrompt1Saved, 'voice-prompts-setup-4', 'Inbound Agent')}
+                    onClick={() => saveNumberedPrompt('voice-1', voicePrompt1, setVoicePrompt1Saving, setVoicePrompt1Saved, 'voice-prompts-setup-3', 'Inbound Agent')}
                     disabled={voicePrompt1Saving || !voicePrompt1.name.trim() || !voicePrompt1.content.trim()}
                     className="bg-primary text-primary-foreground hover:bg-primary/90"
                   >
@@ -7413,7 +7394,7 @@ const [loading, setLoading] = useState(false);
 
                 <div className="flex gap-2">
                   <Button
-                    onClick={() => saveNumberedPrompt('voice-2', voicePrompt2, setVoicePrompt2Saving, setVoicePrompt2Saved, 'voice-prompts-setup-5', 'Outbound Agent')}
+                    onClick={() => saveNumberedPrompt('voice-2', voicePrompt2, setVoicePrompt2Saving, setVoicePrompt2Saved, 'voice-prompts-setup-4', 'Outbound Agent')}
                     disabled={voicePrompt2Saving || !voicePrompt2.name.trim() || !voicePrompt2.content.trim()}
                     className="bg-primary text-primary-foreground hover:bg-primary/90"
                   >
@@ -7527,7 +7508,7 @@ const [loading, setLoading] = useState(false);
 
                 <div className="flex gap-2">
                   <Button
-                    onClick={() => saveNumberedPrompt('voice-5', voicePrompt5, setVoicePrompt5Saving, setVoicePrompt5Saved, 'voice-prompts-setup-6', 'Booking')}
+                    onClick={() => saveNumberedPrompt('voice-5', voicePrompt5, setVoicePrompt5Saving, setVoicePrompt5Saved, 'voice-prompts-setup-5', 'Booking')}
                     disabled={voicePrompt5Saving || !voicePrompt5.name.trim() || !voicePrompt5.content.trim()}
                     className="bg-primary text-primary-foreground hover:bg-primary/90"
                   >
@@ -10403,15 +10384,15 @@ const [loading, setLoading] = useState(false);
       // Knowledgebase (step 0: Open Workflow, step 1: Connect Supabase, step 2: Connect Embeddings, step 3: Setup Webhook)
       'knowledgebase-setup-3': knowledgebaseWebhook,
       // Text Prompts
-      'text-prompts-setup-2': botPersonaPrompt.content,
-      'text-prompts-setup-3': prompt1.content,
-      'text-prompts-setup-4': prompt2.content,
-      'text-prompts-setup-5': prompt3.content,
+      'text-prompts-setup-1': botPersonaPrompt.content,
+      'text-prompts-setup-2': prompt1.content,
+      'text-prompts-setup-3': prompt2.content,
+      'text-prompts-setup-4': prompt3.content,
       // Voice Prompts
-      'voice-prompts-setup-3': voicePrompt0.content,
-      'voice-prompts-setup-4': voicePrompt1.content,
-      'voice-prompts-setup-5': voicePrompt2.content,
-      'voice-prompts-setup-6': voicePrompt5.content,
+      'voice-prompts-setup-2': voicePrompt0.content,
+      'voice-prompts-setup-3': voicePrompt1.content,
+      'voice-prompts-setup-4': voicePrompt2.content,
+      'voice-prompts-setup-5': voicePrompt5.content,
     };
     return fieldMap[stepId] ?? null;
   };
@@ -10487,8 +10468,8 @@ const [loading, setLoading] = useState(false);
       'highlevel-setup-7', 'highlevel-setup-8', 'highlevel-setup-9', 'highlevel-setup-10',
       'retell-setup-3', 'retell-setup-4', 'retell-setup-5', 'retell-setup-6',
       'knowledgebase-setup-2',
-      'text-prompts-setup-2', 'text-prompts-setup-3', 'text-prompts-setup-4', 'text-prompts-setup-5',
-      'voice-prompts-setup-3', 'voice-prompts-setup-4', 'voice-prompts-setup-5', 'voice-prompts-setup-6'
+      'text-prompts-setup-1', 'text-prompts-setup-2', 'text-prompts-setup-3', 'text-prompts-setup-4',
+      'voice-prompts-setup-2', 'voice-prompts-setup-3', 'voice-prompts-setup-4', 'voice-prompts-setup-5'
     ];
     
     fieldSteps.forEach(stepId => {

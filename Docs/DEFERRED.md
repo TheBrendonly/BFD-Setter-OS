@@ -23,6 +23,7 @@ Things deliberately not being built now, each with the gate that would un-defer 
 - [ ] **E-1 `fetch-thread-previews` 500-on-throw** — **Gate:** it has no live caller (latent); fix only if it gets wired up.
 - [ ] **Email provider / custom SMTP** — **Gate:** BFD stays SMS-only by decision; build when a client needs email.
 - [ ] **HIBP password-breach check** — **Gate:** Supabase Pro upgrade (flip `password_hibp_enabled=true` via Mgmt API).
+- [ ] **Drop the unused `clients.text_engine_webhook` column** (F5 leftover) — the n8n code path is already gone, but the column is still referenced by the `clients_public` view (79 browser reads). Dropping it cleanly needs a coordinated `DROP VIEW` + `CREATE VIEW` (preserving `security_invoker` + grants) — not worth that risk for one inert column. **Gate:** fold it into the next intentional `clients_public` view rebuild.
 
 ## First-paying-client onboarding cluster `[BRENDAN]`
 

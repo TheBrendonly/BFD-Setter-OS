@@ -870,7 +870,10 @@ function PhoneCallChannelConfig({ channel, updateChannel, clientId }: {
   const resolvedSetter = channel.voice_setter_id
     ? options.find(o => o.id === channel.voice_setter_id)
     : undefined;
-  const isOrphanSetter = !!channel.voice_setter_id && options.length > 0 && !resolvedSetter;
+  // Legacy "Voice-Setter-N" slot string (pre-UUID model). Still resolves at call
+  // time, but should be re-selected to migrate the node to a voice_setters UUID (F2).
+  const isLegacySlotRef = /^Voice-Setter-\d+$/.test(channel.voice_setter_id || '');
+  const isOrphanSetter = !!channel.voice_setter_id && options.length > 0 && !resolvedSetter && !isLegacySlotRef;
 
   return (
     <div className="space-y-3 pt-2">
@@ -890,7 +893,9 @@ function PhoneCallChannelConfig({ channel, updateChannel, clientId }: {
                     ? <span className="text-foreground">{resolvedSetter.name}</span>
                     : isOrphanSetter
                       ? <span className="text-destructive">Unknown setter (removed)</span>
-                      : <span className="text-foreground">{channel.voice_setter_id}</span>}
+                      : isLegacySlotRef
+                        ? <span className="text-amber-600 dark:text-amber-500">{channel.voice_setter_id} (legacy)</span>
+                        : <span className="text-foreground">{channel.voice_setter_id}</span>}
               </span>
               <span className="absolute right-0 top-1/2 -translate-y-1/2 h-7 w-7 flex items-center justify-center">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="h-5 w-5 text-foreground" fill="currentColor" style={{ imageRendering: 'pixelated' as const }}>
@@ -950,6 +955,11 @@ function PhoneCallChannelConfig({ channel, updateChannel, clientId }: {
         {isOrphanSetter && (
           <p className="text-destructive" style={{ ...fieldStyle, fontSize: '13px' }}>
             The selected setter no longer exists. Pick another so the call can fire.
+          </p>
+        )}
+        {isLegacySlotRef && (
+          <p className="text-amber-600 dark:text-amber-500" style={{ ...fieldStyle, fontSize: '13px' }}>
+            Legacy setter reference — re-select a voice setter to migrate this node to the UUID-native model.
           </p>
         )}
       </div>

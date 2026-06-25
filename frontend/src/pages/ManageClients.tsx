@@ -78,10 +78,10 @@ export default function ManageClients() {
   };
 
   usePageHeader({
-    title: 'Manage Sub-Accounts',
+    title: 'Sub-Accounts',
     breadcrumbs: editingClient
       ? [
-          { label: 'Manage Sub-Accounts', onClick: () => setEditingClient(null) },
+          { label: 'Sub-Accounts', onClick: () => setEditingClient(null) },
           { label: editingClient.name },
         ]
       : undefined,

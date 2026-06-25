@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useCreatorMode } from '@/hooks/useCreatorMode';
 import { OpenRouterModelSelector } from '@/components/OpenRouterModelSelector';
+import RetellPhoneNumbersTab from '@/components/retell/RetellPhoneNumbersTab';
 import { useParams, useSearchParams } from 'react-router-dom';
 
 import { supabase } from '@/integrations/supabase/client';
@@ -902,6 +903,15 @@ const ApiCredentials = () => {
               </div>
             </CardContent>
           </Card>
+
+          {/* Retell phone numbers: import a Twilio number into Retell + assign
+              inbound/outbound agents per number. Relocated here from the per-setter
+              voice editor (F2) so the capability lives with the Retell credentials. */}
+          {clientId && (
+            <div id="twilio-configuration" className="scroll-mt-6">
+              <RetellPhoneNumbersTab clientId={clientId} />
+            </div>
+          )}
 
           {/* GoHighLevel Connection */}
           <Card className="material-surface scroll-mt-6">

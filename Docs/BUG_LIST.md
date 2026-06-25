@@ -15,7 +15,7 @@ Open bugs and behavior fixes. Reconciled 2026-06-25 with Brendan (one-by-one tri
 
 ## 🟠 Medium
 
-- [ ] **B-4 (6.1) Settings nav split (client vs admin).** Decided model: a **client** sees only **"My Account"** (their self-serve settings); an **admin** sees **"My Account"** (own login/password/theme) **+ "Sub-Accounts"** (list → click a sub-account → its config page at `/client/<id>/settings`, which already exists). Removes the near-duplicate "Sub-Account Settings"/"Account Settings"/"Manage Sub-Accounts" confusion. `[B]`-minor: decide which workspace settings (brand voice, contact hours…) a client may self-edit in their My Account vs admin-only. Frontend (`ClientLayout.tsx` SYSTEM block, `useClientMenuConfig.ts`). Effort S-M.
+_(none open — B-4 settings nav split SHIPPED Session 3 2026-06-25, → TEST_LIST.)_
 
 ## 🟢 Low — hardening / cleanup
 

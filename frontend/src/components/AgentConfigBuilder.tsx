@@ -5,7 +5,6 @@ import RetroLoader from '@/components/RetroLoader';
 import SavingOverlay from '@/components/SavingOverlay';
 import { VoiceRetellSettings, ToolsEditor, DEFAULT_RETELL_VOICE_SETTINGS, type RetellVoiceSettings } from '@/components/VoiceRetellSettings';
 import { DEFAULT_RETELL_GENERAL_TOOLS, formatJsonConfig } from '@/lib/retellVoiceAgentDefaults';
-import { RetellPhoneNumberSelector } from '@/components/RetellPhoneNumberSelector';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -3441,18 +3440,9 @@ export const AgentConfigBuilder: React.FC<AgentConfigBuilderProps> = ({
                     </>
                   )}
 
-                  {/* Phone Number Selector for voice setters */}
-                  {mode === 'voice' && clientId && slotId && (
-                    <>
-                      <div className="border-t border-dashed border-border" />
-                      <RetellPhoneNumberSelector
-                        clientId={clientId}
-                        slotId={slotId}
-                        disabled={disabled}
-                        onMarkNeedsSync={onMarkNeedsSync}
-                      />
-                    </>
-                  )}
+                  {/* Per-setter outbound phone binding removed (F2): outbound is chosen
+                      at the campaign/workflow level, and phone-number import/assignment
+                      now lives on the API Credentials page (RetellPhoneNumbersTab). */}
 
                   {!isFollowup && mode !== 'voice' && (
                     <>

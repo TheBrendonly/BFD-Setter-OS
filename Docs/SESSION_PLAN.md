@@ -83,10 +83,14 @@ Status: `[ ]` not started · `[~]` in progress · `[x]` done. Effort is rough.
   appended to `clients_public` (security_invoker preserved, 0 secrets leaked, types.ts already declared them
   so no frontend change). retell-call-webhook v21, test-external-supabase v17. Found out-of-scope: vite
   dev-server advisories → new BUG_LIST **G3-7** (needs breaking vite bump). All → TEST_LIST. → emitted **Session 3**.
-- [ ] **Session 3 — Settings + setter cleanup (CODE).** `BUG_LIST` B-4 (client="My Account" only; admin=
-  "My Account"+"Sub-Accounts"); `FEATURE_ROADMAP` F2 (UUID-native node picker + single inbound-setter
-  binding + remove outbound-direction config), F5 (n8n decommission), F6 (remove setup-guide quizzes),
-  F7 (delete draft cadence `c206da3e`). **Done when:** deployed + moved to TEST_LIST. → emits **Session 4**.
+- [x] **Session 3 — Settings + setter cleanup (CODE).** SHIPPED 2026-06-25. B-4 (was already ~90% shipped
+  in the 2026-06-17 restructure → finished the "Sub-Accounts" naming); F2 (new `voice_setters.is_inbound`
+  + one-per-client index + inbound toggle auto-rebinds the live Retell number; removed per-setter outbound
+  config, relocated phone import to API Credentials; the `40e8bea3`/all-workflow slot→UUID migration was a
+  verified **no-op**); F5 (n8n code path was already gone → Railway shutdown to BRENDAN_TODO, column drop
+  deferred via `clients_public` dep); F6 (deleted the two quiz steps + renumbered step-ids); F7 (deleted
+  `c206da3e` + its inert companion campaign). Frontend build green; DB via Mgmt API; **no edge deploy**.
+  All → `TEST_LIST`. → emitted **Session 4**.
 - [ ] **Session 4 — Client visibility + cadence controls (CODE).** `FEATURE_ROADMAP` F1 (GHL→BFD deep-link
   custom field), F3 (pause/resume a running cadence), F4 (per-tenant timezone `nudgeColdReply` cron).
   **Done when:** deployed + moved to TEST_LIST. → emits **Session 5**.
