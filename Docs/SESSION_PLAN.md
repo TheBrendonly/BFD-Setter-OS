@@ -90,7 +90,13 @@ Status: `[ ]` not started · `[~]` in progress · `[x]` done. Effort is rough.
   verified **no-op**); F5 (n8n code path was already gone → Railway shutdown to BRENDAN_TODO, column drop
   deferred via `clients_public` dep); F6 (deleted the two quiz steps + renumbered step-ids); F7 (deleted
   `c206da3e` + its inert companion campaign). Frontend build green; DB via Mgmt API; **no edge deploy**.
-  All → `TEST_LIST`. → emitted **Session 4**.
+  All → `TEST_LIST`. → emitted **Session 3.1** (F2b regression found in live use).
+- [ ] **Session 3.1 — F2b inbound-toggle hotfix (CODE).** `BUG_LIST` B-6: the inbound "use this setter?"
+  toggle doesn't persist `voice_setters.is_inbound` in live use, and the "Not Active" badge confuses
+  (it's prompt-deploy state, and deploying would overwrite the live inbound prompt). Reproduce on the
+  live build first (may already work post-deploy); add explicit toggle success/failure toasts + busy
+  state so no write is silent; decouple the inbound-setter status badge from `prompts.is_active`.
+  **Done when:** deployed + B-6 moved to TEST_LIST. → emits **Session 4**. Recommended mode: PLAN (live path).
 - [ ] **Session 4 — Client visibility + cadence controls (CODE).** `FEATURE_ROADMAP` F1 (GHL→BFD deep-link
   custom field), F3 (pause/resume a running cadence), F4 (per-tenant timezone `nudgeColdReply` cron).
   **Done when:** deployed + moved to TEST_LIST. → emits **Session 5**.

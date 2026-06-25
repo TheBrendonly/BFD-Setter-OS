@@ -22,7 +22,13 @@ Lists updated (B-4 out of BUG_LIST; F2/F5/F6/F7 out of FEATURE_ROADMAP; all → 
 
 ---
 
-## EMITTED — Session 4 kickoff prompt (paste verbatim to start the next session)
+## POST-CLOSE UPDATE (2026-06-25): B-6 regression found → next session is **Session 3.1**, not Session 4
+
+In live use Brendan couldn't get the F2b inbound toggle to persist (`voice_setters.is_inbound` stays false for all BFD setters) and the setter shows "Not Active" no matter how many saves. Read-only diagnosis: the new code **is** deployed (verified the live bundle); RLS allows his update; the slot maps correctly (`Voice-Setter-8`↔`legacy_slot 8`↔Inbound BFD Agent); `dualWriteVoiceSetter` doesn't wipe `is_inbound`. Leading cause: he likely tested mid-Railway-deploy on the OLD build (a hard-refresh + retry may already work); secondary: a subtle silent-write/revert bug. "Not Active" is a SEPARATE cosmetic thing (`prompts.is_active`, flips only on Deploy; deploying would overwrite the live inbound prompt — do NOT). Logged as **B-6** (BUG_LIST, High). The next session is now **Session 3.1** (the hotfix), which then emits Session 4. The Session 4 prompt below is retained for reference but is NOT next.
+
+**→ Use the Session 3.1 prompt at the bottom of this file as the next session's kickoff.**
+
+## (SUPERSEDED — for reference) Session 4 kickoff prompt
 
 ```
 BFD-setter continuation. Repo /srv/bfd/Projects/bfd-setter, branch main (git pull first).
@@ -67,4 +73,59 @@ SESSION 5 PROMPT (By-phone pivot: BUG_LIST B-2 — internal-first STOP + inbound
 lookup; larger live-path change, do it alone + carefully) — print it in a fenced block in chat AND save
 it into the new handoff, built from the Standard Context Block + Session 5's scope + this Relay
 Protocol. Point to Docs/SESSION_PLAN.md; do not inline the whole plan. Session 5 recommended mode: PLAN.
+```
+
+---
+
+## EMITTED — Session 3.1 kickoff prompt (NEXT — paste verbatim)
+
+```
+BFD-setter continuation. Repo /srv/bfd/Projects/bfd-setter, branch main (git pull first).
+Supabase ref bjgrgbgykvjrsuwwruoh. Creds in ./.env (SUPABASE_PAT, TRIGGER_DEPLOY_PAT, BFD_RETELL_API_KEY).
+Live DB via Supabase Management API /database/query (NOT postgres MCP). Live Retell via api.retellai.com
+with BFD_RETELL_API_KEY. To know which agent serves a direction, read the PHONE-NUMBER binding
+(list-phone-numbers inbound_agent_id/outbound_agent_id) — never trust old memory. NEVER edit voice
+prompts (report-only: report location + change, Brendan applies in the BFD setter UI). Verify read-only
+before claiming done. Follow the Relay Protocol in Docs/SESSION_PLAN.md.
+READ FIRST: Docs/SESSION_PLAN.md + the latest Operations/handoffs/ doc + BUG_LIST B-6.
+
+DEPLOY NOTE: the frontend auto-deploys via Railway on push to main (app.buildingflowdigital.com); allow
+a few minutes + hard-refresh. Edge fns import from _shared/, so deploy with
+`node scripts/deploy_retell_proxy_bundle.mjs <slug>`. Session 3 was frontend + DB-migration only; live
+edge versions unchanged from Session 2 (retell-call-webhook v21, test-external-supabase v17,
+retell-proxy v45, duplicate-setter-config v8).
+
+Use the superpowers skill to accomplish tasks.
+
+TASK — SESSION 3.1: F2b INBOUND-TOGGLE HOTFIX (CODE). Recommended mode: PLAN (live inbound path).
+Bug B-6 (Docs/BUG_LIST.md, High): in live use the inbound "INBOUND CALLS — USE THIS SETTER?" toggle
+(Inbound BFD Agent, slot 8) does not persist `voice_setters.is_inbound` (all BFD setters read false),
+and the setter shows "Not Active" no matter how many saves.
+
+Pre-diagnosis already done (read-only, in B-6): the F2b code IS deployed; RLS allows Brendan's update
+(agency fb6b57a3 owns client e467dabc); the slot maps correctly (Voice-Setter-8 ↔ legacy_slot 8 ↔
+Inbound BFD Agent); `dualWriteVoiceSetter` does not touch is_inbound. So:
+1. FIRST reproduce on the live build (hard-refresh app.buildingflowdigital.com). Brendan's failures may
+   have been on the OLD build mid-deploy — confirm whether it now persists is_inbound on a single ON
+   toggle (check voice_setters.is_inbound via Mgmt API right after).
+2. If it still fails: instrument `useSetInboundSetter` (frontend/src/hooks/useSetInboundSetter.ts) +
+   the toggle handler in PromptManagement.tsx — add explicit success/failure toasts + a busy/disabled
+   state so a failed or 0-row `voice_setters` UPDATE is never silent; confirm the browser UPDATE
+   actually affects the row (a 0-row update returns no error). Fix the root cause.
+3. SEPARATE sub-issue: the "Not Active" badge is `prompts.is_active` (flips only on Deploy/Push, NOT
+   Save). Do NOT deploy the inbound setter to clear it — that overwrites the live inbound prompt on
+   agent_b2f6495 (report-only rule). Inbound routing does not depend on is_active. Decouple the
+   inbound-setter status badge from prompt-deploy state (e.g. show "Inbound" / bound-number status from
+   voice_setters.is_inbound + the Retell inbound binding instead).
+
+DONE WHEN: tsc clean + deployed; Brendan can flip the inbound setter and it holds (is_inbound persists +
+Retell inbound number rebinds); B-6 moved to TEST_LIST.
+
+CLOSE OUT (Relay Protocol, Docs/SESSION_PLAN.md step 4): update the 5 lists; tick Session 3.1 done in
+SESSION_PLAN.md; write a dated handoff; git add -A + commit + push to origin + github; then EMIT THE
+SESSION 4 PROMPT (Client visibility + cadence controls: F1 GHL→BFD deep-link custom field, F3
+pause/resume a running cadence, F4 per-tenant timezone nudgeColdReply cron; recommended mode PLAN) —
+print it in a fenced block in chat AND save it into the new handoff, built from the Standard Context
+Block + Session 4's scope + this Relay Protocol. Point to Docs/SESSION_PLAN.md; do not inline the whole
+plan.
 ```
