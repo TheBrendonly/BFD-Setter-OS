@@ -48,6 +48,8 @@ Dashboard  (frontend/src/)
   - Analytics, contacts, campaigns
 ```
 
+> **Current state (2026-06):** the AI reply now runs on the **native text engine** (`trigger/processSetterReply.ts`, behind `use_native_text_engine`), and outbound SMS is sent **direct via Twilio** (GHL is mirrored, not the send path). **n8n is bypassed and slated for decommission** (FEATURE_ROADMAP F5); the n8n boxes above describe the original fork architecture and are kept for historical orientation only. See [Docs/ARCHITECTURE.md](./Docs/ARCHITECTURE.md) for the authoritative wiring.
+
 **Deployment topology** (hosts that run BFD-setter in production):
 
 - **Frontend dashboard** → Railway service `1prompt-os-production` (auto-deploys on `git push origin main`)
@@ -55,7 +57,7 @@ Dashboard  (frontend/src/)
 - **Edge functions + platform Postgres** → Supabase (`bjgrgbgykvjrsuwwruoh`)
 - **Background tasks** → Trigger.dev cloud (`proj_fdozaybvhgxnzopabtse`)
 
-Lovable hosts nothing for BFD. Canonical env reference: [`Docs/RAILWAY_ENV.md`](./Docs/RAILWAY_ENV.md). Operational runbook: [`SOP/RUNBOOK.md`](./SOP/RUNBOOK.md).
+Lovable hosts nothing for BFD. Operational runbook: [`SOP/RUNBOOK.md`](./SOP/RUNBOOK.md). Env reference (archived snapshot): [`Docs/archive/RAILWAY_ENV.md`](./Docs/archive/RAILWAY_ENV.md).
 
 ---
 
@@ -138,7 +140,7 @@ You also need a second Supabase project per client (for their leads, chat histor
 
 ## High-Level Setup Steps
 
-See [SETUP_OVERVIEW.md](./SETUP_OVERVIEW.md) for the full technical reference, and [SOP/GHL_SETUP.md](./SOP/GHL_SETUP.md) for the GoHighLevel operator guide (forms, tags, automations, webhooks + verification checklist).
+See [Docs/ARCHITECTURE.md](./Docs/ARCHITECTURE.md) for the system source of truth, and [SOP/GHL_SETUP.md](./SOP/GHL_SETUP.md) for the GoHighLevel operator guide (forms, tags, automations, webhooks + verification checklist). The full doc index is in [Docs/README.md](./Docs/README.md).
 
 ---
 

@@ -60,11 +60,13 @@ it does not block the relay.
 
 Status: `[ ]` not started · `[~]` in progress · `[x]` done. Effort is rough.
 
-- [ ] **Session 0 — Documentation fix-up.** Sense-check the 21 kept docs (keep/update/merge/archive each),
-  fix stale references (n8n, the deleted cadence `c206da3e`), make the 5 lists internally consistent,
-  add a pointer to the 5 lists + this plan in `CLAUDE.md`/`AGENTS.md` (keep the twins in sync), and
-  finalize THIS file. Surgical edits only. **Done when:** doc set is coherent + minimal and nothing
-  contradicts the locked decisions. → emits **Session 1**.
+- [x] **Session 0 — Documentation fix-up.** DONE 2026-06-25. Keep/update/merge/archive table produced for
+  every doc; CADENCE_DESIGN repointed off the deleted `c206da3e` → lifecycle (no more activation SQL);
+  ARCHITECTURE got a current-wiring note (separate inbound agent, Twilio-direct, Retell-native voicemail,
+  multi-DB, `clients_public`); ROADMAP banner'd as history; root README n8n-staleness + 2 broken links
+  fixed; Docs/README index now leads with the 5 lists + SESSION_PLAN + a reference-docs table;
+  `CLAUDE.md`/`AGENTS.md` got the tracking pointer (twins in sync); archived `WORKING_PROMPTS.md` +
+  `AUDIT_RECONCILIATION_2026-06-19.md`. Doc set: 20 Docs/*.md, coherent + minimal. → emitted **Session 1**.
 - [ ] **Session 1 — Voice reliability (CODE).** `BUG_LIST` B-3 (outbound phone re-pin to latest published),
   B-5 (persist agent-level `default_dynamic_variables` net), B-1 (setter-rename cascade across all name
   surfaces). Mostly `retell-proxy` + setter management. **Done when:** tsc clean + deployed; B-1/B-3/B-5

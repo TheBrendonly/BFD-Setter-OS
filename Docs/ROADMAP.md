@@ -1,5 +1,7 @@
 # BFD-Setter Build Roadmap
 
+> **This is build HISTORY, not the active to-do list.** The live work-tracking moved to the 5 canonical lists + `Docs/SESSION_PLAN.md` on 2026-06-25. The "Master to-do (Claude)" and "Brendan-only" lists below are a 2026-05-30/31 snapshot kept for provenance — for what is actually open now, read `Docs/BUG_LIST.md`, `FEATURE_ROADMAP.md`, `Docs/BRENDAN_TODO.md`, `Docs/TEST_LIST.md`, `Docs/DEFERRED.md`. The "Future feature" sections here are superseded by `Docs/DEFERRED.md`.
+
 Source: capability audit 2026-05-30 (per-client multi-agent / form routing / reactivation / isolation) plus docs consolidation. Decisions approved by Brendan 2026-05-30.
 
 ## Approved decisions

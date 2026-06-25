@@ -4,6 +4,18 @@ This file provides project-specific guidance to AI coding agents working in this
 It is the cross-platform twin of CLAUDE.md (used by Claude Code) and applies to Cursor, GitHub
 Copilot, Gemini CLI, OpenAI Codex, Windsurf, Aider, and other AGENTS.md-aware tools.
 
+## Tracking & Session Workflow (read first)
+
+`Docs/SESSION_PLAN.md` is the single source of truth for the session sequence to v1 "100%" and carries the **Relay Protocol** every session follows (start → do scoped work → verify → close out + emit the next prompt). The detail behind each session lives in **5 canonical lists** (do not duplicate work-tracking elsewhere):
+
+- `Docs/BUG_LIST.md` — open bugs / behavior fixes (the AI agent builds)
+- `FEATURE_ROADMAP.md` (repo root) — feature build queue
+- `Docs/BRENDAN_TODO.md` — manual/UI actions only Brendan can do
+- `Docs/TEST_LIST.md` — things to live-verify after a build
+- `Docs/DEFERRED.md` — someday / gated (v2: lifecycle, A/B, HubSpot, analytics)
+
+Closed items move to `Docs/archive/COMPLETED_LOG.md`. `Docs/ROADMAP.md` is build **history** (not an active to-do list).
+
 ## Behavioral Guidelines
 
 Source: forrestchang/andrej-karpathy-skills. Behavioral guidelines to reduce common LLM coding mistakes. These bias toward caution over speed; use judgment on trivial tasks.

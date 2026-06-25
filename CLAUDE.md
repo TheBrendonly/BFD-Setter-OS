@@ -2,6 +2,18 @@
 
 This file provides project-specific guidance to Claude Code when working in this repository.
 
+## Tracking & Session Workflow (read first)
+
+`Docs/SESSION_PLAN.md` is the single source of truth for the session sequence to v1 "100%" and carries the **Relay Protocol** every session follows (start → do scoped work → verify → close out + emit the next prompt). The detail behind each session lives in **5 canonical lists** (do not duplicate work-tracking elsewhere):
+
+- `Docs/BUG_LIST.md` — open bugs / behavior fixes (Claude builds)
+- `FEATURE_ROADMAP.md` (repo root) — feature build queue
+- `Docs/BRENDAN_TODO.md` — manual/UI actions only Brendan can do
+- `Docs/TEST_LIST.md` — things to live-verify after a build
+- `Docs/DEFERRED.md` — someday / gated (v2: lifecycle, A/B, HubSpot, analytics)
+
+Closed items move to `Docs/archive/COMPLETED_LOG.md`. `Docs/ROADMAP.md` is build **history** (not an active to-do list). Reconciliation context: memory `project_list_doc_reconciliation_2026_06_25`.
+
 ## Behavioral Guidelines
 
 Source: forrestchang/andrej-karpathy-skills. Behavioral guidelines to reduce common LLM coding mistakes. These bias toward caution over speed; use judgment on trivial tasks.

@@ -225,3 +225,15 @@ The `voice_setters` / `voice_setter_phone_bindings` tables are now real for ever
 - `retell-proxy` dual-writes `voice_setters` on agent create/update.
 - The Retell Agents UI exposes all 10 slots.
 - The legacy `Voice-Setter-N` slot path remains the live resolution path (zero risk to live calls); a UUID-native cadence picker + per-setter phone-binding UI are the documented follow-ups.
+
+---
+
+## Current wiring notes (verified 2026-06-25)
+
+These supersede any older detail in the diagrams above where they conflict:
+
+- **Inbound voice is a SEPARATE agent.** `+61481614530` inbound is bound to `agent_b2f6495` ("Inbound BFD Agent", neutral greeting); outbound is `agent_f45f4dd` ("Main Outbound", `{{first_name}}` opener). Always read the **phone-number binding** (`list-phone-numbers` `inbound_agent_id`/`outbound_agent_id`) to know which agent serves a direction — never trust a hardwired number on an agent.
+- **Outbound SMS is Twilio-direct.** As of 2026-06-17 every outbound message is sent DIRECT via Twilio; GHL is cut out of the send path (GHL is only mirrored). The component map's SMS branch is correct; the multi-channel (WhatsApp/DM) scaffolding is intentionally preserved but un-surfaced. See `Docs/ROADMAP.md` "inbound multi-channel" + memory `project_ghl_is_the_outbound_send_channel`.
+- **Voicemail is Retell-native**, not the old Twilio `<Play>` TwiML path (removed in phase-11d). See `Docs/CADENCE_DESIGN.md` → "Voicemail (Retell-native)".
+- **Multi-DB.** The frontend reads the platform DB *and* per-client external DBs, so `types.ts` is never wholesale-regenerated (surgical adds only).
+- **`clients_public` view.** Browser reads of non-secret `clients` columns go through the `clients_public` view (security_invoker; omits 13 secret columns, exposes `has_<col>` booleans). Secret *values* still read by some browser flows are tracked as `BUG_LIST` G3-6. See memory `project_clients_public_view_b5_s1_1_2026_06_24`.

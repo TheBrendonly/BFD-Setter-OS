@@ -1,6 +1,21 @@
 # BFD-Setter Documentation
 
-Start here. The docs are now a small, maintained set; everything historical lives in `archive/` (kept for reference, not maintained).
+Start here. The docs are a small, maintained set; everything historical lives in `archive/` (kept for reference, not maintained).
+
+## Tracking & sessions (start here)
+
+The live work-tracking is the **5 canonical lists** + the master session plan. Don't track open work anywhere else.
+
+| Doc | What it covers |
+|-----|----------------|
+| [`SESSION_PLAN.md`](SESSION_PLAN.md) | **Single source of truth for the session sequence** to v1 "100%" + the Relay Protocol every session follows. |
+| [`BUG_LIST.md`](BUG_LIST.md) | Open bugs / behavior fixes (Claude builds). |
+| [`/FEATURE_ROADMAP.md`](../FEATURE_ROADMAP.md) | Feature build queue (lives at repo root). |
+| [`BRENDAN_TODO.md`](BRENDAN_TODO.md) | Manual / UI actions only Brendan can do. |
+| [`TEST_LIST.md`](TEST_LIST.md) | Things to live-verify after a build. |
+| [`DEFERRED.md`](DEFERRED.md) | Someday / gated (v2: lifecycle, A/B, HubSpot, analytics). |
+
+Closed items move to [`archive/COMPLETED_LOG.md`](archive/COMPLETED_LOG.md).
 
 ## Living docs (the canonical set)
 
@@ -11,10 +26,24 @@ Start here. The docs are now a small, maintained set; everything historical live
 | [`WEBHOOKS.md`](WEBHOOKS.md) | Per-endpoint webhook catalogue + auth. |
 | [`CADENCE_DESIGN.md`](CADENCE_DESIGN.md) | The engagement cadence engine: state machine, node types, guards. |
 | [`FORM_ROUTING.md`](FORM_ROUTING.md) | Operator guide: how inbound forms route to cadences/agents (incl. BFD's main + Try-Gary setup), adding new forms, and provisioning additional voice agents. |
-| [`ROADMAP.md`](ROADMAP.md) | Active build roadmap + the Claude/Brendan to-do lists. |
-| [`SELF_HOSTING_FEASIBILITY.md`](SELF_HOSTING_FEASIBILITY.md) | Future-reference investigation: replacing Supabase + Trigger.dev with self-hosted infra on Railway. Findings, pros/cons, recommendation, migration steps. |
+| [`ROADMAP.md`](ROADMAP.md) | Build **history** (2026-05/06 snapshot). NOT the active to-do list — that moved to the 5 lists above. |
 
 Mental model of the friendly names: ARCHITECTURE (+ WEBHOOKS) = "how it's built", CADENCE_DESIGN = "the engagement engine". Operator-facing SOPs and setup guides now live in the sibling [`../SOP/`](../SOP/) folder (see below).
+
+## Reference / research (kept, not maintained)
+
+Single-topic references cited by the lists above. Read when the linked item comes up; otherwise leave them be.
+
+| Doc | What it covers |
+|-----|----------------|
+| [`GHL_SYNC_FIX_2026-06-19.md`](GHL_SYNC_FIX_2026-06-19.md) | F1 deep-link + 6.12b outcome-field writeback build record + GHL field-type findings. |
+| [`GHL_CUSTOM_FIELDS_HITLIST.md`](GHL_CUSTOM_FIELDS_HITLIST.md) | The ~101-field GHL custom-field cleanup list (Brendan-owned, gated). |
+| [`SELF_HOSTING_FEASIBILITY.md`](SELF_HOSTING_FEASIBILITY.md) | Future-reference: self-hosting Supabase + Trigger.dev on Railway. |
+| [`AB_TESTING_RESEARCH_2026-06-16.md`](AB_TESTING_RESEARCH_2026-06-16.md) | Research brief for DEFERRED 3.1 (A/B testing). |
+| [`HUBSPOT_GHL_COEXISTENCE_ANALYSIS.md`](HUBSPOT_GHL_COEXISTENCE_ANALYSIS.md) / [`HUBSPOT_CLIENT_RECOMMENDATION.md`](HUBSPOT_CLIENT_RECOMMENDATION.md) | DEFERRED 3.11 (HubSpot coexistence) analysis + client-facing summary. |
+| [`RETELL_CONVERSATION_FLOW_EVALUATION_2026-06-11.md`](RETELL_CONVERSATION_FLOW_EVALUATION_2026-06-11.md) | Conversation-Flow-vs-single-prompt eval (CONDITIONAL GO). |
+| [`EMAIL_PROVIDER_OPTIONS.md`](EMAIL_PROVIDER_OPTIONS.md) | Email/SMTP options for DEFERRED email provider. |
+| [`SECURITY_REVIEW_2026-06-05.md`](SECURITY_REVIEW_2026-06-05.md) | Dated whole-codebase security review. |
 
 ## Operator SOPs and setup guides
 
@@ -30,7 +59,7 @@ Kept separate from the build docs above, in the sibling [`../SOP/`](../SOP/) fol
 
 ## Archive
 
-`archive/` holds superseded/session docs: `MASTER_PLAN`, `CHANGES_LOG`, `FUTURE`, `TRACKING`, `RAILWAY_ENV`, `NEXT_SESSION_PROMPT`, `GHL_PUSH_AUDIT`, `SETUP_OVERVIEW`, and dated `soak-checks/`. Git history is the source of truth for change log; these are kept only for reference.
+`archive/` holds superseded/session docs: the dated audits (`AUDIT_2026-06-10`, `AUDIT_RECONCILIATION_2026-06-19`), the old driving prompts (`WORKING_PROMPTS`, `NEXT_SESSION_*`), `MASTER_PLAN`, `CHANGES_LOG`, `FUTURE`, `TRACKING`, `RAILWAY_ENV`, `GHL_PUSH_AUDIT`, `SETUP_OVERVIEW`, dated session/prompt docs, and `soak-checks/`. It also holds [`COMPLETED_LOG.md`](archive/COMPLETED_LOG.md) (closed list items). Git history is the source of truth for the change log; these are kept only for reference.
 
 ## Deployment
 
