@@ -38,44 +38,49 @@ Repo `/srv/bfd/Projects/bfd-setter`, branch `main`. Supabase ref `bjgrgbgykvjrsu
 
 ---
 
-## ===== COPY-PASTE KICKOFF PROMPT (next session = DOC SENSE-CHECK) =====
+## ===== COPY-PASTE KICKOFF PROMPT — Session 0: Documentation fix-up =====
+
+This starts the self-continuing session chain in `Docs/SESSION_PLAN.md`. Each session ends by updating
+the lists + plan, writing a handoff, committing, and **emitting the next session's prompt** — so you
+copy-paste straight from one session into the next, end-to-end, until v1 is 100%.
 
 ```
-BFD-setter continuation. Repo /srv/bfd/Projects/bfd-setter, branch main. Supabase ref
-bjgrgbgykvjrsuwwruoh. Creds in ./.env (SUPABASE_PAT, TRIGGER_DEPLOY_PAT, BFD_RETELL_API_KEY).
-Live DB via Supabase Management API /database/query (NOT postgres MCP). Live Retell via
-api.retellai.com with BFD_RETELL_API_KEY. Read the phone-number binding to know which agent serves
-a direction. NEVER edit voice prompts (report-only). Verify read-only before claiming done.
+BFD-setter continuation. Repo /srv/bfd/Projects/bfd-setter, branch main (git pull first).
+Supabase ref bjgrgbgykvjrsuwwruoh. Creds in ./.env (SUPABASE_PAT, TRIGGER_DEPLOY_PAT, BFD_RETELL_API_KEY).
+Live DB via Supabase Management API /database/query (NOT postgres MCP). Live Retell via api.retellai.com
+with BFD_RETELL_API_KEY. To know which agent serves a direction, read the PHONE-NUMBER binding
+(list-phone-numbers inbound_agent_id/outbound_agent_id) — never trust old memory. NEVER edit voice
+prompts (report-only: report location + change, Brendan applies in the BFD setter UI). Verify read-only
+before claiming done. Follow the Relay Protocol in Docs/SESSION_PLAN.md.
 
-READ FIRST: Operations/handoffs/2026-06-25-list-doc-reconciliation-and-next.md (this), then the 5
-canonical lists: Docs/BUG_LIST.md, FEATURE_ROADMAP.md, Docs/BRENDAN_TODO.md, Docs/TEST_LIST.md,
-Docs/DEFERRED.md. Memory: project_list_doc_reconciliation_2026_06_25.
+READ FIRST: Docs/SESSION_PLAN.md (the master sequence + Relay Protocol), this handoff, and the 5
+canonical lists (Docs/BUG_LIST.md, FEATURE_ROADMAP.md, Docs/BRENDAN_TODO.md, Docs/TEST_LIST.md,
+Docs/DEFERRED.md). Memory: project_list_doc_reconciliation_2026_06_25.
 
-TASK — DOC SENSE-CHECK (the 21 kept docs). Last session reconciled all tracking into the 5 lists
-and archived 19 stale docs. Now make sure the REMAINING docs still make sense and are non-redundant.
-Go file-by-file through Docs/*.md + the root docs (CLAUDE.md, AGENTS.md, README.md, FEATURE_ROADMAP.md)
-and for each decide: KEEP-as-is / UPDATE (stale content) / MERGE (overlap) / ARCHIVE (no longer needed).
-Do NOT rewrite wholesale — surgical updates only; report before large changes.
-
-Specifically check these for staleness against the locked decisions:
-- Docs/CADENCE_DESIGN.md — references the deleted 28-node draft c206da3e + n8n; should point to the
-  lifecycle direction (3.5/3.6/3.7) and note n8n is being decommissioned (F5).
-- Docs/ROADMAP.md — chronological build log; keep but confirm it isn't duplicating the 5 lists.
-- Docs/WORKING_PROMPTS.md — flagged repo/live prompt drift; confirm still useful or archive.
-- Docs/ARCHITECTURE.md — confirm it reflects current wiring (separate inbound agent; Twilio-direct;
+TASK — SESSION 0: DOCUMENTATION FIX-UP. Last session reconciled all tracking into the 5 lists and
+archived 19 stale docs. Now make the REMAINING docs coherent and non-redundant (we keep hitting
+conflicting docs). Go file-by-file through Docs/*.md + the root docs (CLAUDE.md, AGENTS.md, README.md,
+FEATURE_ROADMAP.md) and for each decide KEEP / UPDATE (stale) / MERGE (overlap) / ARCHIVE. Surgical
+edits only; report before any large rewrite. Specifically fix against the locked decisions:
+- Docs/CADENCE_DESIGN.md — drop/repoint the deleted 28-node draft c206da3e + n8n refs; point to the
+  lifecycle direction (DEFERRED 3.5/3.6/3.7) and note n8n decommission (F5).
+- Docs/ROADMAP.md — keep as build history but confirm it doesn't duplicate the 5 lists.
+- Docs/WORKING_PROMPTS.md — repo/live prompt drift; confirm useful or archive.
+- Docs/ARCHITECTURE.md — confirm current wiring (separate inbound agent agent_b2f6495; Twilio-direct;
   multi-DB; clients_public view).
-- Docs/GHL_SYNC_FIX_2026-06-19.md + Docs/GHL_CUSTOM_FIELDS_HITLIST.md — still the reference for the
-  F1 deep-link + 6.12b outcome fields? keep or fold.
-- CLAUDE.md / AGENTS.md — add a pointer to the 5 canonical lists so future sessions use them (and keep
-  the twin files in sync per the global rule).
-- Confirm the 5 lists cross-reference each other correctly and nothing fell through the cracks.
+- Docs/GHL_SYNC_FIX_2026-06-19.md + Docs/GHL_CUSTOM_FIELDS_HITLIST.md — keep as the F1 deep-link /
+  6.12b outcome-field reference or fold.
+- CLAUDE.md / AGENTS.md — add a pointer to Docs/SESSION_PLAN.md + the 5 lists (keep the twins in sync).
+- Validate Docs/SESSION_PLAN.md itself + confirm the 5 lists cross-reference correctly.
+Output a keep/update/merge/archive table for every doc; apply the safe ones; flag anything needing
+Brendan's judgment. Done when the doc set is coherent + minimal and nothing contradicts the decisions.
 
-Output: a short keep/update/merge/archive table for every doc, apply the safe ones, and leave a note
-for anything needing Brendan's judgment. End state = a coherent, minimal doc set.
-
-AFTER the doc review, the build backlog is ready in the lists. Likely first build session: the
-security quick-wins (G3-1/G3-2/G3-4) + B-1 setter-rename cascade + B-3/B-5 Retell version-pin/default-vars,
-or F1 (GHL deep-link) — Brendan picks.
+CLOSE OUT (Relay Protocol, Docs/SESSION_PLAN.md step 4): update the lists + tick Session 0 done in
+SESSION_PLAN.md; write a dated handoff; git add -A + commit + push to origin + github; then EMIT THE
+SESSION 1 PROMPT (Voice reliability: BUG_LIST B-3 outbound version re-pin, B-5 default_dynamic_variables
+net, B-1 setter-rename cascade) — print it in a fenced block in chat AND save it into the new handoff,
+built from the Standard Context Block + Session 1's scope + this Relay Protocol. Do NOT paste the whole
+plan into it; point to Docs/SESSION_PLAN.md.
 ```
 
 ## ===== END KICKOFF PROMPT =====

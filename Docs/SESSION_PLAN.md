@@ -1,0 +1,89 @@
+# BFD-Setter — Master Session Plan (to v1 "100%")
+
+**This file is the single source of truth for the session sequence.** Prompts point here; they do NOT
+duplicate it. Every session keeps this file current, then emits the next session's prompt from it.
+"100%" = rock-solid for the current live setup + ready to onboard a paying client. The deferred /
+lifecycle work (`Docs/DEFERRED.md`) is v2 and NOT on this critical path.
+
+The 5 canonical lists are the detail behind each session: `Docs/BUG_LIST.md`, `FEATURE_ROADMAP.md`,
+`Docs/BRENDAN_TODO.md`, `Docs/TEST_LIST.md`, `Docs/DEFERRED.md`. Closed items → `Docs/archive/COMPLETED_LOG.md`.
+
+---
+
+## The Relay Protocol (how EVERY session runs)
+
+1. **START.** Read (in order): this `SESSION_PLAN.md`, the latest `Operations/handoffs/` doc, and the
+   list(s) named in this session's scope. Confirm `main` is current (`git pull` first).
+2. **DO** only this session's scoped work (below). Stay in scope; if you find something out of scope,
+   add it to the right list, don't build it.
+3. **VERIFY** read-only / server-side before claiming anything done (tsc + deploy + push are necessary,
+   not sufficient). Brendan runs live tests in the dedicated TEST session.
+4. **CLOSE OUT — always do all of these, in order:**
+   a. Update the 5 lists: move each finished item OUT (→ `TEST_LIST.md` if it needs live verification,
+      else → `archive/COMPLETED_LOG.md`).
+   b. Update THIS file: tick the session done; if reality changed (new bug, reprioritization, a session
+      split or merged), edit the remaining sequence so it stays true.
+   c. Write a dated handoff in `Operations/handoffs/YYYY-MM-DD-<topic>.md`.
+   d. `git add -A && commit && push` to `origin` + `github` (docs/code both go to `main`).
+   e. **Emit the NEXT session's prompt** — generate it FRESH from this file's next entry, print it in
+      chat in a fenced block AND save it into the handoff. Use the Standard Context Block below + the
+      next session's scope + this Relay Protocol. Do NOT paste the whole plan into it.
+
+If a session is Brendan-driven (TEST or a manual milestone), the closeout still updates the lists +
+this file + handoff, and emits the prompt for whatever comes after.
+
+### Standard Context Block (paste at the top of every emitted prompt)
+```
+BFD-setter continuation. Repo /srv/bfd/Projects/bfd-setter, branch main (git pull first).
+Supabase ref bjgrgbgykvjrsuwwruoh. Creds in ./.env (SUPABASE_PAT, TRIGGER_DEPLOY_PAT, BFD_RETELL_API_KEY).
+Live DB via Supabase Management API /database/query (NOT postgres MCP). Live Retell via api.retellai.com
+with BFD_RETELL_API_KEY. To know which agent serves a direction, read the PHONE-NUMBER binding
+(list-phone-numbers inbound_agent_id/outbound_agent_id) — never trust old memory. NEVER edit voice
+prompts (report-only: report location + change, Brendan applies in the BFD setter UI). Verify read-only
+before claiming done. Follow the Relay Protocol in Docs/SESSION_PLAN.md.
+READ FIRST: Docs/SESSION_PLAN.md + the latest Operations/handoffs/ doc + the list(s) for this session.
+```
+
+---
+
+## The sequence
+
+Status: `[ ]` not started · `[~]` in progress · `[x]` done. Effort is rough.
+
+- [ ] **Session 0 — Documentation fix-up.** Sense-check the 21 kept docs (keep/update/merge/archive each),
+  fix stale references (n8n, the deleted cadence `c206da3e`), make the 5 lists internally consistent,
+  add a pointer to the 5 lists + this plan in `CLAUDE.md`/`AGENTS.md` (keep the twins in sync), and
+  finalize THIS file. Surgical edits only. **Done when:** doc set is coherent + minimal and nothing
+  contradicts the locked decisions. → emits **Session 1**.
+- [ ] **Session 1 — Voice reliability (CODE).** `BUG_LIST` B-3 (outbound phone re-pin to latest published),
+  B-5 (persist agent-level `default_dynamic_variables` net), B-1 (setter-rename cascade across all name
+  surfaces). Mostly `retell-proxy` + setter management. **Done when:** tsc clean + deployed; B-1/B-3/B-5
+  moved to TEST_LIST; handoff notes "Brendan: re-Save the 5 setters before the TEST session." → emits **Session 2**.
+- [ ] **Session 2 — Security/quality sweep (CODE).** `BUG_LIST` G3-1 (fail-closed on NULL intake_lead_secret),
+  G3-2 (S4-10 shared-agent disambiguation), G3-3 (S2b-11 outcome-stamp guard), G3-4 (S4-8 status codes),
+  G3-5 (esbuild ≥0.25), types.ts drift (5 phantom columns). No decisions. **Done when:** all deployed +
+  moved to TEST_LIST. → emits **Session 3**.
+- [ ] **Session 3 — Settings + setter cleanup (CODE).** `BUG_LIST` B-4 (client="My Account" only; admin=
+  "My Account"+"Sub-Accounts"); `FEATURE_ROADMAP` F2 (UUID-native node picker + single inbound-setter
+  binding + remove outbound-direction config), F5 (n8n decommission), F6 (remove setup-guide quizzes),
+  F7 (delete draft cadence `c206da3e`). **Done when:** deployed + moved to TEST_LIST. → emits **Session 4**.
+- [ ] **Session 4 — Client visibility + cadence controls (CODE).** `FEATURE_ROADMAP` F1 (GHL→BFD deep-link
+  custom field), F3 (pause/resume a running cadence), F4 (per-tenant timezone `nudgeColdReply` cron).
+  **Done when:** deployed + moved to TEST_LIST. → emits **Session 5**.
+- [ ] **Session 5 — By-phone pivot (CODE).** `BUG_LIST` B-2 (internal-first STOP + inbound resolution,
+  drop the GHL lookup). Larger behavior change to a live path; do it alone + carefully. **Done when:**
+  deployed + moved to TEST_LIST. → emits **Session 6**.
+- [ ] **Session 6 — Secret-read hardening (CODE, optional pre-100%).** `BUG_LIST` G3-6 (move ~20 browser
+  secret-value reads behind edge fns). Defense-in-depth (already RLS-scoped), so can slot after the TEST
+  pass if time-boxed. **Done when:** deployed + moved to TEST_LIST. → emits **Session 7**.
+- [ ] **Session 7 — TEST pass (BRENDAN drives, Claude verifies).** Run the whole `Docs/TEST_LIST.md` in one
+  live sweep (go-live smokes + B4 no-double-send + B-1/B-3/B-4/B-5 retests). Pre-req: Brendan re-Saved
+  the 5 setters (from Session 1). Each pass → COMPLETED_LOG; each fail → a new BUG_LIST item + a fix
+  session. **Done when:** TEST_LIST is empty/green. → emits the **First-client milestone**.
+- [ ] **First-client milestone (BRENDAN, gated).** Not a Claude code session. At the first paying client:
+  flip Stripe live (backfill `subscription_status` → set `ENFORCE_SUBSCRIPTION_GATE=true`), provision the
+  GHL/Retell/Unipile webhook secrets + arm `retell_webhook_secret` (6.6), register AU SMS A2P for
+  `+61481614530`. See `Docs/DEFERRED.md`. After this, v1 is live + 100%.
+
+When Sessions 0-7 are `[x]` and TEST_LIST is green, BFD-setter is at v1 "100%". v2 = the lifecycle
+system + A/B + analytics + HubSpot (`Docs/DEFERRED.md`).
