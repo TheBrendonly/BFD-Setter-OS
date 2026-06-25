@@ -284,6 +284,23 @@ Deno.serve(async (req) => {
       }
     }
 
+    // B-1: seed the display-name single source of truth for the new slot so the
+    // duplicate's name shows on its card immediately AND cascades to Retell
+    // agent_name + voice_setters.name on its first Save. Key format mirrors
+    // setterKey() = "<kind>-<slotNumber>". Non-blocking: the clone already
+    // committed; on failure the user can rename inline.
+    if (desiredName) {
+      const newSlotN = slotNumber(targetSlotId);
+      if (newSlotN) {
+        const dnKey = `${isVoiceSlot(targetSlotId) ? "voice" : "text"}-${newSlotN}`;
+        const { data: cur } = await supabase.from("clients").select("setter_display_names").eq("id", clientId).single();
+        const names = { ...((cur?.setter_display_names as Record<string, string>) ?? {}) };
+        names[dnKey] = desiredName;
+        const { error: dnErr } = await supabase.from("clients").update({ setter_display_names: names }).eq("id", clientId);
+        if (dnErr) console.warn(`[duplicate-setter-config] setter_display_names seed failed:`, dnErr.message);
+      }
+    }
+
     console.log(
       `[duplicate-setter-config] ${sourceSlotId} → ${targetSlotId} OK (prompts=${promptsToInsert.length}, configs=${configsToInsert.length}, settings=${srcSettings.data ? 1 : 0})`
     );

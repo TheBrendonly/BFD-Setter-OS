@@ -16,6 +16,14 @@ When an item passes, move it to `Docs/archive/COMPLETED_LOG.md`. When it fails, 
 
 - [ ] **B4 send-idempotency** — induce a Trigger retry on a real cadence SMS → confirm **no double-send** end-to-end (unit + DB-level proof already done).
 
+## Session 1 — voice reliability (PREREQ: Brendan re-Saves the 5 setters first)
+
+**Before these, re-Save/Push (do NOT edit prompts) each of: Main Outbound (slot 1) + Gary Property Coach / Mortgage Broker / Finance Strategist / Crazy Gary.** Code deployed 2026-06-25 (retell-proxy v45, duplicate-setter-config v8); fixes only land on the next Save.
+
+- [ ] **B-3 outbound auto-follow** — after re-Saving Main Outbound, `get-phone-number/+61481614530` shows `outbound_agent_version == "latest_published"` (was numeric `19`). Then any later publish goes live on outbound with no re-pin. (Baseline pre-re-Save: outbound `v19`, inbound already `latest_published`.)
+- [ ] **B-5 default-vars net** — after a re-Save, the agent's latest-published **LLM** reports `default_dynamic_variables = {first_name:"", …}` (was `null`). Mechanism already proven on a throwaway agent; this confirms it on the live agents. Pairs with the `{{first_name}}` retest below.
+- [ ] **B-1 rename cascade** — rename a voice setter inline (and/or via Duplicate). Confirm the one name shows everywhere: card heading + card "Title:"/"Name:" lines, `voice_setters.name`, `prompts.name`/`agent_settings.name`, and Retell `agent_name` all match. The spoken in-prompt persona is intentionally unchanged. A duplicated setter shows its typed name on the new card immediately.
+
 ## Retests after the relevant fix ships
 
 - [ ] **B-3 (6.4)** clear a lead's phone, Save → it stays cleared in BFD **and** GHL (only the name case was retested before).

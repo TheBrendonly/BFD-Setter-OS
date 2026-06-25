@@ -5858,6 +5858,11 @@ const PromptManagement = () => {
     let conversationFlowId: string | null = null;
     try {
       const slotNumber = parseInt(editingSlotId.replace('Voice-Setter-', ''), 10);
+      // B-1: clients.setter_display_names is the single source of truth for the
+      // setter's identity; it drives Retell agent_name + voice_setters.name.
+      // Fall back to the prompt Title (agentTitle) only when no display name is set.
+      const displayName = (setterDisplayNames[setterKey('voice', slotNumber)] || '').trim();
+      const resolvedAgentName = displayName || agentTitle || `Voice Setter ${slotNumber}`;
       if (slotNumber >= 1 && slotNumber <= 10) {
         const parsedKnowledgeBaseIds: string[] = []; // KB integration removed
         // When booking function is disabled, strip all booking tools and keep only end_call
@@ -5911,7 +5916,7 @@ const PromptManagement = () => {
             generalPrompt: promptText,
             beginMessage: retellVoiceSettings.begin_message || '',
             model: currentAgentSettings?.model || 'gpt-4.1-nano',
-            agentName: agentTitle || `Voice Setter ${slotNumber}`,
+            agentName: resolvedAgentName,
             llmSettings: {
               model_high_priority: retellVoiceSettings.model_high_priority,
               knowledge_base_ids: parsedKnowledgeBaseIds,
@@ -6430,7 +6435,15 @@ const PromptManagement = () => {
       const builderPersona = builderSnapshot.persona?.trim() || '';
       const builderContent = builderSnapshot.content?.trim() || '';
       const hasBuilderSnapshot = Boolean(builderPersona || builderContent);
-      const effectivePromptTitle = (promptContent.title || editingSlotId || '').trim();
+      // B-1: Title follows the setter name (display name) when one is set, so
+      // prompts.name + agent_settings.name match the one source of truth. Falls
+      // back to the typed Title when no display name exists (e.g. brand-new slot).
+      const dnForTitle = editingSlotId?.startsWith('Voice-Setter-')
+        ? (setterDisplayNames[setterKey('voice', parseInt(editingSlotId.replace('Voice-Setter-', ''), 10))] || '').trim()
+        : (editingSlotId?.startsWith('Setter-')
+            ? (setterDisplayNames[setterKey('text', parseInt(editingSlotId.replace('Setter-', ''), 10))] || '').trim()
+            : '');
+      const effectivePromptTitle = (dnForTitle || promptContent.title || editingSlotId || '').trim();
       const personaForSave = hasBuilderSnapshot ? builderPersona : (promptContent.persona || '').trim();
       const contentForSave = hasBuilderSnapshot ? builderContent : (promptContent.content || '').trim();
       const descriptionToSave = promptContent.description === '' || promptContent.description === undefined || promptContent.description === null ? null : promptContent.description;
@@ -7880,8 +7893,13 @@ const PromptManagement = () => {
 
                           {(() => {
                             const slotConfigs = overviewConfigs[slot.id];
-                            const setterTitle = agentSettings.name?.trim();
-                            const agentName = slotConfigs?.agent_name?.selected_option?.trim();
+                            // B-1: Title + Name follow the display-name SoT (display-only;
+                            // the spoken persona param is untouched). Fall back to stored values.
+                            const dispKind: 'voice' | 'text' = slot.id.startsWith('Voice-Setter-') ? 'voice' : 'text';
+                            const dispMatch = slot.id.match(/-(\d+)$/);
+                            const dispName = dispMatch ? (setterDisplayNames[setterKey(dispKind, parseInt(dispMatch[1], 10))] || '').trim() : '';
+                            const setterTitle = dispName || agentSettings.name?.trim();
+                            const agentName = dispName || slotConfigs?.agent_name?.selected_option?.trim();
                             const businessName = slotConfigs?.company_name?.custom_content?.trim() || slotConfigs?.company_knowledge?.selected_option?.trim();
                             return (
                               <div className="space-y-0.5">
@@ -8015,8 +8033,13 @@ const PromptManagement = () => {
 
                           {(() => {
                             const slotConfigs = overviewConfigs[slot.id];
-                            const setterTitle = agentSettings.name?.trim();
-                            const agentName = slotConfigs?.agent_name?.selected_option?.trim();
+                            // B-1: Title + Name follow the display-name SoT (display-only;
+                            // the spoken persona param is untouched). Fall back to stored values.
+                            const dispKind: 'voice' | 'text' = slot.id.startsWith('Voice-Setter-') ? 'voice' : 'text';
+                            const dispMatch = slot.id.match(/-(\d+)$/);
+                            const dispName = dispMatch ? (setterDisplayNames[setterKey(dispKind, parseInt(dispMatch[1], 10))] || '').trim() : '';
+                            const setterTitle = dispName || agentSettings.name?.trim();
+                            const agentName = dispName || slotConfigs?.agent_name?.selected_option?.trim();
                             const businessName = slotConfigs?.company_name?.custom_content?.trim() || slotConfigs?.company_knowledge?.selected_option?.trim();
                             return (
                               <div className="space-y-0.5">

@@ -67,10 +67,13 @@ Status: `[ ]` not started · `[~]` in progress · `[x]` done. Effort is rough.
   fixed; Docs/README index now leads with the 5 lists + SESSION_PLAN + a reference-docs table;
   `CLAUDE.md`/`AGENTS.md` got the tracking pointer (twins in sync); archived `WORKING_PROMPTS.md` +
   `AUDIT_RECONCILIATION_2026-06-19.md`. Doc set: 20 Docs/*.md, coherent + minimal. → emitted **Session 1**.
-- [ ] **Session 1 — Voice reliability (CODE).** `BUG_LIST` B-3 (outbound phone re-pin to latest published),
-  B-5 (persist agent-level `default_dynamic_variables` net), B-1 (setter-rename cascade across all name
-  surfaces). Mostly `retell-proxy` + setter management. **Done when:** tsc clean + deployed; B-1/B-3/B-5
-  moved to TEST_LIST; handoff notes "Brendan: re-Save the 5 setters before the TEST session." → emits **Session 2**.
+- [x] **Session 1 — Voice reliability (CODE).** DONE 2026-06-25. B-3 outbound now writes `agent_version:"latest_published"`
+  (auto-follow, immune to the stale-pin class; Retell `AgentVersionReference` confirmed to accept the string). B-5
+  root-caused: `default_dynamic_variables` is an **LLM** field, not an agent field — the v43 agent-level set was a
+  silent no-op (verified on a throwaway agent); moved to `llmPayload` + reasserted on rename; **verified end-to-end**.
+  B-1 rename cascades to one name across `prompts.name`/`agent_settings.name`/`voice_setters.name`/Retell `agent_name`
+  + card lines (spoken persona untouched; "Title follows name" per Brendan). retell-proxy v45, duplicate-setter-config v8;
+  tsc clean. B-1/B-3/B-5 → `TEST_LIST.md`. **PREREQ for TEST:** Brendan re-Saves the 5 setters. → emitted **Session 2**.
 - [ ] **Session 2 — Security/quality sweep (CODE).** `BUG_LIST` G3-1 (fail-closed on NULL intake_lead_secret),
   G3-2 (S4-10 shared-agent disambiguation), G3-3 (S2b-11 outcome-stamp guard), G3-4 (S4-8 status codes),
   G3-5 (esbuild ≥0.25), types.ts drift (5 phantom columns). No decisions. **Done when:** all deployed +

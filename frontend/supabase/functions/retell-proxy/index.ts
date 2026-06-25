@@ -21,6 +21,15 @@ const RETELL_BASE = "https://api.retellai.com";
 // Conversations push + Bug 28 booking confirm SMS).
 const DEFAULT_RETELL_WEBHOOK_EVENTS = ["call_ended", "call_analyzed"];
 
+// Agent-level empty-string defaults for lead dynamic variables. An unset
+// {{first_name}} (unknown inbound caller, or outbound missing the field)
+// otherwise renders the literal token; empty defaults make Retell substitute
+// nothing. Real call-time values still override these. Asserted on every push
+// (sync + rename) so the latest published version always carries the net.
+const EMPTY_LEAD_DEFAULTS = {
+  first_name: "", last_name: "", email: "", phone: "", business_name: "",
+};
+
 // Map internal model names to Retell-supported model names
 function mapToRetellModel(model: string): string {
   // Strip OpenRouter-style prefixes (e.g., "openai/gpt-5" -> "gpt-5")
@@ -173,7 +182,9 @@ async function dualWriteVoiceSetter(
       .maybeSingle();
     if (existing?.id) {
       await supabase.from("voice_setters")
-        .update({ retell_agent_id: agentId, retell_llm_id: llmId, is_active: true })
+        // B-1: include name so a rename cascades to an EXISTING row (the UPDATE
+        // branch previously froze name at its first-insert value).
+        .update({ name: agentName || `Voice Setter ${slotNumber}`, retell_agent_id: agentId, retell_llm_id: llmId, is_active: true })
         .eq("id", existing.id);
     } else {
       await supabase.from("voice_setters").insert({
@@ -384,7 +395,7 @@ async function repointPhoneVersionsAfterPublish(
   // below regardless of TS narrowing-into-closure behavior.
   const ver: number = publishedVersion;
 
-  type AgentWeight = { agent_id: string; agent_version?: number; weight: number };
+  type AgentWeight = { agent_id: string; agent_version?: number | string; weight: number };
 
   const { data: phoneRow, error: phoneErr } = await supabase
     .from("clients")
@@ -441,13 +452,17 @@ async function repointPhoneVersionsAfterPublish(
         const curAgent = Array.isArray(list) ? list[0]?.agent_id ?? null : deprecated ?? null;
         if (curAgent !== agentId) continue;
         if (Array.isArray(list)) {
-          // Preserve the full weighted list; bump only our agent's version.
+          // Preserve the full weighted list; pin our agent to the latest
+          // published version (auto-follow) so future publishes go live without
+          // a re-pin. Retell's AgentVersionReference accepts "latest_published"
+          // as a writable value; this matches the inbound binding and makes the
+          // phone immune to the stale-pin class (out-of-band publishes, drafts).
           fields[column] = list.map((e) =>
-            e.agent_id === agentId ? { ...e, agent_version: ver } : e
+            e.agent_id === agentId ? { ...e, agent_version: "latest_published" } : e
           );
         } else {
           // Only the deprecated single field was set; migrate to a weighted list.
-          fields[column] = [{ agent_id: agentId, agent_version: ver, weight: 1 }];
+          fields[column] = [{ agent_id: agentId, agent_version: "latest_published", weight: 1 }];
         }
         bumped.push(direction);
       }
@@ -463,7 +478,7 @@ async function repointPhoneVersionsAfterPublish(
         `update-phone-number/${encodeURIComponent(phone)}`,
         fields,
       );
-      console.log(`[repoint-phones] Repointed ${phone} [${bumped.join(", ")}] to v${publishedVersion} (slot ${slotNumber}, agent ${agentId})`);
+      console.log(`[repoint-phones] Repointed ${phone} [${bumped.join(", ")}] to latest_published (was targeting v${publishedVersion}) (slot ${slotNumber}, agent ${agentId})`);
     } catch (phoneErr) {
       console.warn(`[repoint-phones] Failed to repoint phone ${phone}:`, phoneErr);
     }
@@ -686,18 +701,10 @@ function buildAgentUpdatesFromVoiceSettings(voiceSettings?: Record<string, unkno
       agentUpdates.pii_config = voiceSettings.pii_config;
     }
   }
-  // Agent-level safety net for lead dynamic variables. Without an agent default,
-  // an unset {{first_name}} (e.g. an inbound call from an unknown number, or an
-  // outbound call missing the field) is spoken/rendered as the literal token. Empty
-  // string defaults make Retell substitute nothing instead. Set unconditionally so
-  // every pushed/created agent carries it; real call-time values still override these.
-  agentUpdates.default_dynamic_variables = {
-    first_name: "",
-    last_name: "",
-    email: "",
-    phone: "",
-    business_name: "",
-  };
+  // NOTE: default_dynamic_variables is NOT an agent field — Retell silently
+  // ignores it on update-agent/create-agent (verified live 2026-06-25 on a
+  // throwaway agent: PATCH then read-back returned null). It lives on the
+  // retell-LLM instead, so the net is set on llmPayload in syncVoiceSetter.
   return agentUpdates;
 }
 
@@ -779,6 +786,10 @@ async function syncVoiceSetter(
         ? llmSettings.start_speaker
         : "agent",
     knowledge_base_ids: knowledgeBaseIds,
+    // B-5: empty-string lead-default net. Lives on the retell-LLM (NOT the agent
+    // — Retell ignores it there). An unset {{first_name}} renders nothing instead
+    // of the literal token; real call-time values still override these.
+    default_dynamic_variables: EMPTY_LEAD_DEFAULTS,
   };
 
   // Build agent-level update payload from voiceSettings (engine-agnostic; shared
@@ -1427,6 +1438,25 @@ Deno.serve(async (req) => {
         // Published agent versions are IMMUTABLE; mint/reuse a draft, rename it, publish.
         const draft = await ensureEditableAgentDraft(apiKey, existingAgentId);
         await retellFetch(apiKey, "PATCH", `update-agent/${existingAgentId}`, { agent_name: agentName });
+        // B-5: reassert the empty-string lead-default net on the LLM (where the
+        // field actually lives — the agent ignores it) so every rename carries
+        // it too. Skip conversation-flow agents (no llm_id).
+        if (draft.llmId) {
+          await retellFetch(apiKey, "PATCH", `update-retell-llm/${draft.llmId}`, {
+            default_dynamic_variables: EMPTY_LEAD_DEFAULTS,
+          });
+        }
+        // B-1: cascade the rename to every DB name store for this slot so the
+        // card Title, voice_setters.name and the prompt name all match the
+        // display name. Non-blocking: the durable SoT (clients.setter_display_names)
+        // is already written client-side; a failed projection re-converges on the
+        // next Save. setter_display_names key format mirrors setterKey().
+        const voiceSlotId = `Voice-Setter-${slotNumber}`;
+        await Promise.all([
+          supabaseAdmin.from("prompts").update({ name: agentName }).eq("client_id", clientId).eq("slot_id", voiceSlotId),
+          supabaseAdmin.from("agent_settings").update({ name: agentName }).eq("client_id", clientId).eq("slot_id", voiceSlotId),
+          supabaseAdmin.from("voice_setters").update({ name: agentName }).eq("client_id", clientId).eq("legacy_slot", slotNumber),
+        ]).catch((e) => console.warn(`[set-agent-name] DB name cascade failed (non-blocking):`, e));
         let publishedVersion: number | undefined;
         try {
           const publishResp = await publishAgentVersion(apiKey, existingAgentId, draft.draftVersion);
