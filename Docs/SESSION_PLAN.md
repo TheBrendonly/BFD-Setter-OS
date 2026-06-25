@@ -44,6 +44,16 @@ before claiming done. Follow the Relay Protocol in Docs/SESSION_PLAN.md.
 READ FIRST: Docs/SESSION_PLAN.md + the latest Operations/handoffs/ doc + the list(s) for this session.
 ```
 
+### Plan mode per session
+Start in **plan mode** (research + approve the approach before any edits) for the **design-heavy or
+live-path** sessions: **Session 1 (B-1 cascade), Session 4 (F1/F3), Session 5 (B-2 by-phone pivot)**,
+and any session that touches the live cadence runtime or many surfaces. **Skip plan mode** (just
+execute) for the **mechanical/prescriptive** ones: Session 2 (G3 sweep), Session 3's cleanup
+(F5/F6/F7), types.ts, the **doc** session, and the **TEST** session (read-only / Brendan-driven).
+Each emitted prompt should state the recommended mode. Note: the closeout (update lists/plan, commit,
+push, emit next prompt) runs after you approve + exit plan mode — plan mode front-loads a review gate,
+it does not block the relay.
+
 ---
 
 ## The sequence
