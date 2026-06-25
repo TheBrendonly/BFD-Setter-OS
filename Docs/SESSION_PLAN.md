@@ -102,9 +102,16 @@ Status: `[ ]` not started · `[~]` in progress · `[x]` done. Effort is rough.
   match the setter's agent), not red "Not Active"; toggle made non-silent + race-safe (`disabled` while
   writing; `.select('id')` 0-row detection in `useSetInboundSetter`). Frontend-only; tsc + build green;
   **no edge deploy**. B-6 → `TEST_LIST.md`. → emits **Session 4**. (Was PLAN mode — live path.)
-- [ ] **Session 4 — Client visibility + cadence controls (CODE).** `FEATURE_ROADMAP` F1 (GHL→BFD deep-link
-  custom field), F3 (pause/resume a running cadence), F4 (per-tenant timezone `nudgeColdReply` cron).
-  **Done when:** deployed + moved to TEST_LIST. → emits **Session 5**.
+- [x] **Session 4 — Client visibility + cadence controls (CODE).** DONE 2026-06-26 (was PLAN mode — live path).
+  Verify-first (Relay Protocol) found **F3 + F4 were already built** and committed to `main` (F3 = `4b7dbc1`:
+  `pause-/resume-engagement` live v1 + `runEngagement` `isPaused()` exit + UI buttons; F4 = `b0c6bea`:
+  `nudgeColdReply` per-lead-local-hour gate on `clients.timezone`) but never reconciled off `FEATURE_ROADMAP` —
+  so only **F1** was a real build. Shipped F1 (GHL→BFD deep-link: `sync-ghl-contact` **v24** writes the lead's
+  `/leads/<uuid>` conversation URL onto the GHL contact via `writeGhlContactFields`, gated on the new
+  `clients.ghl_conversation_link_field_id` column / migration `20260626120000`; non-fatal + dormant until
+  Brendan provisions the field; `clients_public` recreated, 0 secrets leaked; `vite build` + `deno check` green).
+  Redeployed Trigger.dev prod (`20260625.1`, 12 tasks) to guarantee the F3/F4 runtime is current. F1/F3/F4 →
+  `TEST_LIST`; F1 activation → `BRENDAN_TODO`. → emits **Session 5**.
 - [ ] **Session 5 — By-phone pivot (CODE).** `BUG_LIST` B-2 (internal-first STOP + inbound resolution,
   drop the GHL lookup). Larger behavior change to a live path; do it alone + carefully. **Done when:**
   deployed + moved to TEST_LIST. → emits **Session 6**.

@@ -1320,6 +1320,7 @@ export type Database = {
           ghl_call_appt_booked_field_id: string | null
           ghl_call_sentiment_field_id: string | null
           ghl_channel_field_id: string | null
+          ghl_conversation_link_field_id: string | null
           ghl_conversation_provider_id: string | null
           ghl_last_synced_from_field_id: string | null
           ghl_last_synced_from_field_value: string | null
@@ -1435,6 +1436,7 @@ export type Database = {
           ghl_call_appt_booked_field_id?: string | null
           ghl_call_sentiment_field_id?: string | null
           ghl_channel_field_id?: string | null
+          ghl_conversation_link_field_id?: string | null
           ghl_conversation_provider_id?: string | null
           ghl_last_synced_from_field_id?: string | null
           ghl_last_synced_from_field_value?: string | null
@@ -1550,6 +1552,7 @@ export type Database = {
           ghl_call_appt_booked_field_id?: string | null
           ghl_call_sentiment_field_id?: string | null
           ghl_channel_field_id?: string | null
+          ghl_conversation_link_field_id?: string | null
           ghl_conversation_provider_id?: string | null
           ghl_last_synced_from_field_id?: string | null
           ghl_last_synced_from_field_value?: string | null
@@ -4871,6 +4874,7 @@ export type Database = {
           ghl_call_appt_booked_field_id: string | null
           ghl_call_sentiment_field_id: string | null
           ghl_channel_field_id: string | null
+          ghl_conversation_link_field_id: string | null
           ghl_conversation_provider_id: string | null
           ghl_last_synced_from_field_id: string | null
           ghl_last_synced_from_field_value: string | null

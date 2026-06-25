@@ -12,12 +12,19 @@ import { createClient } from "npm:@supabase/supabase-js@2.101.0";
 import { fetchActiveNewLeadsWorkflows, resolveWorkflow } from "../_shared/resolve-workflow.ts";
 import { buildExistingLeadUpdatePayload } from "../_shared/sync-identity-guard.ts";
 import { buildLeadInsert } from "../_shared/lead-insert.ts";
+import { writeGhlContactFields } from "../_shared/ghl-conversations.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type, x-wh-signature, x-wh-token, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
+
+// Base URL of the BFD app (the lead conversation view lives at /leads/<lead_id>,
+// served by ContactDetail.tsx). Used by F1 to write a click-through deep-link onto
+// the GHL contact. Overridable via env; defaults to the production app domain.
+const APP_BASE_URL = (Deno.env.get("APP_BASE_URL") ?? "https://app.buildingflowdigital.com")
+  .replace(/\/+$/, "");
 
 // Constant-time string compare for the static-token webhook proof.
 function ctEqual(a: string, b: string): boolean {
@@ -320,7 +327,7 @@ Deno.serve(async (req) => {
 
     const { data: clientRow, error: clientErr } = await supabase
       .from("clients")
-      .select("id, sync_ghl_enabled, auto_engagement_workflow_id, ghl_last_synced_from_field_id, ghl_last_synced_from_field_value, ghl_webhook_secret")
+      .select("id, sync_ghl_enabled, auto_engagement_workflow_id, ghl_last_synced_from_field_id, ghl_last_synced_from_field_value, ghl_webhook_secret, ghl_api_key, ghl_conversation_link_field_id")
       .eq("ghl_location_id", ghlAccountId)
       .single();
 
@@ -533,6 +540,35 @@ Deno.serve(async (req) => {
       }
 
       steps.push(makeStep("sync-create", "Create New Lead", "create_contact", "completed", `Created ${newContact.id}`));
+
+      // F1: write the BFD conversation deep-link back onto the GHL contact so a
+      // client can click from GHL straight into BFD's full conversation view
+      // (/leads/<lead_id>) while keeping their own GHL/Twilio number (no double
+      // send). Non-fatal and dormant until the client provisions
+      // ghl_conversation_link_field_id — writeGhlContactFields no-ops (skipped) on
+      // an empty field id or api key, so this never blocks lead creation.
+      try {
+        const convoUrl = `${APP_BASE_URL}/leads/${newContact.id}`;
+        const linkRes = await writeGhlContactFields({
+          ghlApiKey: (clientRow.ghl_api_key as string | null) ?? "",
+          contactId,
+          fields: [{
+            id: (clientRow.ghl_conversation_link_field_id as string | null) ?? "",
+            value: convoUrl,
+          }],
+        });
+        const linkStatus = linkRes.skipped ? "skipped" : linkRes.ok ? "completed" : "failed";
+        const linkDetail = linkRes.skipped
+          ? "No conversation-link field configured — write skipped"
+          : linkRes.ok
+            ? convoUrl
+            : (linkRes.error || `GHL ${linkRes.status ?? "error"}`);
+        steps.push(makeStep("sync-convo-link", "Write BFD Conversation Link", "ghl_custom_field", linkStatus, linkDetail));
+      } catch (linkErr: any) {
+        console.error("[sync-ghl-contact] conversation-link write failed:", linkErr);
+        steps.push(makeStep("sync-convo-link", "Write BFD Conversation Link", "ghl_custom_field", "failed",
+          linkErr?.message || "unknown"));
+      }
 
       // Enrol into the routed workflow: a tag-matched new-leads workflow when
       // the inbound carries a routing tag, else the client's default cadence
