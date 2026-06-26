@@ -11,6 +11,10 @@ function encodeBase64(bytes: Uint8Array): string {
 }
 import { z } from 'npm:zod@3.25.76';
 import { parsePhoneNumberFromString } from 'npm:libphonenumber-js@1.12.41/min';
+// Shared E.164/AU normalizer — the single source of truth used by every other
+// lead-create path (via _shared/lead-insert.ts) and by resolveLeadByPhone.
+// Aliased because this file has its own local normalizePhone (different shape).
+import { normalizePhone as normalizePhoneE164 } from '../_shared/phone.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -70,6 +74,7 @@ interface InsertLeadPayload {
   first_name: string | null;
   last_name: string | null;
   phone: string | null;
+  normalized_phone: string | null;
   email: string | null;
   business_name: string | null;
   custom_fields: Record<string, string>;
@@ -346,6 +351,9 @@ async function processImportJob(
           first_name: normalizedData.first_name || null,
           last_name: normalizedData.last_name || null,
           phone,
+          // BUG 6.10/B-2: derive normalized_phone so CSV-imported leads are
+          // resolvable by resolveLeadByPhone and covered by the STOP fan-out.
+          normalized_phone: normalizePhoneE164(phone),
           email,
           business_name: businessName,
           custom_fields: buildCustomFieldsFromData(normalizedData),

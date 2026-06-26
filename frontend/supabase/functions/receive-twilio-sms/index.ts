@@ -349,17 +349,34 @@ async function findOrCreateGhlContact(
   if (searchResp.ok) {
     const searchData = await searchResp.json().catch(() => null);
     const contacts = searchData?.contacts || [];
-    const exact = contacts.find((c: any) =>
+    const exactMatches = contacts.filter((c: any) =>
       c?.phone === fromPhone || c?.phone === fromPhone.replace(/^\+/, "")
     );
-    if (exact?.id) {
-      return {
-        contactId: exact.id,
-        name:
-          [exact.firstName, exact.lastName].filter(Boolean).join(" ") ||
-          exact.contactName || "Unknown",
-        email: exact.email || "",
-      };
+    if (exactMatches.length > 0) {
+      // Deterministic survivor when GHL returns >1 contact for the phone:
+      // most-recently-updated wins, tie-break by dateAdded desc, then id desc.
+      // Mirrors _shared/leadResolve.ts resolveLeadByPhone so the GHL fallback
+      // and the internal resolver agree on which contact owns a shared number.
+      // (Date.parse(undefined) -> NaN, NaN || 0 -> 0, so missing dates sort last.)
+      exactMatches.sort((a: any, b: any) => {
+        const au = Date.parse(a?.dateUpdated ?? "") || 0;
+        const bu = Date.parse(b?.dateUpdated ?? "") || 0;
+        if (bu !== au) return bu - au;
+        const aa = Date.parse(a?.dateAdded ?? "") || 0;
+        const ba = Date.parse(b?.dateAdded ?? "") || 0;
+        if (ba !== aa) return ba - aa;
+        return String(b?.id ?? "").localeCompare(String(a?.id ?? ""));
+      });
+      const exact = exactMatches[0];
+      if (exact?.id) {
+        return {
+          contactId: exact.id,
+          name:
+            [exact.firstName, exact.lastName].filter(Boolean).join(" ") ||
+            exact.contactName || "Unknown",
+          email: exact.email || "",
+        };
+      }
     }
   } else {
     console.warn("GHL contact search failed", searchResp.status);
@@ -672,6 +689,11 @@ Deno.serve(async (req) => {
     let contactId = "";
     let contactName = "";
     let contactEmail = "";
+    // Set when the GHL fallback failed and we minted a deterministic internal
+    // lead (bfd-<normalized_phone>) so the inbound reply is never dropped on a
+    // GHL hiccup. A background reconcile (before the final return) links the
+    // real GHL contact id once GHL recovers.
+    let syntheticMinted = false;
 
     if (normalizedFrom) {
       const existingLead = await resolveLeadByPhone(supabase, client.id, normalizedFrom);
@@ -691,34 +713,66 @@ Deno.serve(async (req) => {
 
     if (!contactId) {
       // No internal lead (or normalization failed): mirror/create in GHL.
-      try {
-        const c = await findOrCreateGhlContact(
-          client.ghl_api_key,
-          client.ghl_location_id,
-          fromPhone,
-          messageBody,
-        );
-        contactId = c.contactId;
-        contactName = c.name;
-        contactEmail = c.email;
-      } catch (e) {
-        console.error("GHL contact resolve failed", e);
-        // REL-03: this drops the inbound reply (no contact, no execution) —
-        // record it so the operator can see the dead lead.
+      // Bounded retry so a brief GHL hiccup doesn't drop the inbound reply.
+      let lastErr: unknown = null;
+      for (let attempt = 0; attempt < 2 && !contactId; attempt++) {
+        try {
+          const c = await findOrCreateGhlContact(
+            client.ghl_api_key,
+            client.ghl_location_id,
+            fromPhone,
+            messageBody,
+          );
+          contactId = c.contactId;
+          contactName = c.name;
+          contactEmail = c.email;
+        } catch (e) {
+          lastErr = e;
+          console.error("GHL contact resolve failed", { attempt, error: e });
+          if (attempt === 0) await new Promise((r) => setTimeout(r, 400));
+        }
+      }
+
+      if (!contactId) {
+        if (!normalizedFrom) {
+          // Malformed inbound number: we can't form a stable synthetic key, so
+          // keep the old REL-03 behavior (log + empty TwiML) rather than mint a
+          // junk row.
+          try {
+            await supabase.from("error_logs").insert({
+              client_id: client.id,
+              severity: "error",
+              source: "receive_twilio_sms",
+              error_type: "ghl_contact_resolve_failed",
+              error_message: lastErr instanceof Error ? lastErr.message : String(lastErr),
+              context: { messageSid, fromPhone, note: "no normalized phone; cannot mint synthetic" },
+            });
+          } catch (_logErr) { /* non-fatal */ }
+          return new Response(TWIML_EMPTY, {
+            status: 200,
+            headers: { ...corsHeaders, "Content-Type": "text/xml" },
+          });
+        }
+
+        // REL-03 fix: never drop the reply on a GHL outage. Mint a deterministic
+        // internal lead keyed by normalized phone (idempotent under
+        // onConflict client_id,lead_id — Twilio retries reuse the same row). The
+        // reply pipeline is Twilio-direct off the phone, so it needs no GHL. A
+        // background reconcile (before the final return) links the real GHL id.
+        contactId = `bfd-${normalizedFrom}`;
+        contactName = "SMS Lead";
+        contactEmail = "";
+        syntheticMinted = true;
         try {
           await supabase.from("error_logs").insert({
             client_id: client.id,
-            severity: "error",
+            severity: "warning",
             source: "receive_twilio_sms",
-            error_type: "ghl_contact_resolve_failed",
-            error_message: e instanceof Error ? e.message : String(e),
-            context: { messageSid, fromPhone },
+            error_type: "ghl_contact_resolve_degraded",
+            error_message: lastErr instanceof Error ? lastErr.message : String(lastErr),
+            context: { messageSid, fromPhone, syntheticLeadId: contactId },
           });
         } catch (_logErr) { /* non-fatal */ }
-        return new Response(TWIML_EMPTY, {
-          status: 200,
-          headers: { ...corsHeaders, "Content-Type": "text/xml" },
-        });
       }
     }
 
@@ -1083,6 +1137,104 @@ Deno.serve(async (req) => {
       reusingExecution,
       debounceSeconds: effectiveDebounce,
     });
+
+    if (syntheticMinted) {
+      // Background reconcile: GHL was down when this inbound landed, so the lead
+      // was minted internally (bfd-<phone>) and the reply already flows
+      // Twilio-direct. Now that the response is returned, retry GHL and, on
+      // success, repoint ONLY the rows born in THIS request from the synthetic
+      // id to the real GHL contact id. Bounded child set; constraint-safe via
+      // the collision guard. Never blocks the inbound (runs in waitUntil).
+      const syntheticId = contactId;
+      const execIdForRepoint = executionId;
+      const ghlAccountIdForRepoint = ghlAccountId;
+      scheduleGhlMirror((async () => {
+        try {
+          const c = await findOrCreateGhlContact(
+            client.ghl_api_key!,
+            client.ghl_location_id!,
+            fromPhone,
+            messageBody,
+          );
+          const realId = c.contactId;
+          if (!realId || realId === syntheticId) return;
+
+          // Collision guard: if a real-GHL-id lead already exists for this
+          // client (e.g. a concurrent sync-ghl-contact created it), repointing
+          // would violate UNIQUE(client_id,lead_id). Leave the synthetic for the
+          // deferred Spec-2 merge instead.
+          const { data: collision } = await supabase
+            .from("leads")
+            .select("id")
+            .eq("client_id", client.id)
+            .eq("lead_id", realId)
+            .maybeSingle();
+          if (collision) {
+            await supabase.from("error_logs").insert({
+              client_id: client.id,
+              severity: "info",
+              source: "receive_twilio_sms",
+              error_type: "synthetic_repoint_skipped_collision",
+              error_message: "real GHL id already has a lead row; deferring to merge",
+              context: { syntheticId, realId },
+            }).then(() => {}, () => {});
+            return;
+          }
+
+          // Bounded repoint of the rows created/touched in this request.
+          const realNameParts = (c.name || "").split(" ").filter(Boolean);
+          await supabase
+            .from("leads")
+            .update({
+              lead_id: realId,
+              first_name: realNameParts[0] ?? null,
+              last_name: realNameParts.slice(1).join(" ") || null,
+              email: c.email || null,
+            })
+            .eq("client_id", client.id)
+            .eq("lead_id", syntheticId);
+          await supabase
+            .from("message_queue")
+            .update({ lead_id: realId })
+            .eq("lead_id", syntheticId)
+            .eq("ghl_account_id", ghlAccountIdForRepoint);
+          if (execIdForRepoint) {
+            await supabase
+              .from("dm_executions")
+              .update({ lead_id: realId })
+              .eq("id", execIdForRepoint);
+          }
+          await supabase
+            .from("active_trigger_runs")
+            .update({ lead_id: realId })
+            .eq("lead_id", syntheticId)
+            .eq("ghl_account_id", ghlAccountIdForRepoint);
+
+          // Re-mirror now that a real GHL contact exists (best-effort).
+          setGhlContactChannel(client.ghl_api_key!, client.ghl_channel_field_id, realId, "SMS");
+          scheduleGhlMirror(
+            pushSmsToGhl({
+              ghlApiKey: client.ghl_api_key!,
+              ghlLocationId: client.ghl_location_id!,
+              contactId: realId,
+              conversationProviderId: client.ghl_conversation_provider_id ?? null,
+              message: messageBody,
+              direction: "inbound",
+              altId: messageSid ?? null,
+            }),
+          );
+        } catch (e) {
+          await supabase.from("error_logs").insert({
+            client_id: client.id,
+            severity: "warning",
+            source: "receive_twilio_sms",
+            error_type: "synthetic_repoint_failed",
+            error_message: e instanceof Error ? e.message : String(e),
+            context: { syntheticLeadId: syntheticId, messageSid },
+          }).then(() => {}, () => {});
+        }
+      })());
+    }
 
     return new Response(TWIML_EMPTY, {
       status: 200,

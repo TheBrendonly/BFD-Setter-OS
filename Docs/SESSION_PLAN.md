@@ -112,9 +112,19 @@ Status: `[ ]` not started · `[~]` in progress · `[x]` done. Effort is rough.
   Brendan provisions the field; `clients_public` recreated, 0 secrets leaked; `vite build` + `deno check` green).
   Redeployed Trigger.dev prod (`20260625.1`, 12 tasks) to guarantee the F3/F4 runtime is current. F1/F3/F4 →
   `TEST_LIST`; F1 activation → `BRENDAN_TODO`. → emits **Session 5**.
-- [ ] **Session 5 — By-phone pivot (CODE).** `BUG_LIST` B-2 (internal-first STOP + inbound resolution,
-  drop the GHL lookup). Larger behavior change to a live path; do it alone + carefully. **Done when:**
-  deployed + moved to TEST_LIST. → emits **Session 6**.
+- [x] **Session 5 — By-phone pivot (CODE).** DONE 2026-06-26 (was PLAN mode — live path). Verify-first found
+  **most of B-2 already shipped in Spec 1** (STOP fully internal + by-phone, zero GHL; inbound already
+  internal-first via `resolveLeadByPhone`; `normalized_phone` set on the main create paths). The only residual
+  GHL-lookup-for-identity was `receive-twilio-sms`'s `findOrCreateGhlContact` fallback on a brand-new-number
+  miss. Per Brendan's gate ("Resilient + deterministic", "Fix + backfill"): (1a) made the GHL pick deterministic
+  (exact-phone filter → most-recently-updated survivor, not first-match); (1b/1c) made inbound resilient — a GHL
+  outage no longer drops the reply (REL-03): it mints a deterministic internal lead `bfd-<normalized_phone>` (reply
+  flows Twilio-direct), logs `ghl_contact_resolve_degraded`, and a background `waitUntil` reconcile repoints the
+  synthetic row to the real GHL id behind a UNIQUE-collision guard (bounded child set; defers concurrent-create to
+  the Spec-2 merge); (2) fixed the CSV-import `normalized_phone` gap in `process-lead-file` + a one-time idempotent
+  backfill migration `20260627120000`. receive-twilio-sms **v29**, process-lead-file **v14**, migration applied;
+  no Trigger redeploy (`trigger/*` unchanged). Server-side verified (column/index present, `rows_missing_norm=0`,
+  no dup `bfd-%` rows). B-2 → `TEST_LIST`. → emits **Session 6**.
 - [ ] **Session 6 — Secret-read hardening (CODE, optional pre-100%).** `BUG_LIST` G3-6 (move ~20 browser
   secret-value reads behind edge fns). Defense-in-depth (already RLS-scoped), so can slot after the TEST
   pass if time-boxed. **Done when:** deployed + moved to TEST_LIST. → emits **Session 7**.

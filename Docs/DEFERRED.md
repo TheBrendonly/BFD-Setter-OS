@@ -32,4 +32,6 @@ Things deliberately not being built now, each with the gate that would un-defer 
 
 ## Other
 
+- [ ] **By-phone Spec 2 — N-row merge + UNIQUE(client_id, normalized_phone)** — collapse the existing duplicate `leads` rows that share a `normalized_phone` into one survivor (richest/most-recent), repoint child tables (engagement_executions / bookings / campaign_events / dm_executions / scheduled_callbacks / message_queue / active_trigger_runs) onto the survivor, add the UNIQUE constraint, and clean up the GHL-side dupes. Spec 1 (go-forward) is live; Session 5's resilient-inbound collision guard explicitly **defers** the rare concurrent-create case here. **Gate:** needs a dry-run on the live dup set first (was the ~10-row `+61405482446` case); low urgency while GHL allow-duplicate-contacts stays OFF. See `project_internal_by_phone_leads_spec1_2026_06_18`.
+
 - [ ] **6.12a GHL custom conversation provider POC** — deferred. Upstream `1prompt-os` never used one (it lets GHL own the channel); the marketplace-app path is bfd-specific and painful. The **F1 deep-link feature** covers the need near-term (link from GHL to BFD's conversation view). Revisit the provider only if branded in-GHL bubbles become a hard requirement.
