@@ -46,7 +46,7 @@ READ FIRST: Docs/SESSION_PLAN.md + the latest Operations/handoffs/ doc + the lis
 
 ### Plan mode per session
 Start in **plan mode** (research + approve the approach before any edits) for the **design-heavy or
-live-path** sessions: **Session 1 (B-1 cascade), Session 4 (F1/F3), Session 5 (B-2 by-phone pivot)**,
+live-path** sessions: **Session 1 (B-1 cascade), Session 4 (F1/F3), Session 5 (B-2 by-phone pivot), Session 6.5 (F9/F8 build)**,
 and any session that touches the live cadence runtime or many surfaces. **Skip plan mode** (just
 execute) for the **mechanical/prescriptive** ones: Session 2 (G3 sweep), Session 3's cleanup
 (F5/F6/F7), types.ts, the **doc** session, and the **TEST** session (read-only / Brendan-driven).
@@ -137,7 +137,21 @@ Status: `[ ]` not started · `[~]` in progress · `[x]` done. Effort is rough.
   get-openrouter-usage **v1**, get-chat-history **v7** ACTIVE. Out-of-scope residue (live/legacy webhook
   secret-forwards in LeadRow + the cross-project-n8n Presentation/Webinar chats, + dead ApiManagement/
   SupabaseConfigCard/RefreshCostDialog) logged as **G3-8**. G3-6 → `TEST_LIST` (network-tab gate + Tier-3
-  live re-test owed at first client). → emits **Session 7**.
+  live re-test owed at first client). → emitted **Session 7**; sequence then re-ordered (2026-06-26) to run
+  **Session 6.5** (F9/F8 build) before the TEST pass.
+- [ ] **Session 6.5 — F9/F8 feature build (CODE, PLAN mode — design-heavy + live-path).** Inserted
+  2026-06-26 ahead of the TEST pass (Brendan's call): build it before testing so the single test pass
+  validates final behaviour instead of re-testing the voice write paths after. **F9 first (own session) —
+  per-setter Retell lock + ownership sync** (`FEATURE_ROADMAP` "Feature spec - F9"): `voice_setters.is_retell_locked`
+  (+ snapshot/version cols) with a SERVER-ENFORCED write-guard across all ~8 retell-proxy write paths
+  (incl. the two BULK loops + the make-retell-outbound-call voicemail PATCH skip) — outbound dialing must
+  keep working while locked; locked setters become a read-only "Pull from Retell" mirror with version-drift
+  detection. **F8 second (additive, agency-only, zero runtime overlap; may instead slot after the TEST pass)
+  — per-minute cost-to-price calculator** (`FEATURE_ROADMAP` "Feature spec - F8"): `computeBlendedRate`
+  (integer minor units + explicit FX + markup) + an agency-only rate panel on Sub-Account Config. Start
+  with a discovery sweep (re-verify both specs vs live code + scan BUG_LIST/DEFERRED for other in-area
+  wins) and brainstorm the open decisions before coding. **Done when:** F9 + F8 (v1) deployed + moved to
+  TEST_LIST (with concrete live checks); v2 noted deferred. → emits the **Session 7** TEST prompt.
 - [ ] **Session 7 — TEST pass (BRENDAN drives, Claude verifies).** Run the whole `Docs/TEST_LIST.md` in one
   live sweep (go-live smokes + B4 no-double-send + B-1/B-3/B-4/B-5 retests). Pre-req: Brendan re-Saved
   the 5 setters (from Session 1). Each pass → COMPLETED_LOG; each fail → a new BUG_LIST item + a fix
@@ -147,5 +161,5 @@ Status: `[ ]` not started · `[~]` in progress · `[x]` done. Effort is rough.
   GHL/Retell/Unipile webhook secrets + arm `retell_webhook_secret` (6.6), register AU SMS A2P for
   `+61481614530`. See `Docs/DEFERRED.md`. After this, v1 is live + 100%.
 
-When Sessions 0-7 are `[x]` and TEST_LIST is green, BFD-setter is at v1 "100%". v2 = the lifecycle
+When Sessions 0-6.5 and 7 are `[x]` and TEST_LIST is green, BFD-setter is at v1 "100%". v2 = the lifecycle
 system + A/B + analytics + HubSpot (`Docs/DEFERRED.md`).
