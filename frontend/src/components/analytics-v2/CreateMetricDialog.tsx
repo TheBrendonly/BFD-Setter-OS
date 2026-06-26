@@ -29,11 +29,10 @@ interface CreateMetricDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   clientId: string;
-  openrouterApiKey: string;
   onCreated: () => void;
 }
 
-export function CreateMetricDialog({ open, onOpenChange, clientId, openrouterApiKey, onCreated }: CreateMetricDialogProps) {
+export function CreateMetricDialog({ open, onOpenChange, clientId, onCreated }: CreateMetricDialogProps) {
   const [step, setStep] = useState<'input' | 'analyzing' | 'choose' | 'creating'>('input');
   const [name, setName] = useState('');
   const [color, setColor] = useState('#3b82f6');
@@ -64,7 +63,7 @@ export function CreateMetricDialog({ open, onOpenChange, clientId, openrouterApi
 
     try {
       const { data, error } = await supabase.functions.invoke('analytics-v2-suggest-widgets', {
-        body: { prompt: prompt.trim(), openrouter_api_key: openrouterApiKey },
+        body: { prompt: prompt.trim(), client_id: clientId },
       });
 
       if (error) throw new Error(error.message);

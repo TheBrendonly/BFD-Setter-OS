@@ -259,6 +259,21 @@ interface ApiSettings {
   llm_model?: string | null;
 }
 
+// G3-6: secret fields are write-only in the editor (never prefilled, never read
+// back). A blank secret input means "unchanged"; saves must skip it so a blank
+// box can't NULL a stored secret. The "Configured" indicator reads has_<col>.
+const SECRET_SETTING_FIELDS = new Set<keyof ApiSettings>([
+  'openai_api_key',
+  'openrouter_api_key',
+  'openrouter_management_key',
+  'elevenlabs_api_key',
+  'retell_api_key',
+  'supabase_service_key',
+  'supabase_access_token',
+  'twilio_auth_token',
+  'ghl_api_key',
+]);
+
 const ApiCredentials = () => {
   const { clientId } = useParams<{ clientId: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -273,6 +288,11 @@ const ApiCredentials = () => {
 
   // Use cached credentials hook - prevents flash of incorrect state
   const { credentials, isLoading, updateCredential, updateMultipleCredentials, refetch } = useClientCredentials(clientId);
+
+  // G3-6: presence of a secret comes from the has_<col> booleans on clients_public,
+  // never the value. Used so saves don't require re-entering an already-set secret.
+  const isSecretSet = (field: keyof ApiSettings): boolean =>
+    Boolean((credentials as any)?.[`has_${field}`]);
 
   useEffect(() => {
     const highlight = searchParams.get('highlight');
@@ -401,21 +421,24 @@ const ApiCredentials = () => {
     llm_model: '',
   });
 
-  // Sync local settings with cached credentials
+  // Sync local settings with cached credentials.
+  // G3-6: secret VALUES are never read into the browser. Secret inputs stay
+  // write-only (seeded to ''); the "Configured" indicator reads has_<col>
+  // booleans (see isSavedConfigured below). Non-secret fields prefill as before.
   useEffect(() => {
     if (credentials) {
       setSettings({
         api_webhook_url: credentials.api_webhook_url || '',
-        openai_api_key: credentials.openai_api_key || '',
-        openrouter_api_key: credentials.openrouter_api_key || '',
-        openrouter_management_key: (credentials as any).openrouter_management_key || '',
-        elevenlabs_api_key: credentials.elevenlabs_api_key || '',
+        openai_api_key: '',
+        openrouter_api_key: '',
+        openrouter_management_key: '',
+        elevenlabs_api_key: '',
         elevenlabs_agent_id: (credentials as any).elevenlabs_agent_id || '',
-        retell_api_key: credentials.retell_api_key || '',
-        supabase_service_key: credentials.supabase_service_key || '',
+        retell_api_key: '',
+        supabase_service_key: '',
         supabase_table_name: credentials.supabase_table_name || '',
         supabase_url: credentials.supabase_url || '',
-        supabase_access_token: (credentials as any).supabase_access_token || '',
+        supabase_access_token: '',
         campaign_webhook_url: credentials.campaign_webhook_url || '',
         knowledge_base_webhook_url: credentials.knowledge_base_add_webhook_url || '',
         prompt_webhook_url: credentials.prompt_webhook_url || '',
@@ -425,9 +448,9 @@ const ApiCredentials = () => {
         database_reactivation_inbound_webhook_url: credentials.database_reactivation_inbound_webhook_url || '',
         update_pipeline_webhook_url: credentials.update_pipeline_webhook_url || '',
         twilio_account_sid: (credentials as any).twilio_account_sid || '',
-        twilio_auth_token: (credentials as any).twilio_auth_token || '',
+        twilio_auth_token: '',
         twilio_default_phone: (credentials as any).twilio_default_phone || '',
-        ghl_api_key: credentials.ghl_api_key || '',
+        ghl_api_key: '',
         ghl_calendar_id: credentials.ghl_calendar_id || '',
         gohighlevel_booking_title: (credentials as any).gohighlevel_booking_title || '',
         ghl_assignee_id: (credentials as any).ghl_assignee_id || '',
@@ -443,6 +466,13 @@ const ApiCredentials = () => {
 
   const handleSaveField = async (field: keyof ApiSettings) => {
     if (!clientId) return;
+    // G3-6 blank-save guard: secret inputs are write-only and seeded to ''.
+    // A blank secret field means "unchanged" (the value was never read back),
+    // so skip the write rather than NULL the stored secret.
+    if (SECRET_SETTING_FIELDS.has(field) && !settings[field]?.trim()) {
+      toast({ title: "No change", description: `${field.replace(/_/g, ' ')} left unchanged (enter a new value to update).` });
+      return;
+    }
     setSavingField(field);
     try {
       const fieldValue = settings[field] || null;
@@ -480,22 +510,24 @@ const ApiCredentials = () => {
     
     const url = settings.supabase_url?.trim();
     const key = settings.supabase_service_key?.trim();
-    
-    if (!url || !key) {
-      toast({ 
-        title: "Both fields required", 
-        description: "Please enter both Supabase URL and Service Role Key", 
-        variant: "destructive" 
+
+    // G3-6: the key is write-only. Require it only when none is stored yet;
+    // a blank key on a configured client means "keep the existing key".
+    if (!url || (!key && !isSecretSet('supabase_service_key'))) {
+      toast({
+        title: "Both fields required",
+        description: "Please enter both Supabase URL and Service Role Key",
+        variant: "destructive"
       });
       return;
     }
-    
+
     setSavingGroup('supabase');
     try {
-      const updates: Record<string, string | null> = { 
-        supabase_url: url, 
-        supabase_service_key: key,
+      const updates: Record<string, string | null> = {
+        supabase_url: url,
       };
+      if (key) updates.supabase_service_key = key;
       if (settings.supabase_access_token?.trim()) {
         updates.supabase_access_token = settings.supabase_access_token.trim();
       }
@@ -516,22 +548,23 @@ const ApiCredentials = () => {
     
     const openai = settings.openai_api_key?.trim();
     const openrouter = settings.openrouter_api_key?.trim();
-    
-    if (!openai || !openrouter) {
-      toast({ 
-        title: "Both fields required", 
-        description: "Please enter both OpenAI API Key and OpenRouter API Key", 
-        variant: "destructive" 
+
+    // G3-6: keys are write-only. Require each only when none is stored yet;
+    // a blank field on a configured client means "keep the existing key".
+    if ((!openai && !isSecretSet('openai_api_key')) || (!openrouter && !isSecretSet('openrouter_api_key'))) {
+      toast({
+        title: "Both fields required",
+        description: "Please enter both OpenAI API Key and OpenRouter API Key",
+        variant: "destructive"
       });
       return;
     }
-    
+
     setSavingGroup('llm');
     try {
-      const updates: Record<string, string | null> = { 
-        openai_api_key: openai, 
-        openrouter_api_key: openrouter,
-      };
+      const updates: Record<string, string | null> = {};
+      if (openai) updates.openai_api_key = openai;
+      if (openrouter) updates.openrouter_api_key = openrouter;
       const mgmtKey = settings.openrouter_management_key?.trim();
       if (mgmtKey) {
         updates.openrouter_management_key = mgmtKey;
@@ -539,6 +572,11 @@ const ApiCredentials = () => {
       const llmModel = settings.llm_model?.trim();
       if (llmModel) {
         updates.llm_model = llmModel;
+      }
+      if (Object.keys(updates).length === 0) {
+        toast({ title: "No change", description: "Keys already configured — enter a new value to update." });
+        setSavingGroup(null);
+        return;
       }
       await updateMultipleCredentials({ updates });
       await sendToApiCredentialsWebhook();
@@ -557,24 +595,24 @@ const ApiCredentials = () => {
     
     const key = settings.elevenlabs_api_key?.trim();
     const agentId = settings.elevenlabs_agent_id?.trim();
-    
-    if (!key) {
-      toast({ 
-        title: "Field required", 
-        description: "Please enter your ElevenLabs API key", 
-        variant: "destructive" 
+
+    // G3-6: the key is write-only. Require it only when none is stored yet.
+    if (!key && !isSecretSet('elevenlabs_api_key')) {
+      toast({
+        title: "Field required",
+        description: "Please enter your ElevenLabs API key",
+        variant: "destructive"
       });
       return;
     }
-    
+
     setSavingGroup('elevenlabs');
     try {
-      await updateMultipleCredentials({
-        updates: {
-          elevenlabs_api_key: key,
-          elevenlabs_agent_id: agentId || null,
-        }
-      });
+      const updates: Record<string, string | null> = {
+        elevenlabs_agent_id: agentId || null,
+      };
+      if (key) updates.elevenlabs_api_key = key;
+      await updateMultipleCredentials({ updates });
       await sendToApiCredentialsWebhook();
       toast({ title: "Saved", description: "ElevenLabs credentials saved successfully" });
     } catch (error) {
@@ -590,16 +628,22 @@ const ApiCredentials = () => {
     if (!clientId) return;
     
     const key = settings.retell_api_key?.trim();
-    
+
+    // G3-6: the key is write-only. A blank field on a configured client means
+    // "keep the existing key"; require it only when none is stored yet.
     if (!key) {
-      toast({ 
-        title: "Field required", 
-        description: "Please enter your Retell API key", 
-        variant: "destructive" 
+      if (isSecretSet('retell_api_key')) {
+        toast({ title: "No change", description: "Retell API key already configured — enter a new value to update." });
+        return;
+      }
+      toast({
+        title: "Field required",
+        description: "Please enter your Retell API key",
+        variant: "destructive"
       });
       return;
     }
-    
+
     setSavingGroup('retell');
     try {
       await updateCredential({ field: 'retell_api_key', value: key });
@@ -618,28 +662,29 @@ const ApiCredentials = () => {
     if (!clientId) return;
     setRefreshingGroup(group);
     try {
-      let updates: Record<string, string | null> = {};
+      // G3-6: secret fields are write-only; only re-push a secret when the user
+      // entered a new value (a blank box must never NULL a stored secret). The
+      // real re-sync to the external DB happens server-side below regardless.
+      const updates: Record<string, string | null> = {};
+      const addSecret = (field: keyof ApiSettings) => {
+        const v = settings[field]?.trim();
+        if (v) updates[field as string] = v;
+      };
       if (group === 'llm') {
-        updates = {
-          openai_api_key: settings.openai_api_key?.trim() || null,
-          openrouter_api_key: settings.openrouter_api_key?.trim() || null,
-          openrouter_management_key: settings.openrouter_management_key?.trim() || null,
-        };
+        addSecret('openai_api_key');
+        addSecret('openrouter_api_key');
+        addSecret('openrouter_management_key');
       } else if (group === 'elevenlabs') {
-        updates = {
-          elevenlabs_api_key: settings.elevenlabs_api_key?.trim() || null,
-          elevenlabs_agent_id: settings.elevenlabs_agent_id?.trim() || null,
-        };
+        addSecret('elevenlabs_api_key');
+        updates.elevenlabs_agent_id = settings.elevenlabs_agent_id?.trim() || null;
       } else if (group === 'retell') {
-        updates = {
-          retell_api_key: settings.retell_api_key?.trim() || null,
-        };
+        addSecret('retell_api_key');
       } else if (group === 'webhooks') {
-        updates = {
-          simulation_webhook: settings.simulation_webhook?.trim() || null,
-        };
+        updates.simulation_webhook = settings.simulation_webhook?.trim() || null;
       }
-      await updateMultipleCredentials({ updates });
+      if (Object.keys(updates).length > 0) {
+        await updateMultipleCredentials({ updates });
+      }
       await sendToApiCredentialsWebhook();
       toast({ title: "Synced", description: `${group === 'llm' ? 'LLM' : group === 'retell' ? 'Retell AI' : group === 'elevenlabs' ? 'ElevenLabs' : 'Webhook'} credentials re-synced to database` });
     } catch (error) {
@@ -653,19 +698,19 @@ const ApiCredentials = () => {
 
   const areRequiredCredentialsConfigured = () => {
     const hasSupabase = isCredentialConfigured(credentials?.supabase_url) && 
-                        isCredentialConfigured(credentials?.supabase_service_key);
-    const hasLLM = isCredentialConfigured(credentials?.openai_api_key) || 
-                   isCredentialConfigured(credentials?.openrouter_api_key);
+                        Boolean(credentials?.has_supabase_service_key);
+    const hasLLM = Boolean(credentials?.has_openai_api_key) || 
+                   Boolean(credentials?.has_openrouter_api_key);
     return hasSupabase && hasLLM;
   };
 
   // Get missing credentials for the alert message
   const getMissingCredentials = () => {
     const missing: string[] = [];
-    if (!isCredentialConfigured(credentials?.supabase_url) || !isCredentialConfigured(credentials?.supabase_service_key)) {
+    if (!isCredentialConfigured(credentials?.supabase_url) || !Boolean(credentials?.has_supabase_service_key)) {
       missing.push('Supabase');
     }
-    if (!isCredentialConfigured(credentials?.openai_api_key) && !isCredentialConfigured(credentials?.openrouter_api_key)) {
+    if (!Boolean(credentials?.has_openai_api_key) && !Boolean(credentials?.has_openrouter_api_key)) {
       missing.push('LLM (OpenAI or OpenRouter)');
     }
     return missing;
@@ -727,7 +772,7 @@ const ApiCredentials = () => {
                   value={settings.supabase_service_key || ''}
                   onChange={(value) => handleInputChange('supabase_service_key', value)}
                   disabled={false}
-                  isSavedConfigured={isCredentialConfigured(credentials?.supabase_service_key)}
+                  isSavedConfigured={Boolean(credentials?.has_supabase_service_key)}
                   isPassword
                   placeholder="Enter your Supabase service role key"
                 />
@@ -794,7 +839,7 @@ const ApiCredentials = () => {
                   value={settings.openai_api_key || ''}
                   onChange={(value) => handleInputChange('openai_api_key', value)}
                   disabled={false}
-                  isSavedConfigured={isCredentialConfigured(credentials?.openai_api_key)}
+                  isSavedConfigured={Boolean(credentials?.has_openai_api_key)}
                   isPassword
                   placeholder="Enter your OpenAI API key"
                 />
@@ -804,7 +849,7 @@ const ApiCredentials = () => {
                   value={settings.openrouter_api_key || ''}
                   onChange={(value) => handleInputChange('openrouter_api_key', value)}
                   disabled={false}
-                  isSavedConfigured={isCredentialConfigured(credentials?.openrouter_api_key)}
+                  isSavedConfigured={Boolean(credentials?.has_openrouter_api_key)}
                   isPassword
                   placeholder="Enter your OpenRouter API key"
                 />
@@ -876,7 +921,7 @@ const ApiCredentials = () => {
                   value={settings.retell_api_key || ''}
                   onChange={(value) => handleInputChange('retell_api_key', value)}
                   disabled={false}
-                  isSavedConfigured={isCredentialConfigured(credentials?.retell_api_key)}
+                  isSavedConfigured={Boolean(credentials?.has_retell_api_key)}
                   isPassword
                   placeholder="key_xxxxxxxxxxxxxxxxxxxxxxxx"
                 />
@@ -932,7 +977,7 @@ const ApiCredentials = () => {
                   value={settings.ghl_api_key || ''}
                   onChange={(value) => handleInputChange('ghl_api_key', value)}
                   disabled={false}
-                  isSavedConfigured={isCredentialConfigured(credentials?.ghl_api_key)}
+                  isSavedConfigured={Boolean(credentials?.has_ghl_api_key)}
                   isPassword
                   placeholder="Enter your GoHighLevel API key"
                 />

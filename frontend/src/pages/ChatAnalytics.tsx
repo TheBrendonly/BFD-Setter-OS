@@ -238,8 +238,9 @@ const loadAnalyticsFromDatabase = async (clientId: string, analyticsType: 'text'
 interface Client {
   id: string;
   name: string;
-  openrouter_api_key: string | null;
-  openai_api_key: string | null;
+  // G3-6: presence-only — secret values never reach the browser.
+  has_openrouter_api_key: boolean;
+  has_openai_api_key: boolean;
 }
 interface SupabaseConfig {
   url: string;
@@ -1048,16 +1049,18 @@ const ChatAnalytics = () => {
       const {
         data: clientData,
         error: clientError
-      } = await supabase.from('clients').select('supabase_url, supabase_service_key, analytics_webhook_url').eq('id', clientId).maybeSingle();
+      } = await supabase.from('clients_public').select('supabase_url, has_supabase_service_key, analytics_webhook_url').eq('id', clientId).maybeSingle();
       if (clientError) throw clientError;
-      
+
       if (clientData) {
         // Set webhook URL for validation
         setClientWebhookUrl(clientData.analytics_webhook_url || null);
-        if (clientData.supabase_url && clientData.supabase_service_key) {
+        // G3-6: the service key is write-only (never read back). Presence comes
+        // from has_supabase_service_key; the time-series reads run server-side.
+        if (clientData.supabase_url && clientData.has_supabase_service_key) {
           setSupabaseConfig({
             url: clientData.supabase_url,
-            serviceKey: clientData.supabase_service_key,
+            serviceKey: '',
             tableName: '' // No longer needed
           });
           setConfigSaved(true);
@@ -1215,9 +1218,9 @@ const ChatAnalytics = () => {
       const {
         data,
         error
-      } = await supabase.from('clients').select('id, name, openrouter_api_key, openai_api_key, supabase_url, supabase_service_key').eq('id', clientId).maybeSingle();
+      } = await supabase.from('clients_public').select('id, name, has_openrouter_api_key, has_openai_api_key, supabase_url, has_supabase_service_key').eq('id', clientId).maybeSingle();
       if (error) throw error;
-      
+
       if (!data) {
         toast({
           title: "Client Not Found",
@@ -1226,15 +1229,15 @@ const ChatAnalytics = () => {
         });
         return;
       }
-      
+
       setClient(data);
 
       // Check if Supabase is configured (URL and service key only - no table name required)
-      const hasConfig = !!(data.supabase_url && data.supabase_service_key);
+      const hasConfig = !!(data.supabase_url && data.has_supabase_service_key);
       setHasSupabaseConfig(hasConfig);
 
       // Check if LLMs (OpenRouter/OpenAI) are configured
-      const hasLLMs = !!data.openrouter_api_key;
+      const hasLLMs = !!data.has_openrouter_api_key;
       setHasLLMConfig(hasLLMs);
     } catch (error: any) {
       console.error('Error fetching client:', error);
@@ -1577,29 +1580,22 @@ const ChatAnalytics = () => {
               }
             } else {
               console.warn(`AI format failed for "${metric.name}":`, formatError || formatResult);
-              // Fallback: try old analyze-metric if OpenRouter key available
-              if (conversations.length > 0 && wt !== 'number_card') {
-                const { data: clientCreds } = await supabase
-                  .from('clients')
-                  .select('openrouter_api_key')
-                  .eq('id', clientId)
-                  .maybeSingle();
-                if (clientCreds?.openrouter_api_key) {
-                  const { data: analysisData, error: analysisError } = await supabase.functions.invoke('analyze-metric', {
-                    body: {
-                      client_id: clientId,
-                      metric_id: metric.id,
-                      metric_prompt: metric.prompt,
-                      metric_name: metric.name,
-                      conversations,
-                      openrouter_api_key: clientCreds.openrouter_api_key,
-                      time_range: requestedTimeRange,
-                    },
-                  });
-                  if (!analysisError && analysisData?.matches) {
-                    const ts = buildTimeSeriesFromMatches(analysisData.matches);
-                    setMetricAnalysisTimeSeries(prev => ({ ...prev, [metric.id]: ts }));
-                  }
+              // Fallback: try old analyze-metric if OpenRouter key is configured.
+              // G3-6: analyze-metric reads the key server-side from client_id.
+              if (conversations.length > 0 && wt !== 'number_card' && hasLLMConfig) {
+                const { data: analysisData, error: analysisError } = await supabase.functions.invoke('analyze-metric', {
+                  body: {
+                    client_id: clientId,
+                    metric_id: metric.id,
+                    metric_prompt: metric.prompt,
+                    metric_name: metric.name,
+                    conversations,
+                    time_range: requestedTimeRange,
+                  },
+                });
+                if (!analysisError && analysisData?.matches) {
+                  const ts = buildTimeSeriesFromMatches(analysisData.matches);
+                  setMetricAnalysisTimeSeries(prev => ({ ...prev, [metric.id]: ts }));
                 }
               }
             }
@@ -1920,7 +1916,7 @@ const ChatAnalytics = () => {
   }, [chatHistoryMessages, toLocalDateKey]);
 
   useEffect(() => {
-    if (!supabaseConfig.url || !supabaseConfig.serviceKey) {
+    if (!clientId || !hasSupabaseConfig) {
       setChatHistoryMessages(null);
       return;
     }
@@ -1929,9 +1925,6 @@ const ChatAnalytics = () => {
 
     const fetchTimeSeries = async () => {
       try {
-        const { createClient } = await import('@supabase/supabase-js');
-        const clientSupabase = createClient(supabaseConfig.url, supabaseConfig.serviceKey);
-
         // Calculate date range
         let startDate: string;
         let endDate: string;
@@ -1944,40 +1937,28 @@ const ChatAnalytics = () => {
           endDate = new Date().toISOString();
         }
 
-        // Fetch timestamps + message data in range
-        const pageSize = 1000;
+        // G3-6: the external-supabase read runs server-side in get-chat-history
+        // (date-range mode), so the service key never reaches the browser.
+        const { data, error } = await supabase.functions.invoke('get-chat-history', {
+          body: { clientId, mode: 'range', startDate, endDate },
+        });
+        if (error) throw error;
+        const rows = (data?.rows ?? []) as Array<{ timestamp: string; message: any }>;
+
         const allMessages: ChatHistoryMsg[] = [];
-        let from = 0;
-
-        while (true) {
-          const { data, error } = await clientSupabase
-            .from('chat_history')
-            .select('timestamp,message')
-            .gte('timestamp', startDate)
-            .lte('timestamp', endDate)
-            .order('timestamp', { ascending: true })
-            .range(from, from + pageSize - 1);
-
-          if (error) throw error;
-          if (!data || data.length === 0) break;
-
-          for (const row of data) {
-            let msgType = 'assistant';
-            let msgContent = '';
-            const m = row.message;
-            if (typeof m === 'object' && m !== null) {
-              msgContent = (m as any).content || (m as any).text || '';
-              msgType = (m as any).role || (m as any).type || 'assistant';
-            } else if (typeof m === 'string') {
-              try { const p = JSON.parse(m); msgContent = p.content || p.text || m; msgType = p.role || p.type || 'assistant'; } catch { msgContent = m; }
-            }
-            if (['human', 'user', 'Human', 'User'].includes(msgType)) msgType = 'human';
-            else msgType = 'assistant';
-            allMessages.push({ timestamp: row.timestamp, type: msgType, content: msgContent });
+        for (const row of rows) {
+          let msgType = 'assistant';
+          let msgContent = '';
+          const m = row.message;
+          if (typeof m === 'object' && m !== null) {
+            msgContent = (m as any).content || (m as any).text || '';
+            msgType = (m as any).role || (m as any).type || 'assistant';
+          } else if (typeof m === 'string') {
+            try { const p = JSON.parse(m); msgContent = p.content || p.text || m; msgType = p.role || p.type || 'assistant'; } catch { msgContent = m; }
           }
-
-          if (data.length < pageSize) break;
-          from += pageSize;
+          if (['human', 'user', 'Human', 'User'].includes(msgType)) msgType = 'human';
+          else msgType = 'assistant';
+          allMessages.push({ timestamp: row.timestamp, type: msgType, content: msgContent });
         }
 
         if (!cancelled) {
@@ -1991,7 +1972,7 @@ const ChatAnalytics = () => {
 
     fetchTimeSeries();
     return () => { cancelled = true; };
-  }, [supabaseConfig.url, supabaseConfig.serviceKey, timeRange, customStartDate, customEndDate]);
+  }, [clientId, hasSupabaseConfig, timeRange, customStartDate, customEndDate]);
 
   // ── Auto-refresh when time range changes and no cached data exists ──
   const prevTimeRangeRef = useRef(timeRange);
@@ -2183,49 +2164,9 @@ const ChatAnalytics = () => {
         return;
       }
 
-      // AI-based similarity check against default metrics (only when creating)
-      if (!editingMetric) {
-        // Fetch fresh key to avoid stale credentials
-        const { data: freshCreds } = await supabase.from('clients').select('openrouter_api_key').eq('id', clientId).maybeSingle();
-        const freshKey = freshCreds?.openrouter_api_key;
-        if (freshKey) {
-          try {
-            const checkRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${freshKey}` },
-              body: JSON.stringify({
-                model: 'google/gemini-2.0-flash-001',
-                messages: [{
-                  role: 'user',
-                  content: `You are a duplicate metric detector. Given these DEFAULT metrics:\n${DEFAULT_METRIC_NAMES.map(n => `- "${n}"`).join('\n')}\n\nA user wants to create a new metric named "${data.name}" with description: "${data.prompt}"\n\nIs this new metric essentially the same as or a duplicate/synonym of any default metric? Consider semantic similarity, not just exact name matching. For example "AI Messages" is the same as "Total Bot Messages", "Human Messages" is the same as "Total Human Messages", etc.\n\nRespond with ONLY a JSON object: {"is_duplicate": true/false, "similar_to": "name of similar default metric or null", "reason": "brief explanation"}`
-                }],
-                temperature: 0,
-                max_tokens: 150,
-              }),
-            });
-            if (checkRes.status === 401) {
-              console.warn('OpenRouter API key invalid, skipping AI similarity check');
-            } else if (checkRes.ok) {
-              const checkData = await checkRes.json();
-              const content = checkData?.choices?.[0]?.message?.content || '';
-              const jsonMatch = content.match(/\{[\s\S]*\}/);
-              if (jsonMatch) {
-                const parsed = JSON.parse(jsonMatch[0]);
-                if (parsed.is_duplicate) {
-                  toast({
-                    title: "Duplicate Metric",
-                    description: `This metric is similar to the default metric "${parsed.similar_to}". ${parsed.reason || ''}`,
-                    variant: "destructive",
-                  });
-                  return;
-                }
-              }
-            }
-          } catch (aiErr) {
-            console.warn('AI similarity check failed, proceeding with creation:', aiErr);
-          }
-        }
-      }
+      // G3-6: the optional in-browser OpenRouter "semantic duplicate" check was
+      // removed (it read the secret key into the browser and called openrouter.ai
+      // directly). The exact-name duplicate guard above is retained.
 
       if (editingMetric) {
         const updatePayload: any = { name: data.name, prompt: data.prompt, color: data.color, updated_at: new Date().toISOString() };
@@ -2624,16 +2565,9 @@ const ChatAnalytics = () => {
     const conversations = result?.Conversations_List || result?.conversations_list || result?.metrics?.Conversations_List || [];
     if (!conversations || conversations.length === 0) return;
 
-    // Get client's OpenRouter API key
+    // G3-6: analyze-metric reads the OpenRouter key server-side from client_id;
+    // the hasLLMConfig gate above already confirms a key is configured.
     try {
-      const { data: clientData } = await supabase
-        .from('clients')
-        .select('openrouter_api_key')
-        .eq('id', clientId)
-        .maybeSingle();
-
-      if (!clientData?.openrouter_api_key) return;
-
       setIsAnalyzingMetric(true);
 
       // Check cache first
@@ -2661,7 +2595,6 @@ const ChatAnalytics = () => {
           metric_prompt: effectivePrompt,
           metric_name: metric.name,
           conversations,
-          openrouter_api_key: clientData.openrouter_api_key,
           time_range: timeRange,
         },
       });
@@ -2862,7 +2795,7 @@ const ChatAnalytics = () => {
                   onOpenChange={(open) => { setMetricDialogOpen(open); if (!open) setEditingMetric(null); }}
                   metric={null}
                   onSave={handleMetricSave}
-                  openrouterApiKey={client?.openrouter_api_key || undefined}
+                  hasOpenrouterKey={!!client?.has_openrouter_api_key}
                   clientId={clientId}
                 />
               </div>
@@ -2964,7 +2897,7 @@ const ChatAnalytics = () => {
                   onOpenChange={(open) => { setMetricDialogOpen(open); if (!open) setEditingMetric(null); }}
                   metric={null}
                   onSave={handleMetricSave}
-                  openrouterApiKey={client?.openrouter_api_key || undefined}
+                  hasOpenrouterKey={!!client?.has_openrouter_api_key}
                   clientId={clientId}
                 />
                 

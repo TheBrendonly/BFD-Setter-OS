@@ -5415,7 +5415,9 @@ const PromptManagement = () => {
       if (isFresh(cacheKey)) return;
     }
     try {
-      const { data: clientData, error } = await supabase.from('clients').select('name, supabase_url, supabase_service_key, supabase_table_name, openrouter_api_key, openai_api_key').eq('id', clientId).maybeSingle();
+      // G3-6: read only the non-secret name (via clients_public). openrouterApiKey
+      // state is unused downstream; no secret value is pulled into the browser.
+      const { data: clientData, error } = await supabase.from('clients_public').select('name').eq('id', clientId).maybeSingle();
       if (error) throw error;
       if (!clientData) {
         console.warn('No client found or access denied for client name fetch.');
@@ -5425,7 +5427,7 @@ const PromptManagement = () => {
       }
       const meta: ClientMeta = {
         name: clientData.name,
-        openrouter_api_key: clientData.openrouter_api_key || null,
+        openrouter_api_key: null,
         hasSupabaseConfig: true,
         hasLLMConfig: true,
       };
@@ -6803,10 +6805,12 @@ const PromptManagement = () => {
       // Convert HTML to clean markdown with proper formatting and spacing
       const markdownContent = preserveMarkdownFormatting(data.content);
 
-      // Fetch only Supabase credentials for the webhook payload
+      // G3-6: the supabase service key is no longer read into the browser or
+      // forwarded in the webhook payload (defense-in-depth; this n8n prompt-sync
+      // webhook is being decommissioned). Only supabase_url is needed downstream.
       const {
         data: clientData
-      } = await supabase.from('clients').select('supabase_url, supabase_service_key, supabase_table_name').eq('id', clientId).maybeSingle();
+      } = await supabase.from('clients_public').select('supabase_url, supabase_table_name').eq('id', clientId).maybeSingle();
 
       // Build prompt configurations map - merge saved DB configs with local overrides
       // so ALL configuration options are always sent, not just ones changed this session
@@ -6874,9 +6878,8 @@ const PromptManagement = () => {
         booking_prompt: data.agentSettings?.booking_prompt || '',
         // Prompt configurations (all mini-prompt sections with their selections)
         prompt_configurations: promptConfigurations,
-        // Client Supabase config
+        // Client Supabase config (G3-6: service key intentionally omitted)
         supabase_url: clientData?.supabase_url || null,
-        supabase_service_key: clientData?.supabase_service_key || null,
         supabase_table_name: clientData?.supabase_table_name || null,
       };
 

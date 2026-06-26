@@ -94,7 +94,9 @@ type ChatHistoryRow = {
 };
 
 async function fetchAllRows(
-  perClient: ReturnType<typeof createClient>,
+  // deno: the per-client SupabaseClient generic (schema "public") doesn't unify
+  // with ReturnType<typeof createClient> (schema never); typed `any` for the helper.
+  perClient: any,
   sessionId: string,
   pageSize: number,
 ): Promise<ChatHistoryRow[]> {
@@ -117,6 +119,35 @@ async function fetchAllRows(
   return all;
 }
 
+// G3-6: date-range mode for the ChatAnalytics time-series. Replaces the old
+// in-browser createClient + chat_history range query (which needed the secret
+// service key in the browser). Returns just {timestamp, message} across the range.
+async function fetchRangeRows(
+  perClient: any,
+  startDate: string,
+  endDate: string,
+  pageSize: number,
+): Promise<Array<{ timestamp: string; message: unknown }>> {
+  const all: Array<{ timestamp: string; message: unknown }> = [];
+  let from = 0;
+  // Hard cap to avoid runaway pagination (50 * 1000 = 50k rows).
+  for (let page = 0; page < 50; page++) {
+    const { data, error } = await perClient
+      .from("chat_history")
+      .select("timestamp,message")
+      .gte("timestamp", startDate)
+      .lte("timestamp", endDate)
+      .order("timestamp", { ascending: true })
+      .range(from, from + pageSize - 1);
+    if (error) throw new Error(`chat_history range fetch failed: ${error.message}`);
+    if (!data || data.length === 0) break;
+    all.push(...(data as Array<{ timestamp: string; message: unknown }>));
+    if (data.length < pageSize) break;
+    from += pageSize;
+  }
+  return all;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   if (req.method !== "POST") return jsonResponse({ ok: false, error: "POST only" }, 405);
@@ -124,16 +155,23 @@ Deno.serve(async (req) => {
   try {
     const body = await req.json().catch(() => ({}));
     const clientId = typeof body?.clientId === "string" ? body.clientId : null;
+    const mode = body?.mode === "range" ? "range" : "session";
     const sessionId = typeof body?.sessionId === "string" ? body.sessionId : null;
     const altSessionId = typeof body?.altSessionId === "string" && body.altSessionId !== sessionId
       ? body.altSessionId
       : null;
+    const startDate = typeof body?.startDate === "string" ? body.startDate : null;
+    const endDate = typeof body?.endDate === "string" ? body.endDate : null;
     const pageSize = typeof body?.pageSize === "number" && body.pageSize > 0 && body.pageSize <= 1000
       ? Math.floor(body.pageSize)
       : 1000;
 
     if (!clientId) throw new AuthError(400, "clientId is required");
-    if (!sessionId) throw new AuthError(400, "sessionId is required");
+    if (mode === "range") {
+      if (!startDate || !endDate) throw new AuthError(400, "startDate and endDate are required for range mode");
+    } else if (!sessionId) {
+      throw new AuthError(400, "sessionId is required");
+    }
 
     await assertClientAccess(req.headers.get("Authorization"), clientId);
 
@@ -152,7 +190,12 @@ Deno.serve(async (req) => {
       auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
     });
 
-    let rows = await fetchAllRows(perClient, sessionId, pageSize);
+    if (mode === "range") {
+      const rangeRows = await fetchRangeRows(perClient, startDate!, endDate!, pageSize);
+      return jsonResponse({ ok: true, rows: rangeRows });
+    }
+
+    let rows = await fetchAllRows(perClient, sessionId!, pageSize);
     let usedAltId = false;
     if (rows.length === 0 && altSessionId) {
       rows = await fetchAllRows(perClient, altSessionId, pageSize);

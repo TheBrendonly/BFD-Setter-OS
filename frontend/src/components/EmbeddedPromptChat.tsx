@@ -165,7 +165,8 @@ export const EmbeddedPromptChat: React.FC<EmbeddedPromptChatProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [threadLoading, setThreadLoading] = useState(false);
   const [fetchedSystemPrompt, setFetchedSystemPrompt] = useState('');
-  const [openRouterApiKey, setOpenRouterApiKey] = useState('');
+  // G3-6: presence-only — the OpenRouter key value never reaches the browser.
+  const [hasOpenRouterKey, setHasOpenRouterKey] = useState(false);
   const [hasLLMConfig, setHasLLMConfig] = useState(false);
   const [hasSupabaseConfig, setHasSupabaseConfig] = useState(false);
   
@@ -175,20 +176,20 @@ export const EmbeddedPromptChat: React.FC<EmbeddedPromptChatProps> = ({
       if (!clientId) return;
       try {
         const { data, error } = await supabase
-          .from('clients')
-          .select('system_prompt, openrouter_api_key, openai_api_key, supabase_url, supabase_service_key')
+          .from('clients_public')
+          .select('system_prompt, has_openrouter_api_key, has_openai_api_key, supabase_url, has_supabase_service_key')
           .eq('id', clientId)
           .maybeSingle();
         if (!error && data) {
           setFetchedSystemPrompt(data.system_prompt || '');
-          setOpenRouterApiKey(data.openrouter_api_key || '');
-          
+          setHasOpenRouterKey(!!data.has_openrouter_api_key);
+
           // Check LLM configuration
-          const hasLLM = !!(data.openrouter_api_key || data.openai_api_key);
+          const hasLLM = !!(data.has_openrouter_api_key || data.has_openai_api_key);
           setHasLLMConfig(hasLLM);
-          
+
           // Check Supabase configuration
-          const hasSupabase = !!(data.supabase_url && data.supabase_service_key);
+          const hasSupabase = !!(data.supabase_url && data.has_supabase_service_key);
           setHasSupabaseConfig(hasSupabase);
         }
       } catch (e) {
@@ -418,7 +419,7 @@ const scrollToBottom = () => {
     if (!currentMessage.trim() || !activeThreadId || isLoading) return;
 
     // Check if OpenRouter API key is configured
-    if (!openRouterApiKey) {
+    if (!hasOpenRouterKey) {
       toast({
         title: "API Key Missing",
         description: "OpenRouter API key is not configured. Please add it in API & Integrations settings.",
@@ -517,7 +518,7 @@ const scrollToBottom = () => {
         threadId: activeThreadId,
         sessionId: activeSessionId,
         chatHistory: chatHistory,
-        openRouterApiKey: openRouterApiKey
+        // G3-6: secret intentionally omitted from the webhook payload.
       };
 
       const webhookResponse = await fetch(WEBHOOK_URL, {

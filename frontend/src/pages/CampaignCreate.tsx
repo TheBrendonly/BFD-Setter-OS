@@ -110,18 +110,18 @@ const CampaignCreate = () => {
       if (!clientId) return;
       try {
         const { data: client, error } = await (supabase
-          .from('clients')
-          .select('name, campaign_webhook_url, supabase_url, supabase_service_key' as any)
+          .from('clients_public')
+          .select('name, campaign_webhook_url, supabase_url, has_supabase_service_key' as any)
           .eq('id', clientId)
           .maybeSingle() as any);
-        
+
         if (error) throw error;
         setClientName(client?.name || '');
 
         // Check if Supabase is configured (URL and service key only - no table name required)
         const hasSupabaseConfig = !!(
-          client?.supabase_url && 
-          client?.supabase_service_key
+          client?.supabase_url &&
+          client?.has_supabase_service_key
         );
         setSupabaseConfigured(hasSupabaseConfig);
       } catch (error) {

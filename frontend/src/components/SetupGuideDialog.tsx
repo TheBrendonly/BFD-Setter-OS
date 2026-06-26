@@ -490,6 +490,20 @@ interface SetupGuideDialogProps {
   dialogTitle?: string;
 }
 
+// G3-6 secret-read hardening: secret VALUES are never read into the browser.
+// Secret inputs are write-only (seeded ''); the "saved/Configured" snapshots hold
+// this non-secret sentinel when has_<col> is true so all the existing "Configured ✓"
+// indicators keep working without ever holding the real value. A blank secret input
+// on save means "unchanged" and is skipped so it can't NULL a stored secret.
+const SECRET_CONFIGURED = '__configured__';
+const SETUP_SECRET_FIELDS = new Set<string>([
+  'supabase_service_key',
+  'openrouter_api_key',
+  'openai_api_key',
+  'ghl_api_key',
+  'retell_api_key',
+]);
+
 const SetupGuideDialog: React.FC<SetupGuideDialogProps> = ({ open, onOpenChange, clientId, initialPhase = 0, initialStep = 0, navigationKey = 0, phaseFilter, dialogTitle = 'AI Reps Setup Guide' }) => {
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -653,37 +667,38 @@ const [loading, setLoading] = useState(false);
       setConfigLoading(true); // Start loading
       const loadConfig = async () => {
         const { data, error } = await (supabase
-          .from('clients')
-          .select('supabase_url, supabase_service_key, openrouter_api_key, openai_api_key, ghl_api_key, ghl_assignee_id, ghl_calendar_id, ghl_location_id, retell_api_key, retell_inbound_agent_id, retell_outbound_agent_id, retell_phone_1, retell_phone_1_country_code, retell_phone_2, retell_phone_2_country_code, retell_phone_3, retell_phone_3_country_code, transfer_to_human_webhook_url, user_details_webhook_url, update_pipeline_webhook_url, lead_score_webhook_url, knowledge_base_add_webhook_url, save_reply_webhook_url, outbound_caller_webhook_1_url, setup_guide_completed_steps, prompt_webhook_url') as any)
+          .from('clients_public')
+          .select('supabase_url, has_supabase_service_key, has_openrouter_api_key, has_openai_api_key, has_ghl_api_key, ghl_assignee_id, ghl_calendar_id, ghl_location_id, has_retell_api_key, retell_inbound_agent_id, retell_outbound_agent_id, retell_phone_1, retell_phone_1_country_code, retell_phone_2, retell_phone_2_country_code, retell_phone_3, retell_phone_3_country_code, transfer_to_human_webhook_url, user_details_webhook_url, update_pipeline_webhook_url, lead_score_webhook_url, knowledge_base_add_webhook_url, save_reply_webhook_url, outbound_caller_webhook_1_url, setup_guide_completed_steps, prompt_webhook_url') as any)
           .eq('id', clientId)
           .single();
-        
+
         if (data) {
-          const supabaseData = {
+          // G3-6: inputs are write-only (''); saved snapshots hold the sentinel
+          // when the secret is configured (has_<col>) so "Configured" indicators work.
+          setSupabaseConfig({ supabase_url: data.supabase_url || '', supabase_service_key: '' });
+          setSavedSupabaseConfig({
             supabase_url: data.supabase_url || '',
-            supabase_service_key: data.supabase_service_key || ''
-          };
-          setSupabaseConfig(supabaseData);
-          setSavedSupabaseConfig(supabaseData);
-          
-          const llmData = {
-            openrouter_api_key: data.openrouter_api_key || '',
-            openai_api_key: data.openai_api_key || ''
-          };
-          setLlmConfig(llmData);
-          setSavedLlmConfig(llmData);
-          
-          const ghlData = {
-            ghl_api_key: data.ghl_api_key || '',
+            supabase_service_key: data.has_supabase_service_key ? SECRET_CONFIGURED : ''
+          });
+
+          setLlmConfig({ openrouter_api_key: '', openai_api_key: '' });
+          setSavedLlmConfig({
+            openrouter_api_key: data.has_openrouter_api_key ? SECRET_CONFIGURED : '',
+            openai_api_key: data.has_openai_api_key ? SECRET_CONFIGURED : ''
+          });
+
+          const ghlNonSecret = {
             ghl_assignee_id: data.ghl_assignee_id || '',
             ghl_calendar_id: data.ghl_calendar_id || '',
             ghl_location_id: data.ghl_location_id || ''
           };
-          setGhlConfig(ghlData);
-          setSavedGhlConfig(ghlData);
-          
-          const retellData = {
-            retell_api_key: data.retell_api_key || '',
+          setGhlConfig({ ghl_api_key: '', ...ghlNonSecret });
+          setSavedGhlConfig({
+            ghl_api_key: data.has_ghl_api_key ? SECRET_CONFIGURED : '',
+            ...ghlNonSecret
+          });
+
+          const retellNonSecret = {
             retell_inbound_agent_id: data.retell_inbound_agent_id || '',
             retell_outbound_agent_id: data.retell_outbound_agent_id || '',
             retell_phone_1: data.retell_phone_1 || '',
@@ -693,14 +708,14 @@ const [loading, setLoading] = useState(false);
             retell_phone_3: data.retell_phone_3 || '',
             retell_phone_3_country_code: data.retell_phone_3_country_code || '+1'
           };
-          setRetellConfig(retellData);
+          setRetellConfig({ retell_api_key: '', ...retellNonSecret });
           setSavedRetellConfig({
-            retell_api_key: retellData.retell_api_key,
-            retell_inbound_agent_id: retellData.retell_inbound_agent_id,
-            retell_outbound_agent_id: retellData.retell_outbound_agent_id,
-            retell_phone_1: retellData.retell_phone_1,
-            retell_phone_2: retellData.retell_phone_2,
-            retell_phone_3: retellData.retell_phone_3
+            retell_api_key: data.has_retell_api_key ? SECRET_CONFIGURED : '',
+            retell_inbound_agent_id: retellNonSecret.retell_inbound_agent_id,
+            retell_outbound_agent_id: retellNonSecret.retell_outbound_agent_id,
+            retell_phone_1: retellNonSecret.retell_phone_1,
+            retell_phone_2: retellNonSecret.retell_phone_2,
+            retell_phone_3: retellNonSecret.retell_phone_3
           });
           
           setTransferHumanWebhookUrl(data.transfer_to_human_webhook_url || '');
@@ -897,6 +912,11 @@ const [loading, setLoading] = useState(false);
   };
 
   const saveSupabaseField = async (field: 'supabase_url' | 'supabase_service_key', value: string) => {
+    // G3-6: a blank secret input means "unchanged" — never write it over a stored secret.
+    if (SETUP_SECRET_FIELDS.has(field) && !value.trim()) {
+      toast({ title: "No change", description: "Enter a new value to update this secret." });
+      return;
+    }
     setLoading(true);
     try {
       const { error } = await supabase
@@ -911,8 +931,9 @@ const [loading, setLoading] = useState(false);
         description: `${field === 'supabase_url' ? 'Project URL' : 'Service Key'} saved successfully`
       });
 
-      setSupabaseConfig(prev => ({ ...prev, [field]: value }));
-      setSavedSupabaseConfig(prev => ({ ...prev, [field]: value }));
+      const isSecret = SETUP_SECRET_FIELDS.has(field);
+      setSupabaseConfig(prev => ({ ...prev, [field]: isSecret ? '' : value }));
+      setSavedSupabaseConfig(prev => ({ ...prev, [field]: isSecret ? SECRET_CONFIGURED : value }));
       setSavedFields(prev => new Set([...prev, field]));
       
       // User must manually click Done button to mark step as complete
@@ -931,6 +952,11 @@ const [loading, setLoading] = useState(false);
   };
 
   const saveLlmField = async (field: 'openrouter_api_key' | 'openai_api_key', value: string) => {
+    // G3-6: a blank secret input means "unchanged" — never write it over a stored secret.
+    if (SETUP_SECRET_FIELDS.has(field) && !value.trim()) {
+      toast({ title: "No change", description: "Enter a new value to update this secret." });
+      return;
+    }
     setLoading(true);
     try {
       const { error } = await supabase
@@ -945,8 +971,9 @@ const [loading, setLoading] = useState(false);
         description: `${field === 'openrouter_api_key' ? 'OpenRouter API Key' : 'OpenAI API Key'} saved successfully`
       });
 
-      setLlmConfig(prev => ({ ...prev, [field]: value }));
-      setSavedLlmConfig(prev => ({ ...prev, [field]: value }));
+      const isSecret = SETUP_SECRET_FIELDS.has(field);
+      setLlmConfig(prev => ({ ...prev, [field]: isSecret ? '' : value }));
+      setSavedLlmConfig(prev => ({ ...prev, [field]: isSecret ? SECRET_CONFIGURED : value }));
       setSavedFields(prev => new Set([...prev, field]));
       
       // User must manually click Done button to mark step as complete
@@ -965,6 +992,11 @@ const [loading, setLoading] = useState(false);
   };
 
   const saveGhlField = async (field: 'ghl_api_key' | 'ghl_assignee_id' | 'ghl_calendar_id' | 'ghl_location_id', value: string) => {
+    // G3-6: a blank secret input means "unchanged" — never write it over a stored secret.
+    if (SETUP_SECRET_FIELDS.has(field) && !value.trim()) {
+      toast({ title: "No change", description: "Enter a new value to update this secret." });
+      return;
+    }
     setLoading(true);
     try {
       const { error } = await supabase
@@ -986,8 +1018,9 @@ const [loading, setLoading] = useState(false);
         description: `${fieldNames[field]} saved successfully`
       });
 
-      setGhlConfig(prev => ({ ...prev, [field]: value }));
-      setSavedGhlConfig(prev => ({ ...prev, [field]: value }));
+      const isSecret = SETUP_SECRET_FIELDS.has(field);
+      setGhlConfig(prev => ({ ...prev, [field]: isSecret ? '' : value }));
+      setSavedGhlConfig(prev => ({ ...prev, [field]: isSecret ? SECRET_CONFIGURED : value }));
       setSavedFields(prev => new Set([...prev, field]));
       
       // User must manually click Done button to mark step as complete
@@ -1006,6 +1039,11 @@ const [loading, setLoading] = useState(false);
   };
 
   const saveRetellField = async (field: 'retell_api_key' | 'retell_inbound_agent_id' | 'retell_outbound_agent_id' | 'retell_phone_1' | 'retell_phone_2' | 'retell_phone_3', value: string, countryCode?: string) => {
+    // G3-6: a blank secret input means "unchanged" — never write it over a stored secret.
+    if (SETUP_SECRET_FIELDS.has(field) && !value.trim()) {
+      toast({ title: "No change", description: "Enter a new value to update this secret." });
+      return;
+    }
     setLoading(true);
     try {
       const updateData: Record<string, string> = { [field]: value };
@@ -1037,10 +1075,11 @@ const [loading, setLoading] = useState(false);
         description: `${fieldNames[field]} saved successfully`
       });
 
-      setRetellConfig(prev => ({ ...prev, [field]: value }));
+      const isSecret = SETUP_SECRET_FIELDS.has(field);
+      setRetellConfig(prev => ({ ...prev, [field]: isSecret ? '' : value }));
       // Update saved config for the appropriate field
       if (field === 'retell_api_key' || field === 'retell_inbound_agent_id' || field === 'retell_outbound_agent_id' || field === 'retell_phone_1' || field === 'retell_phone_2' || field === 'retell_phone_3') {
-        setSavedRetellConfig(prev => ({ ...prev, [field]: value }));
+        setSavedRetellConfig(prev => ({ ...prev, [field]: isSecret ? SECRET_CONFIGURED : value }));
       }
       setSavedFields(prev => new Set([...prev, field]));
       
@@ -1678,10 +1717,12 @@ const [loading, setLoading] = useState(false);
       // Convert HTML to clean markdown with proper formatting and spacing
       const markdownContent = preserveMarkdownFormatting(data.content);
 
-      // Fetch Supabase configuration for the client (account-specific) - CRITICAL FOR BACKEND LOGIC
+      // Fetch Supabase configuration for the client (account-specific).
+      // G3-6: the service key is never read into the browser or forwarded in the
+      // webhook payload (this n8n prompt-sync webhook is being decommissioned).
       const { data: clientData } = await supabase
-        .from('clients')
-        .select('supabase_url, supabase_service_key, supabase_table_name')
+        .from('clients_public')
+        .select('supabase_url, supabase_table_name')
         .eq('id', clientId)
         .maybeSingle();
 
@@ -1700,7 +1741,6 @@ const [loading, setLoading] = useState(false);
         timestamp: new Date().toISOString(),
         clientId: clientId,
         supabase_url: clientData?.supabase_url || null,
-        supabase_service_key: clientData?.supabase_service_key || null,
         supabase_table_name: clientData?.supabase_table_name || null
       };
 

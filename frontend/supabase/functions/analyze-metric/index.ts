@@ -63,15 +63,25 @@ Deno.serve(async (req) => {
       metric_prompt,
       metric_name,
       conversations,
-      openrouter_api_key,
       time_range,
     } = await req.json();
 
-    if (!openrouter_api_key) {
+    // G3-6: the OpenRouter key is read server-side (never accepted from the
+    // browser). client_id is now required so we can authorize + resolve the key.
+    if (!client_id) {
       return new Response(
-        JSON.stringify({ error: "OpenRouter API key is required" }),
+        JSON.stringify({ error: "client_id is required" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
+    }
+
+    try {
+      await authorizeClientRequest(req.headers.get("Authorization"), client_id);
+    } catch (e) {
+      if (e instanceof AssertAccessError) {
+        return new Response(JSON.stringify({ error: e.message }), { status: e.status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+      throw e;
     }
 
     if (!conversations || conversations.length === 0) {
@@ -81,16 +91,23 @@ Deno.serve(async (req) => {
       );
     }
 
-    if (client_id) {
-      try {
-        await authorizeClientRequest(req.headers.get("Authorization"), client_id);
-      } catch (e) {
-        if (e instanceof AssertAccessError) {
-          return new Response(JSON.stringify({ error: e.message }), { status: e.status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-        }
-        throw e;
-      }
+    // Resolve the client's OpenRouter key with the service role.
+    const orSupabase = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+    );
+    const { data: orClient, error: orClientErr } = await orSupabase
+      .from("clients")
+      .select("openrouter_api_key")
+      .eq("id", client_id)
+      .maybeSingle();
+    if (orClientErr || !orClient?.openrouter_api_key) {
+      return new Response(
+        JSON.stringify({ error: "OpenRouter API key not configured for this client." }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
+    const openrouterApiKey = orClient.openrouter_api_key as string;
 
     // Build compact conversation text
     const compactText = buildCompactConversations(conversations);
@@ -159,7 +176,7 @@ Analyze each message and identify ALL messages that match the criteria. Use the 
       {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${openrouter_api_key}`,
+          Authorization: `Bearer ${openrouterApiKey}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify(metricRequestBody),

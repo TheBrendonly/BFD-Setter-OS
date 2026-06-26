@@ -93,14 +93,14 @@ const Dashboard = () => {
     }
     try {
       const { data: client, error: clientError } = await supabase
-        .from('clients')
-        .select('name, supabase_url, supabase_service_key')
+        .from('clients_public')
+        .select('name, supabase_url, has_supabase_service_key')
         .eq('id', clientId)
         .single();
 
       if (clientError) throw clientError;
       setClientName(client.name);
-      const hasConfig = !!(client.supabase_url && client.supabase_service_key);
+      const hasConfig = !!(client.supabase_url && client.has_supabase_service_key);
       setHasSupabaseConfig(hasConfig);
 
       const { data, error } = await supabase

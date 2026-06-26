@@ -398,7 +398,7 @@ const SupabaseUsage = () => {
   const isDraggingRef = useRef(false);
   const { width, containerRef, mounted } = useContainerWidth({ initialWidth: 1200 });
 
-  const hasPat = Boolean(credentials?.supabase_access_token);
+  const hasPat = Boolean(credentials?.has_supabase_access_token);
   const hasUrl = Boolean(credentials?.supabase_url);
 
   // ── Layout state ───────────────────────────────────────────────────

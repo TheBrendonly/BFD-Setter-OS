@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { cn } from '@/lib/utils';
-import { createClient } from '@supabase/supabase-js';
 import SavingOverlay from '@/components/SavingOverlay';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -82,45 +81,39 @@ const Contacts = () => {
   const { credentials } = useClientCredentials(clientId);
   const { cb: creatorBlur } = useCreatorMode();
 
-  const hasExternalSupabase = !!(credentials?.supabase_url && credentials?.supabase_service_key);
+  // G3-6: presence-only — the external-supabase service key never reaches the browser.
+  const hasExternalSupabase = !!(credentials?.supabase_url && credentials?.has_supabase_service_key);
 
   // Last interaction timestamps from external chat_history
   const [lastInteractionMap, setLastInteractionMap] = useState<Record<string, string>>({});
 
   const fetchLastInteractions = useCallback(async (contactsList: Contact[]) => {
-    if (!credentials?.supabase_url || !credentials?.supabase_service_key || contactsList.length === 0) return;
+    if (!clientId || !credentials?.has_supabase_service_key || contactsList.length === 0) return;
     try {
-      const extClient = createClient(credentials.supabase_url, credentials.supabase_service_key);
       const sessionIds = contactsList
         .map((c) => getCanonicalLeadId(c))
         .filter(Boolean);
       if (sessionIds.length === 0) return;
 
-      // Batch in chunks of 200 to avoid query limits
-      const chunkSize = 200;
+      // G3-6 secret-read hardening: the external-supabase read runs server-side.
+      // fetch-thread-previews (messages_per_session=1) returns the most-recent
+      // {session_id, timestamp} per session in `previews` — exactly this map.
+      const { data, error } = await supabase.functions.invoke('fetch-thread-previews', {
+        body: { client_id: clientId, session_ids: sessionIds, messages_per_session: 1 },
+      });
+      if (error) throw error;
+      const previews = (data?.previews ?? []) as Array<{ session_id: string; timestamp: string }>;
       const map: Record<string, string> = {};
-      for (let i = 0; i < sessionIds.length; i += chunkSize) {
-        const chunk = sessionIds.slice(i, i + chunkSize);
-        const { data } = await extClient
-          .from('chat_history')
-          .select('session_id, timestamp')
-          .in('session_id', chunk)
-          .order('timestamp', { ascending: false });
-
-        if (data) {
-          for (const row of data) {
-            // Only keep the most recent per session_id
-            if (!map[row.session_id]) {
-              map[row.session_id] = row.timestamp;
-            }
-          }
+      for (const row of previews) {
+        if (row.session_id && !map[row.session_id]) {
+          map[row.session_id] = row.timestamp;
         }
       }
       setLastInteractionMap(map);
     } catch (err) {
       console.error('Failed to fetch last interactions:', err);
     }
-  }, [credentials?.supabase_url, credentials?.supabase_service_key]);
+  }, [clientId, credentials?.has_supabase_service_key]);
 
   // Fetch existing custom field definitions for CSV mapper
   const [customFieldDefs, setCustomFieldDefs] = useState<string[]>([]);
@@ -440,10 +433,10 @@ const Contacts = () => {
 
   // Re-fetch last interactions when credentials arrive after contacts already loaded
   useEffect(() => {
-    if (contacts.length > 0 && credentials?.supabase_url && credentials?.supabase_service_key && Object.keys(lastInteractionMap).length === 0) {
+    if (contacts.length > 0 && credentials?.has_supabase_service_key && Object.keys(lastInteractionMap).length === 0) {
       fetchLastInteractions(contacts);
     }
-  }, [contacts, credentials?.supabase_url, credentials?.supabase_service_key, fetchLastInteractions, lastInteractionMap]);
+  }, [contacts, credentials?.has_supabase_service_key, fetchLastInteractions, lastInteractionMap]);
 
 
   useEffect(() => {

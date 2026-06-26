@@ -55,8 +55,8 @@ export function useOpenRouterUsage(clientId: string | undefined) {
   const [activity, setActivity] = useState<ActivityItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [apiKey, setApiKey] = useState<string | null>(null);
-  const [managementKey, setManagementKey] = useState<string | null>(null);
+  // G3-6: the OpenRouter keys never reach the browser. We track presence only
+  // (has_openrouter_api_key) and fetch usage via the get-openrouter-usage edge fn.
   const [hasKey, setHasKey] = useState<boolean | null>(null);
   const [activityError, setActivityError] = useState<string | null>(null);
   const [lastRefreshed, setLastRefreshed] = useState<string | null>(null);
@@ -66,16 +66,12 @@ export function useOpenRouterUsage(clientId: string | undefined) {
     if (!clientId) return;
     try {
       const { data, error } = await supabase
-        .from('clients')
-        .select('openrouter_api_key, openrouter_management_key')
+        .from('clients_public')
+        .select('has_openrouter_api_key')
         .eq('id', clientId)
         .maybeSingle();
       if (error) throw error;
-      const key = (data as any)?.openrouter_api_key || null;
-      const mgmtKey = (data as any)?.openrouter_management_key || null;
-      setApiKey(key);
-      setManagementKey(mgmtKey);
-      setHasKey(!!key);
+      setHasKey(!!(data as any)?.has_openrouter_api_key);
     } catch (err: any) {
       setError(err.message);
       setHasKey(false);
@@ -134,98 +130,47 @@ export function useOpenRouterUsage(clientId: string | undefined) {
     }
   }, [clientId]);
 
-  const fetchCredits = useCallback(async () => {
-    if (!apiKey) return null;
-    try {
-      const res = await fetch('https://openrouter.ai/api/v1/credits', {
-        headers: { 'Authorization': `Bearer ${apiKey}` },
-      });
-      if (!res.ok) throw new Error(`Credits API error: ${res.status}`);
-      const json = await res.json();
-      const data = json.data;
-      const c: OpenRouterCredits = {
-        total_credits: data.total_credits ?? 0,
-        total_usage: data.total_usage ?? 0,
-        remaining: (data.total_credits ?? 0) - (data.total_usage ?? 0),
-      };
-      setCredits(c);
-      return c;
-    } catch (err: any) {
-      setError(err.message);
-      return null;
-    }
-  }, [apiKey]);
-
-  const fetchKeyInfo = useCallback(async () => {
-    if (!apiKey) return null;
-    try {
-      const res = await fetch('https://openrouter.ai/api/v1/key', {
-        headers: { 'Authorization': `Bearer ${apiKey}` },
-      });
-      if (!res.ok) throw new Error(`Key API error: ${res.status}`);
-      const json = await res.json();
-      const d = json.data;
-      const k: KeyUsageData = {
-        label: d.label ?? '',
-        usage: d.usage ?? 0,
-        usage_daily: d.usage_daily ?? 0,
-        usage_weekly: d.usage_weekly ?? 0,
-        usage_monthly: d.usage_monthly ?? 0,
-        limit: d.limit ?? null,
-        limit_remaining: d.limit_remaining ?? null,
-        is_free_tier: d.is_free_tier ?? false,
-      };
-      setKeyUsage(k);
-      return k;
-    } catch (err: any) {
-      return null;
-    }
-  }, [apiKey]);
-
-  const fetchActivity = useCallback(async () => {
-    const keyToUse = managementKey || apiKey;
-    if (!keyToUse) return [];
-    try {
-      const res = await fetch('https://openrouter.ai/api/v1/activity', {
-        headers: { 'Authorization': `Bearer ${keyToUse}` },
-      });
-      if (res.status === 403) {
-        setActivityError('Activity data requires a management key. Add your OpenRouter Management Key in Credentials to unlock model breakdown and daily activity.');
-        return [];
-      }
-      if (!res.ok) throw new Error(`Activity API error: ${res.status}`);
-      const json = await res.json();
-      const items = json.data || [];
-      setActivity(items);
-      setActivityError(null);
-      return items;
-    } catch (err: any) {
-      setActivityError(err.message);
-      return [];
-    }
-  }, [apiKey, managementKey]);
-
+  // G3-6: all OpenRouter calls run server-side in get-openrouter-usage; the hook
+  // just invokes it and stores the returned safe shapes.
   const refresh = useCallback(async () => {
+    if (!clientId) return;
     setLoading(true);
     setError(null);
-    const [c, k, a] = await Promise.all([fetchCredits(), fetchKeyInfo(), fetchActivity()]);
-    await saveCache(c, k, a);
-    setLoading(false);
-  }, [fetchCredits, fetchKeyInfo, fetchActivity, saveCache]);
+    try {
+      const { data, error } = await supabase.functions.invoke('get-openrouter-usage', {
+        body: { clientId },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      const c = (data?.credits ?? null) as OpenRouterCredits | null;
+      const k = (data?.keyUsage ?? null) as KeyUsageData | null;
+      const a = (data?.activity ?? []) as ActivityItem[];
+      setCredits(c);
+      setKeyUsage(k);
+      setActivity(a);
+      setActivityError(data?.activityError ?? null);
+      if (typeof data?.hasKey === 'boolean') setHasKey(data.hasKey);
+      await saveCache(c, k, a);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }, [clientId, saveCache]);
 
   useEffect(() => { fetchApiKey(); }, [fetchApiKey]);
   useEffect(() => { loadCache(); }, [loadCache]);
 
   useEffect(() => {
-    if (apiKey && !cacheLoaded) {
+    if (hasKey && !cacheLoaded) {
       refresh();
-    } else if (apiKey && cacheLoaded) {
+    } else if (hasKey && cacheLoaded) {
       // Cache was loaded, don't auto-fetch
       setLoading(false);
     } else if (hasKey === false) {
       setLoading(false);
     }
-  }, [apiKey, hasKey, cacheLoaded]);
+  }, [hasKey, cacheLoaded, refresh]);
 
   // Aggregate: usage by model
   const modelUsage: ModelUsageSummary[] = (() => {

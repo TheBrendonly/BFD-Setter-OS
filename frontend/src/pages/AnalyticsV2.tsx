@@ -57,7 +57,8 @@ export default function AnalyticsV2() {
   const [dateTo, setDateTo] = useState<Date>(new Date());
 
   // Client config
-  const [openrouterApiKey, setOpenrouterApiKey] = useState<string>('');
+  // G3-6: presence-only — no secret value reaches the browser.
+  const [hasOpenrouterKey, setHasOpenrouterKey] = useState<boolean>(false);
   const [hasSupabaseConfig, setHasSupabaseConfig] = useState(false);
   const [configLoaded, setConfigLoaded] = useState(false);
 
@@ -66,13 +67,13 @@ export default function AnalyticsV2() {
     if (!clientId) return;
     const fetchConfig = async () => {
       const { data } = await supabase
-        .from('clients')
-        .select('openrouter_api_key, supabase_url, supabase_service_key, supabase_table_name')
+        .from('clients_public')
+        .select('has_openrouter_api_key, supabase_url, has_supabase_service_key, supabase_table_name')
         .eq('id', clientId)
         .single();
       if (data) {
-        setOpenrouterApiKey(data.openrouter_api_key || '');
-        setHasSupabaseConfig(!!(data.supabase_url && data.supabase_service_key));
+        setHasOpenrouterKey(!!data.has_openrouter_api_key);
+        setHasSupabaseConfig(!!(data.supabase_url && data.has_supabase_service_key));
       }
       setConfigLoaded(true);
     };
@@ -131,7 +132,7 @@ export default function AnalyticsV2() {
       return;
     }
 
-    if (!openrouterApiKey) {
+    if (!hasOpenrouterKey) {
       toast({ title: 'Missing API Key', description: 'Please configure OpenRouter API key on the Credentials page.', variant: 'destructive' });
       return;
     }
@@ -231,7 +232,7 @@ export default function AnalyticsV2() {
     return <div className="flex items-center justify-center h-64"><RetroLoader /></div>;
   }
 
-  const missingConfig = !hasSupabaseConfig || !openrouterApiKey;
+  const missingConfig = !hasSupabaseConfig || !hasOpenrouterKey;
 
   return (
     <div className="container mx-auto max-w-7xl space-y-6">
@@ -242,7 +243,7 @@ export default function AnalyticsV2() {
           <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '12px' }}>
             <strong>Configuration Required:</strong>{' '}
             {!hasSupabaseConfig && 'Supabase credentials are missing. '}
-            {!openrouterApiKey && 'OpenRouter API key is missing. '}
+            {!hasOpenrouterKey && 'OpenRouter API key is missing. '}
             Please update them on the <strong>Credentials</strong> page.
           </div>
         </div>
@@ -316,7 +317,7 @@ export default function AnalyticsV2() {
         {/* Create metric */}
         <Button
           onClick={() => setCreateDialogOpen(true)}
-          disabled={!openrouterApiKey}
+          disabled={!hasOpenrouterKey}
           className="groove-btn h-9 ml-auto"
           style={{ fontFamily: "'VT323', monospace", fontSize: '18px' }}
         >
@@ -355,7 +356,6 @@ export default function AnalyticsV2() {
         open={createDialogOpen}
         onOpenChange={setCreateDialogOpen}
         clientId={clientId || ''}
-        openrouterApiKey={openrouterApiKey}
         onCreated={fetchWidgets}
       />
 

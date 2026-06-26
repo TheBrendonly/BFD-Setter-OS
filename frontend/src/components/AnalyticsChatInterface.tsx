@@ -693,10 +693,11 @@ export const AnalyticsChatInterface: React.FC<AnalyticsChatInterfaceProps> = ({
         content: m.content
       }));
 
-      // Get Supabase configuration
+      // Get Supabase configuration (G3-6: service key never read into the browser
+      // or forwarded in the webhook payload — only the non-secret url/table).
       const {
         data: clientData
-      } = await supabase.from('clients').select('supabase_url, supabase_service_key, supabase_table_name').eq('id', clientId).single();
+      } = await supabase.from('clients_public').select('supabase_url, supabase_table_name').eq('id', clientId).single();
 
       // Send message to webhook endpoint (custom or default)
       const webhookResponse = await fetch(effectiveWebhookUrl, {
@@ -712,7 +713,6 @@ export const AnalyticsChatInterface: React.FC<AnalyticsChatInterfaceProps> = ({
           timeRange: timeRange,
           queryType: 'general',
           supabase_url: clientData?.supabase_url || null,
-          supabase_service_key: clientData?.supabase_service_key || null,
           supabase_table_name: clientData?.supabase_table_name || null,
           ...(timeRange === 'custom' && customDateRange && {
             startDate: customDateRange.startDate,

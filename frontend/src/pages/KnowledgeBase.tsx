@@ -103,20 +103,20 @@ const KnowledgeBase = () => {
     
     try {
       const { data: clientData, error } = await supabase
-        .from('clients')
-        .select('name, supabase_url, supabase_service_key, openrouter_api_key, openai_api_key')
+        .from('clients_public')
+        .select('name, supabase_url, has_supabase_service_key, has_openrouter_api_key, has_openai_api_key')
         .eq('id', clientId)
         .single();
-      
+
       if (error) throw error;
       setClientName(clientData.name);
-      
+
       // Check if Supabase is configured (URL and service key only - no table name required)
-      const hasConfig = !!(clientData.supabase_url && clientData.supabase_service_key);
+      const hasConfig = !!(clientData.supabase_url && clientData.has_supabase_service_key);
       setHasSupabaseConfig(hasConfig);
-      
+
       // Check if LLMs are configured
-      const hasLLMs = !!(clientData.openrouter_api_key && clientData.openai_api_key);
+      const hasLLMs = !!(clientData.has_openrouter_api_key && clientData.has_openai_api_key);
       setHasLLMConfig(hasLLMs);
     } catch (error) {
       console.error('Error fetching client name:', error);

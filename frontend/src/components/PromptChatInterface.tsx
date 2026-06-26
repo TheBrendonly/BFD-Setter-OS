@@ -161,21 +161,22 @@ export const PromptChatInterface: React.FC<PromptChatInterfaceProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [threadLoading, setThreadLoading] = useState(false);
   const [fetchedSystemPrompt, setFetchedSystemPrompt] = useState('');
-  const [openRouterApiKey, setOpenRouterApiKey] = useState('');
-  
-  // Fetch system prompt and OpenRouter API key from DB when clientId changes
+  // G3-6: presence-only — the OpenRouter key value never reaches the browser.
+  const [hasOpenRouterKey, setHasOpenRouterKey] = useState(false);
+
+  // Fetch system prompt and OpenRouter key presence from DB when clientId changes
   useEffect(() => {
     const fetchClientSettings = async () => {
       if (!clientId) return;
       try {
         const { data, error } = await supabase
-          .from('clients')
-          .select('system_prompt, openrouter_api_key')
+          .from('clients_public')
+          .select('system_prompt, has_openrouter_api_key')
           .eq('id', clientId)
           .maybeSingle();
         if (!error && data) {
           setFetchedSystemPrompt(data.system_prompt || '');
-          setOpenRouterApiKey(data.openrouter_api_key || '');
+          setHasOpenRouterKey(!!data.has_openrouter_api_key);
         }
       } catch (e) {
         console.error('Error fetching client settings:', e);
@@ -414,7 +415,7 @@ export const PromptChatInterface: React.FC<PromptChatInterfaceProps> = ({
     if (!currentMessage.trim() || !activeThreadId || isLoading) return;
 
     // Check if OpenRouter API key is configured
-    if (!openRouterApiKey) {
+    if (!hasOpenRouterKey) {
       toast({
         title: "API Key Missing",
         description: "OpenRouter API key is not configured. Please add it in API & Integrations settings.",
@@ -511,7 +512,7 @@ export const PromptChatInterface: React.FC<PromptChatInterfaceProps> = ({
         threadId: activeThreadId,
         sessionId: activeSessionId,
         chatHistory: chatHistory,
-        openRouterApiKey: openRouterApiKey
+        // G3-6: secret intentionally omitted from the webhook payload.
       };
 
       const webhookResponse = await fetch(WEBHOOK_URL, {
@@ -923,22 +924,22 @@ export const PromptChatInterface: React.FC<PromptChatInterfaceProps> = ({
                         }
                       }}
                       placeholder={
-                        !openRouterApiKey
+                        !hasOpenRouterKey
                           ? "Configure OpenRouter API key first..."
                           : !activeThreadId
                           ? "Select or create a chat to start messaging..."
                           : "Ask me to generate, modify or improve your prompt..."
                       }
-                      disabled={isLoading || !activeThreadId || !openRouterApiKey}
+                      disabled={isLoading || !activeThreadId || !hasOpenRouterKey}
                       className="flex-1 !h-8"
                       style={{ fontSize: '13px' }}
                     />
                     <Button
                       onClick={sendMessage}
-                      disabled={!currentMessage.trim() || isLoading || !activeThreadId || !openRouterApiKey}
+                      disabled={!currentMessage.trim() || isLoading || !activeThreadId || !hasOpenRouterKey}
                       size="sm"
                       className="shrink-0"
-                      title={!openRouterApiKey ? 'Configure OpenRouter API key to enable sending' : 'Send message'}
+                      title={!hasOpenRouterKey ? 'Configure OpenRouter API key to enable sending' : 'Send message'}
                     >
                       {isLoading ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Sending...</> : <><Send className="h-4 w-4 mr-2" />Send</>}
                     </Button>

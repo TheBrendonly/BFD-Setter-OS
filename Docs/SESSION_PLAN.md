@@ -125,9 +125,19 @@ Status: `[ ]` not started · `[~]` in progress · `[x]` done. Effort is rough.
   backfill migration `20260627120000`. receive-twilio-sms **v29**, process-lead-file **v14**, migration applied;
   no Trigger redeploy (`trigger/*` unchanged). Server-side verified (column/index present, `rows_missing_norm=0`,
   no dup `bfd-%` rows). B-2 → `TEST_LIST`. → emits **Session 6**.
-- [ ] **Session 6 — Secret-read hardening (CODE, optional pre-100%).** `BUG_LIST` G3-6 (move ~20 browser
-  secret-value reads behind edge fns). Defense-in-depth (already RLS-scoped), so can slot after the TEST
-  pass if time-boxed. **Done when:** deployed + moved to TEST_LIST. → emits **Session 7**.
+- [x] **Session 6 — Secret-read hardening (CODE).** DONE 2026-06-26 (was EXECUTE mode; one Brendan gate on
+  scope → all 3 tiers now + drop secret from the dormant webhooks). G3-6 closed across ~20 surfaces in 3
+  tiers: **T1** central `useClientCredentials` → `clients_public` + `has_*` (+ all presence-only readers,
+  the 3 dormant n8n chat interfaces, and the secret-EDIT pages ApiCredentials + SetupGuideDialog made
+  write-only with a blank-save guard); **T2** new `get-openrouter-usage` fn + flipped `analyze-metric` /
+  `analytics-v2-suggest-widgets` to read the key server-side (callers send `client_id`); **T3** the 2
+  in-browser external-Supabase `createClient` reads moved server-side (Contacts→`fetch-thread-previews`,
+  ChatAnalytics time-series→`get-chat-history` new `mode:'range'`). No migration (view + has_<col> already
+  existed). tsc/build/deno green; analyze-metric **v18**, analytics-v2-suggest-widgets **v14**,
+  get-openrouter-usage **v1**, get-chat-history **v7** ACTIVE. Out-of-scope residue (live/legacy webhook
+  secret-forwards in LeadRow + the cross-project-n8n Presentation/Webinar chats, + dead ApiManagement/
+  SupabaseConfigCard/RefreshCostDialog) logged as **G3-8**. G3-6 → `TEST_LIST` (network-tab gate + Tier-3
+  live re-test owed at first client). → emits **Session 7**.
 - [ ] **Session 7 — TEST pass (BRENDAN drives, Claude verifies).** Run the whole `Docs/TEST_LIST.md` in one
   live sweep (go-live smokes + B4 no-double-send + B-1/B-3/B-4/B-5 retests). Pre-req: Brendan re-Saved
   the 5 setters (from Session 1). Each pass → COMPLETED_LOG; each fail → a new BUG_LIST item + a fix

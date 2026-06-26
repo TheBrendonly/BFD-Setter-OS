@@ -11,7 +11,7 @@ import { ChevronRight, Phone, MessageSquare, MessageSquarePlus, Bot, PhoneCall }
 import { cn } from '@/lib/utils';
 import VoiceAIRepSetupGuide, { VOICE_AI_REP_PHASES, isPhaseComplete } from '@/components/setup-guide/VoiceAIRepSetupGuide';
 import { usePageHeader } from '@/contexts/PageHeaderContext';
-import { useClientCredentials, isCredentialConfigured } from '@/hooks/useClientCredentials';
+import { useClientCredentials } from '@/hooks/useClientCredentials';
 import RetellAgentsTab from '@/components/retell/RetellAgentsTab';
 
 import RetellPhoneNumbersTab from '@/components/retell/RetellPhoneNumbersTab';
@@ -68,7 +68,7 @@ const VoiceAIRepSetup = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const { credentials } = useClientCredentials(clientId);
-  const hasRetellApiKey = isCredentialConfigured(credentials?.retell_api_key);
+  const hasRetellApiKey = Boolean(credentials?.has_retell_api_key);
 
   usePageHeader({
     title: 'Voice Setter',

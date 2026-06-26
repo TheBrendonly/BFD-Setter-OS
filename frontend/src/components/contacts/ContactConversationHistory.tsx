@@ -61,7 +61,8 @@ interface ContactConversationHistoryProps {
   contactDataId?: string | null;
   contactName: string;
   supabaseUrl: string | null | undefined;
-  supabaseServiceKey: string | null | undefined;
+  // G3-6: presence-only — the service key value never reaches the browser.
+  hasSupabaseServiceKey: boolean;
   clientId?: string;
   contactId?: string;
   hasTwilio?: boolean;
@@ -76,7 +77,7 @@ export const ContactConversationHistory: React.FC<ContactConversationHistoryProp
   contactDataId,
   contactName,
   supabaseUrl,
-  supabaseServiceKey,
+  hasSupabaseServiceKey,
   clientId,
   contactId,
   hasTwilio,
@@ -910,7 +911,7 @@ export const ContactConversationHistory: React.FC<ContactConversationHistoryProp
     if (data) setSelectedChatBooking(data);
   }, []);
 
-  if (!supabaseUrl || !supabaseServiceKey) {
+  if (!supabaseUrl || !hasSupabaseServiceKey) {
     return (
       <div className="flex flex-col h-full">
         <div className="flex-1 flex flex-col items-center justify-center text-center gap-3">

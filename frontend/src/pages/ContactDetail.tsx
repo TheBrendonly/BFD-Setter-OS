@@ -596,8 +596,8 @@ const ContactDetail = () => {
         .eq('id', contact.id);
       if (error) throw error;
 
-      // 2. Push to external Supabase
-      if (credentials?.supabase_url && credentials?.supabase_service_key) {
+      // 2. Push to external Supabase (push-contact-to-external reads creds server-side)
+      if (credentials?.has_supabase_service_key) {
         try {
           await supabase.functions.invoke('push-contact-to-external', {
             body: {
@@ -1062,10 +1062,10 @@ const ContactDetail = () => {
                 contactDataId={getCanonicalLeadId(contact) || contact.id || null}
                 contactName={getName()}
                 supabaseUrl={credentials?.supabase_url || null}
-                supabaseServiceKey={credentials?.supabase_service_key || null}
+                hasSupabaseServiceKey={credentials?.has_supabase_service_key ?? false}
                 clientId={clientId}
                 contactId={contactId}
-                hasTwilio={!!(credentials?.twilio_account_sid && credentials?.twilio_auth_token && (credentials?.twilio_default_phone || (credentials as any)?.retell_phone_1))}
+                hasTwilio={!!(credentials?.twilio_account_sid && credentials?.has_twilio_auth_token && (credentials?.twilio_default_phone || (credentials as any)?.retell_phone_1))}
                 phoneNumber={getPhone()}
                 onLoadComplete={() => setChatLoaded(true)}
               />

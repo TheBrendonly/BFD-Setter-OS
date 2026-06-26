@@ -41,7 +41,8 @@ interface CustomMetricDialogProps {
   metric?: CustomMetric | null;
   onSave: (metric: { name: string; prompt: string; color: string; widget_type?: string; widget_width?: string }) => Promise<void>;
   onDelete?: () => Promise<void> | void;
-  openrouterApiKey?: string;
+  // G3-6: presence-only — the OpenRouter key is read server-side by the edge fn.
+  hasOpenrouterKey?: boolean;
   clientId?: string;
 }
 
@@ -57,7 +58,7 @@ export function CustomMetricDialog({
   metric, 
   onSave,
   onDelete,
-  openrouterApiKey,
+  hasOpenrouterKey,
   clientId,
 }: CustomMetricDialogProps) {
   const { toast } = useToast();
@@ -170,25 +171,10 @@ export function CustomMetricDialog({
       return;
     }
 
-    // Fetch fresh API key from DB to avoid stale credentials
-    let freshKey = openrouterApiKey;
-    if (clientId) {
-      try {
-        const { data: freshClient } = await supabase
-          .from('clients')
-          .select('openrouter_api_key')
-          .eq('id', clientId)
-          .maybeSingle();
-        if (freshClient?.openrouter_api_key) {
-          freshKey = freshClient.openrouter_api_key;
-        }
-      } catch (e) {
-        console.warn('Failed to fetch fresh API key, using cached:', e);
-      }
-    }
-
-    // If creating and no OpenRouter key, save as number_card
-    if (!freshKey) {
+    // G3-6: no client-side key read. If no key is configured, save as
+    // number_card; otherwise analyze with AI (the edge fn reads the key
+    // server-side from client_id).
+    if (!hasOpenrouterKey || !clientId) {
       setSaving(true);
       try {
         await onSave({ name: name.trim(), prompt: prompt.trim(), color, widget_type: 'number_card' });
@@ -202,7 +188,7 @@ export function CustomMetricDialog({
     setStep('analyzing');
     try {
       const { data, error } = await supabase.functions.invoke('analytics-v2-suggest-widgets', {
-        body: { prompt: prompt.trim(), openrouter_api_key: freshKey },
+        body: { prompt: prompt.trim(), client_id: clientId },
       });
 
       if (error) throw new Error(error.message);
@@ -463,7 +449,7 @@ export function CustomMetricDialog({
                     size="sm"
                   >
                     {isEditing && <Save className="h-3.5 w-3.5 mr-1.5" />}
-                    {saving ? 'SAVING...' : isEditing ? 'UPDATE' : (openrouterApiKey ? 'ANALYZE & SUGGEST' : 'CREATE')}
+                    {saving ? 'SAVING...' : isEditing ? 'UPDATE' : (hasOpenrouterKey ? 'ANALYZE & SUGGEST' : 'CREATE')}
                   </Button>
                 </div>
               </div>

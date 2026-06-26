@@ -1736,10 +1736,10 @@ export default function Chats() {
                     contactDataId={getCanonicalLeadId(selectedLead as any) || selectedLead.id || null}
                     contactName={getLeadName(selectedLead)}
                     supabaseUrl={credentials?.supabase_url || null}
-                    supabaseServiceKey={credentials?.supabase_service_key || null}
+                    hasSupabaseServiceKey={credentials?.has_supabase_service_key ?? false}
                     clientId={clientId}
                     contactId={selectedLead.id}
-                    hasTwilio={!!(credentials?.twilio_account_sid && credentials?.twilio_auth_token && (credentials?.twilio_default_phone || (credentials as any)?.retell_phone_1))}
+                    hasTwilio={!!(credentials?.twilio_account_sid && credentials?.has_twilio_auth_token && (credentials?.twilio_default_phone || (credentials as any)?.retell_phone_1))}
                     phoneNumber={selectedLead.phone || ''}
                     refreshKey={selectedLead.last_message_at || undefined}
                     onNewActivity={() => {
@@ -2184,8 +2184,8 @@ function ChatContactDetailsPanel({
         .eq('id', lead.id);
       if (error) throw error;
 
-      // Push to external
-      if (credentials?.supabase_url && credentials?.supabase_service_key) {
+      // Push to external (push-contact-to-external reads creds server-side)
+      if (credentials?.has_supabase_service_key) {
         try {
           await supabase.functions.invoke('push-contact-to-external', {
             body: {

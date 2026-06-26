@@ -1,4 +1,6 @@
+import { createClient } from "npm:@supabase/supabase-js@2.101.0";
 import { loggedFetch } from "../_shared/request-logger.ts";
+import { authorizeClientRequest, AssertAccessError } from "../_shared/authorize-client-request.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -14,11 +16,13 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { prompt, openrouter_api_key } = await req.json();
+    const { prompt, client_id } = await req.json();
 
-    if (!openrouter_api_key) {
+    // G3-6: the OpenRouter key is read server-side (never accepted from the
+    // browser). client_id is required so we can authorize + resolve the key.
+    if (!client_id) {
       return new Response(
-        JSON.stringify({ error: "OpenRouter API key is required" }),
+        JSON.stringify({ error: "client_id is required" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -29,6 +33,32 @@ Deno.serve(async (req) => {
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+
+    try {
+      await authorizeClientRequest(req.headers.get("Authorization"), client_id);
+    } catch (e) {
+      if (e instanceof AssertAccessError) {
+        return new Response(JSON.stringify({ error: e.message }), { status: e.status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+      throw e;
+    }
+
+    const admin = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+    );
+    const { data: clientData, error: clientErr } = await admin
+      .from("clients")
+      .select("openrouter_api_key")
+      .eq("id", client_id)
+      .maybeSingle();
+    if (clientErr || !clientData?.openrouter_api_key) {
+      return new Response(
+        JSON.stringify({ error: "OpenRouter API key not configured for this client." }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    const openrouter_api_key = clientData.openrouter_api_key as string;
 
     const systemPrompt = `You are an analytics visualization expert. A user wants to create a metric widget for their AI chatbot analytics dashboard. Based on their description of what they want to track, suggest exactly 3 visualization types that would best represent this data.
 
