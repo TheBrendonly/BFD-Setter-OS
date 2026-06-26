@@ -46,7 +46,7 @@ READ FIRST: Docs/SESSION_PLAN.md + the latest Operations/handoffs/ doc + the lis
 
 ### Plan mode per session
 Start in **plan mode** (research + approve the approach before any edits) for the **design-heavy or
-live-path** sessions: **Session 1 (B-1 cascade), Session 4 (F1/F3), Session 5 (B-2 by-phone pivot), Session 6.5 (F9/F8 build)**,
+live-path** sessions: **Session 1 (B-1 cascade), Session 4 (F1/F3), Session 5 (B-2 by-phone pivot), Session 6.5 (F9 lock build), Session 8 (F8 cost calc)**,
 and any session that touches the live cadence runtime or many surfaces. **Skip plan mode** (just
 execute) for the **mechanical/prescriptive** ones: Session 2 (G3 sweep), Session 3's cleanup
 (F5/F6/F7), types.ts, the **doc** session, and the **TEST** session (read-only / Brendan-driven).
@@ -139,27 +139,39 @@ Status: `[ ]` not started · `[~]` in progress · `[x]` done. Effort is rough.
   SupabaseConfigCard/RefreshCostDialog) logged as **G3-8**. G3-6 → `TEST_LIST` (network-tab gate + Tier-3
   live re-test owed at first client). → emitted **Session 7**; sequence then re-ordered (2026-06-26) to run
   **Session 6.5** (F9/F8 build) before the TEST pass.
-- [ ] **Session 6.5 — F9/F8 feature build (CODE, PLAN mode — design-heavy + live-path).** Inserted
-  2026-06-26 ahead of the TEST pass (Brendan's call): build it before testing so the single test pass
-  validates final behaviour instead of re-testing the voice write paths after. **F9 first (own session) —
-  per-setter Retell lock + ownership sync** (`FEATURE_ROADMAP` "Feature spec - F9"): `voice_setters.is_retell_locked`
-  (+ snapshot/version cols) with a SERVER-ENFORCED write-guard across all ~8 retell-proxy write paths
-  (incl. the two BULK loops + the make-retell-outbound-call voicemail PATCH skip) — outbound dialing must
-  keep working while locked; locked setters become a read-only "Pull from Retell" mirror with version-drift
-  detection. **F8 second (additive, agency-only, zero runtime overlap; may instead slot after the TEST pass)
-  — per-minute cost-to-price calculator** (`FEATURE_ROADMAP` "Feature spec - F8"): `computeBlendedRate`
-  (integer minor units + explicit FX + markup) + an agency-only rate panel on Sub-Account Config. Start
-  with a discovery sweep (re-verify both specs vs live code + scan BUG_LIST/DEFERRED for other in-area
-  wins) and brainstorm the open decisions before coding. **Done when:** F9 + F8 (v1) deployed + moved to
-  TEST_LIST (with concrete live checks); v2 noted deferred. → emits the **Session 7** TEST prompt.
+- [x] **Session 6.5 — F9 Retell lock build + fold-ins (CODE, PLAN mode — design-heavy + live-path).** DONE
+  2026-06-26. Brendan chose **SPLIT** (F9 first this session; F8 after the TEST pass). Shipped **F9 v1** —
+  per-setter Retell lock + ownership sync: migration `20260627130000` (`is_retell_locked` + snapshot/version
+  cols + partial index, applied live); pure guard core `_shared/retell-lock.ts` (12 unit tests, TDD); a
+  SERVER-ENFORCED write-guard across all retell-proxy write paths (single-target THROW 423
+  `setter_retell_locked`; the two BULK loops `set-voicemail`/`refresh-booking-tool-messages` SKIP locked
+  setters + report them); `make-retell-outbound-call` skips the at-call voicemail PATCH for a locked setter
+  but **still dials**; new `set-setter-lock` + READ-ONLY `pull-retell-config` (snapshot + version-drift); tile
+  lock toggle + confirm dialogs + Retell-locked/sync badges + Pull button + Edit-entry gating; `useRetellApi`
+  now surfaces the structured 423 body. **retell-proxy v46, make-retell-outbound-call v27.** Two cheap in-area
+  fold-ins (Brendan's call): **F8-1** (cost-ceiling inputs agency-gated) + **G3-8(c)** (deleted dead
+  ApiManagement/SupabaseConfigCard/RefreshCostDialog). tsc + build + 118 edge tests green; verified read-only
+  (columns/index live, guard query valid, fns booted). F9 v2 → DEFERRED. F9 v1 + F8-1 + G3-8(c) → TEST_LIST.
+  → emits the **Session 7** TEST prompt. (F8 build = **Session 8**, after the TEST pass.)
 - [ ] **Session 7 — TEST pass (BRENDAN drives, Claude verifies).** Run the whole `Docs/TEST_LIST.md` in one
-  live sweep (go-live smokes + B4 no-double-send + B-1/B-3/B-4/B-5 retests). Pre-req: Brendan re-Saved
-  the 5 setters (from Session 1). Each pass → COMPLETED_LOG; each fail → a new BUG_LIST item + a fix
-  session. **Done when:** TEST_LIST is empty/green. → emits the **First-client milestone**.
+  live sweep: go-live smokes + B4 no-double-send + the Session 5 by-phone checks + the Session 6 secret-read
+  network-tab gate + the **new Session 6.5 F9 lock checks (lock→rename/voicemail refused; edit-in-Retell→drift
+  →Pull mirrors it; outbound on a locked setter still dials; unlock→management resumes) + F8-1 + G3-8(c)** +
+  B-1/B-3/B-4/B-5 retests. Pre-req: Brendan re-Saved the 5 setters (from Session 1). Each pass → COMPLETED_LOG;
+  each fail → a new BUG_LIST item + a fix session. **Done when:** TEST_LIST is empty/green. → emits **Session 8**.
+- [ ] **Session 8 — F8 cost-to-price calculator (CODE, PLAN mode — money math + agency governance).** The
+  second half of the split. Build per `FEATURE_ROADMAP` "Feature spec - F8" + the decided scope: pure
+  `computeBlendedRate` (integer minor units + explicit FX step + markup multiplier + deterministic rounding;
+  TDD the core) and an **agency-only** rate panel on Sub-Account Config (mirror `ClientAccountFieldConfigEditor`
+  governance), per-sub-account override on a global default. **NEW requirement:** a per-sub-account "show rate
+  to client" toggle (agency-set) that surfaces a read-only blended-$/min display card in that client's own
+  account settings (markup/breakdown stay agency-only). **Done when:** computeBlendedRate tests pass; the panel
+  edits/persists + the client display card respects the toggle; client role can't see the markup internals →
+  TEST_LIST. → emits the **First-client milestone**.
 - [ ] **First-client milestone (BRENDAN, gated).** Not a Claude code session. At the first paying client:
   flip Stripe live (backfill `subscription_status` → set `ENFORCE_SUBSCRIPTION_GATE=true`), provision the
   GHL/Retell/Unipile webhook secrets + arm `retell_webhook_secret` (6.6), register AU SMS A2P for
   `+61481614530`. See `Docs/DEFERRED.md`. After this, v1 is live + 100%.
 
-When Sessions 0-6.5 and 7 are `[x]` and TEST_LIST is green, BFD-setter is at v1 "100%". v2 = the lifecycle
-system + A/B + analytics + HubSpot (`Docs/DEFERRED.md`).
+When Sessions 0-8 are `[x]` and TEST_LIST is green, BFD-setter is at v1 "100%". v2 = the lifecycle
+system + A/B + analytics + HubSpot + F9 v2 (`Docs/DEFERRED.md`).

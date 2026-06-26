@@ -572,12 +572,15 @@ Deno.serve(async (req) => {
     // defined" AFTER the call placed, causing a retry/re-dial loop.
     let slotNumber: number | null = null;
     let agentColumn: string | null = null;
+    // F9 — when the setter is Retell-locked, BFD must NOT mutate its config, so
+    // the at-call voicemail PATCH is skipped. The call itself still places.
+    let setterLocked = false;
 
     if (UUID_RE.test(voice_setter_id)) {
       // ── UUID path: voice_setters + voice_setter_phone_bindings ──
       const { data: setter, error: setterErr } = await supabase
         .from("voice_setters")
-        .select("id, retell_agent_id, name, is_active")
+        .select("id, retell_agent_id, name, is_active, is_retell_locked")
         .eq("id", voice_setter_id)
         .eq("client_id", client_id)
         .maybeSingle();
@@ -601,6 +604,7 @@ Deno.serve(async (req) => {
           hint: `Open the "${setter.name}" editor and Save to provision the agent.`,
         }, 409);
       }
+      setterLocked = setter.is_retell_locked === true; // F9
       // From-number from outbound binding (cadence node `from_number` override checked later).
       const { data: binding } = await supabase
         .from("voice_setter_phone_bindings")
@@ -656,6 +660,14 @@ Deno.serve(async (req) => {
       const slotPhoneCol = SLOT_TO_PHONE_COLUMN[slotNumber];
       const slotPhone = slotPhoneCol ? (client as Record<string, unknown>)[slotPhoneCol] as string | null : null;
       fromNumber = slotPhone || null;
+      // F9 — legacy path has no setter row in scope; resolve the lock by slot.
+      const { data: lockRow } = await supabase
+        .from("voice_setters")
+        .select("is_retell_locked")
+        .eq("client_id", client_id)
+        .eq("legacy_slot", slotNumber)
+        .maybeSingle();
+      setterLocked = lockRow?.is_retell_locked === true;
     }
 
     // 3. Get destination phone number (the lead we're calling). Normalize to
@@ -830,8 +842,9 @@ Deno.serve(async (req) => {
       ? clientVoicemailCfg as { detect_enabled?: unknown; detect_timeout_ms?: unknown }
       : null;
     if (
-      (voicemail_config && typeof voicemail_config === "object") ||
-      (detectionCfg && detectionCfg.detect_enabled === true)
+      !setterLocked && // F9 — Retell-locked: skip the config PATCH, still place the call
+      ((voicemail_config && typeof voicemail_config === "object") ||
+        (detectionCfg && detectionCfg.detect_enabled === true))
     ) {
       await ensureVoicemailConfig(
         client.retell_api_key,
@@ -839,6 +852,8 @@ Deno.serve(async (req) => {
         voicemail_config,
         detectionCfg,
       );
+    } else if (setterLocked) {
+      console.log(`[make-retell-outbound-call] setter ${voice_setter_id} is Retell-locked — skipping voicemail PATCH, placing call.`);
     }
 
     // 7. Make the Retell API call with full debug capture

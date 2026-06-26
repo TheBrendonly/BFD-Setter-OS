@@ -1,5 +1,13 @@
 import { useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { FunctionsHttpError } from '@supabase/supabase-js';
+
+// Error carrying the retell-proxy structured body (code/status) so callers can
+// branch — e.g. the F9 lock (code 'setter_retell_locked', status 423).
+export interface RetellProxyError extends Error {
+  code?: string;
+  status?: number;
+}
 
 // Typed wrapper around the retell-proxy edge function
 export function useRetellApi(clientId: string | undefined) {
@@ -11,7 +19,19 @@ export function useRetellApi(clientId: string | undefined) {
         body: { action, clientId, ...params },
       });
 
-      if (error) throw new Error(error.message);
+      if (error) {
+        // Non-2xx responses come back as FunctionsHttpError with the JSON body on
+        // error.context — without reading it the structured {error, code} (and the
+        // HTTP status) are lost, so a 423 lock surfaced as a generic message.
+        if (error instanceof FunctionsHttpError) {
+          const body = await error.context.json().catch(() => ({}));
+          const e = new Error(body?.error || error.message) as RetellProxyError;
+          e.code = body?.code;
+          e.status = error.context.status;
+          throw e;
+        }
+        throw new Error(error.message);
+      }
       if (data?.error) throw new Error(data.error);
       return data as T;
     },

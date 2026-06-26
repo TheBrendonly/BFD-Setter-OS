@@ -4579,10 +4579,15 @@ export type Database = {
           id: string
           is_active: boolean
           is_inbound: boolean
+          is_retell_locked: boolean
           legacy_slot: number | null
           name: string
           retell_agent_id: string | null
+          retell_config_snapshot: Json | null
           retell_llm_id: string | null
+          retell_locked_at: string | null
+          retell_synced_at: string | null
+          retell_synced_version: number | null
           updated_at: string
         }
         Insert: {
@@ -4591,10 +4596,15 @@ export type Database = {
           id?: string
           is_active?: boolean
           is_inbound?: boolean
+          is_retell_locked?: boolean
           legacy_slot?: number | null
           name: string
           retell_agent_id?: string | null
+          retell_config_snapshot?: Json | null
           retell_llm_id?: string | null
+          retell_locked_at?: string | null
+          retell_synced_at?: string | null
+          retell_synced_version?: number | null
           updated_at?: string
         }
         Update: {
@@ -4603,10 +4613,15 @@ export type Database = {
           id?: string
           is_active?: boolean
           is_inbound?: boolean
+          is_retell_locked?: boolean
           legacy_slot?: number | null
           name?: string
           retell_agent_id?: string | null
+          retell_config_snapshot?: Json | null
           retell_llm_id?: string | null
+          retell_locked_at?: string | null
+          retell_synced_at?: string | null
+          retell_synced_version?: number | null
           updated_at?: string
         }
         Relationships: [

@@ -6,6 +6,16 @@ import {
   BFD_SCHEDULE_CALLBACK_TOOL,
 } from "../_shared/bfdVoiceTools.ts";
 import { buildVoiceSetterDeactivatePayload } from "../_shared/voice-setter.ts";
+import {
+  assertAgentNotLocked,
+  assertLlmNotLocked,
+  assertSlotNotLocked,
+  buildLockIndex,
+  isAgentLocked,
+  isSlotLocked,
+  type LockedSetterRow,
+  type LockIndex,
+} from "../_shared/retell-lock.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -142,6 +152,18 @@ async function getRetellApiKey(clientId: string): Promise<string> {
   if (error) throw new Error(`Failed to fetch client: ${error.message}`);
   if (!data?.retell_api_key) throw new Error("Retell API key not configured. Please add it in API Credentials.");
   return data.retell_api_key;
+}
+
+// F9 — load the client's Retell-locked setters once for a write action. The
+// returned index drives single-target THROW (assert*NotLocked) and bulk SKIP
+// (is*Locked). One indexed query per guarded write (read actions never call it).
+async function loadLockIndex(clientId: string): Promise<LockIndex> {
+  const { data } = await getSupabaseAdmin()
+    .from("voice_setters")
+    .select("retell_agent_id, retell_llm_id, legacy_slot, name")
+    .eq("client_id", clientId)
+    .eq("is_retell_locked", true);
+  return buildLockIndex((data ?? []) as LockedSetterRow[]);
 }
 
 // Map Voice-Setter slot numbers to client column names for agent IDs.
@@ -1260,11 +1282,13 @@ Deno.serve(async (req) => {
 
       case "update-agent":
         if (!params.agentId) throw new Error("agentId is required");
+        assertAgentNotLocked(await loadLockIndex(clientId), params.agentId); // F9
         result = await retellFetch(apiKey, "PATCH", `update-agent/${params.agentId}`, params.agentData);
         break;
 
       case "delete-agent":
         if (!params.agentId) throw new Error("agentId is required");
+        assertAgentNotLocked(await loadLockIndex(clientId), params.agentId); // F9
         result = await retellFetch(apiKey, "DELETE", `delete-agent/${params.agentId}`);
         break;
 
@@ -1284,6 +1308,7 @@ Deno.serve(async (req) => {
 
       case "update-llm": {
         if (!params.llmId) throw new Error("llmId is required");
+        assertLlmNotLocked(await loadLockIndex(clientId), params.llmId); // F9
         // Published LLM versions are IMMUTABLE. This raw pass-through has no agent
         // context, so it cannot mint a draft via create-agent-version (that endpoint
         // is keyed by agent, not LLM). Surface a clear, actionable error instead of
@@ -1304,6 +1329,7 @@ Deno.serve(async (req) => {
 
       case "delete-llm":
         if (!params.llmId) throw new Error("llmId is required");
+        assertLlmNotLocked(await loadLockIndex(clientId), params.llmId); // F9
         result = await retellFetch(apiKey, "DELETE", `delete-retell-llm/${params.llmId}`);
         break;
 
@@ -1418,6 +1444,7 @@ Deno.serve(async (req) => {
         if (!agentName) throw new Error("agentName is required");
         const agentColumn = SLOT_TO_AGENT_COLUMN[slotNumber];
         if (!agentColumn) throw new Error(`Invalid voice setter slot number: ${slotNumber}`);
+        assertSlotNotLocked(await loadLockIndex(clientId), slotNumber); // F9
 
         const supabaseAdmin = getSupabaseAdmin();
         const { data: clientRow, error: clientFetchErr } = await supabaseAdmin
@@ -1487,6 +1514,7 @@ Deno.serve(async (req) => {
       // phase-night-n8-voicemail-detection.
       case "set-voicemail": {
         const supabaseAdmin = getSupabaseAdmin();
+        const lockIdx = await loadLockIndex(clientId); // F9 — skip locked agents
         const allAgentCols = Object.values(SLOT_TO_AGENT_COLUMN);
         const { data: clientRow, error: clientFetchErr } = await supabaseAdmin
           .from("clients")
@@ -1548,8 +1576,12 @@ Deno.serve(async (req) => {
           voicemail_option: voicemailOption,
         };
 
-        const patches: Array<{ agent_id: string; ok: boolean; error?: string }> = [];
+        const patches: Array<{ agent_id: string; ok: boolean; error?: string; skipped?: boolean; reason?: string; name?: string }> = [];
         for (const agentId of agentIds) {
+          if (isAgentLocked(lockIdx, agentId)) { // F9 — Retell-locked: leave it alone
+            patches.push({ agent_id: agentId, ok: true, skipped: true, reason: "retell_locked", name: lockIdx.nameByAgentId.get(agentId) });
+            continue;
+          }
           try {
             await retellFetch(apiKey, "PATCH", `update-agent/${agentId}`, patchBody);
             patches.push({ agent_id: agentId, ok: true });
@@ -1557,14 +1589,16 @@ Deno.serve(async (req) => {
             patches.push({ agent_id: agentId, ok: false, error: e instanceof Error ? e.message : String(e) });
           }
         }
-        const okCount = patches.filter((p) => p.ok).length;
+        const okCount = patches.filter((p) => p.ok && !p.skipped).length;
+        const skippedCount = patches.filter((p) => p.skipped).length;
         result = {
-          success: okCount === patches.length,
+          success: patches.every((p) => p.ok),
           action: "voicemail_set",
           mode: cfg.mode,
           detect_enabled: detectEnabled,
           detect_timeout_ms: detectTimeoutMs,
           patched: okCount,
+          skipped: skippedCount,
           total: patches.length,
           results: patches,
         };
@@ -1577,6 +1611,7 @@ Deno.serve(async (req) => {
         if (!slotNumber) throw new Error("slotNumber is required");
         const agentColumn = SLOT_TO_AGENT_COLUMN[slotNumber];
         if (!agentColumn) throw new Error(`Invalid voice setter slot number: ${slotNumber}`);
+        assertSlotNotLocked(await loadLockIndex(clientId), slotNumber); // F9 — unlock first
 
         const supabaseAdmin = getSupabaseAdmin();
         const { data: clientRow, error: clientFetchErr } = await supabaseAdmin
@@ -1649,6 +1684,7 @@ Deno.serve(async (req) => {
       case "sync-voice-setter": {
         const slotNumber = params.slotNumber as number;
         if (!slotNumber) throw new Error("slotNumber is required");
+        assertSlotNotLocked(await loadLockIndex(clientId), slotNumber); // F9
         const generalPrompt = (params.generalPrompt as string) || "";
         const beginMessage = (params.beginMessage as string) || "";
         const model = (params.model as string) || "gpt-4.1-nano";
@@ -1675,6 +1711,7 @@ Deno.serve(async (req) => {
       case "sync-voice-setter-cf": {
         const slotNumber = params.slotNumber as number;
         if (!slotNumber) throw new Error("slotNumber is required");
+        assertSlotNotLocked(await loadLockIndex(clientId), slotNumber); // F9
         const flowOutline = params.flowOutline as FlowOutline | undefined;
         if (!flowOutline) throw new Error("flowOutline is required");
         const model = (params.model as string) || "gpt-4.1-nano";
@@ -1739,6 +1776,7 @@ Deno.serve(async (req) => {
         };
 
         const supabaseAdmin = getSupabaseAdmin();
+        const lockIdx = await loadLockIndex(clientId); // F9 — skip locked slots
         const agentColumns = Object.values(SLOT_TO_AGENT_COLUMN);
         const { data: clientRow, error: clientFetchErr } = await supabaseAdmin
           .from("clients")
@@ -1751,6 +1789,10 @@ Deno.serve(async (req) => {
         for (const [slotStr, column] of Object.entries(SLOT_TO_AGENT_COLUMN)) {
           const agentId = (clientRow as Record<string, string | null>)?.[column];
           if (!agentId) continue;
+          if (isSlotLocked(lockIdx, Number(slotStr))) { // F9 — Retell-locked: leave it alone
+            updates.push({ slot: Number(slotStr), agent_id: agentId, status: "skipped", reason: "retell_locked", name: lockIdx.nameBySlot.get(Number(slotStr)) });
+            continue;
+          }
           try {
             const agent = await retellFetch(apiKey, "GET", `get-agent/${agentId}`) as any;
             const llmId = agent?.response_engine?.llm_id;
@@ -1798,7 +1840,116 @@ Deno.serve(async (req) => {
           }
         }
 
-        result = { success: true, updated: updates.filter(u => u.status === "updated").length, total: updates.length, results: updates };
+        result = {
+          success: true,
+          updated: updates.filter(u => u.status === "updated").length,
+          skipped_locked: updates.filter(u => u.reason === "retell_locked").length,
+          total: updates.length,
+          results: updates,
+        };
+        break;
+      }
+
+      // ===== SET SETTER LOCK (F9) =====
+      // Flip voice_setters.is_retell_locked for a slot. Pure DB write (no Retell
+      // call). When locked, every BFD->Retell write path refuses/skips this setter
+      // (see loadLockIndex + the guards above) and the outbound voicemail PATCH is
+      // skipped (the call still dials). Tenant-checked by assertClientAccess.
+      case "set-setter-lock": {
+        const slotNumber = params.slotNumber as number;
+        const locked = params.locked === true;
+        if (!slotNumber) throw new Error("slotNumber is required");
+        const supabaseAdmin = getSupabaseAdmin();
+        const { data, error } = await supabaseAdmin
+          .from("voice_setters")
+          .update({ is_retell_locked: locked, retell_locked_at: locked ? new Date().toISOString() : null })
+          .eq("client_id", clientId)
+          .eq("legacy_slot", slotNumber)
+          .select("id");
+        if (error) throw new Error(`Failed to set lock: ${error.message}`);
+        if (!data || data.length === 0) {
+          result = { success: false, code: "no_setter_row", error: `No voice setter row for slot ${slotNumber}. Push the setter to Retell first.` };
+          break;
+        }
+        result = { success: true, action: locked ? "locked" : "unlocked", slot: slotNumber };
+        break;
+      }
+
+      // ===== PULL RETELL CONFIG (F9) =====
+      // READ-ONLY mirror of the live Retell config for a slot into
+      // voice_setters.retell_config_snapshot + retell_synced_version (drift basis).
+      // Never writes prompt content back to Retell — only get-agent / get-retell-llm /
+      // get-conversation-flow reads. Works whether or not the setter is locked (it is
+      // the primary tool for a locked setter), so it is NOT lock-guarded.
+      case "pull-retell-config": {
+        const slotNumber = params.slotNumber as number;
+        if (!slotNumber) throw new Error("slotNumber is required");
+        const agentColumn = SLOT_TO_AGENT_COLUMN[slotNumber];
+        if (!agentColumn) throw new Error(`Invalid voice setter slot number: ${slotNumber}`);
+        const supabaseAdmin = getSupabaseAdmin();
+        const { data: clientRow, error: clientFetchErr } = await supabaseAdmin
+          .from("clients")
+          .select(agentColumn)
+          .eq("id", clientId)
+          .single();
+        if (clientFetchErr) throw new Error(`Failed to fetch client: ${clientFetchErr.message}`);
+        const agentId = (clientRow as Record<string, string | null>)?.[agentColumn];
+        if (!agentId) {
+          result = { success: false, code: "no_agent", error: `No Retell agent for slot ${slotNumber}` };
+          break;
+        }
+        const agent = await retellFetch(apiKey, "GET", `get-agent/${agentId}`) as any;
+        const engineType = agent?.response_engine?.type ?? null;
+        let llmSnap: Record<string, unknown> | null = null;
+        let flowSnap: Record<string, unknown> | null = null;
+        if (engineType === "retell-llm" && agent?.response_engine?.llm_id) {
+          const llm = await retellFetch(apiKey, "GET", `get-retell-llm/${agent.response_engine.llm_id}`) as any;
+          const tools = Array.isArray(llm?.general_tools)
+            ? llm.general_tools.map((t: Record<string, unknown>) => (typeof t?.name === "string" ? t.name : null)).filter(Boolean)
+            : [];
+          const prompt = typeof llm?.general_prompt === "string" ? llm.general_prompt : "";
+          const beginMessage = typeof llm?.begin_message === "string" ? llm.begin_message : "";
+          llmSnap = {
+            llm_id: llm?.llm_id ?? agent.response_engine.llm_id,
+            model: llm?.model ?? null,
+            version: llm?.version ?? null,
+            general_prompt_present: prompt.length > 0,
+            general_prompt_chars: prompt.length,
+            begin_message_present: beginMessage.length > 0,
+            start_speaker: llm?.start_speaker ?? null,
+            tools,
+            booking_tools_present: tools.some((n: string) => BFD_VOICE_BOOKING_TOOL_NAMES.has(n)),
+          };
+        } else if (engineType === "conversation-flow" && agent?.response_engine?.conversation_flow_id) {
+          const flow = await retellFetch(apiKey, "GET", `get-conversation-flow/${agent.response_engine.conversation_flow_id}`) as any;
+          flowSnap = {
+            conversation_flow_id: agent.response_engine.conversation_flow_id,
+            present: true,
+            node_count: Array.isArray(flow?.nodes) ? flow.nodes.length : null,
+          };
+        }
+        const pulledAt = new Date().toISOString();
+        const snapshot = {
+          pulled_at: pulledAt,
+          agent: {
+            agent_id: agent?.agent_id ?? agentId,
+            agent_name: agent?.agent_name ?? null,
+            version: agent?.version ?? null,
+            is_published: agent?.is_published ?? null,
+            last_modification_timestamp: agent?.last_modification_timestamp ?? null,
+            voice_id: agent?.voice_id ?? null,
+            language: agent?.language ?? null,
+            engine_type: engineType,
+          },
+          llm: llmSnap,
+          flow: flowSnap,
+        };
+        await supabaseAdmin
+          .from("voice_setters")
+          .update({ retell_config_snapshot: snapshot, retell_synced_at: pulledAt, retell_synced_version: agent?.version ?? null })
+          .eq("client_id", clientId)
+          .eq("legacy_slot", slotNumber);
+        result = { success: true, snapshot, version: agent?.version ?? null };
         break;
       }
 

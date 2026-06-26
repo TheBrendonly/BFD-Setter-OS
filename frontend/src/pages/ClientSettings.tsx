@@ -306,6 +306,9 @@ export default function ClientSettings() {
               </p>
             </div>
 
+            {/* F8-1: cost ceilings are an agency governance control — hidden from
+                client roles so a sub-account can't edit its own spend limit. */}
+            {isAgency && (
             <div className="space-y-2">
               <Label className="field-text">Cost Ceiling (flag only)</Label>
               <div className="grid grid-cols-2 gap-3">
@@ -343,6 +346,7 @@ export default function ClientSettings() {
                 Crossing a ceiling logs an alert (error_logs: cost_ceiling_breach); it never auto-pauses cadences. Estimate based on cadence_metrics (SMS/email/voice/AI).
               </p>
             </div>
+            )}
 
             {clientId && (
               <div className="space-y-4">

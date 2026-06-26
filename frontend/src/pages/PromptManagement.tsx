@@ -14,7 +14,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { UnsavedChangesDialog } from '@/components/UnsavedChangesDialog';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft, Plus, Edit, Trash2, MessageSquare, Save, X, FileText, Sparkles, Link, Settings, Key, Wand2, Bot, Webhook, ExternalLink, CheckCircle, AlertCircle, Calendar, RotateCcw, Copy, Phone, RefreshCw } from '@/components/icons';
+import { ArrowLeft, Plus, Edit, Trash2, MessageSquare, Save, X, FileText, Sparkles, Link, Settings, Key, Wand2, Bot, Webhook, ExternalLink, CheckCircle, AlertCircle, Calendar, RotateCcw, Copy, Phone, RefreshCw, Lock, Unlock, Download } from '@/components/icons';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 import { ConfigStatusBar } from '@/components/ConfigStatusBar';
 import { WebhookSetupDialog } from '@/components/WebhookSetupDialog';
@@ -5125,6 +5125,23 @@ const PromptManagement = () => {
   >({});
   const [clientInboundAgentId, setClientInboundAgentId] = useState<string | null>(null);
   const [inboundMapRefresh, setInboundMapRefresh] = useState(0);
+  // F9: per-setter Retell lock. Keyed by legacy_slot, loaded alongside the
+  // inbound map. liveVersionByAgent holds the live get-agent version for locked
+  // setters so the tile can show "in sync" vs "drifted". Busy sets gate the
+  // toggle/pull buttons; dialog slots drive the lock/unlock confirm dialogs.
+  const [lockMap, setLockMap] = useState<
+    Record<number, { is_retell_locked: boolean; retell_agent_id: string | null; retell_synced_version: number | null }>
+  >({});
+  const [liveVersionByAgent, setLiveVersionByAgent] = useState<Record<string, number>>({});
+  const [lockBusySlots, setLockBusySlots] = useState<Set<number>>(new Set());
+  const [pullBusySlots, setPullBusySlots] = useState<Set<number>>(new Set());
+  const [lockDialogSlot, setLockDialogSlot] = useState<number | null>(null);
+  const [unlockDialogSlot, setUnlockDialogSlot] = useState<number | null>(null);
+  const isVoiceSlotLocked = (slotId?: string | null): boolean => {
+    const m = slotId?.match(/Voice-Setter-(\d+)$/);
+    const n = m ? parseInt(m[1], 10) : null;
+    return n != null && !!lockMap[n]?.is_retell_locked;
+  };
   useEffect(() => {
     if (!clientId || currentView !== 'list') { setProcessingSlots(new Set()); return; }
     // Initial fetch
@@ -5176,7 +5193,7 @@ const PromptManagement = () => {
       const [settersRes, clientRes] = await Promise.all([
         (supabase as any)
           .from('voice_setters')
-          .select('legacy_slot, is_inbound, retell_agent_id')
+          .select('legacy_slot, is_inbound, retell_agent_id, is_retell_locked, retell_synced_version')
           .eq('client_id', clientId),
         (supabase as any)
           .from('clients_public')
@@ -5186,18 +5203,91 @@ const PromptManagement = () => {
       ]);
       if (cancelled) return;
       const map: Record<number, { is_inbound: boolean; retell_agent_id: string | null }> = {};
+      const locks: Record<number, { is_retell_locked: boolean; retell_agent_id: string | null; retell_synced_version: number | null }> = {};
       for (const s of (settersRes?.data as any[]) || []) {
         if (s.legacy_slot == null) continue;
         map[s.legacy_slot] = {
           is_inbound: !!s.is_inbound,
           retell_agent_id: s.retell_agent_id ?? null,
         };
+        locks[s.legacy_slot] = {
+          is_retell_locked: !!s.is_retell_locked,
+          retell_agent_id: s.retell_agent_id ?? null,
+          retell_synced_version: s.retell_synced_version ?? null,
+        };
       }
       setInboundSlotMap(map);
+      setLockMap(locks);
       setClientInboundAgentId((clientRes?.data as any)?.retell_inbound_agent_id ?? null);
     })();
     return () => { cancelled = true; };
   }, [clientId, currentView, inboundMapRefresh]);
+  // F9: drift check — for each LOCKED setter with a Retell agent, read the live
+  // get-agent version (read-only) and compare to the last-synced version so the
+  // tile can show "in sync" vs "drifted — pull to refresh".
+  useEffect(() => {
+    if (!clientId || currentView !== 'list') return;
+    const locked = Object.values(lockMap).filter((l) => l.is_retell_locked && l.retell_agent_id);
+    if (locked.length === 0) { setLiveVersionByAgent({}); return; }
+    let cancelled = false;
+    (async () => {
+      const next: Record<string, number> = {};
+      for (const l of locked) {
+        try {
+          const { data } = await supabase.functions.invoke('retell-proxy', {
+            body: { action: 'get-agent', clientId, agentId: l.retell_agent_id },
+          });
+          if (data && typeof (data as any).version === 'number') next[l.retell_agent_id!] = (data as any).version;
+        } catch { /* leave unknown; UI shows "drift unknown" */ }
+      }
+      if (!cancelled) setLiveVersionByAgent(next);
+    })();
+    return () => { cancelled = true; };
+  }, [clientId, currentView, lockMap]);
+  // F9: flip the lock (pure DB write via retell-proxy set-setter-lock).
+  const handleSetSetterLock = async (slotNum: number, locked: boolean) => {
+    if (!clientId) return;
+    setLockBusySlots((prev) => new Set(prev).add(slotNum));
+    try {
+      const { data, error } = await supabase.functions.invoke('retell-proxy', {
+        body: { action: 'set-setter-lock', clientId, slotNumber: slotNum, locked },
+      });
+      if (error) throw error;
+      if (data && (data as any).success === false) throw new Error((data as any).error || 'Failed to set lock');
+      toast({
+        title: locked ? 'Setter locked to Retell' : 'Setter unlocked',
+        description: locked
+          ? 'BFD will not overwrite this setter. Outbound calls still place. Unlock to resume BFD management.'
+          : 'BFD management resumed. Your next Save / Push to Retell will overwrite Retell with BFD’s config.',
+      });
+      setInboundMapRefresh((x) => x + 1);
+    } catch (e: any) {
+      toast({ title: 'Lock change failed', description: e?.message || String(e), variant: 'destructive' });
+    } finally {
+      setLockBusySlots((prev) => { const n = new Set(prev); n.delete(slotNum); return n; });
+      setLockDialogSlot(null);
+      setUnlockDialogSlot(null);
+    }
+  };
+  // F9: pull the live Retell config into the read-only BFD mirror (read-only
+  // against Retell; never writes prompt content back).
+  const handlePullFromRetell = async (slotNum: number) => {
+    if (!clientId) return;
+    setPullBusySlots((prev) => new Set(prev).add(slotNum));
+    try {
+      const { data, error } = await supabase.functions.invoke('retell-proxy', {
+        body: { action: 'pull-retell-config', clientId, slotNumber: slotNum },
+      });
+      if (error) throw error;
+      if (data && (data as any).success === false) throw new Error((data as any).error || 'Pull failed');
+      toast({ title: 'Pulled from Retell', description: `Mirror updated (version ${(data as any)?.version ?? '—'}).` });
+      setInboundMapRefresh((x) => x + 1);
+    } catch (e: any) {
+      toast({ title: 'Pull from Retell failed', description: e?.message || String(e), variant: 'destructive' });
+    } finally {
+      setPullBusySlots((prev) => { const n = new Set(prev); n.delete(slotNum); return n; });
+    }
+  };
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const autoSavePromptTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const autoSaveConfigs = useCallback((configs: Record<string, { selectedOption: string; customContent: string }>) => {
@@ -5738,6 +5828,10 @@ const PromptManagement = () => {
   // Sets the same context the editor would set, then opens the existing two-step modal.
   const handleListDelete = (prompt: Prompt, slotId: string) => {
     if (slotId === 'Setter-1') return; // mirror editor-view protection
+    if (isVoiceSlotLocked(slotId)) { // F9: deleting would delete the Retell agent
+      toast({ title: 'Setter is Retell-locked', description: 'Unlock it before deleting.' });
+      return;
+    }
     setEditingPrompt(prompt);
     setEditingSlotId(slotId);
     setShowDeleteSetterDialog(true);
@@ -7102,6 +7196,17 @@ const PromptManagement = () => {
     }
   };
   const handleEdit = (prompt: Prompt, slotId?: string, fromVoiceTab?: boolean) => {
+    // F9: a Retell-locked setter cannot be edited in BFD (entering edit would let
+    // a Save clobber Retell). Block entry; offer Pull/Unlock instead. Server 423
+    // is the backstop. Mirrors Brendan's intent: the lock stops people entering
+    // the edit section.
+    if (fromVoiceTab && isVoiceSlotLocked(slotId)) {
+      toast({
+        title: 'Setter is Retell-locked',
+        description: 'Unlock it to edit in BFD, or use “Pull from Retell” to refresh the read-only mirror.',
+      });
+      return;
+    }
     setEditingPrompt(prompt);
     setEditingSlotId(slotId || null);
     // Remember which tab the edit was initiated from
@@ -8115,6 +8220,25 @@ const PromptManagement = () => {
                                 );
                               })()}
                               <StatusTag variant="neutral">{agentSettings.model ? modelName : 'NO LLM SELECTED'}</StatusTag>
+                              {(() => {
+                                // F9: Retell-lock badge + sync/drift chip.
+                                const im = slot.id.match(/Voice-Setter-(\d+)$/);
+                                const sn = im ? parseInt(im[1], 10) : null;
+                                const lk = sn != null ? lockMap[sn] : undefined;
+                                if (!lk?.is_retell_locked) return null;
+                                const live = lk.retell_agent_id ? liveVersionByAgent[lk.retell_agent_id] : undefined;
+                                let sync: { variant: 'positive' | 'warning' | 'neutral'; label: string };
+                                if (lk.retell_synced_version == null) sync = { variant: 'neutral', label: 'Not pulled' };
+                                else if (typeof live === 'number' && live > lk.retell_synced_version) sync = { variant: 'warning', label: 'Drifted · pull' };
+                                else if (typeof live === 'number') sync = { variant: 'positive', label: 'In sync' };
+                                else sync = { variant: 'neutral', label: 'Synced v' + lk.retell_synced_version };
+                                return (
+                                  <>
+                                    <StatusTag variant="warning">Retell-locked</StatusTag>
+                                    <StatusTag variant={sync.variant}>{sync.label}</StatusTag>
+                                  </>
+                                );
+                              })()}
                             </div>
                           </div>
 
@@ -8148,37 +8272,77 @@ const PromptManagement = () => {
                           <div className="border-t border-dashed border-border -mx-5" />
 
                           <div className="flex items-center gap-2">
-                            <Button onClick={() => handleEdit(prompt, slot.id, true)} variant="outline" size="sm" disabled={!hasSupabaseConfig || !hasLLMConfig} className="h-8 gap-2 bg-primary text-primary-foreground hover:bg-primary/80 border-border flex-1">
-                              <Edit className="w-4 h-4" />
-                              {isEmpty ? 'Create Setter' : 'Edit Setter'}
-                            </Button>
-                            {!isEmpty && (
-                              <Button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setDuplicateSource({ slotId: slot.id, channel: 'voice', name: prompt.name || slot.staticName });
-                                  setShowDuplicateDialog(true);
-                                }}
-                                variant="outline"
-                                size="sm"
-                                aria-label="Duplicate setter"
-                                title="Duplicate this setter into another empty slot"
-                                className="h-8 px-2.5 border-border hover:bg-muted/40"
-                              >
-                                <Copy className="w-4 h-4" />
-                              </Button>
-                            )}
-                            {!isEmpty && slot.id !== 'Setter-1' && (
-                              <Button
-                                onClick={(e) => { e.stopPropagation(); handleListDelete(prompt, slot.id); }}
-                                variant="outline"
-                                size="sm"
-                                aria-label="Delete setter"
-                                className="h-8 px-2.5 border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </Button>
-                            )}
+                            {(() => {
+                              // F9: lock-aware action row. Locked setters: Edit is blocked
+                              // (label reflects it), Pull mirrors the live Retell config,
+                              // and the agency can toggle the lock.
+                              const lim = slot.id.match(/Voice-Setter-(\d+)$/);
+                              const lsn = lim ? parseInt(lim[1], 10) : null;
+                              const locked = lsn != null && !!lockMap[lsn]?.is_retell_locked;
+                              const lockBusy = lsn != null && lockBusySlots.has(lsn);
+                              const pullBusy = lsn != null && pullBusySlots.has(lsn);
+                              return (
+                                <>
+                                  <Button onClick={() => handleEdit(prompt, slot.id, true)} variant="outline" size="sm" disabled={!hasSupabaseConfig || !hasLLMConfig} className="h-8 gap-2 bg-primary text-primary-foreground hover:bg-primary/80 border-border flex-1">
+                                    {locked ? <Lock className="w-4 h-4" /> : <Edit className="w-4 h-4" />}
+                                    {locked ? 'Retell-locked' : (isEmpty ? 'Create Setter' : 'Edit Setter')}
+                                  </Button>
+                                  {!isEmpty && lsn != null && (
+                                    <Button
+                                      onClick={(e) => { e.stopPropagation(); handlePullFromRetell(lsn); }}
+                                      variant="outline"
+                                      size="sm"
+                                      disabled={pullBusy}
+                                      aria-label="Pull from Retell"
+                                      title="Pull the live Retell config into BFD (read-only mirror)"
+                                      className="h-8 px-2.5 border-border hover:bg-muted/40"
+                                    >
+                                      {pullBusy ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                                    </Button>
+                                  )}
+                                  {!isEmpty && lsn != null && userRole === 'agency' && (
+                                    <Button
+                                      onClick={(e) => { e.stopPropagation(); locked ? setUnlockDialogSlot(lsn) : setLockDialogSlot(lsn); }}
+                                      variant="outline"
+                                      size="sm"
+                                      disabled={lockBusy}
+                                      aria-label={locked ? 'Unlock setter' : 'Lock setter to Retell'}
+                                      title={locked ? 'Unlock — resume BFD management' : 'Lock to Retell — BFD stops managing this setter'}
+                                      className={locked ? 'h-8 px-2.5 border-amber-500/50 text-amber-600 hover:bg-amber-500/10' : 'h-8 px-2.5 border-border hover:bg-muted/40'}
+                                    >
+                                      {lockBusy ? <RefreshCw className="w-4 h-4 animate-spin" /> : (locked ? <Unlock className="w-4 h-4" /> : <Lock className="w-4 h-4" />)}
+                                    </Button>
+                                  )}
+                                  {!isEmpty && !locked && (
+                                    <Button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setDuplicateSource({ slotId: slot.id, channel: 'voice', name: prompt.name || slot.staticName });
+                                        setShowDuplicateDialog(true);
+                                      }}
+                                      variant="outline"
+                                      size="sm"
+                                      aria-label="Duplicate setter"
+                                      title="Duplicate this setter into another empty slot"
+                                      className="h-8 px-2.5 border-border hover:bg-muted/40"
+                                    >
+                                      <Copy className="w-4 h-4" />
+                                    </Button>
+                                  )}
+                                  {!isEmpty && !locked && slot.id !== 'Setter-1' && (
+                                    <Button
+                                      onClick={(e) => { e.stopPropagation(); handleListDelete(prompt, slot.id); }}
+                                      variant="outline"
+                                      size="sm"
+                                      aria-label="Delete setter"
+                                      className="h-8 px-2.5 border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                                    >
+                                      <Trash2 className="w-4 h-4" />
+                                    </Button>
+                                  )}
+                                </>
+                              );
+                            })()}
                           </div>
                         </div>
                       </Card>;
@@ -8188,6 +8352,59 @@ const PromptManagement = () => {
           </div>}
         </div>
       </div>
+
+      {/* F9: Lock-to-Retell confirm */}
+      <AlertDialog open={lockDialogSlot !== null} onOpenChange={(o) => { if (!o) setLockDialogSlot(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Lock this setter to Retell?</AlertDialogTitle>
+            <AlertDialogDescription>
+              BFD will stop managing this setter and will not overwrite your Retell edits — automated
+              voicemail / tool-message updates and prompt pushes are skipped for it. Outbound calls
+              still place. Unlock any time to resume BFD management.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={lockDialogSlot !== null && lockBusySlots.has(lockDialogSlot)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => { if (lockDialogSlot !== null) handleSetSetterLock(lockDialogSlot, true); }}
+              disabled={lockDialogSlot !== null && lockBusySlots.has(lockDialogSlot)}
+            >
+              Lock to Retell
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* F9: Unlock confirm (warns next Save overwrites Retell; offers Pull first) */}
+      <AlertDialog open={unlockDialogSlot !== null} onOpenChange={(o) => { if (!o) setUnlockDialogSlot(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Unlock and resume BFD management?</AlertDialogTitle>
+            <AlertDialogDescription>
+              On your next Save / Push to Retell, BFD will overwrite the current Retell configuration
+              for this setter. If you made edits directly in Retell, Pull them into BFD first so they
+              are not lost.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="gap-2">
+            <AlertDialogCancel disabled={unlockDialogSlot !== null && lockBusySlots.has(unlockDialogSlot)}>Cancel</AlertDialogCancel>
+            <Button
+              variant="outline"
+              onClick={() => { if (unlockDialogSlot !== null) { handlePullFromRetell(unlockDialogSlot); setUnlockDialogSlot(null); } }}
+              disabled={unlockDialogSlot !== null && (pullBusySlots.has(unlockDialogSlot) || lockBusySlots.has(unlockDialogSlot))}
+            >
+              Pull from Retell first
+            </Button>
+            <AlertDialogAction
+              onClick={() => { if (unlockDialogSlot !== null) handleSetSetterLock(unlockDialogSlot, false); }}
+              disabled={unlockDialogSlot !== null && lockBusySlots.has(unlockDialogSlot)}
+            >
+              Unlock anyway
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Delete Setter dialogs (also rendered in editor view; here for list-view trash button) */}
       <Dialog open={showDeleteSetterDialog} onOpenChange={setShowDeleteSetterDialog}>

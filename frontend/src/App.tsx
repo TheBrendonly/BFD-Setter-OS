@@ -44,7 +44,6 @@ const KnowledgeBase = lazyRetry(() => import("./pages/KnowledgeBase"));
 const CampaignCreate = lazyRetry(() => import("./pages/CampaignCreate"));
 const CampaignDetail = lazyRetry(() => import("./pages/CampaignDetail"));
 const Settings = lazyRetry(() => import("./pages/Settings"));
-const ApiManagement = lazyRetry(() => import("./pages/ApiManagement"));
 const ApiCredentials = lazyRetry(() => import("./pages/ApiCredentials"));
 const WorkflowImports = lazyRetry(() => import("./pages/WorkflowImports"));
 const TextAIRepSetup = lazyRetry(() => import("./pages/TextAIRepSetup"));
