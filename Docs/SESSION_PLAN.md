@@ -153,12 +153,19 @@ Status: `[ ]` not started · `[~]` in progress · `[x]` done. Effort is rough.
   ApiManagement/SupabaseConfigCard/RefreshCostDialog). tsc + build + 118 edge tests green; verified read-only
   (columns/index live, guard query valid, fns booted). F9 v2 → DEFERRED. F9 v1 + F8-1 + G3-8(c) → TEST_LIST.
   → emits the **Session 7** TEST prompt. (F8 build = **Session 8**, after the TEST pass.)
-- [ ] **Session 7 — TEST pass (BRENDAN drives, Claude verifies).** Run the whole `Docs/TEST_LIST.md` in one
-  live sweep: go-live smokes + B4 no-double-send + the Session 5 by-phone checks + the Session 6 secret-read
-  network-tab gate + the **new Session 6.5 F9 lock checks (lock→rename/voicemail refused; edit-in-Retell→drift
-  →Pull mirrors it; outbound on a locked setter still dials; unlock→management resumes) + F8-1 + G3-8(c)** +
-  B-1/B-3/B-4/B-5 retests. Pre-req: Brendan re-Saved the 5 setters (from Session 1). Each pass → COMPLETED_LOG;
-  each fail → a new BUG_LIST item + a fix session. **Done when:** TEST_LIST is empty/green. → emits **Session 8**.
+- [~] **Session 7 — TEST pass (BRENDAN drives, Claude verifies).** IN PROGRESS — **paused 2026-06-29 after the
+  UI half (LIVE-A)**; see handoff `Operations/handoffs/2026-06-29-session7-test-pass-PAUSED.md`. Done so far:
+  ~21 items banked read-only (B-3/B-5/G3-5/F2a/F7/6.7/6.10/G3-6 gate+saves/F2c-relocated/G3-8c/F8-1/B-6 badge/
+  B-4 nav/types.ts/B-1/F2e/G3-2/G3-4/delete-setter) + **LIVE-A passes** (F9 lock/bulk/Pull, F2b, B-6×2, 6.1,
+  6.3-visual, F6, G3-6 Credentials live). **5 bugs found:** F9-1 (lock display-name leak, M), VM-1 (set-voicemail
+  push broken, M), INB-1 (inbound version-pin, L), API-DEPR-1 (Retell/GHL deprecation review, M), UI-1 (legacy
+  setter labels, L). **Feature F11** (Credentials masked indicator — Brendan chose option A) logged.
+  **Setup:** F1 GHL field provisioned. **Still owed (phone-heavy half):** LIVE-B (client RLS), LIVE-C (one answered
+  call on the still-LOCKED Property Coach = F2c+G3-3+6.12b+F9-outbound+B4+latency, then UNLOCK; + 3.12 booking,
+  6.11 voicemail, B-3(6.4)), LIVE-D (B-2 by-phone ×4 + manual-send/429), LIVE-E (F3/F4), B-5/{{first_name}},
+  async G3-6 Tier-3 analytics. **Done when:** TEST_LIST green / all fails logged. Because bugs were found, a
+  **fix pass** (F9-1/VM-1/INB-1/UI-1 + F11 build + API-DEPR-1 review) precedes **Session 8** (F8). → continues
+  in the next session (see emitted prompt).
 - [ ] **Session 8 — F8 cost-to-price calculator (CODE, PLAN mode — money math + agency governance).** The
   second half of the split. Build per `FEATURE_ROADMAP` "Feature spec - F8" + the decided scope: pure
   `computeBlendedRate` (integer minor units + explicit FX step + markup multiplier + deterministic rounding;
