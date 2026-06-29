@@ -106,7 +106,7 @@ export function useSetInboundSetter(clientId?: string) {
             null;
           if (inboundNumber) {
             await updatePhoneNumber(inboundNumber, {
-              inbound_agents: [{ agent_id: setter.retell_agent_id, weight: 1 }],
+              inbound_agents: [{ agent_id: setter.retell_agent_id, agent_version: "latest_published", weight: 1 }],
             });
           }
         } catch (e) {

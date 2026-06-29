@@ -273,10 +273,10 @@ const VoiceAIRepSetup = () => {
                       title="Voice Setter Names"
                       description="Custom labels shown in Simulator, Logs, Outbound runs, Conversations, AND pushed to the Retell agent as agent_name (visible in the Retell dashboard). Empty falls back to 'Setter N'."
                       slots={[
-                        { slot: 1, hint: 'Inbound' },
-                        { slot: 2, hint: 'Outbound' },
-                        { slot: 3, hint: 'Followup' },
-                        { slot: 4, hint: 'Slot 4' },
+                        { slot: 1 },
+                        { slot: 2 },
+                        { slot: 3 },
+                        { slot: 4 },
                       ]}
                     />
                   )}

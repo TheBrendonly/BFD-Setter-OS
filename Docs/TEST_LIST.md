@@ -66,6 +66,14 @@ When an item passes, move it to `Docs/archive/COMPLETED_LOG.md`. When it fails, 
 - [x] **F9 Pull from Retell + drift.** — **PASS 2026-06-28 (Session 7).** First Pull → `retell_synced_version=11`, snapshot populated, `booking_tools_present=true`, chip "In sync". Edited the agent in Retell + published (live version → 13) → chip "Drifted · pull" (live 13 > synced 11). Re-Pull → `retell_synced_version=13`, snapshot refreshed, "In sync". All DB-verified.
 - [ ] **F9 outbound still dials while locked.** Place a test outbound call on the locked setter → the call **still places** (voicemail PATCH skipped; `make-retell-outbound-call` logs "is Retell-locked — skipping voicemail PATCH").
 - [ ] **F9 unlock resumes BFD management.** Click **Unlock** → dialog warns the next Save overwrites Retell + offers **Pull from Retell first**. Unlock → badge clears, Edit reopens the editor, and a rename/Save now succeeds (no 423).
+## Overnight frontend-only build — F11 / UI-1 / INB-1 (shipped 2026-06-29; frontend-only, Railway auto-deploy, NO edge deploy — edge versions UNCHANGED)
+
+> Cosmetic/polish + one binding fix. Hard-refresh app.buildingflowdigital.com first. None of these touch live Retell/DB at render time.
+
+- [ ] **F11 masked "Configured" indicator** — on **API Credentials** (and the **Setup Guide** dialog), a configured secret shows a fixed-length dot-mask `••••••••••••` in the (still-blank-on-edit) box + a bolder **"Configured ✓"**. Confirm: clicking into the box clears the mask (blank), typing a new key + Save still works, and a blank Save still shows the "no change / unchanged" guard (never writes dots). **Supabase Personal Access Token** + **OpenRouter Management Key** read **(Optional)** and do NOT show the red "Not Configured" pulse when empty.
+- [ ] **UI-1 plain setter labels** — AI Rep Config → **Voice Setter Names**: the four slots read plain **"Setter 1 / Setter 2 / Setter 3 / Setter 4"** (no "· Inbound/Outbound/Followup" suffixes). Custom names still save + push.
+- [ ] **INB-1 inbound rebind pins `latest_published`** — use the inbound toggle to move the inbound setter, then check the Retell inbound phone binding: `inbound_agents[].agent_version` is now `"latest_published"` (not versionless / not a numeric pin), so inbound auto-follows future publishes. (Pairs with the B-3 outbound auto-follow check.)
+
 ## Retests after the relevant fix ships
 
 - [ ] **B-3 (6.4)** clear a lead's phone, Save → it stays cleared in BFD **and** GHL (only the name case was retested before).

@@ -2168,7 +2168,7 @@ const [loading, setLoading] = useState(false);
               </Label>
               {savedLlmConfig.openai_api_key && (
                 <Badge className="bg-green-500 hover:bg-green-600 text-white">
-                  Configured
+                  Configured ✓
                 </Badge>
               )}
             </div>
@@ -2178,7 +2178,7 @@ const [loading, setLoading] = useState(false);
                 type={showOpenAIKey ? "text" : "password"}
                 value={llmConfig.openai_api_key}
                 onChange={(e) => setLlmConfig(prev => ({ ...prev, openai_api_key: e.target.value }))}
-                placeholder="sk-..."
+                placeholder={savedLlmConfig.openai_api_key ? '••••••••••••' : 'sk-...'}
                 className="font-mono text-sm pr-10"
               />
               <Button
@@ -2298,7 +2298,7 @@ const [loading, setLoading] = useState(false);
               </Label>
               {savedLlmConfig.openrouter_api_key && (
                 <Badge className="bg-green-500 hover:bg-green-600 text-white">
-                  Configured
+                  Configured ✓
                 </Badge>
               )}
             </div>
@@ -2308,7 +2308,7 @@ const [loading, setLoading] = useState(false);
                 type={showOpenRouterKey ? "text" : "password"}
                 value={llmConfig.openrouter_api_key}
                 onChange={(e) => setLlmConfig(prev => ({ ...prev, openrouter_api_key: e.target.value }))}
-                placeholder="sk-or-v1-..."
+                placeholder={savedLlmConfig.openrouter_api_key ? '••••••••••••' : 'sk-or-v1-...'}
                 className="font-mono text-sm pr-10"
               />
               <Button
@@ -2652,7 +2652,7 @@ const [loading, setLoading] = useState(false);
                   </Label>
                   {savedSupabaseConfig.supabase_service_key && (
                     <Badge className="bg-green-500 hover:bg-green-600 text-white">
-                      Configured
+                      Configured ✓
                     </Badge>
                   )}
                 </div>
@@ -2662,7 +2662,7 @@ const [loading, setLoading] = useState(false);
                     type={showServiceKey ? "text" : "password"}
                     value={supabaseConfig.supabase_service_key}
                     onChange={(e) => setSupabaseConfig(prev => ({ ...prev, supabase_service_key: e.target.value }))}
-                    placeholder="Enter your service role key"
+                    placeholder={savedSupabaseConfig.supabase_service_key ? '••••••••••••' : 'Enter your service role key'}
                     className="font-mono text-sm pr-10"
                   />
                   <Button
@@ -4467,7 +4467,7 @@ const [loading, setLoading] = useState(false);
                   </Label>
                   {savedGhlConfig.ghl_api_key && (
                     <Badge className="bg-green-500 hover:bg-green-600 text-white">
-                      Configured
+                      Configured ✓
                     </Badge>
                   )}
                 </div>
@@ -4477,7 +4477,7 @@ const [loading, setLoading] = useState(false);
                     type={showGHLApiKey ? "text" : "password"}
                     value={ghlConfig.ghl_api_key}
                     onChange={(e) => setGhlConfig(prev => ({ ...prev, ghl_api_key: e.target.value }))}
-                    placeholder="Enter your HighLevel API key"
+                    placeholder={savedGhlConfig.ghl_api_key ? '••••••••••••' : 'Enter your HighLevel API key'}
                     className="font-mono text-sm pr-10"
                   />
                   <Button
@@ -6004,7 +6004,7 @@ const [loading, setLoading] = useState(false);
                   </Label>
                   {savedRetellConfig.retell_api_key && (
                     <Badge className="bg-green-500 hover:bg-green-600 text-white">
-                      Configured
+                      Configured ✓
                     </Badge>
                   )}
                 </div>
@@ -6014,7 +6014,7 @@ const [loading, setLoading] = useState(false);
                     type={showRetellApiKey ? "text" : "password"}
                     value={retellConfig.retell_api_key}
                     onChange={(e) => setRetellConfig(prev => ({ ...prev, retell_api_key: e.target.value }))}
-                    placeholder="Enter your Retell API key"
+                    placeholder={savedRetellConfig.retell_api_key ? '••••••••••••' : 'Enter your Retell API key'}
                     className="font-mono text-sm pr-10"
                   />
                   <Button

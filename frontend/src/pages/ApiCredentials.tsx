@@ -51,9 +51,10 @@ const CredentialInputField = ({
   isSavedConfigured,
   isPassword = false,
   placeholder = '',
-}: { 
+  isOptional = false,
+}: {
   id: string;
-  label: string; 
+  label: string;
   subtitle?: string;
   value: string;
   onChange: (value: string) => void;
@@ -61,29 +62,35 @@ const CredentialInputField = ({
   isSavedConfigured: boolean;
   isPassword?: boolean;
   placeholder?: string;
+  isOptional?: boolean;
 }) => {
   const [showPassword, setShowPassword] = React.useState(false);
   const { cb } = useCreatorMode();
-  
+
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between">
         <div>
-          <Label htmlFor={id} className="text-sm font-medium">{label}</Label>
+          <div className="flex items-center gap-2">
+            <Label htmlFor={id} className="text-sm font-medium">{label}</Label>
+            {isOptional && !isSavedConfigured && (
+              <span className="text-xs text-muted-foreground">(Optional)</span>
+            )}
+          </div>
           {subtitle && <p className="text-xs text-muted-foreground mt-0.5">{subtitle}</p>}
         </div>
         {isSavedConfigured ? (
-          <StatusTag variant="positive">Configured</StatusTag>
-        ) : (
+          <StatusTag variant="positive">Configured ✓</StatusTag>
+        ) : !isOptional ? (
           <StatusTag variant="negative" className="animate-pulse">Not Configured</StatusTag>
-        )}
+        ) : null}
       </div>
       <div className="relative">
-        <Input 
+        <Input
           id={id}
           type={isPassword && !showPassword ? "password" : "text"}
           autoComplete="off"
-          placeholder={isSavedConfigured ? '' : placeholder}
+          placeholder={isSavedConfigured ? '••••••••••••' : placeholder}
           value={value || ''}
           onChange={(e) => onChange(e.target.value)}
           disabled={disabled}
@@ -152,7 +159,7 @@ const ApiCredentialField = ({
           )}
         </div>
         {isSavedConfigured ? (
-          <StatusTag variant="positive">Configured</StatusTag>
+          <StatusTag variant="positive">Configured ✓</StatusTag>
         ) : !isOptional ? (
           <StatusTag variant="negative" className="animate-pulse">Not Configured</StatusTag>
         ) : null}
@@ -176,7 +183,7 @@ const ApiCredentialField = ({
             id={id}
             type={isPassword && !showPassword ? "password" : "text"}
             autoComplete="off"
-            placeholder={isSavedConfigured ? '' : placeholder}
+            placeholder={isSavedConfigured ? '••••••••••••' : placeholder}
             value={value || ''}
             onChange={(e) => onChange(e.target.value)}
             disabled={disabled}
@@ -784,6 +791,7 @@ const ApiCredentials = () => {
                   disabled={false}
                   isSavedConfigured={isCredentialConfigured((credentials as any)?.supabase_access_token)}
                   isPassword
+                  isOptional
                   placeholder="sbp_... (for Supabase Usage dashboard)"
                 />
                 <div className="flex gap-2 pt-2">
@@ -861,6 +869,7 @@ const ApiCredentials = () => {
                   disabled={false}
                   isSavedConfigured={isCredentialConfigured((credentials as any)?.openrouter_management_key)}
                   isPassword
+                  isOptional
                   placeholder="Enter your OpenRouter management key (for billing/activity data)"
                 />
                 <OpenRouterModelSelector
