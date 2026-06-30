@@ -7661,6 +7661,7 @@ const PromptManagement = () => {
                           fallback={editingSlotId}
                           className="text-foreground font-medium"
                           style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '16px' }}
+                          isLocked={isVoice && !!lockMap[slotNum]?.is_retell_locked}
                         />
                       </div>
                       {isVoice && (
@@ -8170,6 +8171,7 @@ const PromptManagement = () => {
                                         kind="voice"
                                         slot={slotNum}
                                         fallback={slot.staticName}
+                                        isLocked={!!lockMap[slotNum]?.is_retell_locked}
                                       />
                                     </CardTitle>
                                     {displayName && (

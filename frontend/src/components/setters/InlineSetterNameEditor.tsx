@@ -20,6 +20,13 @@ interface Props {
   placeholder?: string;
   /** Optional callback after a successful save. */
   onSaved?: (newName: string) => void;
+  /**
+   * F9-1: when true (voice setter is Retell-locked), the inline rename is refused —
+   * no setter_display_names write, clear "unlock to rename" error. Without this the
+   * editor wrote the display name unconditionally, then the guarded Retell push 423'd,
+   * leaving the tile showing a name that never reached Retell / voice_setters.
+   */
+  isLocked?: boolean;
 }
 
 /**
@@ -55,11 +62,14 @@ export const InlineSetterNameEditor: React.FC<Props> = ({
   style,
   placeholder,
   onSaved,
+  isLocked,
 }) => {
   const { credentials, updateCredential } = useClientCredentials(clientId);
   const stored = (credentials?.setter_display_names ?? {}) as Record<string, string>;
   const key = setterKey(kind, slot);
   const currentName = (stored[key] ?? '').trim();
+  // F9-1: lock only applies to voice setters (text setters have no Retell agent).
+  const renameLocked = !!isLocked && kind === 'voice';
 
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(currentName);
@@ -85,6 +95,12 @@ export const InlineSetterNameEditor: React.FC<Props> = ({
       e.preventDefault();
     }
     if (saving) return;
+    // F9-1: a Retell-locked voice setter cannot be renamed inline — refuse clearly
+    // instead of letting the user type a name that won't reach Retell / voice_setters.
+    if (renameLocked) {
+      toast.error('Retell-locked — unlock this setter to rename it');
+      return;
+    }
     setDraft(currentName);
     setEditing(true);
   };
@@ -95,6 +111,13 @@ export const InlineSetterNameEditor: React.FC<Props> = ({
   };
 
   const commitEdit = async () => {
+    // F9-1: belt-and-suspenders — even if edit mode was entered (e.g. via blur),
+    // a locked voice setter never writes setter_display_names. No silent leak.
+    if (renameLocked) {
+      toast.error('Retell-locked — unlock this setter to rename it');
+      setEditing(false);
+      return;
+    }
     const newVal = draft.trim();
     if (newVal === currentName) {
       setEditing(false);
