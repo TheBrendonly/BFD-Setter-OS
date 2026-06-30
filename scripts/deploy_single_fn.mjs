@@ -43,17 +43,19 @@ console.log(`Deploying ${slug}`);
 console.log(`  index.ts + siblings: ${siblings.join(', ') || '(none)'}`);
 console.log(`  _shared bundled: ${sharedFiles.join(', ') || '(none)'}`);
 
-// Preserve verify_jwt by reading current.
+// Preserve verify_jwt by reading current. A brand-new slug 404s here; that is
+// fine — deploy it with verify_jwt=false (the function validates the JWT itself).
 const getRes = await fetch(`https://api.supabase.com/v1/projects/${REF}/functions/${slug}`, {
   headers: { Authorization: `Bearer ${PAT}` },
 });
-if (!getRes.ok) {
-  console.error(`GET function metadata failed: ${getRes.status}`);
-  process.exit(1);
+let verifyJwt = false;
+if (getRes.ok) {
+  const current = await getRes.json();
+  verifyJwt = !!current.verify_jwt;
+  console.log(`  current version: ${current.version}, verify_jwt: ${verifyJwt}`);
+} else {
+  console.log(`  new slug (GET ${getRes.status}) — deploying with verify_jwt=false`);
 }
-const current = await getRes.json();
-const verifyJwt = !!current.verify_jwt;
-console.log(`  current version: ${current.version}, verify_jwt: ${verifyJwt}`);
 
 const fd = new FormData();
 fd.append('metadata', JSON.stringify({

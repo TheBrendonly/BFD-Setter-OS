@@ -85,6 +85,11 @@ try {
   if (cErr || !clientRow) throw new Error(`load BFD client: ${cErr?.message}`);
   const agencyId = clientRow.agency_id as string;
 
+  // A real OTHER client (any existing id != BFD) for the cross-tenant 403 test.
+  // A non-existent id would 404 (not found) before the 403 ownership check fires.
+  const { data: otherClient } = await svc.from("clients").select("id").neq("id", BFD_CLIENT_ID).limit(1).maybeSingle();
+  const otherClientId = (otherClient?.id as string) ?? "00000000-0000-0000-0000-000000000000";
+
   // Remember whether a real pricing row pre-existed (so cleanup is correct).
   const { data: pre } = await svc.from("client_pricing_config").select("id").eq("client_id", BFD_CLIENT_ID).maybeSingle();
   pricingRowExisted = !!pre;
@@ -165,9 +170,9 @@ try {
     r7.status === 200 && "markup_bps" in r7obj && "rate_table" in r7obj,
     `keys=${Object.keys(r7obj).join(",")}`);
 
-  // (viii) cross-tenant: client requests a non-owned client_id -> 403.
-  const r8 = await callFn(clientJwt, "00000000-0000-0000-0000-000000000000");
-  check("(viii) client requesting a non-owned client_id -> 403", r8.status === 403, `status=${r8.status}`);
+  // (viii) cross-tenant: client requests a non-owned EXISTING client_id -> 403.
+  const r8 = await callFn(clientJwt, otherClientId);
+  check("(viii) client requesting a non-owned existing client_id -> 403", r8.status === 403, `otherId=${otherClientId} status=${r8.status}`);
 } catch (err) {
   check("harness ran without throwing", false, err instanceof Error ? err.message : String(err));
 } finally {
