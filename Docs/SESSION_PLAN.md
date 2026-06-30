@@ -196,10 +196,23 @@ Status: `[ ]` not started · `[~]` in progress · `[x]` done. Effort is rough.
   9/9** (client cannot read markup/cost inputs via the API; agency gets the full breakdown). Deployed:
   `client_pricing_config` migration + `get-blended-rate` v1 + frontend. F8 touches NO Voice surface → not
   Voice-gated. Live behavioral UI verify (panel persists + client card toggle) → Session 7-finish.
+- [ ] **Session 9 — API-DEPR-1 (CODE, supervised deploy).** Migrate every deprecated Retell legacy-list
+  endpoint (retell-proxy `list-agents`/`list-calls`/`list-phone-numbers`/`list-retell-llms`/`list-knowledge-bases`/
+  `list-voices`, verify-credentials, elevenlabs-manage-agent) per the deprecation-notice overview, AND align
+  the mixed GHL `Version` headers (2021-04-15 / 2021-07-28 / 2022-11-28) to current. Touches FROZEN baselines
+  (retell-proxy / make-retell-outbound-call) → re-confirm read-only against the live APIs, deploy via
+  `deploy_single_fn.mjs`, re-check no deprecation notice fires. Effort M-L. (Runs after Session 7-finish; not
+  breaking yet but the notices are firing.) Optional fold-in: **BOOK-2/3** supervised shared-fn edit (Low).
+- [ ] **Session 10 — G3-7 (CODE).** Bump vite 5.4 → 7/8 (breaking; dev-server-only advisories, prod ships a
+  static build) + fix whatever the major bump breaks; clear the dompurify/tar advisories. Effort M. Lowest
+  urgency; runs after Session 9. NO npm/lockfile churn until this session.
 - [ ] **First-client milestone (BRENDAN, gated).** Not a Claude code session. At the first paying client:
   flip Stripe live (backfill `subscription_status` → set `ENFORCE_SUBSCRIPTION_GATE=true`), provision the
   GHL/Retell/Unipile webhook secrets + arm `retell_webhook_secret` (6.6), register AU SMS A2P for
   `+61481614530`. See `Docs/DEFERRED.md`. After this, v1 is live + 100%.
 
-When Sessions 0-8 are `[x]` and TEST_LIST is green, BFD-setter is at v1 "100%". v2 = the lifecycle
-system + A/B + analytics + HubSpot + F9 v2 (`Docs/DEFERRED.md`).
+**Remaining sequence to v1 "100%" (the relay follows this order):** Session 7-finish (live TEST pass) → any
+fix-pass for failures → Session 9 (API-DEPR-1) → Session 10 (G3-7) → First-client milestone (event-gated).
+**Functional 100% = Sessions 0-8 `[x]` + TEST_LIST green** (reached at the end of Session 7-finish); Sessions
+9-10 clear the last open BUG_LIST items; the First-client milestone is the actual go-live. v2 = the lifecycle
+system + A/B + analytics + HubSpot + F9 v2 + F8 v2 (`Docs/DEFERRED.md`), off the 100% path.
