@@ -25,6 +25,8 @@ import { task } from "@trigger.dev/sdk";
 import { createClient } from "@supabase/supabase-js";
 import { SETTER_TOOLS, SETTER_TOOL_NAMES, TOOL_USAGE_INSTRUCTION } from "./_shared/setterTools.ts";
 import { normalizeLlmModel } from "./_shared/llmModel.ts";
+import { persistToolInvocations } from "./_shared/persistToolInvocations.ts";
+import { prefetchAvailability, buildAvailabilityBlock } from "./_shared/prefetchSlots.ts";
 import {
   runSetterToolLoop,
   ToolsUnsupportedError,
@@ -302,6 +304,17 @@ export const processSetterReply = task({
       return json && typeof json === "object" && "result" in json ? json.result : json;
     };
 
+    // ── BOOK-1: prefetch real calendar availability and inject it as ground truth
+    // before the model speaks (mirrors the Voice setter). Best-effort — a prefetch
+    // failure degrades to a "call get-available-slots" instruction, never blocks the
+    // reply. Passing an epoch-ms window sidesteps BOOK-3's offset-less-ISO mis-parse.
+    const prefetch = await prefetchAvailability({
+      callTool,
+      timeZone: (client.timezone as string | null) ?? null,
+      nowMs: Date.now(),
+    });
+    messages[0].content = `${messages[0].content ?? ""}\n\n${buildAvailabilityBlock(prefetch)}`;
+
     const loopResult = await runSetterToolLoop({
       messages,
       tools: SETTER_TOOLS,
@@ -316,6 +329,18 @@ export const processSetterReply = task({
         loopResult.toolInvocations.map((t) => `${t.name}${t.error ? "(err)" : "(ok)"}`).join(", "),
       );
     }
+    // ── SMS-OBS-1: persist tool calls/results to the platform tool_invocations
+    // table so booking failures (BOOK-1) are diagnosable from the DB. Best-effort;
+    // never throws (a persistence hiccup must not break the SMS reply).
+    await persistToolInvocations({
+      supabase,
+      clientId: client.id as string,
+      leadId: payload.Lead_ID,
+      setterSlot: slotId,
+      source: "sms",
+      // Prepend the BOOK-1 prefetch so the DB shows availability WAS fetched this turn.
+      invocations: [prefetch.invocation, ...loopResult.toolInvocations],
+    });
     const rawText = (loopResult.finalText || "").trim();
     if (!rawText) {
       throw new Error("processSetterReply: tool loop produced empty content");
@@ -341,7 +366,15 @@ export const processSetterReply = task({
           message: {
             type: "ai",
             content: combined,
-            tool_calls: [],
+            // SMS-OBS-1: record the tools the model actually invoked this turn
+            // (was hardcoded []). Full args/results live in the platform
+            // tool_invocations table; this is the LangChain ai-message summary.
+            tool_calls: loopResult.toolInvocations.map((t) => ({
+              name: t.name,
+              args: t.args,
+              id: crypto.randomUUID(),
+              type: "tool_call",
+            })),
             additional_kwargs: {},
             response_metadata: {},
             invalid_tool_calls: [],

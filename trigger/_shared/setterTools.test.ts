@@ -53,3 +53,9 @@ test("TOOL_USAGE_INSTRUCTION guides slot offering + the slot_unavailable recover
   assert.ok(TOOL_USAGE_INSTRUCTION.length > 0);
   assert.match(TOOL_USAGE_INSTRUCTION, /available_slots/);
 });
+
+test("TOOL_USAGE_INSTRUCTION carries the BOOK-1 anti-fabrication rule (ground-truth snapshot)", () => {
+  // Reinforces the injected availability block: the model may not invent unavailability.
+  assert.match(TOOL_USAGE_INSTRUCTION, /snapshot/i);
+  assert.match(TOOL_USAGE_INSTRUCTION, /booked out/i);
+});

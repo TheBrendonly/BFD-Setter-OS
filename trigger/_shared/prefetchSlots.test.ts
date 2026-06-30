@@ -1,0 +1,104 @@
+// BOOK-1 — unit tests for the Text-setter availability prefetch.
+//
+// Run with Node 22+:
+//   node --experimental-strip-types --test trigger/_shared/prefetchSlots.test.ts
+//
+// BOOK-1 root cause: unlike Voice (which prefetches availability into a dynamic var
+// so the model sees open times before it speaks), the Text setter relied on the model
+// to voluntarily call get-available-slots — and a weak model fabricated "booked out"
+// against an OPEN calendar. The fix mirrors Voice read-only: prefetch via the SAME
+// shared get-available-slots tool, compact like Voice's compactSlots, and inject a
+// ground-truth block every reply so fabrication is structurally impossible.
+//
+// These tests prove: (1) compaction matches Voice (HH:MM, skips traceId); (2) the
+// prefetch calls get-available-slots with an EPOCH-MS window (NOT an offset-less ISO —
+// that would hit BOOK-3's UTC-misparse); (3) it never throws; (4) the injected block
+// carries the real open times + the anti-fabrication guard.
+import test from "node:test";
+import { strict as assert } from "node:assert";
+import { compactSlots, prefetchAvailability, buildAvailabilityBlock } from "./prefetchSlots.ts";
+import type { CallTool } from "./setterToolLoop.ts";
+
+const RAW_GHL = {
+  "2026-07-01": { slots: ["2026-07-01T09:00:00+10:00", "2026-07-01T09:30:00+10:00"] },
+  "2026-07-02": { slots: ["2026-07-02T14:00:00+10:00", "2026-07-02T16:00:00+10:00"] },
+  traceId: "abc-123",
+};
+
+const NOW = Date.parse("2026-06-30T00:00:00Z");
+
+test("compactSlots: ISO slots -> HH:MM map, skips traceId and non-date keys", () => {
+  const out = compactSlots(RAW_GHL);
+  assert.deepEqual(out, {
+    "2026-07-01": ["09:00", "09:30"],
+    "2026-07-02": ["14:00", "16:00"],
+  });
+  assert.equal((out as Record<string, unknown>).traceId, undefined);
+});
+
+test("prefetchAvailability: calls get-available-slots with an EPOCH-MS window (avoids BOOK-3)", async () => {
+  let capturedName = "";
+  let capturedArgs: Record<string, unknown> = {};
+  const callTool: CallTool = async (name, args) => {
+    capturedName = name;
+    capturedArgs = args;
+    return RAW_GHL;
+  };
+
+  const r = await prefetchAvailability({ callTool, timeZone: "Australia/Sydney", nowMs: NOW, windowDays: 14 });
+
+  assert.equal(capturedName, "get-available-slots");
+  // startDate/endDate must be numeric epoch-ms strings, NOT offset-less ISO.
+  assert.match(String(capturedArgs.startDate), /^\d+$/, "startDate must be epoch ms");
+  assert.match(String(capturedArgs.endDate), /^\d+$/, "endDate must be epoch ms");
+  assert.equal(Number(capturedArgs.startDate), NOW);
+  assert.equal(Number(capturedArgs.endDate), NOW + 14 * 86400000);
+  assert.equal(capturedArgs.timeZone, "Australia/Sydney");
+
+  assert.equal(r.status, "ok");
+  assert.equal(r.timezone, "Australia/Sydney");
+  assert.deepEqual(r.slots, { "2026-07-01": ["09:00", "09:30"], "2026-07-02": ["14:00", "16:00"] });
+  // The prefetch is itself a recorded ToolInvocation (so SMS-OBS-1 persists it).
+  assert.equal(r.invocation.name, "get-available-slots");
+  assert.equal(r.invocation.error ?? null, null);
+});
+
+test("prefetchAvailability: empty calendar -> status empty, slots {}", async () => {
+  const callTool: CallTool = async () => ({ traceId: "x" });
+  const r = await prefetchAvailability({ callTool, timeZone: "Australia/Sydney", nowMs: NOW });
+  assert.equal(r.status, "empty");
+  assert.deepEqual(r.slots, {});
+});
+
+test("prefetchAvailability: callTool throwing -> status error, never throws", async () => {
+  const callTool: CallTool = async () => {
+    throw new Error("voice-booking-tools get-available-slots failed: GHL 502");
+  };
+  const r = await prefetchAvailability({ callTool, timeZone: "Australia/Sydney", nowMs: NOW });
+  assert.equal(r.status, "error");
+  assert.match(r.invocation.error ?? "", /GHL 502/);
+  assert.deepEqual(r.slots, {});
+});
+
+test("buildAvailabilityBlock: ok block carries the real times + anti-fabrication guard", async () => {
+  const callTool: CallTool = async () => RAW_GHL;
+  const r = await prefetchAvailability({ callTool, timeZone: "Australia/Sydney", nowMs: NOW, windowDays: 14 });
+  const block = buildAvailabilityBlock(r);
+  assert.match(block, /09:00/);
+  assert.match(block, /Australia\/Sydney/);
+  // The guard wording that makes BOOK-1's fabrication structurally disallowed.
+  assert.match(block, /booked out/i);
+  assert.match(block, /never/i);
+});
+
+test("buildAvailabilityBlock: error block tells the model to call get-available-slots, no fabrication", () => {
+  const block = buildAvailabilityBlock({
+    status: "error",
+    timezone: "Australia/Sydney",
+    windowDays: 14,
+    slots: {},
+    invocation: { name: "get-available-slots", args: {}, error: "boom" },
+  });
+  assert.match(block, /get-available-slots/);
+  assert.match(block, /never/i);
+});

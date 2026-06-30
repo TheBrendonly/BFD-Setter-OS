@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate, type NavigateOptions } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
+import { normalizePhone } from '@/lib/normalizePhone';
 import { autoSplitContactName } from '@/utils/contactNameSplitter';
 import { useLeadErrorAlert } from '@/hooks/useLeadErrorAlert';
 import { Button } from '@/components/ui/button';
@@ -584,6 +585,10 @@ const ContactDetail = () => {
         last_name: currentData['last_name'] || null,
         email: currentData['email'] || null,
         phone: currentData['phone'] || null,
+        // PHONE-CLEAR-1: recompute normalized_phone whenever phone is saved so clearing
+        // or changing the number also clears/updates the by-phone (inbound/STOP) match
+        // key. A cleared phone -> null (was: the stale +61… value lingered).
+        normalized_phone: normalizePhone(currentData['phone'] || null),
         business_name: currentData['business_name'] || null,
         custom_fields: customFields,
         tags: tagsPayload,

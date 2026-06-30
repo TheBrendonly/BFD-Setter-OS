@@ -16,6 +16,7 @@ import {
   type LockedSetterRow,
   type LockIndex,
 } from "../_shared/retell-lock.ts";
+import { buildVoicemailPatch } from "./voicemail.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -1529,34 +1530,25 @@ Deno.serve(async (req) => {
           detect_enabled?: boolean;
           detect_timeout_ms?: number;
         } | null;
-        if (!cfg || !cfg.mode) {
-          result = { success: false, action: "skipped_no_config", reason: "clients.voicemail_config is null — set it first." };
+        // VM-1: build the patch body with voicemail_option ONLY. The deprecated
+        // enable_voicemail_detection + voicemail_detection_timeout_ms fields are no
+        // longer in the live Retell agent schema and caused the whole PATCH to 4xx
+        // (the "Push partial" symptom). The hangup option already lands via this same
+        // raw PATCH, so voicemail_option alone is the proven path. (Routing through
+        // ensureEditableAgentDraft was considered but is unnecessary — hangup proves
+        // the raw PATCH applies; see the VM-1 note in the handoff for the Voice-gated
+        // live-test confirmation.)
+        const vm = buildVoicemailPatch(cfg);
+        if (!vm.ok) {
+          result = { success: false, action: vm.action, reason: vm.reason };
           break;
         }
-
-        let voicemailOption: Record<string, unknown>;
-        if (cfg.mode === "hangup") {
-          voicemailOption = { action: { type: "hangup" } };
-        } else if (cfg.mode === "static") {
-          if (!cfg.text || !cfg.text.trim()) {
-            result = { success: false, action: "skipped_missing_text", reason: "Static voicemail requires `text` to be non-empty." };
-            break;
-          }
-          voicemailOption = { action: { type: "static", text: cfg.text } };
-        } else if (cfg.mode === "prompt") {
-          if (!cfg.text || !cfg.text.trim()) {
-            result = { success: false, action: "skipped_missing_text", reason: "Prompt voicemail requires `text` to be non-empty." };
-            break;
-          }
-          voicemailOption = { action: { type: "prompt", text: cfg.text } };
-        } else {
-          result = { success: false, action: "invalid_mode", reason: `Unknown voicemail mode: ${cfg.mode}. Use hangup, static, or prompt.` };
-          break;
-        }
-
-        const detectEnabled = cfg.detect_enabled !== false;
+        const patchBody = vm.patchBody;
+        // detect_* are echoed in the result for UI continuity (they reflect the stored
+        // clients.voicemail_config intent) but are NO LONGER sent to Retell.
+        const detectEnabled = cfg?.detect_enabled !== false;
         const detectTimeoutMs =
-          typeof cfg.detect_timeout_ms === "number" && cfg.detect_timeout_ms > 0
+          typeof cfg?.detect_timeout_ms === "number" && cfg.detect_timeout_ms > 0
             ? cfg.detect_timeout_ms
             : 30000;
 
@@ -1569,12 +1561,6 @@ Deno.serve(async (req) => {
           result = { success: true, action: "skipped_no_agents", reason: "No Retell agents are provisioned for this client yet." };
           break;
         }
-
-        const patchBody = {
-          enable_voicemail_detection: detectEnabled,
-          voicemail_detection_timeout_ms: detectTimeoutMs,
-          voicemail_option: voicemailOption,
-        };
 
         const patches: Array<{ agent_id: string; ok: boolean; error?: string; skipped?: boolean; reason?: string; name?: string }> = [];
         for (const agentId of agentIds) {
