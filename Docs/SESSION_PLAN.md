@@ -153,19 +153,33 @@ Status: `[ ]` not started · `[~]` in progress · `[x]` done. Effort is rough.
   ApiManagement/SupabaseConfigCard/RefreshCostDialog). tsc + build + 118 edge tests green; verified read-only
   (columns/index live, guard query valid, fns booted). F9 v2 → DEFERRED. F9 v1 + F8-1 + G3-8(c) → TEST_LIST.
   → emits the **Session 7** TEST prompt. (F8 build = **Session 8**, after the TEST pass.)
-- [~] **Session 7 — TEST pass (BRENDAN drives, Claude verifies).** IN PROGRESS — **paused 2026-06-29 after the
-  UI half (LIVE-A)**; see handoff `Operations/handoffs/2026-06-29-session7-test-pass-PAUSED.md`. Done so far:
-  ~21 items banked read-only (B-3/B-5/G3-5/F2a/F7/6.7/6.10/G3-6 gate+saves/F2c-relocated/G3-8c/F8-1/B-6 badge/
-  B-4 nav/types.ts/B-1/F2e/G3-2/G3-4/delete-setter) + **LIVE-A passes** (F9 lock/bulk/Pull, F2b, B-6×2, 6.1,
-  6.3-visual, F6, G3-6 Credentials live). **5 bugs found:** F9-1 (lock display-name leak, M), VM-1 (set-voicemail
-  push broken, M), INB-1 (inbound version-pin, L), API-DEPR-1 (Retell/GHL deprecation review, M), UI-1 (legacy
-  setter labels, L). **Feature F11** (Credentials masked indicator — Brendan chose option A) logged.
-  **Setup:** F1 GHL field provisioned. **Still owed (phone-heavy half):** LIVE-B (client RLS), LIVE-C (one answered
-  call on the still-LOCKED Property Coach = F2c+G3-3+6.12b+F9-outbound+B4+latency, then UNLOCK; + 3.12 booking,
-  6.11 voicemail, B-3(6.4)), LIVE-D (B-2 by-phone ×4 + manual-send/429), LIVE-E (F3/F4), B-5/{{first_name}},
-  async G3-6 Tier-3 analytics. **Done when:** TEST_LIST green / all fails logged. Because bugs were found, a
-  **fix pass** (F9-1/VM-1/INB-1/UI-1 + F11 build + API-DEPR-1 review) precedes **Session 8** (F8). → continues
-  in the next session (see emitted prompt).
+- [~] **Session 7 — TEST pass (BRENDAN drives, Claude verifies).** IN PROGRESS — **UI half (LIVE-A) done 2026-06-28;
+  phone-half done 2026-06-30** (handoff `Operations/handoffs/2026-06-30-session7-test-pass-phone-half.md`). PASSED
+  (→ COMPLETED_LOG): the ~21 read-only banks + LIVE-A UI (F2b/F6/B-6×2/F9 lock/bulk/Pull) + **phone-half**
+  B-4(6.2), F2c, G3-3, 6.11, 6.12b(call+SMS), the full **F9 lifecycle** (outbound-dials-while-locked + unlock+
+  rename-no-423), B-3(6.4), B4-call, latency. **Bugs found this half →** BUG_LIST: **BOOK-1** (SMS setter
+  fabricates "booked out" + never books on an OPEN calendar — model/prompt, proven NOT API; **H**), **BOOK-2/3**
+  (latent shared-fn slot-grid/tz defects; **L**, shared-fn defer), **SMS-OBS-1** (tool calls not persisted; **M**),
+  **MODEL-1-HARDENING** (free-text llm_model can break all AI; **M** — the live misconfig itself FIXED), **PHONE-CLEAR-1**
+  (normalized_phone not cleared on phone-clear; **L**). **Config:** SMS latency 60-82→12s. **Still owed (→ Session 7-finish):**
+  B-5, F1, LIVE-D (B-2 ×4 + manual-send/429), LIVE-E (F3/F4), G3-6 Tier-3, and **3.12 SMS booking (blocked on BOOK-1)**.
+  Because BOOK-1 is structural, an **overnight Text-Setter repair (Session 7.5)** runs first, then the fix pass.
+- [ ] **Session 7.5 — Overnight Text-Setter structural repair (CODE; branch-only, DEPLOY-NOTHING; superpowers + thin spec-kit).**
+  Triggered by BOOK-1. Council-vetted (GO-with-changes). Research-then-repair: map the Text setter vs Voice setter vs the
+  n8n reference (`n8n/exports/Text_Engine_REVERSE_ENGINEERED.md`; **no upstream remote**), then fix the **Text-safe code**:
+  (1) persist tool invocations to a DB table (closes SMS-OBS-1), (2) prefetch + inject ground-truth open slots every reply +
+  an anti-fabrication guard (structural BOOK-1 fix), (3) tighten `setterTools.ts` tool-usage guidance + tool_choice.
+  **voice-booking-tools is SHARED with live Voice + frozen Session-7 baseline → read-only tonight** (BOOK-2/3 = write-up +
+  characterization test for a supervised daytime session). Both prompts report-only (BOOK-1 prompt tweak → BRENDAN_TODO).
+  Kickoff prompt = the `2026-06-30` handoff. **Done when:** branch + comparison doc + fix-summary + deploy checklist + passing
+  unit tests (no deploy); Brendan reviews + deploys in daylight.
+- [ ] **Fix pass — remaining Session-7 bugs (CODE).** After 7.5: **F9-1** (lock display-name leak), **VM-1** (set-voicemail
+  deprecated fields), **API-DEPR-1** (Retell/GHL deprecation review), **PHONE-CLEAR-1**, **MODEL-1-HARDENING**, + the open
+  **G3-8(a)** LeadRow service-key forward. (INB-1, UI-1, F11 were already built in the 2026-06-29 overnight build → pending
+  live-verify in Session 7-finish, not rebuilt.)
+- [ ] **Session 7-finish — remaining live TEST items (BRENDAN drives, Claude verifies).** The deferred phone/SMS checks once
+  the above land: B-5, F1, LIVE-D (B-2 ×4 + manual-send/429), LIVE-E (F3/F4), G3-6 Tier-3, **3.12 SMS booking** (re-test after
+  the BOOK-1 repair), + live-verify F11/UI-1/INB-1. **Done when:** TEST_LIST green / all fails logged.
 - [ ] **Session 8 — F8 cost-to-price calculator (CODE, PLAN mode — money math + agency governance).** The
   second half of the split. Build per `FEATURE_ROADMAP` "Feature spec - F8" + the decided scope: pure
   `computeBlendedRate` (integer minor units + explicit FX step + markup multiplier + deterministic rounding;
