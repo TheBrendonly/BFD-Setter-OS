@@ -14,6 +14,7 @@ import { usePageHeader } from '@/contexts/PageHeaderContext';
 import { useAuth } from "@/hooks/useAuth";
 import { ClientMenuConfigEditor } from "@/components/ClientMenuConfigEditor";
 import { ClientAccountFieldConfigEditor } from "@/components/ClientAccountFieldConfigEditor";
+import { ClientPricingConfigEditor } from "@/components/ClientPricingConfigEditor";
 import { useSubscription } from "@/hooks/useSubscription";
 import { UnsavedChangesDialog } from '@/components/UnsavedChangesDialog';
 import { ClientVoicemailCard } from '@/components/setters/ClientVoicemailCard';
@@ -459,6 +460,13 @@ export default function ClientSettings() {
           {isAgency && clientId && (
             <div className="border-t border-dashed border-border pt-6">
               <ClientAccountFieldConfigEditor clientId={clientId} />
+            </div>
+          )}
+
+          {/* F8 Cost-to-Price Calculator - Agency only */}
+          {isAgency && clientId && (
+            <div className="border-t border-dashed border-border pt-6">
+              <ClientPricingConfigEditor clientId={clientId} />
             </div>
           )}
 
