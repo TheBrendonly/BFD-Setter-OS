@@ -26,6 +26,7 @@ import { createClient } from "@supabase/supabase-js";
 import { SETTER_TOOLS, SETTER_TOOL_NAMES, TOOL_USAGE_INSTRUCTION } from "./_shared/setterTools.ts";
 import { normalizeLlmModel } from "./_shared/llmModel.ts";
 import { persistToolInvocations } from "./_shared/persistToolInvocations.ts";
+import { prefetchAvailability, buildAvailabilityBlock } from "./_shared/prefetchSlots.ts";
 import {
   runSetterToolLoop,
   ToolsUnsupportedError,
@@ -303,6 +304,17 @@ export const processSetterReply = task({
       return json && typeof json === "object" && "result" in json ? json.result : json;
     };
 
+    // ── BOOK-1: prefetch real calendar availability and inject it as ground truth
+    // before the model speaks (mirrors the Voice setter). Best-effort — a prefetch
+    // failure degrades to a "call get-available-slots" instruction, never blocks the
+    // reply. Passing an epoch-ms window sidesteps BOOK-3's offset-less-ISO mis-parse.
+    const prefetch = await prefetchAvailability({
+      callTool,
+      timeZone: (client.timezone as string | null) ?? null,
+      nowMs: Date.now(),
+    });
+    messages[0].content = `${messages[0].content ?? ""}\n\n${buildAvailabilityBlock(prefetch)}`;
+
     const loopResult = await runSetterToolLoop({
       messages,
       tools: SETTER_TOOLS,
@@ -326,7 +338,8 @@ export const processSetterReply = task({
       leadId: payload.Lead_ID,
       setterSlot: slotId,
       source: "sms",
-      invocations: loopResult.toolInvocations,
+      // Prepend the BOOK-1 prefetch so the DB shows availability WAS fetched this turn.
+      invocations: [prefetch.invocation, ...loopResult.toolInvocations],
     });
     const rawText = (loopResult.finalText || "").trim();
     if (!rawText) {
