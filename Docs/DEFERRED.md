@@ -12,6 +12,7 @@ Things deliberately not being built now, each with the gate that would un-defer 
 
 ## Gated features
 
+- [ ] **F8 v2 — cost-to-price calculator refinements.** F8 v1 shipped + deployed 2026-07-01 (admin rate card + FX + markup + per-component toggles + show-rate-to-client). v2: a **live model-aware LLM estimate** from `openrouter_usage_cache` (replace the static $0.003/min seed with the setter's actual model rate × tokens-per-minute); **post-call Retell actual reconciliation** of the voice line against `call_history.cost`; a **live FX feed** (replace the admin-set rate + buffer). **Gate:** real usage data accrued + a client asking for per-call accuracy. See `FEATURE_ROADMAP` "Feature spec - F8".
 - [ ] **2.6 Cost-per-booking analytics dashboard** — `cadence_metrics` + `cadence_funnel` view exist; no chart. **Gate:** ~60 days of real data + the cost-tracking table from 3.9.
 - [ ] **3.1 A/B testing** (campaign / agent / AI-generated) — **Gate:** first paying client with ~50+ leads/week.
 - [ ] **3.2 Agent-by-form-field** (within-cadence agent override) — **Gate:** a client needs same-cadence/different-agent (tag-per-campaign covers ~80%).

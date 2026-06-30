@@ -10,6 +10,30 @@ When an item passes, move it to `Docs/archive/COMPLETED_LOG.md`. When it fails, 
 > PHONE-CLEAR-1** (+ the earlier F9-1, VM-1, INB-1, UI-1, API-DEPR-1). **MODEL-1 fixed live.** The items
 > below are the **still-owed** live checks (best run after tonight's overnight Text-Setter repair lands).
 
+## ⭐ 2026-07-01 deploy — F8 + Session 7.5 DEPLOYED LIVE (consolidated test pass)
+
+> Both F8 and the 7.5 all-bugs fixes are DEPLOYED (handoff `2026-07-01-f8-plus-7.5-deploy.md`). F8's trap is
+> proven sealed autonomously (live proof 9/9); these are the BEHAVIORAL checks a human runs. **Batch them**
+> (each line covers several items) to avoid repeated work.
+
+- [ ] **VOICE-REGRESSION CONFIRMATION (do FIRST — gates trusting retell-proxy v47).** One outbound voice call on a
+  canonical agent (read the live phone binding): booking still works end-to-end; **B-3** (outbound follows
+  `latest_published`) + **B-5** (default vars; no literal `{{first_name}}`) survive; **VM-1** voicemail "Save & push"
+  now reports `voicemail_set` (not "partial"). If anything regressed, roll retell-proxy back to v46. _(The deploy was
+  read-only-verified to mutate 0 agents; this is the behavioral leg not run overnight.)_
+- [ ] **F8 — agency panel + client card.** Agency login → Sub-Account Config → "Cost-to-Price Calculator": edit
+  rates/FX/markup/toggles, Save, reload → persists; the live breakdown + blended $/min match a hand-check of the seeded
+  figures (Retell $0.07 + LLM $0.003 = $0.073 USD × FX × (1+markup), Twilio OFF, number rental a separate fixed line).
+  Turn **show rate to client** ON → log in as that client → AccountSettings shows a read-only "Your Rate $X.XX /min (AUD)"
+  card with NO breakdown/markup; toggle OFF → the card disappears. (The trap — client cannot read markup via the API —
+  is already proven 9/9; this is the UI behavioral check.)
+- [ ] **One SMS exchange to a test lead** (apply the BOOK-1 prompt tweak from BRENDAN_TODO first) → **BOOK-1** acceptance
+  (offers real slots → books on acceptance) + **3.12 SMS booking** (`bookings.source='sms'` + execution ends) +
+  **SMS-OBS-1** (rows appear in `tool_invocations`) + **MODEL-1** (engine answers; no silent 400).
+- [ ] **F9-1 / PHONE-CLEAR-1 / G3-8a** — locked-setter inline rename is refused with a clear error (no `setter_display_names`
+  write); clearing a lead's phone nulls `leads.normalized_phone`; "execute lead" on a reactivation campaign fires the
+  webhook + completes with NO `supabase_service_key` in any browser payload.
+
 ## Go-live smokes (code deployed, never live-verified)
 
 - [ ] **3.12 SMS booking** → text "can I book?" → slots → pick → `bookings.source='sms'` + `engagement_executions` ends (`stop_reason='booking_created'`); reschedule / cancel / callback over SMS; STOP mid-exchange is respected (not sent). **BLOCKED on BOOK-1** (the setter currently fabricates "booked out" and never books on an open calendar — `BUG_LIST.md`); **BOOK-1 code is now STAGED on the overnight branch** — re-test via the **Session 7.5 BOOK-1 / 3.12 acceptance** entry below after the Trigger.dev deploy + the prompt tweak.

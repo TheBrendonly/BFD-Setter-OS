@@ -164,7 +164,7 @@ Status: `[ ]` not started · `[~]` in progress · `[x]` done. Effort is rough.
   (normalized_phone not cleared on phone-clear; **L**). **Config:** SMS latency 60-82→12s. **Still owed (→ Session 7-finish):**
   B-5, F1, LIVE-D (B-2 ×4 + manual-send/429), LIVE-E (F3/F4), G3-6 Tier-3, and **3.12 SMS booking (blocked on BOOK-1)**.
   Because BOOK-1 is structural, an **overnight Text-Setter repair (Session 7.5)** runs first, then the fix pass.
-- [x] **Session 7.5 — Overnight Text-Setter repair + FOLD-IN ALL OPEN BUGS, v2 (CODE; branch-only, DEPLOY-NOTHING).** **DONE 2026-07-01** — branch `worktree-overnight+text-setter-repair-allbugs` (8 fix commits + BOOK-2/3 char tests; **NOTHING deployed**). All 11 open bugs dispositioned: **7 staged `[~]`** (SMS-OBS-1, BOOK-1 code, MODEL-1a, F9-1, VM-1, PHONE-CLEAR-1, G3-8a) · **BOOK-2/3** char-test+writeup · **API-DEPR-1 + G3-7** deferred · **MODEL-1b** demoted (save UI is a known-IDs dropdown). BOOK-1 prompt half stays report-only `[B]`. test:node 80/0, test:edge 125/0, vite build green; adversarial verification council = **DONE-CONFIRMED**. Deploy checklist (VM-1 retell-proxy v46→v47 = the only Voice-gated unit) + Voice gate + the tomorrow prompt are in `Operations/handoffs/2026-07-01-overnight-text-setter-repair-allbugs.md`. _Original scope note below._
+- [x] **Session 7.5 — Overnight Text-Setter repair + FOLD-IN ALL OPEN BUGS, v2 (CODE).** **BUILT 2026-07-01 + MERGED to main + DEPLOYED LIVE 2026-07-01** (overnight, alongside F8 — Brendan directed a go-live; handoff `Operations/handoffs/2026-07-01-f8-plus-7.5-deploy.md`). Deployed: Trigger 20260630.1 (SMS-OBS-1/BOOK-1 code/MODEL-1a), `tool_invocations` + `client_pricing_config` migrations, `execute-lead-webhook` v1, frontend (Railway), **retell-proxy v46→v47 (VM-1)** behind a read-only Voice smoke (0 agents mutated; the behavioral answered-call gate still owed → Session 7-finish). Branch `worktree-overnight+text-setter-repair-allbugs` (8 fix commits + BOOK-2/3 char tests). All 11 open bugs dispositioned: **7 staged `[~]`** (SMS-OBS-1, BOOK-1 code, MODEL-1a, F9-1, VM-1, PHONE-CLEAR-1, G3-8a) · **BOOK-2/3** char-test+writeup · **API-DEPR-1 + G3-7** deferred · **MODEL-1b** demoted (save UI is a known-IDs dropdown). BOOK-1 prompt half stays report-only `[B]`. test:node 80/0, test:edge 125/0, vite build green; adversarial verification council = **DONE-CONFIRMED**. Deploy checklist (VM-1 retell-proxy v46→v47 = the only Voice-gated unit) + Voice gate + the tomorrow prompt are in `Operations/handoffs/2026-07-01-overnight-text-setter-repair-allbugs.md`. _Original scope note below._
   Triggered by BOOK-1. Council-vetted **twice** (GO-with-changes). Research-then-repair the Text setter (vs Voice vs the
   n8n reference `n8n/exports/Text_Engine_REVERSE_ENGINEERED.md`; **no upstream remote**) AND additively fold in EVERY open
   BUG_LIST item, each triaged into a frozen ledger: **fix-tonight-branch** (BOOK-1 code, SMS-OBS-1 persistence FIRST, F9-1,
@@ -175,24 +175,27 @@ Status: `[ ]` not started · `[~]` in progress · `[x]` done. Effort is rough.
   v27 / voice-booking-tools) untouched. Kickoff prompt (v2) = the `2026-06-30` handoff. **Done when:** branch + comparison doc
   + per-bug ledger + deploy checklist (Voice-regression gated) + passing unit tests (no deploy) + an emitted **tomorrow**
   testing prompt; Brendan deploys + live-verifies in daylight.
-- [~] **Fix pass — ABSORBED into 7.5 (staged on its branch 2026-07-01).** F9-1 / VM-1 / SMS-OBS-1 / MODEL-1-HARDENING / PHONE-CLEAR-1 / G3-8(a) / BOOK-1
-  code all landed on 7.5's branch (deploy-pending). **What truly remains as their own sessions:** **API-DEPR-1** (frozen-baseline multi-fn
+- [x] **Fix pass — ABSORBED into 7.5 + DEPLOYED 2026-07-01.** F9-1 / VM-1 / SMS-OBS-1 / MODEL-1-HARDENING / PHONE-CLEAR-1 / G3-8(a) / BOOK-1
+  code all merged to main + deployed. **What truly remains as their own sessions:** **API-DEPR-1** (frozen-baseline multi-fn
   Retell/GHL deprecation migration + live-API re-confirm) and **G3-7** (breaking vite major bump). (INB-1, UI-1, F11 already
   built in the 2026-06-29 overnight build → live-verify only in Session 7-finish, not rebuilt.)
-- [ ] **Session 7-finish — deploy 7.5's branch + remaining live TEST (BRENDAN drives, Claude verifies).** First DEPLOY the
-  7.5 branch per its checklist (Voice-regression gated for the retell-proxy v47 bump), THEN: B-5, F1, LIVE-D (B-2 ×4 +
-  manual-send/429), LIVE-E (F3/F4), G3-6 Tier-3, **3.12 SMS booking** (re-test after the BOOK-1 repair + applying the
-  report-only prompt tweak), + live-verify the staged fixes (F9-1, VM-1, SMS-OBS-1, MODEL-1, PHONE-CLEAR-1, G3-8(a)) +
-  F11/UI-1/INB-1. **Done when:** TEST_LIST green / all fails logged.
-- [ ] **Session 8 — F8 cost-to-price calculator (CODE, PLAN mode — money math + agency governance).** The
-  second half of the split. Build per `FEATURE_ROADMAP` "Feature spec - F8" + the decided scope: pure
-  `computeBlendedRate` (integer minor units + explicit FX step + markup multiplier + deterministic rounding;
-  TDD the core) and an **agency-only** rate panel on Sub-Account Config (mirror `ClientAccountFieldConfigEditor`
-  governance), per-sub-account override on a global default. **NEW requirement:** a per-sub-account "show rate
-  to client" toggle (agency-set) that surfaces a read-only blended-$/min display card in that client's own
-  account settings (markup/breakdown stay agency-only). **Done when:** computeBlendedRate tests pass; the panel
-  edits/persists + the client display card respects the toggle; client role can't see the markup internals →
-  TEST_LIST. → emits the **First-client milestone**.
+- [ ] **Session 7-finish — live TEST pass (BRENDAN drives, Claude verifies).** 7.5 + F8 are now DEPLOYED (2026-07-01), so
+  this is purely the BEHAVIORAL live-test pass, **consolidated to reduce repeated work** (see the matrix in the 2026-07-01
+  handoff): **Voice-regression confirmation FIRST** (one outbound call: booking works + B-3/B-5 survive + VM-1 voicemail
+  lands; roll retell-proxy back to v46 if it regressed), then one SMS exchange (BOOK-1/3.12/SMS-OBS-1/MODEL-1), one fresh
+  GHL contact (F1/B-5/B-2), one agency→client login pair (F8 panel + client card toggle + INB-1/UI-1/F11), plus B-5,
+  LIVE-D (B-2 ×4 + manual-send/429), LIVE-E (F3/F4), G3-6 Tier-3, F9-1, PHONE-CLEAR-1, G3-8(a). **Done when:** TEST_LIST
+  green / all fails logged.
+- [x] **Session 8 — F8 cost-to-price calculator.** **BUILT + DEPLOYED LIVE 2026-07-01** (overnight; PLAN-mode
+  approved then executed). Pure `computeBlendedRate` (integer micros, ONE FX step, bps markup + buffer,
+  round-half-even once, line items sum exactly, separate fixed_monthly; 23 edge tests). Agency-only rate panel
+  on Sub-Account Config + per-sub-account "show rate to client" toggle → read-only blended-$/min card on the
+  client's account page. **THE TRAP, sealed server-side:** an adversarial council VETO caught that the agency
+  `FOR ALL` policy matched client-role users (each client = own agency, so profiles.agency_id =
+  clients.agency_id); fixed by role-gating the policy on `get_user_role(...) = 'agency'`. **Live trap proof
+  9/9** (client cannot read markup/cost inputs via the API; agency gets the full breakdown). Deployed:
+  `client_pricing_config` migration + `get-blended-rate` v1 + frontend. F8 touches NO Voice surface → not
+  Voice-gated. Live behavioral UI verify (panel persists + client card toggle) → Session 7-finish.
 - [ ] **First-client milestone (BRENDAN, gated).** Not a Claude code session. At the first paying client:
   flip Stripe live (backfill `subscription_status` → set `ENFORCE_SUBSCRIPTION_GATE=true`), provision the
   GHL/Retell/Unipile webhook secrets + arm `retell_webhook_secret` (6.6), register AU SMS A2P for
