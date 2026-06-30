@@ -164,22 +164,26 @@ Status: `[ ]` not started · `[~]` in progress · `[x]` done. Effort is rough.
   (normalized_phone not cleared on phone-clear; **L**). **Config:** SMS latency 60-82→12s. **Still owed (→ Session 7-finish):**
   B-5, F1, LIVE-D (B-2 ×4 + manual-send/429), LIVE-E (F3/F4), G3-6 Tier-3, and **3.12 SMS booking (blocked on BOOK-1)**.
   Because BOOK-1 is structural, an **overnight Text-Setter repair (Session 7.5)** runs first, then the fix pass.
-- [ ] **Session 7.5 — Overnight Text-Setter structural repair (CODE; branch-only, DEPLOY-NOTHING; superpowers + thin spec-kit).**
-  Triggered by BOOK-1. Council-vetted (GO-with-changes). Research-then-repair: map the Text setter vs Voice setter vs the
-  n8n reference (`n8n/exports/Text_Engine_REVERSE_ENGINEERED.md`; **no upstream remote**), then fix the **Text-safe code**:
-  (1) persist tool invocations to a DB table (closes SMS-OBS-1), (2) prefetch + inject ground-truth open slots every reply +
-  an anti-fabrication guard (structural BOOK-1 fix), (3) tighten `setterTools.ts` tool-usage guidance + tool_choice.
-  **voice-booking-tools is SHARED with live Voice + frozen Session-7 baseline → read-only tonight** (BOOK-2/3 = write-up +
-  characterization test for a supervised daytime session). Both prompts report-only (BOOK-1 prompt tweak → BRENDAN_TODO).
-  Kickoff prompt = the `2026-06-30` handoff. **Done when:** branch + comparison doc + fix-summary + deploy checklist + passing
-  unit tests (no deploy); Brendan reviews + deploys in daylight.
-- [ ] **Fix pass — remaining Session-7 bugs (CODE).** After 7.5: **F9-1** (lock display-name leak), **VM-1** (set-voicemail
-  deprecated fields), **API-DEPR-1** (Retell/GHL deprecation review), **PHONE-CLEAR-1**, **MODEL-1-HARDENING**, + the open
-  **G3-8(a)** LeadRow service-key forward. (INB-1, UI-1, F11 were already built in the 2026-06-29 overnight build → pending
-  live-verify in Session 7-finish, not rebuilt.)
-- [ ] **Session 7-finish — remaining live TEST items (BRENDAN drives, Claude verifies).** The deferred phone/SMS checks once
-  the above land: B-5, F1, LIVE-D (B-2 ×4 + manual-send/429), LIVE-E (F3/F4), G3-6 Tier-3, **3.12 SMS booking** (re-test after
-  the BOOK-1 repair), + live-verify F11/UI-1/INB-1. **Done when:** TEST_LIST green / all fails logged.
+- [ ] **Session 7.5 — Overnight Text-Setter repair + FOLD-IN ALL OPEN BUGS, v2 (CODE; branch-only, DEPLOY-NOTHING; superpowers + thin spec-kit + 2 in-session councils).**
+  Triggered by BOOK-1. Council-vetted **twice** (GO-with-changes). Research-then-repair the Text setter (vs Voice vs the
+  n8n reference `n8n/exports/Text_Engine_REVERSE_ENGINEERED.md`; **no upstream remote**) AND additively fold in EVERY open
+  BUG_LIST item, each triaged into a frozen ledger: **fix-tonight-branch** (BOOK-1 code, SMS-OBS-1 persistence FIRST, F9-1,
+  MODEL-1b) / **stage-on-branch+deploy-checklist** (MODEL-1a, VM-1 [Voice-gated], PHONE-CLEAR-1, G3-8(a)) /
+  **write-up+characterization-test** (BOOK-2/3, shared `voice-booking-tools` = read-only) / **defer** (API-DEPR-1, G3-7).
+  A PLANNING council ratifies the ledger before code; an ADVERSARIAL VERIFICATION council gates "done" (they replace the
+  absent reviewer). Both prompts report-only; DEPLOY NOTHING; frozen baseline (retell-proxy v46 / make-retell-outbound-call
+  v27 / voice-booking-tools) untouched. Kickoff prompt (v2) = the `2026-06-30` handoff. **Done when:** branch + comparison doc
+  + per-bug ledger + deploy checklist (Voice-regression gated) + passing unit tests (no deploy) + an emitted **tomorrow**
+  testing prompt; Brendan deploys + live-verifies in daylight.
+- [ ] **Fix pass — largely ABSORBED into 7.5.** F9-1 / VM-1 / SMS-OBS-1 / MODEL-1-HARDENING / PHONE-CLEAR-1 / G3-8(a) / BOOK-1
+  code all fold into 7.5's branch. **What truly remains as their own sessions:** **API-DEPR-1** (frozen-baseline multi-fn
+  Retell/GHL deprecation migration + live-API re-confirm) and **G3-7** (breaking vite major bump). (INB-1, UI-1, F11 already
+  built in the 2026-06-29 overnight build → live-verify only in Session 7-finish, not rebuilt.)
+- [ ] **Session 7-finish — deploy 7.5's branch + remaining live TEST (BRENDAN drives, Claude verifies).** First DEPLOY the
+  7.5 branch per its checklist (Voice-regression gated for the retell-proxy v47 bump), THEN: B-5, F1, LIVE-D (B-2 ×4 +
+  manual-send/429), LIVE-E (F3/F4), G3-6 Tier-3, **3.12 SMS booking** (re-test after the BOOK-1 repair + applying the
+  report-only prompt tweak), + live-verify the staged fixes (F9-1, VM-1, SMS-OBS-1, MODEL-1, PHONE-CLEAR-1, G3-8(a)) +
+  F11/UI-1/INB-1. **Done when:** TEST_LIST green / all fails logged.
 - [ ] **Session 8 — F8 cost-to-price calculator (CODE, PLAN mode — money math + agency governance).** The
   second half of the split. Build per `FEATURE_ROADMAP` "Feature spec - F8" + the decided scope: pure
   `computeBlendedRate` (integer minor units + explicit FX step + markup multiplier + deterministic rounding;
