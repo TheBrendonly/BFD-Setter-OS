@@ -25,6 +25,7 @@ import { task } from "@trigger.dev/sdk";
 import { createClient } from "@supabase/supabase-js";
 import { SETTER_TOOLS, SETTER_TOOL_NAMES, TOOL_USAGE_INSTRUCTION } from "./_shared/setterTools.ts";
 import { normalizeLlmModel } from "./_shared/llmModel.ts";
+import { persistToolInvocations } from "./_shared/persistToolInvocations.ts";
 import {
   runSetterToolLoop,
   ToolsUnsupportedError,
@@ -316,6 +317,17 @@ export const processSetterReply = task({
         loopResult.toolInvocations.map((t) => `${t.name}${t.error ? "(err)" : "(ok)"}`).join(", "),
       );
     }
+    // ── SMS-OBS-1: persist tool calls/results to the platform tool_invocations
+    // table so booking failures (BOOK-1) are diagnosable from the DB. Best-effort;
+    // never throws (a persistence hiccup must not break the SMS reply).
+    await persistToolInvocations({
+      supabase,
+      clientId: client.id as string,
+      leadId: payload.Lead_ID,
+      setterSlot: slotId,
+      source: "sms",
+      invocations: loopResult.toolInvocations,
+    });
     const rawText = (loopResult.finalText || "").trim();
     if (!rawText) {
       throw new Error("processSetterReply: tool loop produced empty content");
@@ -341,7 +353,15 @@ export const processSetterReply = task({
           message: {
             type: "ai",
             content: combined,
-            tool_calls: [],
+            // SMS-OBS-1: record the tools the model actually invoked this turn
+            // (was hardcoded []). Full args/results live in the platform
+            // tool_invocations table; this is the LangChain ai-message summary.
+            tool_calls: loopResult.toolInvocations.map((t) => ({
+              name: t.name,
+              args: t.args,
+              id: crypto.randomUUID(),
+              type: "tool_call",
+            })),
             additional_kwargs: {},
             response_metadata: {},
             invalid_tool_calls: [],
