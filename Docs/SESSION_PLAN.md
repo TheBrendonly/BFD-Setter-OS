@@ -164,7 +164,7 @@ Status: `[ ]` not started · `[~]` in progress · `[x]` done. Effort is rough.
   (normalized_phone not cleared on phone-clear; **L**). **Config:** SMS latency 60-82→12s. **Still owed (→ Session 7-finish):**
   B-5, F1, LIVE-D (B-2 ×4 + manual-send/429), LIVE-E (F3/F4), G3-6 Tier-3, and **3.12 SMS booking (blocked on BOOK-1)**.
   Because BOOK-1 is structural, an **overnight Text-Setter repair (Session 7.5)** runs first, then the fix pass.
-- [ ] **Session 7.5 — Overnight Text-Setter repair + FOLD-IN ALL OPEN BUGS, v2 (CODE; branch-only, DEPLOY-NOTHING; superpowers + thin spec-kit + 2 in-session councils).**
+- [x] **Session 7.5 — Overnight Text-Setter repair + FOLD-IN ALL OPEN BUGS, v2 (CODE; branch-only, DEPLOY-NOTHING).** **DONE 2026-07-01** — branch `worktree-overnight+text-setter-repair-allbugs` (8 fix commits + BOOK-2/3 char tests; **NOTHING deployed**). All 11 open bugs dispositioned: **7 staged `[~]`** (SMS-OBS-1, BOOK-1 code, MODEL-1a, F9-1, VM-1, PHONE-CLEAR-1, G3-8a) · **BOOK-2/3** char-test+writeup · **API-DEPR-1 + G3-7** deferred · **MODEL-1b** demoted (save UI is a known-IDs dropdown). BOOK-1 prompt half stays report-only `[B]`. test:node 80/0, test:edge 125/0, vite build green; adversarial verification council = **DONE-CONFIRMED**. Deploy checklist (VM-1 retell-proxy v46→v47 = the only Voice-gated unit) + Voice gate + the tomorrow prompt are in `Operations/handoffs/2026-07-01-overnight-text-setter-repair-allbugs.md`. _Original scope note below._
   Triggered by BOOK-1. Council-vetted **twice** (GO-with-changes). Research-then-repair the Text setter (vs Voice vs the
   n8n reference `n8n/exports/Text_Engine_REVERSE_ENGINEERED.md`; **no upstream remote**) AND additively fold in EVERY open
   BUG_LIST item, each triaged into a frozen ledger: **fix-tonight-branch** (BOOK-1 code, SMS-OBS-1 persistence FIRST, F9-1,
@@ -175,8 +175,8 @@ Status: `[ ]` not started · `[~]` in progress · `[x]` done. Effort is rough.
   v27 / voice-booking-tools) untouched. Kickoff prompt (v2) = the `2026-06-30` handoff. **Done when:** branch + comparison doc
   + per-bug ledger + deploy checklist (Voice-regression gated) + passing unit tests (no deploy) + an emitted **tomorrow**
   testing prompt; Brendan deploys + live-verifies in daylight.
-- [ ] **Fix pass — largely ABSORBED into 7.5.** F9-1 / VM-1 / SMS-OBS-1 / MODEL-1-HARDENING / PHONE-CLEAR-1 / G3-8(a) / BOOK-1
-  code all fold into 7.5's branch. **What truly remains as their own sessions:** **API-DEPR-1** (frozen-baseline multi-fn
+- [~] **Fix pass — ABSORBED into 7.5 (staged on its branch 2026-07-01).** F9-1 / VM-1 / SMS-OBS-1 / MODEL-1-HARDENING / PHONE-CLEAR-1 / G3-8(a) / BOOK-1
+  code all landed on 7.5's branch (deploy-pending). **What truly remains as their own sessions:** **API-DEPR-1** (frozen-baseline multi-fn
   Retell/GHL deprecation migration + live-API re-confirm) and **G3-7** (breaking vite major bump). (INB-1, UI-1, F11 already
   built in the 2026-06-29 overnight build → live-verify only in Session 7-finish, not rebuilt.)
 - [ ] **Session 7-finish — deploy 7.5's branch + remaining live TEST (BRENDAN drives, Claude verifies).** First DEPLOY the
