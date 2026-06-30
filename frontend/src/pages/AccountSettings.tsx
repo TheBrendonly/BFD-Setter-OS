@@ -14,6 +14,7 @@ import { useSubscription } from "@/hooks/useSubscription";
 import { useCreatorMode } from "@/hooks/useCreatorMode";
 import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
 import { ClientAccountSettingsCard } from "@/components/ClientAccountSettingsCard";
+import { ClientPricingDisplayCard } from "@/components/ClientPricingDisplayCard";
 
 
 export default function AccountSettings() {
@@ -270,6 +271,9 @@ export default function AccountSettings() {
 
           {/* Billing for client users */}
           {!isAgency && clientId && <ClientBillingCard clientId={clientId} />}
+
+          {/* F8 read-only blended rate (only when the agency turned the toggle on) */}
+          {!isAgency && clientId && <ClientPricingDisplayCard clientId={clientId} />}
         </div>
       </main>
     </div>
