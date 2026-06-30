@@ -164,7 +164,8 @@ Status: `[ ]` not started · `[~]` in progress · `[x]` done. Effort is rough.
   (normalized_phone not cleared on phone-clear; **L**). **Config:** SMS latency 60-82→12s. **Still owed (→ Session 7-finish):**
   B-5, F1, LIVE-D (B-2 ×4 + manual-send/429), LIVE-E (F3/F4), G3-6 Tier-3, and **3.12 SMS booking (blocked on BOOK-1)**.
   Because BOOK-1 is structural, an **overnight Text-Setter repair (Session 7.5)** runs first, then the fix pass.
-- [ ] **Session 7.5 — Overnight Text-Setter repair + FOLD-IN ALL OPEN BUGS, v2 (CODE; branch-only, DEPLOY-NOTHING; superpowers + thin spec-kit + 2 in-session councils).**
+- [~] **Session 7.5 — Overnight Text-Setter repair + FOLD-IN ALL OPEN BUGS, v2 (CODE; branch-only, DEPLOY-NOTHING; superpowers + thin spec-kit + 2 in-session councils).**
+  **BUILT + STAGED 2026-07-01** on worktree branch `worktree-overnight+text-setter-repair-allbugs` (local-only, NOT merged/deployed; 9 commits; test:node 80/0, test:edge 125/0, vite green; adversarial council DONE-CONFIRMED). On the branch: BOOK-1 prefetch+inject (`prefetchSlots.ts`), SMS-OBS-1 `tool_invocations` table, MODEL-1a, F9-1, PHONE-CLEAR-1 (frontend recompute), G3-8(a) `execute-lead-webhook`; VM-1 `retell-proxy v46→v47` **Voice-gated**; BOOK-2/3 char-test only; API-DEPR-1 + G3-7 deferred. The branch carries its own BUG_LIST/TEST_LIST/SESSION_PLAN/BRENDAN_TODO updates + handoff `2026-07-01-overnight-text-setter-repair-allbugs.md` that land on merge. **Deploy-pending daylight → Session 7-finish.**
   Triggered by BOOK-1. Council-vetted **twice** (GO-with-changes). Research-then-repair the Text setter (vs Voice vs the
   n8n reference `n8n/exports/Text_Engine_REVERSE_ENGINEERED.md`; **no upstream remote**) AND additively fold in EVERY open
   BUG_LIST item, each triaged into a frozen ledger: **fix-tonight-branch** (BOOK-1 code, SMS-OBS-1 persistence FIRST, F9-1,
@@ -184,7 +185,10 @@ Status: `[ ]` not started · `[~]` in progress · `[x]` done. Effort is rough.
   manual-send/429), LIVE-E (F3/F4), G3-6 Tier-3, **3.12 SMS booking** (re-test after the BOOK-1 repair + applying the
   report-only prompt tweak), + live-verify the staged fixes (F9-1, VM-1, SMS-OBS-1, MODEL-1, PHONE-CLEAR-1, G3-8(a)) +
   F11/UI-1/INB-1. **Done when:** TEST_LIST green / all fails logged.
-- [ ] **Session 8 — F8 cost-to-price calculator (CODE, PLAN mode — money math + agency governance).** The
+- [ ] **Session 8 — F8 cost-to-price calculator (CODE, PLAN mode — money math + agency governance).** **Council-vetted overnight
+  kickoff prompt READY** = `Operations/handoffs/2026-06-30-f8-build-kickoff-prompt.md` (branch-only/deploy-nothing; dedicated
+  `client_pricing_config` table + `get-blended-rate` edge fn so the agency-only markup is **server-enforced**, not UI-hidden;
+  in-session planning + verification councils; emits a tomorrow deploy+test prompt). The
   second half of the split. Build per `FEATURE_ROADMAP` "Feature spec - F8" + the decided scope: pure
   `computeBlendedRate` (integer minor units + explicit FX step + markup multiplier + deterministic rounding;
   TDD the core) and an **agency-only** rate panel on Sub-Account Config (mirror `ClientAccountFieldConfigEditor`
