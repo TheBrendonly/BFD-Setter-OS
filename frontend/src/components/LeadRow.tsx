@@ -105,105 +105,29 @@ const LeadRow: React.FC<LeadRowProps> = ({
     try {
       console.log('Executing lead manually:', lead.id);
       
-      // Update lead status to processing
-      const { error: updateError } = await supabase
-        .from('campaign_leads')
-        .update({ status: 'processing' })
-        .eq('id', lead.id);
-
-      if (updateError) {
-        console.error('Error updating lead status:', updateError);
-        toast({
-          title: "Error",
-          description: "Failed to update lead status",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      // Load client Supabase config for this campaign
-      const { data: campaignWithClient, error: clientCfgError } = await supabase
-        .from('campaigns')
-        .select('client_id, clients(supabase_url, supabase_service_key, supabase_table_name, database_reactivation_inbound_webhook_url)')
-        .eq('id', lead.campaign_id)
-        .single();
-
-      if (clientCfgError) {
-        console.warn('Could not load client Supabase config:', clientCfgError.message);
-      }
-
-      const clientSupabaseConfig = (campaignWithClient as any)?.clients || {};
-
-      // Call the webhook
-      const webhookData = {
-        leadData: lead.lead_data,
-        campaignName: campaignName,
-        reactivationNotes: campaignNotes || '',
-        leadId: lead.id,
-        campaignId: lead.campaign_id,
-        scheduledFor: lead.scheduled_for,
-        processedAt: new Date().toISOString(),
-        supabase_url: clientSupabaseConfig?.supabase_url || null,
-        supabase_service_key: clientSupabaseConfig?.supabase_service_key || null,
-        supabase_table_name: clientSupabaseConfig?.supabase_table_name || null,
-        database_reactivation_inbound_webhook_url: clientSupabaseConfig?.database_reactivation_inbound_webhook_url || null,
-      };
-
-      console.log('Calling webhook:', campaignWebhookUrl);
-      console.log('Webhook data:', webhookData);
-
-      const response = await fetch(campaignWebhookUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(webhookData),
+      // G3-8(a): the webhook fire, the client-config load, and the status
+      // transitions (processing -> completed/failed) all run server-side in the
+      // execute-lead-webhook edge fn, so the browser never reads or forwards
+      // clients.supabase_service_key. The payload it POSTs is byte-identical to the
+      // legacy webhookData, so the n8n receiver is unchanged.
+      // (campaignWebhookUrl is no longer used here; the edge fn loads webhook_url
+      // from the campaign itself. The prop is kept for the parents.)
+      const { data, error: invokeError } = await supabase.functions.invoke('execute-lead-webhook', {
+        body: { campaignId: lead.campaign_id, leadId: lead.id },
       });
-
-      console.log('Webhook response status:', response.status);
-      const responseText = await response.text();
-      console.log('Webhook response:', responseText);
-
-      if (response.ok) {
-        // Update lead status to completed
-        const { error: completedError } = await supabase
-          .from('campaign_leads')
-          .update({ 
-            status: 'completed',
-            processed_at: new Date().toISOString()
-          })
-          .eq('id', lead.id);
-
-        if (completedError) {
-          console.error('Error updating lead to completed:', completedError);
-        } else {
-          console.log('Lead marked as completed');
-          onLeadUpdate();
-          toast({
-            title: "Success",
-            description: "Lead executed successfully",
-          });
-        }
-      } else {
-        throw new Error(`Webhook failed with status ${response.status}`);
+      if (invokeError) throw new Error(invokeError.message || 'Failed to execute lead');
+      if (data && (data as any).ok === false) {
+        throw new Error((data as any).error || 'Webhook failed');
       }
+
+      onLeadUpdate();
+      toast({
+        title: "Success",
+        description: "Lead executed successfully",
+      });
     } catch (error: any) {
       console.error('Error executing lead:', error);
-      
-      // Update lead status to failed
-      const { error: failedError } = await supabase
-        .from('campaign_leads')
-        .update({ 
-          status: 'failed',
-          error_message: error.message,
-          processed_at: new Date().toISOString()
-        })
-        .eq('id', lead.id);
-
-      if (failedError) {
-        console.error('Error updating lead to failed:', failedError);
-      }
-
+      // The edge fn already marked the lead failed server-side; just refresh + notify.
       onLeadUpdate();
       toast({
         title: "Error",
