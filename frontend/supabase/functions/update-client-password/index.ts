@@ -52,8 +52,9 @@ Deno.serve(async (req) => {
       });
     }
 
-    if (new_password.length < 6) {
-      return new Response(JSON.stringify({ error: "Password must be at least 6 characters" }), {
+    // Matches the project's GoTrue password policy (password_min_length = 12).
+    if (new_password.length < 12) {
+      return new Response(JSON.stringify({ error: "Password must be at least 12 characters" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });

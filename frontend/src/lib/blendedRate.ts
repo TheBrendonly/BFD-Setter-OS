@@ -6,3 +6,4 @@
 // exactly ONE math implementation. Do NOT raw-import the core from feature code.
 export * from "../../supabase/functions/_shared/computeBlendedRate.ts";
 export * from "../../supabase/functions/_shared/pricingDefaults.ts";
+export * from "../../supabase/functions/_shared/billingPeriod.ts";

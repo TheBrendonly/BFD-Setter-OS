@@ -8,6 +8,11 @@ import { supabase } from '@/integrations/supabase/client';
 import logoImg from '@/assets/bfd-logo.png';
 import { ArrowLeft, CheckCircle, AlertTriangle } from 'lucide-react';
 
+// Serves BOTH password recovery links and F14 invite links (type=invite in the
+// URL hash): the same set-a-password form with invite-specific copy. Minimum
+// length is 12 to match the server-side GoTrue password policy.
+const MIN_PASSWORD_LENGTH = 12;
+
 const ResetPassword = () => {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -15,6 +20,9 @@ const ResetPassword = () => {
   const [success, setSuccess] = useState(false);
   const [expired, setExpired] = useState(false);
   const [validationError, setValidationError] = useState('');
+  // Read the hash SYNCHRONOUSLY on first render: supabase-js consumes it while
+  // establishing the session, so a later effect could miss it.
+  const [isInvite] = useState(() => window.location.hash.includes('type=invite'));
   const { toast } = useToast();
   const navigate = useNavigate();
 
@@ -36,8 +44,8 @@ const ResetPassword = () => {
   }, []);
 
   const validate = (): boolean => {
-    if (password.length < 6) {
-      setValidationError('Password must be at least 6 characters');
+    if (password.length < MIN_PASSWORD_LENGTH) {
+      setValidationError(`Password must be at least ${MIN_PASSWORD_LENGTH} characters`);
       return false;
     }
     if (password !== confirmPassword) {
@@ -60,7 +68,7 @@ const ResetPassword = () => {
           setExpired(true);
         } else {
           toast({
-            title: 'Error resetting password',
+            title: isInvite ? 'Error setting password' : 'Error resetting password',
             description: error.message,
             variant: 'destructive',
           });
@@ -92,9 +100,13 @@ const ResetPassword = () => {
 
         {/* Title */}
         <div className="text-center mt-6">
-          <h1 className="mobile-heading-2 text-on-surface font-semibold">Set New Password</h1>
+          <h1 className="mobile-heading-2 text-on-surface font-semibold">
+            {isInvite ? 'Set Your Password' : 'Set New Password'}
+          </h1>
           <p className="text-on-surface-variant mt-1 field-text">
-            Enter your new password below
+            {isInvite
+              ? 'Choose a password to activate your account'
+              : 'Enter your new password below'}
           </p>
         </div>
 
@@ -106,7 +118,7 @@ const ResetPassword = () => {
                 <CheckCircle className="w-10 h-10 text-primary" />
               </div>
               <p className="field-text text-on-surface font-medium">
-                Password reset successful
+                {isInvite ? 'Password set' : 'Password reset successful'}
               </p>
               <p className="field-text text-on-surface-variant">
                 Redirecting you to the sign in page...
@@ -118,16 +130,20 @@ const ResetPassword = () => {
                 <AlertTriangle className="w-10 h-10 text-destructive" />
               </div>
               <p className="field-text text-on-surface font-medium">
-                Reset link has expired
+                {isInvite ? 'Invite link has expired' : 'Reset link has expired'}
               </p>
               <p className="field-text text-on-surface-variant">
-                Password reset links are valid for 1 hour. Please request a new one.
+                {isInvite
+                  ? 'Ask your administrator to send a new invite.'
+                  : 'Password reset links are valid for 1 hour. Please request a new one.'}
               </p>
-              <Link to="/forgot-password">
-                <Button className="material-button-primary modern-button-primary w-full py-3 mobile-touch mt-2">
-                  Request New Reset Link
-                </Button>
-              </Link>
+              {!isInvite && (
+                <Link to="/forgot-password">
+                  <Button className="material-button-primary modern-button-primary w-full py-3 mobile-touch mt-2">
+                    Request New Reset Link
+                  </Button>
+                </Link>
+              )}
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-4">
@@ -144,7 +160,7 @@ const ResetPassword = () => {
                   className="modern-input"
                   disabled={submitting}
                   required
-                  minLength={6}
+                  minLength={MIN_PASSWORD_LENGTH}
                 />
               </div>
 
@@ -161,7 +177,7 @@ const ResetPassword = () => {
                   className="modern-input"
                   disabled={submitting}
                   required
-                  minLength={6}
+                  minLength={MIN_PASSWORD_LENGTH}
                 />
               </div>
 
@@ -171,7 +187,9 @@ const ResetPassword = () => {
 
               <div className="pt-1">
                 <Button type="submit" disabled={submitting} className="material-button-primary modern-button-primary w-full py-3 mobile-touch">
-                  {submitting ? 'Resetting...' : 'Reset Password'}
+                  {submitting
+                    ? (isInvite ? 'Setting...' : 'Resetting...')
+                    : (isInvite ? 'Set Password' : 'Reset Password')}
                 </Button>
               </div>
             </form>

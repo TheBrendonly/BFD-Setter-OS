@@ -196,6 +196,20 @@ Status: `[ ]` not started · `[~]` in progress · `[x]` done. Effort is rough.
   9/9** (client cannot read markup/cost inputs via the API; agency gets the full breakdown). Deployed:
   `client_pricing_config` migration + `get-blended-rate` v1 + frontend. F8 touches NO Voice surface → not
   Voice-gated. Live behavioral UI verify (panel persists + client card toggle) → Session 7-finish.
+- [~] **Session 8.5 — Full re-audit + F13 usage metering + F14 auth improvements (CODE, PLAN mode).** BUILT
+  2026-07-02 on branch `feature/usage-billing-auth`; **deploy = a separate supervised step** (checklist in
+  `Operations/handoffs/2026-07-02-usage-billing-auth.md`). The session opened with a 5-agent read-only re-audit:
+  lists-vs-live CLEAN (all 12 edge fn versions match, all tables live, no drift), security STRONG (no new
+  criticals; mintSecret entropy verified 192-bit; 2 new Low items AUTH-LEN-1 fixed-on-branch + RLS-SHAPE-1 watch),
+  auth architecture confirmed correct (no new provider needed). **F13** = per-client billing anchor day +
+  ceil-per-call minutes x blended rate + all-outbound-texts x a new `sms_llm` per_message component (Twilio is
+  client-BYO) + per-part client_display toggles + `get-client-usage` edge fn (fresh-literal role split, same trap
+  class as F8) + dashboard/account/agency panels (fixes F8's "not on the client dashboard"); ZERO migrations
+  (everything in the client_pricing_config jsonb). **F14** = invite-client-user fn + invite UI + client
+  self-password-reset + ResetPassword handles type=invite + 12-char fix; Resend SMTP is a config step gated on
+  Brendan's Resend/DNS items. ~40 new tests; test:edge 188/0, test:node 80/0, tsc + vite build green;
+  `scripts/f13_usage_trap_proof.ts` ready to run at deploy. → next: Brendan review → supervised deploy →
+  the F13/F14 TEST_LIST items fold into Session 7-finish.
 - [ ] **Session 9 — API-DEPR-1 (CODE, supervised deploy).** Migrate every deprecated Retell legacy-list
   endpoint (retell-proxy `list-agents`/`list-calls`/`list-phone-numbers`/`list-retell-llms`/`list-knowledge-bases`/
   `list-voices`, verify-credentials, elevenlabs-manage-agent) per the deprecation-notice overview, AND align
@@ -211,8 +225,9 @@ Status: `[ ]` not started · `[~]` in progress · `[x]` done. Effort is rough.
   GHL/Retell/Unipile webhook secrets + arm `retell_webhook_secret` (6.6), register AU SMS A2P for
   `+61481614530`. See `Docs/DEFERRED.md`. After this, v1 is live + 100%.
 
-**Remaining sequence to v1 "100%" (the relay follows this order):** Session 7-finish (live TEST pass) → any
-fix-pass for failures → Session 9 (API-DEPR-1) → Session 10 (G3-7) → First-client milestone (event-gated).
+**Remaining sequence to v1 "100%" (the relay follows this order):** Session 8.5 deploy (supervised, after
+Brendan reviews the branch) → Session 7-finish (live TEST pass, now incl. the F13/F14 checks) → any fix-pass
+for failures → Session 9 (API-DEPR-1) → Session 10 (G3-7) → First-client milestone (event-gated).
 **Functional 100% = Sessions 0-8 `[x]` + TEST_LIST green** (reached at the end of Session 7-finish); Sessions
 9-10 clear the last open BUG_LIST items; the First-client milestone is the actual go-live. v2 = the lifecycle
 system + A/B + analytics + HubSpot + F9 v2 + F8 v2 (`Docs/DEFERRED.md`), off the 100% path.

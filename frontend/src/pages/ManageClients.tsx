@@ -3,13 +3,14 @@ import { useCreatorMode } from "@/hooks/useCreatorMode";
 import RetroLoader from "@/components/RetroLoader";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { FunctionsHttpError } from "@supabase/supabase-js";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { usePageHeader } from "@/contexts/PageHeaderContext";
 import { useAuth } from "@/hooks/useAuth";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
-import { Plus, Trash2, Pencil, X, Wrench, Lock, Save, Loader2, CheckCircle, XCircle } from "@/components/icons";
+import { Plus, Trash2, Pencil, X, Wrench, Lock, Save, Loader2, CheckCircle, XCircle, Mail } from "@/components/icons";
 import { StatusTag } from "@/components/StatusTag";
 import { computeClientReadiness, READINESS_FIELDS } from "@/lib/clientReadiness";
 import { Input } from "@/components/ui/input";
@@ -70,6 +71,11 @@ export default function ManageClients() {
   // Create client user state
   const [newUserData, setNewUserData] = useState({ email: "", password: "", full_name: "", client_id: "" });
   const [creatingUser, setCreatingUser] = useState(false);
+
+  // F14 invite-by-email onboarding (edit view)
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteName, setInviteName] = useState("");
+  const [inviting, setInviting] = useState(false);
   
 
   const handleCreateSubAccount = () => {
@@ -254,8 +260,8 @@ export default function ManageClients() {
   };
 
   const handleUpdatePassword = async () => {
-    if (!editingClient || !newPassword || newPassword.length < 6) {
-      toast.error("Password must be at least 6 characters");
+    if (!editingClient || !newPassword || newPassword.length < 12) {
+      toast.error("Password must be at least 12 characters");
       return;
     }
     setUpdatingPassword(true);
@@ -276,13 +282,51 @@ export default function ManageClients() {
     }
   };
 
+  const handleInviteClientUser = async () => {
+    if (!editingClient || !inviteEmail) {
+      toast.error("Email is required");
+      return;
+    }
+    setInviting(true);
+    try {
+      const response = await supabase.functions.invoke('invite-client-user', {
+        body: {
+          email: inviteEmail,
+          full_name: inviteName,
+          client_id: editingClient.id,
+        },
+      });
+      if (response.error) {
+        // Non-2xx bodies carry the operator guidance (409 conflict, 400
+        // duplicate); FunctionsHttpError's own message is a fixed generic
+        // string, so read the body off error.context (G3-4 pattern).
+        const body = response.error instanceof FunctionsHttpError
+          ? await response.error.context.json().catch(() => ({}))
+          : {};
+        throw new Error(body?.error || response.error.message || 'Failed to send invite');
+      }
+      const result = response.data;
+      if (result.error) throw new Error(result.error);
+      toast.success(result.resent
+        ? `Invite re-sent to ${inviteEmail}`
+        : `Invite sent to ${inviteEmail}`);
+      setInviteEmail("");
+      setInviteName("");
+    } catch (error: any) {
+      console.error("Error inviting client user:", error);
+      toast.error(error.message || "Failed to send invite");
+    } finally {
+      setInviting(false);
+    }
+  };
+
   const handleCreateClientUser = async () => {
     if (!newUserData.email || !newUserData.password || !newUserData.client_id) {
       toast.error("Email, password, and client account are required");
       return;
     }
-    if (newUserData.password.length < 6) {
-      toast.error("Password must be at least 6 characters");
+    if (newUserData.password.length < 12) {
+      toast.error("Password must be at least 12 characters");
       return;
     }
     setCreatingUser(true);
@@ -390,7 +434,7 @@ export default function ManageClients() {
                   <Input
                     id="new-password"
                     type="password"
-                    placeholder="Minimum 6 characters"
+                    placeholder="Minimum 12 characters"
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
                     className="field-text"
@@ -399,7 +443,7 @@ export default function ManageClients() {
                 <div className="flex justify-end">
                   <Button
                     onClick={handleUpdatePassword}
-                    disabled={updatingPassword || newPassword.length < 6}
+                    disabled={updatingPassword || newPassword.length < 12}
                     className="groove-btn groove-btn-positive"
                     style={{ fontFamily: "'VT323', monospace", fontSize: '16px' }}
                   >
@@ -407,6 +451,56 @@ export default function ManageClients() {
                       <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Updating...</>
                     ) : (
                       <><Save className="h-4 w-4 mr-2" /> Update Password</>
+                    )}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+             {/* F14 Invite Sub-Account User by Email — the client sets their own password */}
+            <Card className="material-surface">
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Mail className="w-5 h-5" />
+                  Invite Sub-Account User by Email
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <p className="text-muted-foreground field-text">
+                  Sends an email with a secure link so the user sets their own password. No
+                  password hand-off. Requires the project's email sender (SMTP) to be configured.
+                </p>
+                <div className="space-y-2">
+                  <Label htmlFor="invite-email" className="field-text">Email</Label>
+                  <Input
+                    id="invite-email"
+                    type="email"
+                    placeholder="user@example.com"
+                    value={inviteEmail}
+                    onChange={(e) => setInviteEmail(e.target.value)}
+                    className="field-text"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="invite-name" className="field-text">Full Name (optional)</Label>
+                  <Input
+                    id="invite-name"
+                    value={inviteName}
+                    onChange={(e) => setInviteName(e.target.value)}
+                    className="field-text"
+                  />
+                </div>
+                <div className="flex justify-end">
+                  <Button
+                    onClick={handleInviteClientUser}
+                    disabled={inviting || !inviteEmail}
+                    className="groove-btn groove-btn-positive"
+                    style={{ fontFamily: "'VT323', monospace", fontSize: '16px' }}
+                  >
+                    {inviting ? (
+                      <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Sending...</>
+                    ) : (
+                      <><Mail className="h-4 w-4 mr-2" /> Send Invite</>
                     )}
                   </Button>
                 </div>

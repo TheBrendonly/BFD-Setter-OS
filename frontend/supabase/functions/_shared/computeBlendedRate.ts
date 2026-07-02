@@ -14,7 +14,7 @@
 // only ones FX-converted. Per-month components (number rental, A2P) are kept in a
 // SEPARATE fixed_monthly_minor and never folded into the per-minute blend.
 
-export type ComponentUnit = "per_minute" | "per_month";
+export type ComponentUnit = "per_minute" | "per_month" | "per_message";
 export type ComponentCurrency = "USD" | "AUD";
 
 /** One configurable cost component (e.g. retell, openrouter_llm, twilio_voice). */
@@ -25,6 +25,14 @@ export interface PricingComponent {
   rate_micros: number;
 }
 
+/** F13 — per-part client visibility toggles (server-enforced in role branches). */
+export interface ClientDisplayConfig {
+  show_rate: boolean;
+  show_minutes: boolean;
+  show_texts: boolean;
+  show_total: boolean;
+}
+
 /** The fully-merged pricing config for a sub-account. */
 export interface PricingConfig {
   display_currency: string;
@@ -33,6 +41,11 @@ export interface PricingConfig {
   fx_updated_at?: string;
   markup_bps: number;
   show_rate_to_client: boolean;
+  // F13 fields. Optional on the type so hand-built configs (tests, previews)
+  // stay valid; mergeWithDefaults ALWAYS populates them, and show_rate stays
+  // mirrored with the legacy show_rate_to_client flag.
+  billing_anchor_day?: number;
+  client_display?: ClientDisplayConfig;
   components: Record<string, PricingComponent>;
 }
 
@@ -47,9 +60,13 @@ export interface LineItem {
 export interface BlendedRateResult {
   lineItems: LineItem[];        // enabled per-minute components (native micros)
   fixedLineItems: LineItem[];   // enabled per-month components (native micros)
+  messageLineItems: LineItem[]; // enabled per-message components (native micros, F13)
   usd_per_min_micros: number;   // exact integer subtotal (native USD)
   aud_per_min_micros: number;   // exact integer subtotal (native display currency)
+  usd_per_message_micros: number; // exact integer per-message subtotal (native USD)
+  aud_per_message_micros: number; // exact integer per-message subtotal (native display currency)
   blended_per_min_minor: number;   // cents, display currency, post-FX + markup (single round)
+  per_message_minor: number;       // cents per outbound text, post-FX + markup (single round)
   fixed_monthly_minor: number;     // cents, display currency, post-FX, no markup
   display_currency: string;
   markup_bps: number;
@@ -81,10 +98,13 @@ export function computeBlendedRate(config: PricingConfig): BlendedRateResult {
 
   const lineItems: LineItem[] = [];
   const fixedLineItems: LineItem[] = [];
+  const messageLineItems: LineItem[] = [];
   let usdPerMin = 0n;
   let audPerMin = 0n;
   let usdMonth = 0n;
   let audMonth = 0n;
+  let usdPerMsg = 0n;
+  let audPerMsg = 0n;
 
   // Stable key order -> deterministic output regardless of object insertion order.
   for (const key of Object.keys(config.components).sort()) {
@@ -101,6 +121,10 @@ export function computeBlendedRate(config: PricingConfig): BlendedRateResult {
       fixedLineItems.push(item);
       if (c.currency === "USD") usdMonth += micros;
       else audMonth += micros;
+    } else if (c.unit === "per_message") {
+      messageLineItems.push(item);
+      if (c.currency === "USD") usdPerMsg += micros;
+      else audPerMsg += micros;
     } else {
       lineItems.push(item);
       if (c.currency === "USD") usdPerMin += micros;
@@ -114,6 +138,10 @@ export function computeBlendedRate(config: PricingConfig): BlendedRateResult {
   const perMinDen = BPS_DEN * MICROS_PER_DOLLAR * fxDen;
   const blendedCents = roundHalfEven(perMinNum, perMinDen);
 
+  // Per-message cents (F13, SMS sell rate): same formula, own bucket, own single round.
+  const perMsgNum = 100n * (BPS_DEN + markupBps) * (usdPerMsg * fxNum + audPerMsg * fxDen);
+  const perMsgCents = roundHalfEven(perMsgNum, perMinDen);
+
   // Fixed monthly cents (no markup): 100 * (usd*fxNum + aud*fxDen) / (1e6 * fxDen)
   const fixedNum = 100n * (usdMonth * fxNum + audMonth * fxDen);
   const fixedDen = MICROS_PER_DOLLAR * fxDen;
@@ -122,9 +150,13 @@ export function computeBlendedRate(config: PricingConfig): BlendedRateResult {
   return {
     lineItems,
     fixedLineItems,
+    messageLineItems,
     usd_per_min_micros: Number(usdPerMin),
     aud_per_min_micros: Number(audPerMin),
+    usd_per_message_micros: Number(usdPerMsg),
+    aud_per_message_micros: Number(audPerMsg),
     blended_per_min_minor: Number(blendedCents),
+    per_message_minor: Number(perMsgCents),
     fixed_monthly_minor: Number(fixedCents),
     display_currency: config.display_currency,
     markup_bps: Number(markupBps),

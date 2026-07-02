@@ -1,21 +1,26 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { getCached, setCache } from '@/lib/queryCache';
-import { DEFAULT_PRICING_CONFIG, mergeWithDefaults, type PricingConfig } from '@/lib/blendedRate';
+import {
+  DEFAULT_PRICING_CONFIG,
+  mergeWithDefaults,
+  type MergedPricingConfig,
+  type PricingConfig,
+} from '@/lib/blendedRate';
 
 // F8 — per-sub-account cost-to-price config. Agency-only: the agency JWT writes
 // client_pricing_config directly (the agency FOR ALL RLS permits it; there is no
 // edge fn on the write path, mirroring useClientAccountFieldConfig). Clients NEVER
 // read this table — they get the derived blended $/min from get-blended-rate.
 export function useClientPricingConfig(clientId: string | undefined) {
-  const [config, setConfig] = useState<PricingConfig>(DEFAULT_PRICING_CONFIG);
+  const [config, setConfig] = useState<MergedPricingConfig>(DEFAULT_PRICING_CONFIG);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
   const fetchConfig = useCallback(async () => {
     if (!clientId) return;
     const cacheKey = `pricing_config_${clientId}`;
-    const cached = getCached<PricingConfig>(cacheKey);
+    const cached = getCached<MergedPricingConfig>(cacheKey);
     if (cached) {
       setConfig(cached);
       setLoading(false);
@@ -27,7 +32,7 @@ export function useClientPricingConfig(clientId: string | undefined) {
         .eq('client_id', clientId)
         .maybeSingle();
       if (error) throw error;
-      const merged = mergeWithDefaults((data?.config as PricingConfig) ?? null);
+      const merged = mergeWithDefaults((data?.config as PricingConfig | null) ?? null);
       setConfig(merged);
       setCache(cacheKey, merged);
     } catch (err) {
@@ -42,7 +47,7 @@ export function useClientPricingConfig(clientId: string | undefined) {
     fetchConfig();
   }, [fetchConfig]);
 
-  const saveConfig = useCallback(async (next: PricingConfig) => {
+  const saveConfig = useCallback(async (next: MergedPricingConfig) => {
     if (!clientId) return false;
     setSaving(true);
     try {

@@ -59,8 +59,8 @@ export default function CreateClient() {
       toast.error("Login email and password are required");
       return;
     }
-    if (createLogin && loginData.password.length < 6) {
-      toast.error("Password must be at least 6 characters");
+    if (createLogin && loginData.password.length < 12) {
+      toast.error("Password must be at least 12 characters");
       return;
     }
 

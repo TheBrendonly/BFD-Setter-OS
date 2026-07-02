@@ -60,3 +60,12 @@ Deno.test("agency role gets the full breakdown + markup + rate table (proves a r
   // the agency sees the toggle state it controls
   assertEquals(res.show_rate_to_client, true);
 });
+
+Deno.test("F13: agency breakdown includes the per-message sell rate; client shape is unchanged", () => {
+  const agency = branchByRole(MERGED, "agency", COMPUTED) as Record<string, unknown>;
+  assertEquals(agency.per_message_minor, COMPUTED.per_message_minor);
+  assert("messageLineItems" in agency);
+  // The client branch stays byte-identical to pre-F13 (same 3 keys, same values).
+  const client = branchByRole(MERGED, "client", COMPUTED) as Record<string, unknown>;
+  assertEquals(Object.keys(client).sort(), ["blended_per_min_minor", "display_currency", "show"]);
+});

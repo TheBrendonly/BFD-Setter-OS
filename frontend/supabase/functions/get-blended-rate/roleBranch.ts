@@ -20,6 +20,7 @@ export interface AgencyRateResponse {
   role: "agency";
   show_rate_to_client: boolean;
   blended_per_min_minor: number;
+  per_message_minor: number;
   fixed_monthly_minor: number;
   display_currency: string;
   markup_bps: number;
@@ -27,6 +28,7 @@ export interface AgencyRateResponse {
   fx_buffer_bps: number;
   lineItems: BlendedRateResult["lineItems"];
   fixedLineItems: BlendedRateResult["fixedLineItems"];
+  messageLineItems: BlendedRateResult["messageLineItems"];
   usd_per_min_micros: number;
   aud_per_min_micros: number;
   rate_table: Record<string, PricingComponent>;
@@ -51,6 +53,7 @@ export function branchByRole(
     role: "agency",
     show_rate_to_client: merged.show_rate_to_client,
     blended_per_min_minor: computed.blended_per_min_minor,
+    per_message_minor: computed.per_message_minor,
     fixed_monthly_minor: computed.fixed_monthly_minor,
     display_currency: computed.display_currency,
     markup_bps: computed.markup_bps,
@@ -58,6 +61,7 @@ export function branchByRole(
     fx_buffer_bps: computed.fx_buffer_bps,
     lineItems: computed.lineItems,
     fixedLineItems: computed.fixedLineItems,
+    messageLineItems: computed.messageLineItems,
     usd_per_min_micros: computed.usd_per_min_micros,
     aud_per_min_micros: computed.aud_per_min_micros,
     rate_table: merged.components,

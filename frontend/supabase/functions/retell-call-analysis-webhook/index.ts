@@ -677,6 +677,23 @@ Deno.serve(async (req) => {
                 } else {
                   const twJson = await twRes.json().catch(() => ({}));
                   console.log(`✅ Bug-28 booking confirm SMS sent (sid=${twJson.sid ?? "?"}) to ${leadPhone}`);
+                  // F13 usage metering counts outbound texts from message_queue
+                  // channel='sms_outbound' (ghl_account_id = location id or the
+                  // client UUID). Stamp the send like every other Twilio-direct
+                  // writer so booking-confirmation texts meter; non-fatal.
+                  try {
+                    await supabase.from("message_queue").insert({
+                      lead_id: contactId ?? leadPhone,
+                      ghl_account_id: ghlLocId ?? clientId,
+                      message_body: smsBody,
+                      contact_phone: leadPhone,
+                      channel: "sms_outbound",
+                      twilio_message_sid: twJson.sid ?? null,
+                      processed: true,
+                    });
+                  } catch (mqErr) {
+                    console.warn("⚠️ Bug-28 message_queue stamp failed (non-fatal):", mqErr);
+                  }
                 }
               }
             } catch (twErr) {

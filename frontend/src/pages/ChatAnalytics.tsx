@@ -40,6 +40,7 @@ import { DateRangePicker } from '@/components/ui/date-range-picker';
 
 import { ConversationsDrawer, type AiMatch } from '@/components/ConversationsDrawer';
 import RetroLoader from '@/components/RetroLoader';
+import { UsageSummaryCard } from '@/components/UsageSummaryCard';
 
 // Persistence helpers for Supabase storage
 const STORAGE_KEYS = {
@@ -2672,6 +2673,9 @@ const ChatAnalytics = () => {
           <TabsTrigger value="voice">Voice Analytics</TabsTrigger>
         </TabsList>
       </Tabs>
+      {/* F13 billing-period usage summary — server-branched by role (client sees
+          only the admin-toggled parts; agency sees billed/cost/margin). */}
+      {activeTab === 'dashboard' && clientId && <UsageSummaryCard clientId={clientId} />}
       {/* Refresh overlay - scoped to dashboard content area only */}
       {(analyzing || webhookSending) && (
         <div className="absolute inset-0 z-40 bg-background/80 backdrop-blur-sm flex items-center justify-center">
