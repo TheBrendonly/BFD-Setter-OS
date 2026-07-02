@@ -102,6 +102,37 @@ Deno.serve(async (req) => {
       return json({ error: inviteError?.message || "Invite failed" }, 400);
     }
 
+    // GoTrue only rejects CONFIRMED duplicate emails; for a still-pending
+    // (unconfirmed) user it re-sends the invite and returns the EXISTING user.
+    // That user must never be repointed to this client, and the rollback below
+    // must never delete a user this request did not create. Treat a user
+    // created noticeably before this request as pre-existing: if it is already
+    // bound to exactly this client, report the re-send; otherwise conflict.
+    const createdAtMs = Date.parse(invited.user.created_at ?? "");
+    const isNewUser = Number.isFinite(createdAtMs) && Date.now() - createdAtMs < 120_000;
+    if (!isNewUser) {
+      const { data: existingProfile } = await adminClient
+        .from("profiles")
+        .select("client_id, agency_id")
+        .eq("id", invited.user.id)
+        .maybeSingle();
+      const { data: existingRole } = await adminClient
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", invited.user.id)
+        .maybeSingle();
+      if (
+        existingProfile?.client_id === client_id &&
+        existingProfile?.agency_id === callerProfile.agency_id &&
+        existingRole?.role === "client"
+      ) {
+        return json({ success: true, user_id: invited.user.id, email: invited.user.email, resent: true });
+      }
+      return json({
+        error: "A pending user with this email already exists and is not bound to this client. Resolve it manually before re-inviting.",
+      }, 409);
+    }
+
     // The trigger creates the profile with the agency role. We must:
     // 1. Update the profile with client_id and the caller's agency_id.
     // 2. Change the role from agency to client.

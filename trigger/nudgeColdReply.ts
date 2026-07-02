@@ -296,7 +296,11 @@ export const nudgeColdReply = schedules.task({
       try {
         await supabase.from("message_queue").insert({
           lead_id: lead.lead_id,
-          ghl_account_id: lead.lead_id, // best-effort — leads schema has no separate location id
+          // The client UUID, matching crm-send-message's fallback: F13 usage
+          // metering links sms_outbound rows via ghl_account_id IN
+          // (ghl_location_id, client_id); the old lead_id stamp matched
+          // neither, so nudge texts were invisible to the count.
+          ghl_account_id: lead.client_id ?? lead.lead_id,
           message_body: smsBody,
           contact_phone: lead.phone,
           contact_name: [lead.first_name, lead.last_name].filter(Boolean).join(" ") || null,
