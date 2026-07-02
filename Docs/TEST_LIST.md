@@ -40,11 +40,12 @@ When an item passes, move it to `Docs/archive/COMPLETED_LOG.md`. When it fails, 
 - [ ] **F14 — client self password reset.** /forgot-password with a client-role email now sends the reset (no more
   "Not Authorized"); the reset form enforces 12 chars; agency reset still works.
 
-- [ ] **VOICE-REGRESSION CONFIRMATION (do FIRST — gates trusting retell-proxy v47).** One outbound voice call on a
-  canonical agent (read the live phone binding): booking still works end-to-end; **B-3** (outbound follows
-  `latest_published`) + **B-5** (default vars; no literal `{{first_name}}`) survive; **VM-1** voicemail "Save & push"
-  now reports `voicemail_set` (not "partial"). If anything regressed, roll retell-proxy back to v46. _(The deploy was
-  read-only-verified to mutate 0 agents; this is the behavioral leg not run overnight.)_
+- [x] **VOICE-REGRESSION CONFIRMATION — DONE 2026-07-03 (Session 7-finish): gate PASSED, retell-proxy v47 SAFE (no rollback).**
+  Live outbound `call_d5625539` (Main Outbound `agent_b2f6495` v11, ~2.9 min): **booking E2E PASS** (`bookings` `4f7c76a0`,
+  `source='voice_call'`, confirmed, 11:30 AM Thu Sydney; agent used real availability, no fabrication) · **B-3 PASS** (ran on
+  current published v11) · **B-5 PASS** (`first_name` populated, zero literal `{{first_name}}`) · **F2c PASS**. → these legs
+  archived in `COMPLETED_LOG.md`. **VM-1 FAILED** — Save & push (mode=`prompt`) still "partial", 0/5 agents updated →
+  re-opened in `BUG_LIST.md` (v47 fix insufficient; needs draft-first + `static_text`). Does NOT gate v47.
 - [ ] **F8 — agency panel + client card.** Agency login → Sub-Account Config → "Cost-to-Price Calculator": edit
   rates/FX/markup/toggles, Save, reload → persists; the live breakdown + blended $/min match a hand-check of the seeded
   figures (Retell $0.07 + LLM $0.003 = $0.073 USD × FX × (1+markup), Twilio OFF, number rental a separate fixed line).

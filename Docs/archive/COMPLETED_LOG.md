@@ -3,6 +3,16 @@
 Items closed out of the active lists. Newest first. The active lists are in the repo root + `Docs/`
 (`BUG_LIST.md`, `FEATURE_ROADMAP.md`, `BRENDAN_TODO.md`, `TEST_LIST.md`, `DEFERRED.md`).
 
+## 2026-07-03 — Session 7-finish voice-regression gate (retell-proxy v47 confirmed SAFE)
+
+Brendan-driven live call; Claude verified read-only. The one behavioral leg not run overnight. **v47 did NOT regress the calling path → kept live, no rollback.** Preconditions done first: **A1** (BOOK-1 anti-fabrication rule added to the Text setter via **IDENTITY → Agent Mission** free-text — BFD's text setter is the structured section builder, one text setter `Setter-1`, no single prompt box), **A2** (5 voice setters re-saved/pushed — Retell agents modified 03:40-03:43), **A3** ("Gary - Property Coach 1" reverted).
+
+- **Voice booking E2E (PASS).** Outbound `call_d5625539` (Main Outbound `agent_b2f6495` v11, ~2.9 min, `agent_hangup`, sentiment Positive): the agent used **real availability** ("I don't have 11:00 open… I've got 10:30 or 11:30" — no fabrication) and booked → `bookings` `4f7c76a0`, `source='voice_call'`, `status='confirmed'`, `appointment_time` 2026-07-02 01:30 UTC = **11:30 AM Thu Sydney**.
+- **B-3 (latest_published) — PASS.** Ran on `agent_b2f6495` **v11 = current published version** (follows current, not a stale pin); phone binding also shows `outbound_agents[].agent_version="latest_published"`.
+- **B-5 (default vars / `{{first_name}}`) — PASS.** Call dyn vars `first_name="Brendan"` populated; **zero literal `{{first_name}}`** in the 2715-char transcript. (Genuine unknown-number leg still owed in TEST_LIST.)
+- **F2c (outbound calling works) — PASS.** `voice_setter_id=b09624b5` = Main Outbound; correct agent + from-number.
+- **VM-1 (voicemail push) — FAILED → BUG_LIST (re-opened).** Save & push (mode=`prompt`) still "partial"; all 5 push-target agents' `voicemail_option` unchanged (`hangup`) → landed on **0/5**. v47's deprecated-field fix was necessary but not sufficient; blocker is the raw PATCH without `ensureEditableAgentDraft` (immutable published versions) + a latent `static`→`static_text` enum bug. Does NOT gate v47.
+
 ## 2026-06-30 — Session 7 TEST pass continued (phone-half + migrated LIVE-A UI passes)
 
 Brendan-driven live sweep; Claude verified read-only. The phone-heavy half of the Session-7 TEST pass. A live-breaking bug (**MODEL-1**) was found + fixed, and the SMS-booking failure (**BOOK-1**) was root-caused → it spawned the **overnight Text-Setter repair session** (council-vetted; see handoff `2026-06-30-session7-test-pass-phone-half.md`). Still-owed live items (B-5, F1, LIVE-D, LIVE-E, G3-6 Tier-3, 3.12) remain in `TEST_LIST.md`.

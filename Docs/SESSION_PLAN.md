@@ -179,13 +179,18 @@ Status: `[ ]` not started · `[~]` in progress · `[x]` done. Effort is rough.
   code all merged to main + deployed. **What truly remains as their own sessions:** **API-DEPR-1** (frozen-baseline multi-fn
   Retell/GHL deprecation migration + live-API re-confirm) and **G3-7** (breaking vite major bump). (INB-1, UI-1, F11 already
   built in the 2026-06-29 overnight build → live-verify only in Session 7-finish, not rebuilt.)
-- [ ] **Session 7-finish — live TEST pass (BRENDAN drives, Claude verifies).** 7.5 + F8 are now DEPLOYED (2026-07-01), so
-  this is purely the BEHAVIORAL live-test pass, **consolidated to reduce repeated work** (see the matrix in the 2026-07-01
-  handoff): **Voice-regression confirmation FIRST** (one outbound call: booking works + B-3/B-5 survive + VM-1 voicemail
-  lands; roll retell-proxy back to v46 if it regressed), then one SMS exchange (BOOK-1/3.12/SMS-OBS-1/MODEL-1), one fresh
-  GHL contact (F1/B-5/B-2), one agency→client login pair (F8 panel + client card toggle + INB-1/UI-1/F11), plus B-5,
-  LIVE-D (B-2 ×4 + manual-send/429), LIVE-E (F3/F4), G3-6 Tier-3, F9-1, PHONE-CLEAR-1, G3-8(a). **Done when:** TEST_LIST
-  green / all fails logged.
+- [~] **Session 7-finish — live TEST pass (BRENDAN drives, Claude verifies).** 7.5 + F8 + Session 8.5 (F13/F14) are DEPLOYED, so
+  this is purely the BEHAVIORAL live-test pass, **consolidated to reduce repeated work**: **Voice-regression confirmation FIRST**
+  (one outbound call: booking works + B-3/B-5 survive + VM-1 voicemail lands; roll retell-proxy back to v46 if it regressed),
+  then one SMS exchange (BOOK-1/3.12/SMS-OBS-1/MODEL-1), one fresh GHL contact (F1/B-5/B-2), one agency→client login pair
+  (F8 panel + client card toggle + F13 ×4 + F14 ×2 + INB-1/UI-1/F11), plus B-5, LIVE-D (B-2 ×4 + manual-send/429),
+  LIVE-E (F3/F4), G3-6 Tier-3, F9-1, PHONE-CLEAR-1, G3-8(a). **Done when:** TEST_LIST green / all fails logged.
+  _IN PROGRESS 2026-07-03 (handoff `2026-07-03-session7-finish-voice-gate.md`): **voice gate PASSED** — booking + B-3 + B-5
+  live-confirmed (call `call_d5625539`, booking `4f7c76a0`); **v47 SAFE, no rollback**. Preconditions A1 (BOOK-1 rule added via
+  the Text setter's IDENTITY→Agent Mission field) + A2 (5 setters re-saved) + A3 (Property Coach name reverted) DONE.
+  **VM-1 FAILED** the gate (still "partial", 0/5 agents; re-opened in BUG_LIST — v47 insufficient, needs draft-first +
+  `static_text`). **Remaining → next session:** SMS exchange, F8 UI, F13 ×4, F14 ×2 (Resend-gated), fresh GHL contact
+  (F1/B-5/B-2 via the TEST_PHONE_A cleanup), INB-1/UI-1/F11, LIVE-D, LIVE-E, G3-6 Tier-3, F9-1, PHONE-CLEAR-1, G3-8a._
 - [x] **Session 8 — F8 cost-to-price calculator.** **BUILT + DEPLOYED LIVE 2026-07-01** (overnight; PLAN-mode
   approved then executed). Pure `computeBlendedRate` (integer micros, ONE FX step, bps markup + buffer,
   round-half-even once, line items sum exactly, separate fixed_monthly; 23 edge tests). Agency-only rate panel
