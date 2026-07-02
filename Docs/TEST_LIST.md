@@ -16,6 +16,29 @@ When an item passes, move it to `Docs/archive/COMPLETED_LOG.md`. When it fails, 
 > proven sealed autonomously (live proof 9/9); these are the BEHAVIORAL checks a human runs. **Batch them**
 > (each line covers several items) to avoid repeated work.
 
+## ⭐ F13/F14 (usage & billing + auth) — run AFTER the supervised deploy of branch `feature/usage-billing-auth`
+
+> Built 2026-07-02, NOT yet deployed (checklist in `Operations/handoffs/2026-07-02-usage-billing-auth.md`).
+> The trap proof (`scripts/f13_usage_trap_proof.ts`) runs autonomously at deploy; these are the human checks.
+
+- [ ] **F13 — agency margin panel vs SQL hand-check.** Agency login → Sub-Account Config → "Usage & Billing": minutes,
+  calls, texts, billed, actual cost, margin all populate for the current period. Hand-check one month via Mgmt API SQL:
+  `SELECT SUM(CEIL(GREATEST(duration_ms,0)/60000.0)), COUNT(*), SUM(cost) FROM call_history WHERE client_id='e467dabc-...'
+  AND created_at >= '<start_utc>' AND created_at < '<end_utc>';` + the `message_queue` sms_outbound count → matches the panel.
+- [ ] **F13 — client toggle matrix.** In the pricing panel flip each of the 4 Client visibility toggles ON one at a time,
+  log in as the client each time: the dashboard summary card + the account-page Usage & Billing panel show ONLY that part
+  (rate / minutes / texts / month total). All four OFF → neither renders anything for the client.
+- [ ] **F13 — dashboard summary card, both roles.** Your agency login sees the margin one-liner on the client's
+  ChatAnalytics dashboard (text + voice tabs, not chat-with-ai); the client login sees only toggled parts.
+- [ ] **F13 — period browsing + anchor.** Set a billing anchor day (e.g. 15) in the pricing panel → the panel's period
+  label shifts to anchor-to-anchor; browse Previous/2-back periods; set anchor 31 on a short month and confirm the label
+  clamps to the month's last day.
+- [ ] **F14 — invite E2E (AFTER Resend SMTP lands).** ManageClients → edit a sub-account → "Invite Sub-Account User by
+  Email" → invite a test address → email arrives from the branded sender → link lands on "Set Your Password" → a password
+  under 12 chars is refused → set a valid one → sign in works, role=client, correct client_id routing.
+- [ ] **F14 — client self password reset.** /forgot-password with a client-role email now sends the reset (no more
+  "Not Authorized"); the reset form enforces 12 chars; agency reset still works.
+
 - [ ] **VOICE-REGRESSION CONFIRMATION (do FIRST — gates trusting retell-proxy v47).** One outbound voice call on a
   canonical agent (read the live phone binding): booking still works end-to-end; **B-3** (outbound follows
   `latest_published`) + **B-5** (default vars; no literal `{{first_name}}`) survive; **VM-1** voicemail "Save & push"

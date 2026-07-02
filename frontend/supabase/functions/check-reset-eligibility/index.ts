@@ -71,9 +71,10 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Only agency role can reset password
+    // F14: agency AND client roles can self-reset. Only role-less accounts
+    // (half-provisioned) still get the "contact administrator" branch.
     const role = roleData?.role || null;
-    const allowed = role === "agency";
+    const allowed = role === "agency" || role === "client";
 
     return new Response(
       JSON.stringify({ allowed }),

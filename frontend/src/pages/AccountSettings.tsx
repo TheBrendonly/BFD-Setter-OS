@@ -15,6 +15,7 @@ import { useCreatorMode } from "@/hooks/useCreatorMode";
 import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
 import { ClientAccountSettingsCard } from "@/components/ClientAccountSettingsCard";
 import { ClientPricingDisplayCard } from "@/components/ClientPricingDisplayCard";
+import { ClientUsagePanel } from "@/components/ClientUsagePanel";
 
 
 export default function AccountSettings() {
@@ -274,6 +275,9 @@ export default function AccountSettings() {
 
           {/* F8 read-only blended rate (only when the agency turned the toggle on) */}
           {!isAgency && clientId && <ClientPricingDisplayCard clientId={clientId} />}
+
+          {/* F13 Usage & Billing (server decides the role shape + toggled parts) */}
+          {clientId && <ClientUsagePanel clientId={clientId} />}
         </div>
       </main>
     </div>

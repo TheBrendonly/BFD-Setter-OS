@@ -10,9 +10,12 @@ Features to build, in rough priority order. Reconciled 2026-06-25 with Brendan.
 
 ## Build queue
 
+- [~] **F13 - Usage & Billing metering + client visibility (extends F8).** BUILT 2026-07-02 on branch `feature/usage-billing-auth` (tests green; deploy = a separate supervised step after Brendan's review) → deploy checklist in `Operations/handoffs/2026-07-02-usage-billing-auth.md`, live checks in `TEST_LIST.md`. **Decided scope (Brendan 2026-07-02):** per-client billing anchor DAY-OF-MONTH (default 1, short months clamp, boundaries in `clients.timezone`, prior periods browsable); voice billable = per-call CEIL to whole minute x the F8 blended $/min (durations + actual Retell cost already live in `call_history` from the post-call webhook); SMS = ALL outbound texts x a per-text sell rate from a NEW `sms_llm` per_message pricing component (admin-set "LLM cost per average outbound message", seed US$0.003 - Twilio is client-BYO so carriage is not BFD's cost; the per_message bucket NEVER pollutes the per-minute blend); client sees rate/minutes/texts/month-total EACH behind an admin toggle (`client_display` in the pricing config, `show_rate` back-compat-mirrored with `show_rate_to_client`); agency sees the full margin view (billed at sell rates vs actual provider cost). **Zero migrations** (anchor + toggles + component live in the existing `client_pricing_config.config` jsonb). **Compute** = pure `_shared/billingPeriod.ts` + `_shared/computeUsage.ts` + extended `computeBlendedRate` (per_message bucket). **Gated read** = new `get-client-usage` edge fn (service-role; `roleBranch.ts` fresh-literal split, toggled-off keys OMITTED, all-off -> `{show:false}`; same trap class as F8). **UI** = `UsageSummaryCard` on the ChatAnalytics dashboard (BOTH roles, server-branched), `ClientUsagePanel` (period selector) on AccountSettings (client) + ClientSettings after the F8 editor (agency margin view), editor gains anchor-day input + 4-toggle Client visibility group + SMS-per-text breakdown row. **Proof** = `scripts/f13_usage_trap_proof.ts` (delta-based, snapshot-and-restores the live pricing row). ~40 new deno tests; test:edge 188/0, test:node 80/0, tsc + vite build green. Also fixes the F8 discoverability gap: the rate card only rendered on the client Account page for client-role logins, never on the dashboard.
+- [~] **F14 - Auth improvements: invite-email onboarding + client self password reset + Resend SMTP + 12-char fix.** BUILT 2026-07-02 on the same branch (deploy supervised; invite/reset E2E gated on the Resend SMTP items in `BRENDAN_TODO.md`). NO new auth system - Supabase Auth stays (signup disabled, min-12 passwords, optional TOTP, rotation on). (1) NEW `invite-client-user` edge fn: agency-only invite-by-email (structural clone of `create-client-user` - same role flip + profile link + delete-user rollback) via `admin.inviteUserByEmail` redirecting to `/reset-password` (already allow-listed); "Invite Sub-Account User by Email" card in ManageClients' edit view. (2) `check-reset-eligibility` now allows role='client' (clients can self-reset; enumeration-safe always-success preserved). (3) `ResetPassword.tsx` handles `type=invite` links (invite copy: "Set Your Password") and enforces min 12 chars matching the live GoTrue policy (was 6). (4) SMTP = config-only deploy step (Mgmt API PATCH /config/auth with the Resend key; payload in the handoff). Residual noted in BUG_LIST: ManageClients/update-client-password still validate 6 chars on the admin-API path. Audit note: `intake_lead_secret` entropy VERIFIED (24 CSPRNG bytes = 192 bits at all 3 mint sites) - no fix needed.
 - [x] **F8 - Configurable cost-to-price calculator (per-minute, multi-currency).** SHIPPED + DEPLOYED LIVE 2026-07-01 (overnight) → `TEST_LIST.md` (live UI verify) + this note. **Resolved 5 decisions:** (1) audience = agency-internal tool PLUS the opt-in client display card; (2) per-sub-account override on a global default rate card; (3) admin-set fixed FX + buffer % + "last updated" stamp (live feed = v2); (4) Twilio toggles default OFF; (5) fixed monthly costs (number rental, A2P) = a SEPARATE line, markup on per-minute only. **Config store** = new `client_pricing_config` table (jsonb, agency-RLS **role-gated** — an adversarial council VETO caught that a verbatim agency `FOR ALL` policy matched client-role users; fixed with `get_user_role(...)='agency'`). **Compute** = pure `_shared/computeBlendedRate.ts` (integer micros, one FX step, bps markup+buffer, round-half-even once). **Gated read** = `get-blended-rate` edge fn (client gets ONLY the blended scalar when the toggle is on; live trap proof 9/9). v2 deferred (`DEFERRED.md`). _Original spec retained below._ (split from F9; Brendan 2026-06-26: F9 first, F8 after the TEST pass). Admin-set, **agency-only** panel on Sub-Account Config that computes a blended displayed price per minute from real provider costs (Retell + OpenRouter LLM + Twilio voice/SMS + number rental + other), with a per-provider on/off toggle (e.g. Twilio off when the client runs their own Twilio), a display currency + admin-set USD-to-AUD FX, and a markup percentage (10 / 50 / 100% etc.). **Decided scope (Brendan):** per-sub-account override on a global default rate card. **NEW requirement:** a per-sub-account "**show rate to client**" toggle (set in the agency settings) that surfaces a **read-only** blended-$/min **display card in that client's own account settings** — markup/breakdown stay agency-only; only the final blended $/min shows to the client when the toggle is on. The LLM line is a live model-aware estimate; voice has Retell's actual per-call cost to reconcile against. Full spec + provider-rate research in the "Feature spec - F8" section below. Effort L.
 - [x] **F11 - Credentials "Configured" masked indicator + optional-key labelling.** SHIPPED 2026-06-29 (overnight frontend-only build) → `TEST_LIST.md` + `COMPLETED_LOG.md`. Option (A): a fixed-length **dot-mask** `••••••••••••` shown as the **placeholder** (never the value, so the blank-save guard still treats the box as "unchanged" — zero real chars sent to the browser, G3-6 preserved) + a bolder **"Configured ✓"** on every configured secret in `ApiCredentials.tsx` (via the shared `CredentialInputField`/`ApiCredentialField`) and `SetupGuideDialog.tsx` (5 inline secret fields, parity). Supabase PAT + OpenRouter Management Key now labelled **(Optional)** (new `isOptional` on `CredentialInputField`; suppresses their red "Not Configured" pulse). Frontend-only; tsc + build green; **no edge deploy**.
 - [x] **F9 - Per-setter Retell lock + ownership-based config sync.** SHIPPED Session 6.5 2026-06-26 → `TEST_LIST.md`. v1: `voice_setters.is_retell_locked` (+ `retell_locked_at`/`retell_synced_at`/`retell_synced_version`/`retell_config_snapshot`, migration `20260627130000`); **server-enforced** write-guard in retell-proxy across all write paths via `_shared/retell-lock.ts` (single-target THROW 423 `setter_retell_locked`; bulk `set-voicemail`/`refresh-booking-tool-messages` SKIP locked setters + report them); `make-retell-outbound-call` skips the at-call voicemail PATCH for a locked setter but **still dials**; new `set-setter-lock` + READ-ONLY `pull-retell-config` actions (snapshot + version drift); tile lock toggle + confirm dialogs + Retell-locked/sync badges + Pull button + Edit-entry gating in `PromptManagement.tsx`. retell-proxy **v46**, make-retell-outbound-call **v27**. 12 guard-core unit tests. **v2 (deferred → DEFERRED.md):** scheduled drift poll, booking-tools-present alert, auto "pull Retell into BFD before unlock". Full spec in "Feature spec - F9" below.
+- [ ] **F12 - Voice-agent per-minute cost optimization (GATED: after the first paying client — NOT before a deal, per Brendan 2026-07-01).** Cut the setter's real per-minute cost without hurting booking performance / conversational quality. **Verified current cost = A$0.34/min all-in** (US$0.22/min, from live Retell billing across 23 recent gemini-3.0-flash calls, 2026-07-01; the earlier prompt-bloat that spiked calls to ~A$2/min is already fixed). Biggest levers: stop pre-injecting 30 days of calendar slots + full chat/call history into model context every turn (fetch slots on-demand via the existing `get-available-slots` tool; keep ~last 10 turns + a rolling summary); turn off `model_high_priority`; cheaper AU TTS than the ElevenLabs custom voice (~A$0.06/min line); cheaper post-call-analysis model than gpt-4.1; review `stt_mode=accurate`. Report-only on the Retell/prompt side (Brendan applies). A ready-to-run **cost-reduction council brief** + the full cost breakdown live in "Feature spec - F12" below. Target ~A$0.20/min. Effort M.
 _(F2, F5, F6, F7 SHIPPED Session 3 2026-06-25 → TEST_LIST + COMPLETED_LOG. F5's optional `text_engine_webhook` column drop is deferred — see DEFERRED.md — because the column is wired into the `clients_public` view; the n8n code path itself was already gone.)_
 _(F1 SHIPPED Session 4 2026-06-26 (sync-ghl-contact v24 + `clients.ghl_conversation_link_field_id` migration). **F3 + F4 were ALREADY built** before Session 4 — F3 in commit `4b7dbc1` (pause/resume edge fns live v1 + runEngagement `isPaused()` exit + UI buttons), F4 in `b0c6bea` (nudgeColdReply per-lead-local-hour gate). Session 4 verified them live, redeployed Trigger.dev prod (`20260625.1`, 12 tasks) to guarantee the runtime, and reconciled all three → TEST_LIST + COMPLETED_LOG. They were never moved off this queue — a docs-drift catch, not a rebuild.)_
 
@@ -99,6 +102,73 @@ _(F1 SHIPPED Session 4 2026-06-26 (sync-ghl-contact v24 + `clients.ghl_conversat
 Core appointment-setter platform: multi-channel AI setter (SMS / IG DM / FB), native text engine (Trigger.dev, n8n bypassed), engagement cadences (`runEngagement.ts`), email channel in cadences, form-to-agent routing (tag-per-campaign), CSV/list reactivation, voice setters (UUID model + Retell, live voice picker + Fast Tier), multi-tenant RLS + dual-mode `authorize-client-request.ts`, webhook auth hardening, paid-call-path idempotency, quiet-hours/STOP/reply-end guards, credential "Verify" card, brand voice, §3.12 SMS tool parity (book/reschedule/cancel/check-slots/callback over SMS), GHL outcome-field sync, `clients_public` secret-column boundary, billing B1/B2 (dormant until Stripe go-live), S6 readiness dashboard + CI.
 
 Full chronological build log: `Docs/ROADMAP.md`. Deferred / gated features: `Docs/DEFERRED.md`.
+
+---
+
+## Feature spec - F12 voice-agent per-minute cost optimization
+
+> Captured 2026-07-01 from a live Retell cost audit (146 calls pulled, cost broken down per product). GATED: do this AFTER the first paying client, not before a deal (Brendan). The system prompt is already near-minimal for a single-prompt agent, so this is about ARCHITECTURE (context injection, model/voice/STT choice, post-call pipeline), not prompt wording.
+
+**Verified current cost (2026-07-01).** All-in A$0.34/min (US$0.22/min), stable across recent real calls (A$0.23-0.37). Component breakdown per minute: `llm_token_surcharge` A$0.131 (38%), `retell_voice_engine` A$0.084 (25%, fixed platform fee, not reducible), ElevenLabs TTS A$0.061 (18%), `gemini_3_0_flash` A$0.041 (12%), gpt-4.1 post-call analysis A$0.024 (7%). The old prompt-bloat that pushed calls to ~A$2/min (huge `llm_token_surcharge` from injecting 30-day availability + full history) was fixed ~2026-06-11; premium-model test calls (gpt-5 / claude-sonnet) also inflate cost and should never run on live client calls.
+
+**Current config (agent `agent_f45f4dd...` / llm `llm_a73df8d...`, representative).** model `gemini-3.0-flash` with `model_high_priority=TRUE`; `stt_mode=accurate`; ElevenLabs custom voice; `post_call_analysis_model=gpt-4.1`; ~3,500-word single system prompt; 8 custom booking tools; `background_voice_cancellation` + `ambient_sound` on; still injects `{{available_time_slots}}` (30 days), `{{chat_history}}`, `{{call_history}}` into context.
+
+**Ready-to-run council brief (paste to Claude: "run the council on this"):**
+
+```
+COUNCIL BRIEF: Reduce the per-minute cost of the BFD Setter voice agent without compromising
+booking performance or conversational quality.
+
+CONTEXT (verified from live Retell data + agent config, 2026-07-01):
+- Product: AU AI voice appointment-setter ("Gary"). Single-prompt Retell agent architecture.
+- Current all-in cost = A$0.34/min (US$0.22/min), stable across recent real calls (range A$0.23-0.37).
+- Cost breakdown per minute: llm_token_surcharge A$0.131 (38%), retell_voice_engine A$0.084 (25%,
+  fixed), ElevenLabs TTS A$0.061 (18%), gemini-3.0-flash A$0.041 (12%), gpt-4.1 post-call analysis
+  A$0.024 (7%).
+- Current config: model gemini-3.0-flash with model_high_priority=TRUE; stt_mode=accurate; ElevenLabs
+  custom voice; post_call_analysis_model=gpt-4.1; ~3,500-word system prompt; 8 custom booking tools;
+  background_voice_cancellation on; ambient_sound on.
+- Context injection today: the agent pre-injects 30 days of calendar availability
+  ({{available_time_slots}}) AND chat/call history ({{chat_history}}, {{call_history}}) into the model
+  context, re-sent every turn. A get-available-slots tool already exists for on-demand fetching.
+- The system prompt is already about as small as it can be for a single-prompt agent; do NOT focus on
+  trimming prompt wording. Focus on architecture, context strategy, model/voice/STT choices, and the
+  post-call pipeline.
+
+HARD CONSTRAINTS:
+- Must NOT degrade: booking success rate, conversational latency/naturalness, AU-accent voice quality,
+  or slot-accuracy (the agent must never offer a slot that isn't real).
+- Report-only: all changes are applied by Brendan in Retell / the BFD setter UI. Do not assume code
+  can be changed unilaterally; recommend, don't implement.
+- Keep it SIMPLE and STABLE (solo founder, not enterprise). Prefer low-risk, high-certainty wins.
+
+SPECIFIC QUESTIONS TO ANSWER:
+1. model_high_priority=TRUE: what does it cost vs standard priority, and what latency/quality do we
+   lose by turning it off? Net recommendation.
+2. Context injection: do we need to inject all 30 days of availability up front, before a booking is
+   even requested? Or fetch on-demand via get-available-slots only once the lead moves to booking?
+   Quantify the token/cost impact and the performance/latency trade-off of each approach.
+3. Conversation history: do we need 30 days of history in context, or is "last 10 interactions +
+   a rolling summary" sufficient? Design the rolling-summary approach and estimate the cost saving
+   and any quality/continuity risk.
+4. TTS: is the ElevenLabs custom voice worth A$0.061/min, or is there an equal-quality AU voice at
+   lower cost? Recommend specific alternatives.
+5. STT: is stt_mode=accurate necessary, or does the cheaper mode hold quality for AU accents?
+6. Post-call analysis: is gpt-4.1 needed for post-call extraction, or does a cheaper model
+   (gpt-4.1-mini / gemini-flash) do it at ~equal accuracy? Cost delta.
+7. Should we move from single-prompt to a conversation-flow / state-machine architecture to cut
+   context size? This is a FUTURE consideration (NOT before the first deal). Assess the cost upside,
+   the build effort, and whether it risks booking reliability. Flag it as future, not now.
+
+DELIVERABLE:
+- A prioritized list of cost-reduction levers, each with: estimated A$/min saved, performance risk
+  (low/med/high), effort, and a SAFE-NOW vs FUTURE tag.
+- A target "optimized" cost/min if all safe-now levers are applied.
+- Explicit callouts of any lever that would compromise performance (so we can reject it).
+- The recommended rolling-summary + on-demand-slot design as the headline future architecture change.
+```
+
+**Effort.** M (mostly Retell config + context-injection changes Brendan applies; the rolling-summary/on-demand-slot design may need a small code change to how dynamic variables are populated). Reconcile the A$0.34/min figure against fresh call data before relying on it (rates drift).
 
 ---
 

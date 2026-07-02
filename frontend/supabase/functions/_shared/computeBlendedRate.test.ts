@@ -176,3 +176,71 @@ Deno.test("a per-month USD component is FX-converted into fixed_monthly_minor", 
   assertEquals(r.fixed_monthly_minor, 750);
   assert(r.lineItems.length === 0);
 });
+
+// F13 — per_message components (SMS LLM cost per average outbound message).
+// They form a THIRD bucket: never the per-minute blend, never fixed monthly.
+
+Deno.test("per_message components never pollute the per-minute blend or fixed monthly", () => {
+  const r = computeBlendedRate(cfg({
+    markup_bps: 5000,
+    fx_usd_to_display_micros: FX_150,
+    components: {
+      retell: comp({ currency: "USD", unit: "per_minute", rate_micros: 70_000 }),
+      sms_llm: comp({ currency: "USD", unit: "per_message", rate_micros: 3_000 }),
+      number_rental: comp({ currency: "AUD", unit: "per_month", rate_micros: 8_250_000 }),
+    },
+  }));
+  // Per-min blend is retell only: 0.07*1.5=0.105; *1.5=0.1575 -> 16c (unchanged by sms_llm).
+  assertEquals(r.blended_per_min_minor, 16);
+  assertEquals(r.fixed_monthly_minor, 825);
+  assertEquals(r.lineItems.map((l) => l.key), ["retell"]);
+  assertEquals(r.fixedLineItems.map((l) => l.key), ["number_rental"]);
+  assertEquals(r.messageLineItems.map((l) => l.key), ["sms_llm"]);
+  assertEquals(r.usd_per_message_micros, 3_000);
+});
+
+Deno.test("per_message USD rate gets FX + markup with a single round: 0.003 * 1.5 * 1.5 = 0.675c -> 1c", () => {
+  const r = computeBlendedRate(cfg({
+    markup_bps: 5000,
+    fx_usd_to_display_micros: FX_150,
+    components: {
+      sms_llm: comp({ currency: "USD", unit: "per_message", rate_micros: 3_000 }),
+    },
+  }));
+  assertEquals(r.per_message_minor, 1);
+  assertEquals(r.blended_per_min_minor, 0);
+});
+
+Deno.test("per_message AUD component skips FX; larger rate exercises the math: 0.10 AUD * 2 = 20c", () => {
+  const r = computeBlendedRate(cfg({
+    markup_bps: 10_000, // 100%
+    components: {
+      sms_llm: comp({ currency: "AUD", unit: "per_message", rate_micros: 100_000 }),
+    },
+  }));
+  assertEquals(r.per_message_minor, 20);
+  assertEquals(r.aud_per_message_micros, 100_000);
+  assertEquals(r.usd_per_message_micros, 0);
+});
+
+Deno.test("disabled per_message component yields zero per_message_minor", () => {
+  const r = computeBlendedRate(cfg({
+    components: {
+      sms_llm: comp({ currency: "USD", unit: "per_message", rate_micros: 3_000, enabled: false }),
+    },
+  }));
+  assertEquals(r.per_message_minor, 0);
+  assertEquals(r.messageLineItems, []);
+});
+
+Deno.test("per_message determinism: repeated runs are byte-identical", () => {
+  const c = cfg({
+    markup_bps: 5000,
+    fx_buffer_bps: 200,
+    components: {
+      retell: comp({ currency: "USD", rate_micros: 70_000 }),
+      sms_llm: comp({ currency: "USD", unit: "per_message", rate_micros: 3_000 }),
+    },
+  });
+  assertEquals(JSON.stringify(computeBlendedRate(c)), JSON.stringify(computeBlendedRate(c)));
+});

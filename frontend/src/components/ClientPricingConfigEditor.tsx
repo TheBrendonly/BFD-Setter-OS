@@ -10,7 +10,8 @@ import { useClientPricingConfig } from '@/hooks/useClientPricingConfig';
 import {
   DEFAULT_PRICING_CONFIG,
   computeBlendedRate,
-  type PricingConfig,
+  sanitizeAnchorDay,
+  type MergedPricingConfig,
   type PricingComponent,
 } from '@/lib/blendedRate';
 import { formatMinorCurrency } from '@/lib/formatCurrency';
@@ -25,10 +26,26 @@ const COMPONENT_LABELS: Record<string, string> = {
   retell: 'Retell voice',
   openrouter_llm: 'OpenRouter LLM',
   twilio_voice: 'Twilio voice',
-  twilio_sms: 'Twilio SMS',
+  twilio_sms: 'Twilio SMS (client-billed)',
+  sms_llm: 'SMS LLM (per text)',
   number_rental: 'Number rental',
   other: 'Other',
 };
+
+const componentUnitLabel = (unit: string) =>
+  unit === 'per_month' ? 'fixed monthly' : unit === 'per_message' ? 'per text' : 'per minute';
+
+// F13 — the four client-visibility toggles (server-enforced in get-client-usage).
+const CLIENT_DISPLAY_PARTS: Array<{
+  key: keyof MergedPricingConfig['client_display'];
+  label: string;
+  hint: string;
+}> = [
+  { key: 'show_rate', label: 'Rate per minute', hint: 'The blended $/min sell rate' },
+  { key: 'show_minutes', label: 'Minutes used', hint: 'Billable minutes this billing month' },
+  { key: 'show_texts', label: 'Texts sent', hint: 'Outbound SMS count this billing month' },
+  { key: 'show_total', label: 'Month total', hint: 'Usage dollars at the sell rates (+ fixed monthly)' },
+];
 
 // micros <-> dollar-string helpers (no float maths reaches the stored config:
 // strings are parsed to integer micros on change).
@@ -50,7 +67,7 @@ const strToFxMicros = (s: string) => {
 
 export function ClientPricingConfigEditor({ clientId }: { clientId: string }) {
   const { config, loading, saving, saveConfig, refetch } = useClientPricingConfig(clientId);
-  const [form, setForm] = useState<PricingConfig>(DEFAULT_PRICING_CONFIG);
+  const [form, setForm] = useState<MergedPricingConfig>(DEFAULT_PRICING_CONFIG);
   const [hasChanges, setHasChanges] = useState(false);
 
   useEffect(() => {
@@ -62,8 +79,22 @@ export function ClientPricingConfigEditor({ clientId }: { clientId: string }) {
 
   const breakdown = useMemo(() => computeBlendedRate(form), [form]);
 
-  const patch = (over: Partial<PricingConfig>) => {
+  const patch = (over: Partial<MergedPricingConfig>) => {
     setForm((prev) => ({ ...prev, ...over }));
+    setHasChanges(true);
+  };
+
+  // F13 — keep the legacy show_rate_to_client flag mirrored with the new
+  // client_display.show_rate so old and new readers always agree.
+  const patchDisplayPart = (key: keyof MergedPricingConfig['client_display'], value: boolean) => {
+    setForm((prev) => {
+      const client_display = { ...prev.client_display, [key]: value };
+      return {
+        ...prev,
+        client_display,
+        show_rate_to_client: key === 'show_rate' ? value : prev.show_rate_to_client,
+      };
+    });
     setHasChanges(true);
   };
 
@@ -106,8 +137,9 @@ export function ClientPricingConfigEditor({ clientId }: { clientId: string }) {
       <CardContent>
         <p className="text-muted-foreground mb-4 field-text">
           Agency-only. Set the per-component provider costs, the USD-to-{form.display_currency} FX
-          rate, and a markup to compute the blended price per minute. Turn on "Show rate to client"
-          to surface only the final blended $/min (no breakdown) on the client's account page.
+          rate, and a markup to compute the blended price per minute and the SMS price per text.
+          The "Client visibility" toggles below choose which final figures (never the breakdown)
+          show on the client's dashboard and account page.
         </p>
 
         {/* Global controls */}
@@ -161,6 +193,21 @@ export function ClientPricingConfigEditor({ clientId }: { clientId: string }) {
               className="field-text"
             />
           </div>
+          <div className="space-y-1">
+            <Label className="text-xs uppercase text-muted-foreground">Billing anchor day</Label>
+            <Input
+              type="number"
+              min="1"
+              max="31"
+              step="1"
+              value={String(form.billing_anchor_day)}
+              onChange={(e) => patch({ billing_anchor_day: sanitizeAnchorDay(Number(e.target.value)) })}
+              className="field-text"
+            />
+            <p className="text-[10px] text-muted-foreground">
+              Day of month the billing period starts. Day 31 clamps to the last day of shorter months.
+            </p>
+          </div>
         </div>
 
         {/* Component rate table */}
@@ -178,7 +225,7 @@ export function ClientPricingConfigEditor({ clientId }: { clientId: string }) {
                     {COMPONENT_LABELS[key] ?? key}
                   </div>
                   <div className="text-[11px] text-muted-foreground">
-                    {c.currency} &middot; {c.unit === 'per_month' ? 'fixed monthly' : 'per minute'}
+                    {c.currency} &middot; {componentUnitLabel(c.unit)}
                   </div>
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0">
@@ -198,18 +245,27 @@ export function ClientPricingConfigEditor({ clientId }: { clientId: string }) {
           })}
         </div>
 
-        {/* Show-rate-to-client toggle */}
-        <div className="flex items-center justify-between mt-4 px-3 py-2 rounded-lg border border-dashed border-border">
-          <div>
-            <Label className="field-text">Show rate to client</Label>
-            <p className="text-[11px] text-muted-foreground">
-              Surfaces ONLY the blended $/min on the client's account page. Never the breakdown or markup.
-            </p>
+        {/* Client visibility toggles (F13) — server-enforced per-part display */}
+        <div className="mt-4 px-3 py-2 rounded-lg border border-dashed border-border">
+          <Label className="field-text">Client visibility</Label>
+          <p className="text-[11px] text-muted-foreground mb-2">
+            Each part shows on the client's dashboard and account page only while its toggle is on.
+            The breakdown, markup and your costs never show.
+          </p>
+          <div className="flex flex-col gap-2">
+            {CLIENT_DISPLAY_PARTS.map((part) => (
+              <div key={part.key} className="flex items-center justify-between">
+                <div>
+                  <span className="text-sm">{part.label}</span>
+                  <p className="text-[11px] text-muted-foreground">{part.hint}</p>
+                </div>
+                <Switch
+                  checked={form.client_display[part.key]}
+                  onCheckedChange={(v) => patchDisplayPart(part.key, v)}
+                />
+              </div>
+            ))}
           </div>
-          <Switch
-            checked={form.show_rate_to_client}
-            onCheckedChange={(v) => patch({ show_rate_to_client: v })}
-          />
         </div>
 
         {/* Live breakdown */}
@@ -230,6 +286,12 @@ export function ClientPricingConfigEditor({ clientId }: { clientId: string }) {
               <span>Blended price / min</span>
               <span>{formatMinorCurrency(breakdown.blended_per_min_minor, form.display_currency)}</span>
             </div>
+            {breakdown.messageLineItems.length > 0 && (
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">SMS price / text</span>
+                <span>{formatMinorCurrency(breakdown.per_message_minor, form.display_currency)}</span>
+              </div>
+            )}
             {breakdown.fixed_monthly_minor > 0 && (
               <div className="flex justify-between text-muted-foreground text-xs">
                 <span>Fixed monthly (separate)</span>

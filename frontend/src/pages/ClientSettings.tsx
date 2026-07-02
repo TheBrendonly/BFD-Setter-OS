@@ -15,6 +15,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { ClientMenuConfigEditor } from "@/components/ClientMenuConfigEditor";
 import { ClientAccountFieldConfigEditor } from "@/components/ClientAccountFieldConfigEditor";
 import { ClientPricingConfigEditor } from "@/components/ClientPricingConfigEditor";
+import { ClientUsagePanel } from "@/components/ClientUsagePanel";
 import { useSubscription } from "@/hooks/useSubscription";
 import { UnsavedChangesDialog } from '@/components/UnsavedChangesDialog';
 import { ClientVoicemailCard } from '@/components/setters/ClientVoicemailCard';
@@ -467,6 +468,13 @@ export default function ClientSettings() {
           {isAgency && clientId && (
             <div className="border-t border-dashed border-border pt-6">
               <ClientPricingConfigEditor clientId={clientId} />
+            </div>
+          )}
+
+          {/* F13 Usage & Billing margin view - Agency only */}
+          {isAgency && clientId && (
+            <div className="border-t border-dashed border-border pt-6">
+              <ClientUsagePanel clientId={clientId} />
             </div>
           )}
 
