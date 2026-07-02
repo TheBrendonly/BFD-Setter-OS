@@ -26,21 +26,23 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    // Look up user by email in auth.users
-    const { data: usersData, error: usersError } = await supabaseAdmin.auth.admin.listUsers();
+    // Look up the user via the trigger-mirrored profiles row (GoTrue lowercases
+    // emails at signup). listUsers() was page-1-only (50 users), so the
+    // role-less block silently failed open once auth.users grew past 50.
+    const { data: user, error: usersError } = await supabaseAdmin
+      .from("profiles")
+      .select("id")
+      .eq("email", email.trim().toLowerCase())
+      .maybeSingle();
 
     if (usersError) {
-      console.error("Error listing users:", usersError);
+      console.error("Error looking up profile:", usersError);
       // Don't reveal errors - return not allowed
       return new Response(
         JSON.stringify({ allowed: false }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
-
-    const user = usersData?.users?.find(
-      (u: any) => u.email?.toLowerCase() === email.toLowerCase()
-    );
 
     if (!user) {
       // User doesn't exist - don't reveal this, just say not allowed

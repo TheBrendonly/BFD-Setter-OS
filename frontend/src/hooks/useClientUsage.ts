@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 
 // F13 — the single read of a sub-account's billing-period usage + cost via the
@@ -72,21 +72,27 @@ export function isClientUsage(u: ClientUsageResponse | null): u is ClientUsageSh
 export function useClientUsage(clientId: string | undefined, periodOffset = 0) {
   const [usage, setUsage] = useState<ClientUsageResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  // Stale-response guard: quick period changes race their responses; only the
+  // most recently issued request may commit state.
+  const requestSeq = useRef(0);
 
   const fetchUsage = useCallback(async () => {
     if (!clientId) return;
+    const seq = ++requestSeq.current;
     setLoading(true);
     try {
       const { data, error } = await supabase.functions.invoke('get-client-usage', {
         body: { client_id: clientId, period_offset: periodOffset },
       });
       if (error) throw error;
+      if (seq !== requestSeq.current) return;
       setUsage((data ?? { show: false }) as ClientUsageResponse);
     } catch (err) {
       console.error('get-client-usage failed:', err);
+      if (seq !== requestSeq.current) return;
       setUsage({ show: false });
     } finally {
-      setLoading(false);
+      if (seq === requestSeq.current) setLoading(false);
     }
   }, [clientId, periodOffset]);
 

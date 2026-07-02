@@ -3,6 +3,7 @@ import { useCreatorMode } from "@/hooks/useCreatorMode";
 import RetroLoader from "@/components/RetroLoader";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { FunctionsHttpError } from "@supabase/supabase-js";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -259,8 +260,8 @@ export default function ManageClients() {
   };
 
   const handleUpdatePassword = async () => {
-    if (!editingClient || !newPassword || newPassword.length < 6) {
-      toast.error("Password must be at least 6 characters");
+    if (!editingClient || !newPassword || newPassword.length < 12) {
+      toast.error("Password must be at least 12 characters");
       return;
     }
     setUpdatingPassword(true);
@@ -295,10 +296,20 @@ export default function ManageClients() {
           client_id: editingClient.id,
         },
       });
-      if (response.error) throw new Error(response.error.message || 'Failed to send invite');
+      if (response.error) {
+        // Non-2xx bodies carry the operator guidance (409 conflict, 400
+        // duplicate); FunctionsHttpError's own message is a fixed generic
+        // string, so read the body off error.context (G3-4 pattern).
+        const body = response.error instanceof FunctionsHttpError
+          ? await response.error.context.json().catch(() => ({}))
+          : {};
+        throw new Error(body?.error || response.error.message || 'Failed to send invite');
+      }
       const result = response.data;
       if (result.error) throw new Error(result.error);
-      toast.success(`Invite sent to ${inviteEmail}`);
+      toast.success(result.resent
+        ? `Invite re-sent to ${inviteEmail}`
+        : `Invite sent to ${inviteEmail}`);
       setInviteEmail("");
       setInviteName("");
     } catch (error: any) {
@@ -314,8 +325,8 @@ export default function ManageClients() {
       toast.error("Email, password, and client account are required");
       return;
     }
-    if (newUserData.password.length < 6) {
-      toast.error("Password must be at least 6 characters");
+    if (newUserData.password.length < 12) {
+      toast.error("Password must be at least 12 characters");
       return;
     }
     setCreatingUser(true);
@@ -423,7 +434,7 @@ export default function ManageClients() {
                   <Input
                     id="new-password"
                     type="password"
-                    placeholder="Minimum 6 characters"
+                    placeholder="Minimum 12 characters"
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
                     className="field-text"
@@ -432,7 +443,7 @@ export default function ManageClients() {
                 <div className="flex justify-end">
                   <Button
                     onClick={handleUpdatePassword}
-                    disabled={updatingPassword || newPassword.length < 6}
+                    disabled={updatingPassword || newPassword.length < 12}
                     className="groove-btn groove-btn-positive"
                     style={{ fontFamily: "'VT323', monospace", fontSize: '16px' }}
                   >
