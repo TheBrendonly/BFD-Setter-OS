@@ -16,10 +16,11 @@ When an item passes, move it to `Docs/archive/COMPLETED_LOG.md`. When it fails, 
 > proven sealed autonomously (live proof 9/9); these are the BEHAVIORAL checks a human runs. **Batch them**
 > (each line covers several items) to avoid repeated work.
 
-## ⭐ F13/F14 (usage & billing + auth) — run AFTER the supervised deploy of branch `feature/usage-billing-auth`
+## ⭐ F13/F14 (usage & billing + auth) — DEPLOYED LIVE 2026-07-03, ready to test now
 
-> Built 2026-07-02, NOT yet deployed (checklist in `Operations/handoffs/2026-07-02-usage-billing-auth.md`).
-> The trap proof (`scripts/f13_usage_trap_proof.ts`) runs autonomously at deploy; these are the human checks.
+> Deployed 2026-07-03 (results in `Operations/handoffs/2026-07-02-usage-billing-auth.md`). Both trap
+> proofs passed 9/9 live and the SQL hand-check matched exactly, so the security boundary + math are
+> proven; these are the human UI/behavioral checks. The two F14 email items stay gated on Resend SMTP.
 
 - [ ] **F13 — agency margin panel vs SQL hand-check.** Agency login → Sub-Account Config → "Usage & Billing": minutes,
   calls, texts, billed, actual cost, margin all populate for the current period. Hand-check one month via Mgmt API SQL:

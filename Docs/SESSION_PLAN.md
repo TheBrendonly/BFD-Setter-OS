@@ -196,9 +196,15 @@ Status: `[ ]` not started · `[~]` in progress · `[x]` done. Effort is rough.
   9/9** (client cannot read markup/cost inputs via the API; agency gets the full breakdown). Deployed:
   `client_pricing_config` migration + `get-blended-rate` v1 + frontend. F8 touches NO Voice surface → not
   Voice-gated. Live behavioral UI verify (panel persists + client card toggle) → Session 7-finish.
-- [~] **Session 8.5 — Full re-audit + F13 usage metering + F14 auth improvements (CODE, PLAN mode).** BUILT
-  2026-07-02 on branch `feature/usage-billing-auth`; **deploy = a separate supervised step** (checklist in
-  `Operations/handoffs/2026-07-02-usage-billing-auth.md`). The session opened with a 5-agent read-only re-audit:
+- [x] **Session 8.5 — Full re-audit + F13 usage metering + F14 auth improvements (CODE, PLAN mode).** BUILT
+  2026-07-02 on branch `feature/usage-billing-auth`; **DEPLOYED LIVE 2026-07-03 (supervised, Brendan
+  reviewed + GO)**: main `ef8e9fc`, get-client-usage **v1** + invite-client-user **v1** (NEW),
+  get-blended-rate **v2**, check-reset-eligibility **v11**, update-client-password **v11**,
+  retell-call-analysis-webhook **v26**, Trigger **20260702.1**, frontend (Railway on main push).
+  Nudge backfill: 1 row repointed, 5 orphans skipped (deleted June test leads, correctly unattributable).
+  **F13 trap proof 9/9 + F8 trap proof 9/9 live** (F8 proof gained snapshot-restore) + SQL hand-check
+  EXACT MATCH (June period 12 min / 19 texts, fn == raw SQL). SMTP PATCH deferred (Resend items still
+  with Brendan). Original build note follows. The session opened with a 5-agent read-only re-audit:
   lists-vs-live CLEAN (all 12 edge fn versions match, all tables live, no drift), security STRONG (no new
   criticals; mintSecret entropy verified 192-bit; 2 new Low items AUTH-LEN-1 fixed-on-branch + RLS-SHAPE-1 watch),
   auth architecture confirmed correct (no new provider needed). **F13** = per-client billing anchor day +
@@ -225,9 +231,10 @@ Status: `[ ]` not started · `[~]` in progress · `[x]` done. Effort is rough.
   GHL/Retell/Unipile webhook secrets + arm `retell_webhook_secret` (6.6), register AU SMS A2P for
   `+61481614530`. See `Docs/DEFERRED.md`. After this, v1 is live + 100%.
 
-**Remaining sequence to v1 "100%" (the relay follows this order):** Session 8.5 deploy (supervised, after
-Brendan reviews the branch) → Session 7-finish (live TEST pass, now incl. the F13/F14 checks) → any fix-pass
-for failures → Session 9 (API-DEPR-1) → Session 10 (G3-7) → First-client milestone (event-gated).
+**Remaining sequence to v1 "100%" (the relay follows this order):** Session 7-finish (live TEST pass, now
+incl. the F13/F14 checks; voice-regression call FIRST) → any fix-pass for failures → Session 9 (API-DEPR-1,
+optional fold-in BOOK-2/3 + SMS-METER-1 supervised shared-fn edits) → Session 10 (G3-7) → First-client
+milestone (event-gated).
 **Functional 100% = Sessions 0-8 `[x]` + TEST_LIST green** (reached at the end of Session 7-finish); Sessions
 9-10 clear the last open BUG_LIST items; the First-client milestone is the actual go-live. v2 = the lifecycle
 system + A/B + analytics + HubSpot + F9 v2 + F8 v2 (`Docs/DEFERRED.md`), off the 100% path.

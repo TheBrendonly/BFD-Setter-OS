@@ -55,6 +55,7 @@ const HIGH_MARKUP_CONFIG = {
 let clientUserId: string | null = null;
 let agencyUserId: string | null = null;
 let pricingRowExisted = false;
+let savedConfig: unknown = null;
 
 async function makeUser(email: string, password: string, agencyId: string, clientId: string | null, role: string) {
   const { data, error } = await svc.auth.admin.createUser({ email, password, email_confirm: true });
@@ -90,12 +91,12 @@ try {
   const { data: otherClient } = await svc.from("clients").select("id").neq("id", BFD_CLIENT_ID).limit(1).maybeSingle();
   const otherClientId = (otherClient?.id as string) ?? "00000000-0000-0000-0000-000000000000";
 
-  // Remember whether a real pricing row pre-existed (so cleanup is correct).
-  const { data: pre } = await svc.from("client_pricing_config").select("id").eq("client_id", BFD_CLIENT_ID).maybeSingle();
+  // SNAPSHOT any real pricing row for restore (post-F8 deploy a live row always
+  // exists; the old refuse-to-clobber guard would make this proof unrunnable —
+  // mirrors the snapshot-and-restore pattern of f13_usage_trap_proof.ts).
+  const { data: pre } = await svc.from("client_pricing_config").select("config").eq("client_id", BFD_CLIENT_ID).maybeSingle();
   pricingRowExisted = !!pre;
-  if (pricingRowExisted) {
-    throw new Error("BFD client already has a client_pricing_config row — refusing to clobber it. Run against a throwaway client instead.");
-  }
+  savedConfig = pre?.config ?? null;
 
   const stamp = `${Math.floor(Date.now() / 1000)}`;
   const clientEmail = `f8proof-client-${stamp}@example.invalid`;
@@ -176,8 +177,13 @@ try {
 } catch (err) {
   check("harness ran without throwing", false, err instanceof Error ? err.message : String(err));
 } finally {
-  // Cleanup — delete the throwaway pricing row + users.
-  if (!pricingRowExisted) {
+  // Cleanup — restore the real pricing row (or delete the throwaway one) + users.
+  if (pricingRowExisted && savedConfig !== null) {
+    await svc.from("client_pricing_config").upsert(
+      { client_id: BFD_CLIENT_ID, config: savedConfig },
+      { onConflict: "client_id" },
+    );
+  } else if (!pricingRowExisted) {
     await svc.from("client_pricing_config").delete().eq("client_id", BFD_CLIENT_ID);
   }
   for (const id of [clientUserId, agencyUserId]) {

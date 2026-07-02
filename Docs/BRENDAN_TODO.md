@@ -12,7 +12,7 @@ Testing actions live in `TEST_LIST.md`; first-paying-client onboarding actions l
 
 ## From the 2026-07-02 usage/billing + auth build (F13/F14, branch `feature/usage-billing-auth`)
 
-- [ ] **Review the branch + say GO for the supervised deploy** — deploy checklist in `Operations/handoffs/2026-07-02-usage-billing-auth.md`. Zero migrations; 4 edge fns (get-client-usage NEW, get-blended-rate, invite-client-user NEW, check-reset-eligibility) + frontend. `[B]`
+- [x] **Review the branch + say GO for the supervised deploy** — DONE 2026-07-03: Brendan reviewed + GO'd; DEPLOYED LIVE (6 edge fns, Trigger 20260702.1, frontend, backfill; both trap proofs 9/9 + SQL hand-check exact match; results in the handoff). What remains below is yours.
 - [ ] **Resend SMTP (unlocks reliable invite + client-reset emails):** (1) create a free Resend account; (2) add + verify `buildingflowdigital.com` (Resend shows the DKIM/SPF DNS records to add); (3) create an API key and hand it to Claude — the SMTP config PATCH payload is in the handoff. Until this lands, invites/resets ride Supabase's built-in mailer, which is rate-limited to a few emails an hour and effectively team-members-only. `[B]`
 - [ ] **Confirm the `sms_llm` seed rate** — the per-text sell rate is built from an admin-set "LLM cost per average outbound message", seeded at US$0.003/msg (enabled by default; it does NOT change any blended $/min). Sanity-check against real OpenRouter usage and tune it in the pricing panel. `[B]`
 - [ ] **Set per-client billing anchor day + client visibility toggles** — Sub-Account Config → Cost-to-Price Calculator: pick the billing anchor day (default the 1st) and flip on whichever of rate / minutes / texts / month-total each client may see. All four default OFF. `[B]`
