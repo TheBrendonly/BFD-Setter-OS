@@ -107,3 +107,39 @@ Deno.test("empty / null-ish input never throws", () => {
   assertEquals(lintTextSetterPrompt("").ok, true);
   assertEquals(lintTextSetterPrompt(undefined as unknown as string).ok, true);
 });
+
+// PROMPT-LINT-1 — the save-time lint was itself bypassable by casing/wording
+// variants of the exact content it exists to block (found by the parallel
+// adversarial review of PROMPT-AUTH-1, 2026-07-03).
+
+Deno.test("case-insensitive: PascalCase and ALL-CAPS legacy tool names are rejected", () => {
+  assertEquals(lintTextSetterPrompt("Call `BookAppointment` now.").ok, false);
+  assertEquals(lintTextSetterPrompt("Use GET_AVAILABLE_SLOT to check.").ok, false);
+});
+
+Deno.test("case-insensitive: lowercased legacy template header is rejected", () => {
+  assertEquals(lintTextSetterPrompt("# service functions - text agent workflow").ok, false);
+});
+
+Deno.test("abbreviated weekday range 'Mon-Fri' is rejected", () => {
+  assertEquals(lintTextSetterPrompt("We're open Mon-Fri only, sorry.").ok, false);
+  assertEquals(lintTextSetterPrompt("Available Monday-Friday, no exceptions.").ok, false);
+});
+
+Deno.test("reworded restrictive day policies are rejected", () => {
+  assertEquals(lintTextSetterPrompt("We don't book on Tuesdays.").ok, false);
+  assertEquals(lintTextSetterPrompt("Tuesdays and Wednesdays are the only days we're open.").ok, false);
+});
+
+Deno.test("broadened patterns still let clean copy through with no false positives", () => {
+  const clean = [
+    "# IDENTITY",
+    "You are Alex, the friendly scheduling assistant for Building Flow Digital.",
+    "",
+    "Our team is available to help with onboarding questions on weekdays.",
+    "We can find a time that suits you any day the calendar is open.",
+  ].join("\n");
+  const r = lintTextSetterPrompt(clean);
+  assertEquals(r.ok, true, JSON.stringify(r.errors));
+  assertEquals(r.errors.length, 0);
+});

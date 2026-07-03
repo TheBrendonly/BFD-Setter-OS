@@ -29,17 +29,28 @@ export type LintResult = {
 };
 
 const LEGACY_TOOL_NAMES =
-  /\b(Get_Available_Slot|bookAppointment|createContact|getContactAppointments1|updateAppointment1|cancelAppointment1)\b/;
+  /\b(Get_Available_Slot|bookAppointment|createContact|getContactAppointments1|updateAppointment1|cancelAppointment1)\b/i;
 
 // Hard-coded weekday availability policies. Availability is DATA (the injected
 // live calendar), never prose — any in-prompt day policy can silently override
 // the real calendar, which is exactly the incident.
 const DAY = "(?:mon|tues|wednes|thurs|fri|satur|sun)days?";
+// PROMPT-LINT-1: abbreviated stems (Mon/Tue/Wed/Thu/Fri/Sat/Sun) for the
+// hyphenated-range pattern only — a bare "mon"/"tue" is too short to safely
+// match as a standalone weekday-policy signal, but "Mon-Fri"/"Monday-Friday"
+// as a hyphenated range is unambiguous.
+const DAY_STEM = "(?:mon|tue|wed|thu|fri|sat|sun)\\w*";
 const WEEKDAY_POLICY_PATTERNS: RegExp[] = [
   /available\s+days?\s*(?:\*\*)?\s*:/i,
   new RegExp(`\\b(?:only\\s+(?:book|available|schedule)|book\\s+only|bookings?\\s+only)\\b[^.\\n]*\\b${DAY}\\b`, "i"),
   new RegExp(`\\bwe\\s+(?:only\\s+)?(?:book|do|take)\\b[^.\\n]*\\b${DAY}\\s+only\\b`, "i"),
   new RegExp(`\\b${DAY}\\s+only\\b`, "i"),
+  // PROMPT-LINT-1: hyphenated day ranges, abbreviated or full: "Mon-Fri", "Monday-Friday".
+  new RegExp(`\\b${DAY_STEM}\\s*-\\s*${DAY_STEM}\\b`, "i"),
+  // PROMPT-LINT-1: reworded restrictive phrasing: "don't/do not/never/no book(ings) on <day>".
+  new RegExp(`\\b(?:don'?t|do\\s+not|never|no)\\s+(?:book|schedule|take\\s+bookings?)\\b[^.\\n]*\\b${DAY}\\b`, "i"),
+  // PROMPT-LINT-1: day-list-first "only days" phrasing: "Tuesdays and Wednesdays are the only days...".
+  new RegExp(`\\b${DAY}(?:\\s*(?:,|and)\\s*${DAY})*\\s+(?:are\\s+)?(?:the\\s+)?only\\s+days?\\b`, "i"),
 ];
 
 // Canned example bookings ("Booked for this Thursday at 2pm") teach a weak model
@@ -104,7 +115,7 @@ export function lintTextSetterPrompt(text: string): LintResult {
       }
     }
 
-    if (/^# SERVICE FUNCTIONS - TEXT AGENT WORKFLOW/.test(line)) {
+    if (/^# SERVICE FUNCTIONS - TEXT AGENT WORKFLOW/i.test(line)) {
       add(
         "error",
         "legacy-booking-template",

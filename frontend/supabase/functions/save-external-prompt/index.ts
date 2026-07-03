@@ -57,16 +57,33 @@ Deno.serve(async (req) => {
     // Retell-interpolated {{...}} tokens legitimately). Errors block the save
     // BEFORE any write, with exact line numbers so the operator can fix them in
     // the UI. Warnings never block; they ride back on the success response.
+    //
+    // PROMPT-LINT-1: also lint the followup instruction fields — a stale
+    // weekday policy or legacy tool name is just as dangerous there as in the
+    // main prompt, but they were previously never scanned at all.
     let lintWarnings: LintFinding[] = [];
     if (!isVoice) {
       const lint = lintTextSetterPrompt(fullConsolidatedPrompt);
-      lintWarnings = lint.warnings;
-      if (!lint.ok) {
+      let lintErrors: LintFinding[] = [...lint.errors];
+      lintWarnings = [...lint.warnings];
+
+      const followupFields: Array<[string, string | undefined]> = [
+        ["followup_instructions", agent_settings?.followup_instructions],
+        ["followup_cancellation_instructions", agent_settings?.followup_cancellation_instructions],
+      ];
+      for (const [field, value] of followupFields) {
+        if (!value) continue;
+        const fieldLint = lintTextSetterPrompt(value);
+        lintErrors = lintErrors.concat(fieldLint.errors.map((e) => ({ ...e, rule: `${field}.${e.rule}` })));
+        lintWarnings = lintWarnings.concat(fieldLint.warnings.map((w) => ({ ...w, rule: `${field}.${w.rule}` })));
+      }
+
+      if (lintErrors.length > 0) {
         return new Response(
           JSON.stringify({
             error: "Prompt failed save-time lint. Fix the flagged lines and save again — none of this content was saved.",
-            lint_errors: lint.errors,
-            lint_warnings: lint.warnings,
+            lint_errors: lintErrors,
+            lint_warnings: lintWarnings,
           }),
           { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );

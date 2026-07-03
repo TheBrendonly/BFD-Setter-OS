@@ -118,7 +118,9 @@ async function main() {
       rows = await externalGet(
         client.supabase_url,
         client.supabase_service_key,
-        "text_prompts?select=card_name,system_prompt,updated_at",
+        // PROMPT-LINT-1: also fetch the followup fields so they get linted too —
+        // they were previously never selected or scanned by this report.
+        "text_prompts?select=card_name,system_prompt,updated_at,followup_instructions,followup_cancellation_instructions",
       );
     } catch (err) {
       console.log(`client ${client.id}: SKIP (${err.message})`);
@@ -128,16 +130,35 @@ async function main() {
       const stored = row.system_prompt || "";
       const lint = lintTextSetterPrompt(stored);
       const { proposed, removed, region } = buildProposedPrompt(stored);
-      const clean = lint.ok && lint.warnings.length === 0 && removed === 0;
+
+      // PROMPT-LINT-1: fold the followup fields' lint findings in, tagged by
+      // field, so a reworded day-restriction hiding there doesn't get a false
+      // CLEAN verdict.
+      const followupFields = [
+        ["followup_instructions", row.followup_instructions],
+        ["followup_cancellation_instructions", row.followup_cancellation_instructions],
+      ];
+      const followupErrors = [];
+      const followupWarnings = [];
+      for (const [field, value] of followupFields) {
+        if (!value) continue;
+        const fieldLint = lintTextSetterPrompt(value);
+        followupErrors.push(...fieldLint.errors.map((e) => ({ ...e, rule: `${field}.${e.rule}` })));
+        followupWarnings.push(...fieldLint.warnings.map((w) => ({ ...w, rule: `${field}.${w.rule}` })));
+      }
+      const allErrors = [...lint.errors, ...followupErrors];
+      const allWarnings = [...lint.warnings, ...followupWarnings];
+
+      const clean = allErrors.length === 0 && allWarnings.length === 0 && removed === 0;
       const status = clean ? "CLEAN" : "NEEDS MIGRATION";
       if (!clean) flagged++;
       console.log(
         `client ${client.id} / ${row.card_name}: ${status} ` +
-          `(${stored.split("\n").length} lines, ${lint.errors.length} errors, ${lint.warnings.length} warnings` +
+          `(${stored.split("\n").length} lines, ${allErrors.length} errors, ${allWarnings.length} warnings` +
           `${removed ? `, legacy booking region lines ${region.start + 1}-${region.end} [${removed} lines]` : ""})`,
       );
-      if (lint.errors.length) console.log(formatFindings(lint.errors));
-      if (lint.warnings.length) console.log(formatFindings(lint.warnings));
+      if (allErrors.length) console.log(formatFindings(allErrors));
+      if (allWarnings.length) console.log(formatFindings(allWarnings));
 
       if (outDir && !clean) {
         const base = `${client.id}_${row.card_name}`.replace(/[^A-Za-z0-9_-]/g, "_");
@@ -153,10 +174,10 @@ async function main() {
             `Proposed: ${proposed.split("\n").length} lines / ${proposed.length} chars` +
               (removed ? ` (legacy booking region removed: stored lines ${region.start + 1}-${region.end}, ${removed} lines).` : `.`),
             ``,
-            `## Lint findings on the STORED prompt`,
-            lint.errors.length || lint.warnings.length ? formatFindings([...lint.errors, ...lint.warnings]) : `  (none)`,
+            `## Lint findings on the STORED prompt (system_prompt + followup fields)`,
+            allErrors.length || allWarnings.length ? formatFindings([...allErrors, ...allWarnings]) : `  (none)`,
             ``,
-            `## Lint on the PROPOSED prompt`,
+            `## Lint on the PROPOSED prompt (system_prompt only — followup fields are unaffected by this script)`,
             proposedLint.errors.length || proposedLint.warnings.length
               ? formatFindings([...proposedLint.errors, ...proposedLint.warnings])
               : `  (clean)`,
