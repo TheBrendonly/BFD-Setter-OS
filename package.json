@@ -16,7 +16,8 @@
     "dev": "npx trigger.dev@latest dev",
     "deploy": "npx trigger.dev@latest deploy",
     "test:node": "node --experimental-strip-types --test trigger/_shared/*.test.ts",
+    "test:frontend": "node --experimental-strip-types --test frontend/src/lib/*.test.ts",
     "test:edge": "deno test --no-check frontend/supabase/functions/",
-    "test": "npm run test:node && npm run test:edge"
+    "test": "npm run test:node && npm run test:frontend && npm run test:edge"
   }
 }

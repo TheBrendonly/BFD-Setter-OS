@@ -10,7 +10,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { StatusTag } from '@/components/StatusTag';
-import { isKnownOpenRouterModelId } from '@/lib/isKnownOpenRouterModel';
+import { findKnownOpenRouterModelId } from '@/lib/isKnownOpenRouterModel';
 
 const POPULAR_MODELS = [
   { id: 'google/gemini-2.5-pro', name: 'Gemini 2.5 Pro', provider: 'Google' },
@@ -90,22 +90,9 @@ export function OpenRouterModelSelector({ value, onChange, isSavedConfigured, di
     else { setSearch(''); setPendingCustom(null); }
   }, [open]);
 
-  // MODEL-1-HARDENING: both "use as custom model" actions used to call
-  // onChange(search) directly with zero check against the fetched model list,
-  // so any slash-containing string (e.g. the invalid google/gemini-flash-latest
-  // that once silently broke every AI engine) reached clients.llm_model
-  // unchecked. Known ids are accepted immediately; anything else requires an
-  // explicit "use anyway" confirmation instead of a single click.
-  const handleUseCustom = (candidate: string) => {
-    const trimmed = candidate.trim();
-    if (!trimmed) return;
-    if (isKnownOpenRouterModelId(trimmed, allModels)) {
-      onChange(trimmed);
-      setOpen(false);
-      return;
-    }
-    setPendingCustom(trimmed);
-  };
+  // A pending "use anyway" warning is only meaningful for the search text it was
+  // raised for — clear it when the user keeps typing.
+  useEffect(() => { setPendingCustom(null); }, [search]);
 
   const allModels = useMemo(() => {
     if (remoteModels.length > 0) {
@@ -117,6 +104,26 @@ export function OpenRouterModelSelector({ value, onChange, isSavedConfigured, di
     }
     return POPULAR_MODELS;
   }, [remoteModels]);
+
+  // MODEL-1-HARDENING: both "use as custom model" actions used to call
+  // onChange(search) directly with zero check against the fetched model list,
+  // so any slash-containing string (e.g. the invalid google/gemini-flash-latest
+  // that once silently broke every AI engine) reached clients.llm_model
+  // unchecked. Known ids are accepted immediately — as the CANONICAL list id,
+  // since OpenRouter ids are case-sensitive lowercase slugs and echoing the
+  // user's casing would recreate the same silent-400 class. Anything else
+  // requires an explicit "use anyway" confirmation instead of a single click.
+  const handleUseCustom = (candidate: string) => {
+    const trimmed = candidate.trim();
+    if (!trimmed) return;
+    const canonical = findKnownOpenRouterModelId(trimmed, allModels);
+    if (canonical) {
+      onChange(canonical);
+      setOpen(false);
+      return;
+    }
+    setPendingCustom(trimmed);
+  };
 
   const filtered = useMemo(() => {
     if (!search.trim()) return allModels.slice(0, visibleCount);

@@ -582,7 +582,7 @@ const ApiCredentials = () => {
         // OpenRouterModelSelector's confirm gate is ever bypassed or the field
         // is wired elsewhere. An invalid model id (no provider/model shape)
         // silently 400s every AI-driven engine for this client.
-        if (!/^[^/\s]+\/[^/\s]+/.test(llmModel)) {
+        if (!/^[^/\s]+\/\S+$/.test(llmModel)) {
           toast({
             title: "Invalid model ID",
             description: "Model ID must look like provider/model (e.g. google/gemini-2.5-flash).",
