@@ -61,8 +61,15 @@ Deno.serve(async (req) => {
     const results = await Promise.all([
       check("retell", async () => {
         if (!c.retell_api_key) return { ok: false, detail: "No API key set" };
-        const r = await fetch("https://api.retellai.com/list-agents", {
-          headers: { Authorization: `Bearer ${c.retell_api_key}` },
+        // API-DEPR-1: legacy GET /list-agents is deprecated (removal 07/31/2026);
+        // the v2 POST with limit 1 is the cheapest authenticated liveness probe.
+        const r = await fetch("https://api.retellai.com/v2/list-agents", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${c.retell_api_key}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ limit: 1 }),
         });
         return { ok: r.ok, detail: r.ok ? "Connected" : `HTTP ${r.status}` };
       }),

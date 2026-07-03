@@ -1268,9 +1268,30 @@ Deno.serve(async (req) => {
 
     switch (action) {
       // ===== AGENTS =====
-      case "list-agents":
-        result = await retellFetch(apiKey, "GET", "list-agents");
+      case "list-agents": {
+        // API-DEPR-1: legacy GET /list-agents is deprecated (removal 07/31/2026)
+        // in favour of POST /v2/list-agents. The v2 list returns a SLIM summary
+        // (no version/is_published/response_engine/...), but consumers
+        // (RetellAgentsTab) render the full agent shape — so hydrate each unique
+        // agent via get-agent (latest version). Live-verified 2026-07-03: v2
+        // returns { items, has_more }; legacy returned version-EXPANDED rows
+        // capped at 100 (only 8 unique agents made the cap on the BFD account),
+        // so one-full-row-per-agent is strictly more complete for the tab.
+        const slim = unwrapList(
+          await retellFetch(apiKey, "POST", "v2/list-agents", { limit: 1000 })
+        );
+        const ids = [
+          ...new Set(
+            (Array.isArray(slim) ? slim : [])
+              .map((a) => (a as { agent_id?: string }).agent_id)
+              .filter((id): id is string => typeof id === "string" && id.length > 0)
+          ),
+        ];
+        result = await Promise.all(
+          ids.map((id) => retellFetch(apiKey, "GET", `get-agent/${id}`))
+        );
         break;
+      }
 
       case "get-agent":
         if (!params.agentId) throw new Error("agentId is required");
