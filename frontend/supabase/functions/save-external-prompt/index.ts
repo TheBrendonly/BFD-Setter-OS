@@ -1,5 +1,6 @@
 import { createClient } from "npm:@supabase/supabase-js@2.101.0";
 import { authorizeClientRequest, AssertAccessError } from "../_shared/authorize-client-request.ts";
+import { lintTextSetterPrompt, type LintFinding } from "../_shared/promptLint.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -51,6 +52,26 @@ Deno.serve(async (req) => {
     const normalizedCardName = card_name.replace(/^Voice-Setter-/, 'Setter-');
 
     const isVoice = channel === 'voice';
+
+    // ── PROMPT-AUTH-1: save-time lint (TEXT channel only — voice prompts use
+    // Retell-interpolated {{...}} tokens legitimately). Errors block the save
+    // BEFORE any write, with exact line numbers so the operator can fix them in
+    // the UI. Warnings never block; they ride back on the success response.
+    let lintWarnings: LintFinding[] = [];
+    if (!isVoice) {
+      const lint = lintTextSetterPrompt(fullConsolidatedPrompt);
+      lintWarnings = lint.warnings;
+      if (!lint.ok) {
+        return new Response(
+          JSON.stringify({
+            error: "Prompt failed save-time lint. Fix the flagged lines and save again — none of this content was saved.",
+            lint_errors: lint.errors,
+            lint_warnings: lint.warnings,
+          }),
+          { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    }
     // Try new table names first, fall back to legacy 'prompts' for text channel
     const primaryTable = isVoice ? 'voice_prompts' : 'text_prompts';
     const fallbackTable = isVoice ? null : 'prompts'; // legacy fallback for text only
@@ -235,8 +256,34 @@ Deno.serve(async (req) => {
 
     console.log(`✅ External prompt saved to ${resolvedTable}: ${result.action} ${normalizedCardName}`);
 
+    // ── PROMPT-AUTH-1 (Q9): snapshot every deploy to platform prompt_versions so
+    // the runtime artifact has an audit trail ("when did rule X enter this
+    // prompt?") and a rollback source. Non-fatal — a snapshot hiccup must never
+    // break the save.
+    try {
+      const { data: latest } = await internalSupabase
+        .from("prompt_versions")
+        .select("version_number")
+        .eq("client_id", client_id)
+        .eq("slot_id", card_name)
+        .order("version_number", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      const nextVersion = ((latest?.version_number as number | null) ?? 0) + 1;
+      const { error: snapshotError } = await internalSupabase.from("prompt_versions").insert({
+        client_id,
+        slot_id: card_name,
+        version_number: nextVersion,
+        prompt_content: fullConsolidatedPrompt,
+        label: "deploy",
+      });
+      if (snapshotError) console.warn("prompt_versions snapshot failed:", snapshotError.message);
+    } catch (snapshotErr) {
+      console.warn("prompt_versions snapshot failed:", (snapshotErr as Error)?.message);
+    }
+
     return new Response(
-      JSON.stringify({ success: true, ...result }),
+      JSON.stringify({ success: true, ...result, lint_warnings: lintWarnings }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err) {

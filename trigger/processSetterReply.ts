@@ -23,7 +23,7 @@
 
 import { task } from "@trigger.dev/sdk";
 import { createClient } from "@supabase/supabase-js";
-import { SETTER_TOOLS, SETTER_TOOL_NAMES, TOOL_USAGE_INSTRUCTION } from "./_shared/setterTools.ts";
+import { MULTI_MESSAGE_INSTRUCTION, SETTER_TOOLS, SETTER_TOOL_NAMES, TOOL_USAGE_INSTRUCTION } from "./_shared/setterTools.ts";
 import { normalizeLlmModel } from "./_shared/llmModel.ts";
 import { persistToolInvocations } from "./_shared/persistToolInvocations.ts";
 import { prefetchAvailability, buildAvailabilityBlock } from "./_shared/prefetchSlots.ts";
@@ -101,8 +101,6 @@ function parseSetterMessages(raw: string): string[] {
 
   return [trimmed];
 }
-
-const MULTI_MESSAGE_INSTRUCTION = `\n\n## Output format (REQUIRED)\nRespond with ONLY a single JSON object — no markdown, no code fences, no preamble:\n{"messages": ["first reply", "second reply if needed"]}\n\nRules:\n- One element if a single SMS is enough; up to 3 elements when the natural reply needs to be broken into separate SMS\n- Each element is a complete SMS by itself\n- Do not include any text outside the JSON\n- Plain text — no JSON inside the message strings`;
 
 type ChatHistoryRow = {
   message: { type: string; content: string } | null;

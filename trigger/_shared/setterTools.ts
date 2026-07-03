@@ -156,6 +156,11 @@ export const SETTER_TOOL_NAMES: ReadonlySet<string> = new Set(
   SETTER_TOOLS.map((t) => t.function.name),
 );
 
+// Output-format instruction appended to the setter's system prompt each turn.
+// Lives here (not in processSetterReply) so the frontend X-Ray mirror can be
+// byte-equality-tested against it (PROMPT-AUTH-1).
+export const MULTI_MESSAGE_INSTRUCTION = `\n\n## Output format (REQUIRED)\nRespond with ONLY a single JSON object — no markdown, no code fences, no preamble:\n{"messages": ["first reply", "second reply if needed"]}\n\nRules:\n- One element if a single SMS is enough; up to 3 elements when the natural reply needs to be broken into separate SMS\n- Each element is a complete SMS by itself\n- Do not include any text outside the JSON\n- Plain text — no JSON inside the message strings`;
+
 // Code-side system addendum appended to the setter's system prompt (sibling to
 // MULTI_MESSAGE_INSTRUCTION). This is NOT a stored-prompt edit — voice/text
 // prompts stay report-only; tool guidance lives in code and the schemas ride

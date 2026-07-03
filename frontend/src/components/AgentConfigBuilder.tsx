@@ -48,6 +48,13 @@ import {
 } from '@/data/voiceSetterConfigParameters';
 import { segmentsToText, SEGMENT_JOIN, SUB_SEGMENT_JOIN, type PromptSegment, type PromptSubSegment, type SegmentTarget } from '@/lib/promptSegments';
 import { buildDynamicVarsBlock } from '@/data/retellDynamicVarsBlock';
+import {
+  MULTI_MESSAGE_INSTRUCTION as TEXT_MULTI_MESSAGE_INSTRUCTION,
+  TOOL_USAGE_INSTRUCTION as TEXT_TOOL_USAGE_INSTRUCTION,
+  SAMPLE_LEAD_CONTEXT,
+  SAMPLE_AVAILABILITY_BLOCK,
+  SAMPLE_TIME_ANCHOR_BLOCK,
+} from '@/data/textEngineRuntimeBlocks';
 import { FullPromptXRay } from '@/components/FullPromptXRay';
 
 // ── LLM Options ──
@@ -457,6 +464,16 @@ export const AgentConfigBuilder: React.FC<AgentConfigBuilderProps> = ({
   const [activeLayer, setActiveLayer] = useState<CoreLayerId | null>('settings');
   const [activeSubsection, setActiveSubsection] = useState<string | null>(null);
   const [showFullPromptDialog, setShowFullPromptDialog] = useState(false);
+  // PROMPT-AUTH-1: the LIVE stored prompt (external text_prompts row) shown in the
+  // verify dialog, so divergence between the editor compile and what the engine
+  // actually reads is visible instead of silent.
+  const [livePromptView, setLivePromptView] = useState<{
+    status: 'idle' | 'loading' | 'loaded' | 'error';
+    prompt?: string;
+    updatedAt?: string | null;
+    found?: boolean;
+    error?: string;
+  }>({ status: 'idle' });
   // Client timezone for the read-only DYNAMIC VARIABLES x-ray segment (voice only) —
   // same source + default as retell-proxy (clients.timezone, Australia/Sydney).
   const [clientTimezone, setClientTimezone] = useState('Australia/Sydney');
@@ -3072,32 +3089,66 @@ export const AgentConfigBuilder: React.FC<AgentConfigBuilderProps> = ({
     return output;
   }
 
+  // Compute the current { persona, content } halves (same logic as buildPromptFromConfigs
+  // in the parent). Used by the imperative getter below and by the live-stored-prompt
+  // comparison in the verify dialog (save-external-prompt stores persona + content
+  // joined by the same separator).
+  const computePromptHalves = () => {
+    const output = buildParentConfigOutput();
+    const fullPrompt = output['__full_prompt__']?.customContent || '';
+    const personaKeys = ['agent_name', 'agent_goal', 'identity_behavior', 'personality', 'communication_tone', 'grammar_style'];
+    const SECTION_SEPARATOR = '\n\n── ── ── ── ── ── ── ── ── ── ── ── ── ──\n\n';
+    const personaParts: string[] = [];
+    for (const key of personaKeys) {
+      const config = localConfigs[key];
+      if (!config?.customContent?.trim()) continue;
+      if (key === 'personality') {
+        try {
+          const parsed = JSON.parse(config.customContent);
+          if (parsed.prompt?.trim()) personaParts.push(parsed.prompt.trim());
+        } catch { personaParts.push(config.customContent.trim()); }
+      } else {
+        personaParts.push(config.customContent.trim());
+      }
+    }
+    return { persona: personaParts.join(SECTION_SEPARATOR), content: fullPrompt };
+  };
+
   // ── Expose imperative getter for the current full prompt ──
   useEffect(() => {
     if (getFullPromptRef) {
-      getFullPromptRef.current = () => {
-        const output = buildParentConfigOutput();
-        const fullPrompt = output['__full_prompt__']?.customContent || '';
-        // Build persona from the config sections (same logic as buildPromptFromConfigs in parent)
-        const personaKeys = ['agent_name', 'agent_goal', 'identity_behavior', 'personality', 'communication_tone', 'grammar_style'];
-        const SECTION_SEPARATOR = '\n\n── ── ── ── ── ── ── ── ── ── ── ── ── ──\n\n';
-        const personaParts: string[] = [];
-        for (const key of personaKeys) {
-          const config = localConfigs[key];
-          if (!config?.customContent?.trim()) continue;
-          if (key === 'personality') {
-            try {
-              const parsed = JSON.parse(config.customContent);
-              if (parsed.prompt?.trim()) personaParts.push(parsed.prompt.trim());
-            } catch { personaParts.push(config.customContent.trim()); }
-          } else {
-            personaParts.push(config.customContent.trim());
-          }
-        }
-        return { persona: personaParts.join(SECTION_SEPARATOR), content: fullPrompt };
-      };
+      getFullPromptRef.current = computePromptHalves;
     }
   });
+
+  // PROMPT-AUTH-1: fetch the LIVE stored external prompt for the verify dialog.
+  const fetchLiveStoredPrompt = async () => {
+    if (!clientId || !slotId) return;
+    setLivePromptView({ status: 'loading' });
+    try {
+      const { data, error } = await supabase.functions.invoke('get-external-prompt', {
+        body: { client_id: clientId, card_name: slotId, channel: mode },
+      });
+      if (error) throw new Error(error.message);
+      if (data?.error) throw new Error(data.error);
+      setLivePromptView({
+        status: 'loaded',
+        prompt: (data?.system_prompt as string) ?? '',
+        updatedAt: (data?.updated_at as string | null) ?? null,
+        found: Boolean(data?.found),
+      });
+    } catch (e) {
+      setLivePromptView({ status: 'error', error: (e as Error)?.message || 'Failed to load' });
+    }
+  };
+
+  // The blob save-external-prompt would write for the CURRENT editor state.
+  const expectedStoredPrompt = () => {
+    const { persona, content } = computePromptHalves();
+    const SAVE_SEPARATOR = '\n\n── ── ── ── ── ── ── ── ── ── ── ── ── ──\n\n';
+    return [persona.trim(), content.trim()].filter(Boolean).join(SAVE_SEPARATOR);
+  };
+  const normalizeForCompare = (s: string) => s.replace(/\r\n/g, '\n').trim();
 
   const userHasInteractedRef = useRef(false);
   const initialSnapshotRef = useRef<string>('');
@@ -3241,11 +3292,54 @@ export const AgentConfigBuilder: React.FC<AgentConfigBuilderProps> = ({
     return map;
   }, [fullPromptSegments]);
 
-  // Segments appended at push/call time (voice only) — shown read-only in the x-ray so the
-  // TRUE final prompt that hits the LLM is visible. Mirrors PromptManagement handleSavePrompt
-  // (booking append, truthiness check not trim) + retell-proxy's DYNAMIC_VARS_BLOCK.
+  // Segments appended at push/call time — shown read-only in the x-ray so the
+  // TRUE final prompt that hits the LLM is visible. Voice: mirrors PromptManagement
+  // handleSavePrompt (booking append, truthiness check not trim) + retell-proxy's
+  // DYNAMIC_VARS_BLOCK. Text (PROMPT-AUTH-1): mirrors processSetterReply's runtime
+  // assembly order — Lead Context, output-format + tool instructions, then the
+  // per-turn availability map and current-time anchor (samples; real values are
+  // generated fresh each turn).
   const callTimeSegments = useMemo<PromptSegment[]>(() => {
-    if (mode !== 'voice') return [];
+    if (mode !== 'voice') {
+      const readonlyTarget = { kind: 'readonly' as const, label: 'Added at runtime each turn' };
+      return [
+        {
+          id: 'runtime:lead-context',
+          title: 'Lead Context (auto-injected each turn — sample values)',
+          text: SAMPLE_LEAD_CONTEXT,
+          source: 'push-append',
+          target: readonlyTarget,
+        },
+        {
+          id: 'runtime:output-format',
+          title: 'Output Format (code-owned, every turn)',
+          text: TEXT_MULTI_MESSAGE_INSTRUCTION.trim(),
+          source: 'push-append',
+          target: readonlyTarget,
+        },
+        {
+          id: 'runtime:tool-usage',
+          title: 'Booking Tools Instruction (code-owned, every turn)',
+          text: TEXT_TOOL_USAGE_INSTRUCTION.trim(),
+          source: 'push-append',
+          target: readonlyTarget,
+        },
+        {
+          id: 'runtime:availability',
+          title: 'Live Calendar Availability (fetched fresh each turn — sample)',
+          text: SAMPLE_AVAILABILITY_BLOCK,
+          source: 'push-append',
+          target: readonlyTarget,
+        },
+        {
+          id: 'runtime:time-anchor',
+          title: 'Current Date & Time Anchor (computed fresh each turn — sample)',
+          text: SAMPLE_TIME_ANCHOR_BLOCK,
+          source: 'push-append',
+          target: readonlyTarget,
+        },
+      ];
+    }
     const segs: PromptSegment[] = [];
     if (agentSettings?.booking_function_enabled && agentSettings?.booking_prompt) {
       segs.push({
@@ -3896,11 +3990,11 @@ export const AgentConfigBuilder: React.FC<AgentConfigBuilderProps> = ({
                                   type="button"
                                   onClick={() => {
                                     const newVal = !agentSettings.booking_function_enabled;
-                                    const updates: Record<string, any> = { booking_function_enabled: newVal };
-                                    if (newVal && !agentSettings.booking_prompt) {
-                                      updates.booking_prompt = DEFAULT_BOOKING_PROMPT;
-                                    }
-                                    onAgentSettingsChange(updates);
+                                    // PROMPT-AUTH-1: no auto-seed on toggle-on. Booking mechanics are
+                                    // code-owned at runtime; the booking prompt is optional flavor the
+                                    // operator adds deliberately ("Return to Default" offers the minimal
+                                    // template).
+                                    onAgentSettingsChange({ booking_function_enabled: newVal });
                                   }}
                                   className={cn(
                                     'text-left p-3 transition-colors duration-100 groove-border relative bg-card w-full',
@@ -4880,13 +4974,64 @@ export const AgentConfigBuilder: React.FC<AgentConfigBuilderProps> = ({
             </p>
           </DialogHeader>
 
-          <div className="flex-1 min-h-0 px-6 pb-2 flex flex-col" style={{ paddingTop: '24px' }}>
+          <div className="flex-1 min-h-0 px-6 pb-2 flex flex-col overflow-y-auto" style={{ paddingTop: '24px' }}>
             <FullPromptXRay
               segments={fullPromptSegments}
               callTimeSegments={callTimeSegments}
               onNavigate={navigateToSegment}
-              maxHeight="100%"
+              maxHeight={mode !== 'voice' && livePromptView.status === 'loaded' ? '45%' : '100%'}
             />
+            {/* PROMPT-AUTH-1: live stored prompt (what the text engine actually reads) */}
+            {mode !== 'voice' && clientId && slotId && (
+              <div className="mt-3 space-y-2">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Button
+                    type="button"
+                    variant="default"
+                    size="sm"
+                    onClick={() => void fetchLiveStoredPrompt()}
+                    disabled={livePromptView.status === 'loading'}
+                    className="h-8 font-medium"
+                  >
+                    {livePromptView.status === 'loading' ? 'LOADING…' : livePromptView.status === 'loaded' ? 'RELOAD LIVE STORED PROMPT' : 'LOAD LIVE STORED PROMPT (CLIENT DB)'}
+                  </Button>
+                  {livePromptView.status === 'loaded' && livePromptView.found && (
+                    normalizeForCompare(livePromptView.prompt || '') === normalizeForCompare(expectedStoredPrompt()) ? (
+                      <span className="px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-600 border border-emerald-500/30" style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '11px' }}>
+                        MATCHES THE EDITOR'S COMPILED PROMPT
+                      </span>
+                    ) : (
+                      <span className="px-2 py-0.5 rounded bg-amber-500/15 text-amber-600 border border-amber-500/30" style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '11px' }}>
+                        DIFFERS FROM THE EDITOR — THE ENGINE USES THIS STORED TEXT
+                      </span>
+                    )
+                  )}
+                  {livePromptView.status === 'loaded' && livePromptView.updatedAt && (
+                    <span className="text-muted-foreground" style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '11px' }}>
+                      stored {new Date(livePromptView.updatedAt).toLocaleString()}
+                    </span>
+                  )}
+                </div>
+                {livePromptView.status === 'error' && (
+                  <p className="text-destructive m-0" style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '12px' }}>
+                    Failed to load the live stored prompt: {livePromptView.error}
+                  </p>
+                )}
+                {livePromptView.status === 'loaded' && !livePromptView.found && (
+                  <p className="text-muted-foreground m-0" style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '12px' }}>
+                    No stored prompt row exists yet for this setter in the client DB.
+                  </p>
+                )}
+                {livePromptView.status === 'loaded' && livePromptView.found && (
+                  <div className="groove-border bg-card p-3 overflow-y-auto" style={{ maxHeight: '40vh' }}>
+                    <p className="text-muted-foreground mt-0 mb-2" style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '11px' }}>
+                      LIVE STORED PROMPT ({(livePromptView.prompt || '').length.toLocaleString()} chars, {((livePromptView.prompt || '').split('\n').length).toLocaleString()} lines). This is the exact text the text engine reads at runtime; the runtime blocks above are appended to it each turn.
+                    </p>
+                    <pre className="whitespace-pre-wrap break-words m-0" style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '13px', lineHeight: '1.6' }}>{livePromptView.prompt}</pre>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
           <div className="px-6 pb-6 flex gap-2">
             <Button
