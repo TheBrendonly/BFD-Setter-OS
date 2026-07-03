@@ -5,6 +5,10 @@ import { claimSend, releaseSend } from "./_shared/sendClaim";
 import { normalizePhone } from "./_shared/phone";
 import { isPhoneOptedOut } from "./_shared/optout";
 import { normalizeLlmModel } from "./_shared/llmModel";
+import { resolveClientTimeZone, buildTimeAnchorBlock } from "./_shared/timeAnchor";
+import { prefetchAvailability, buildAvailabilityBlock } from "./_shared/prefetchSlots";
+import { buildFollowupUserMessage } from "./_shared/buildFollowupContext";
+import type { CallTool } from "./_shared/setterToolLoop";
 
 const getMainSupabase = () =>
   createClient(
@@ -148,7 +152,7 @@ export const sendFollowup = task({
     // ── STEP 3: Fetch client config ───────────────────────────────────────────
     const { data: client } = await supabase
       .from("clients")
-      .select("openrouter_api_key, llm_model, supabase_url, supabase_service_key, twilio_account_sid, twilio_auth_token, retell_phone_1, twilio_default_phone, ghl_api_key, ghl_location_id, ghl_conversation_provider_id")
+      .select("openrouter_api_key, llm_model, supabase_url, supabase_service_key, twilio_account_sid, twilio_auth_token, retell_phone_1, twilio_default_phone, ghl_api_key, ghl_location_id, ghl_conversation_provider_id, intake_lead_secret, timezone")
       .eq("id", client_id)
       .single();
 
@@ -230,20 +234,46 @@ export const sendFollowup = task({
       ...allConditions.map((c) => `- ${c}`),
     ].join("\n");
 
-    const userMessage = [
-      setterPrompt ? `## Setter Prompt\n${setterPrompt}` : "",
-      `## Conversation History\n${chatHistoryText}`,
+    // FOLLOWUP-PROMPT-1: the follow-up channel read the same stale-prone
+    // text_prompts.system_prompt as the live-reply path but had none of its
+    // anti-fabrication protections (no current-time anchor, no live-calendar
+    // prefetch), so a stale day policy or a dead {{ $now }} token could still
+    // produce fabricated scheduling copy here, unwatched. There is no booking
+    // tool loop in this file (follow-ups never call book-appointments), so no
+    // slot-binding validator is needed — only the anchor + availability data.
+    const clientTimeZone = resolveClientTimeZone(client.timezone as string | null);
+    const supabaseUrl = process.env.SUPABASE_URL!;
+    const toolEndpoint = `${supabaseUrl}/functions/v1/voice-booking-tools`;
+    const followupCallTool: CallTool = async (name, toolArgs) => {
+      const url = `${toolEndpoint}?tool=${encodeURIComponent(name)}&clientId=${encodeURIComponent(client_id)}`;
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      const intakeSecret = client.intake_lead_secret as string | null;
+      if (intakeSecret) headers.Authorization = `Bearer ${intakeSecret}`;
+      const resp = await fetch(url, { method: "POST", headers, body: JSON.stringify(toolArgs) });
+      const json = (await resp.json().catch(() => null)) as { ok?: boolean; result?: unknown; error?: string } | null;
+      if (!resp.ok || (json && json.ok === false)) {
+        throw new Error((json && json.error) || `HTTP ${resp.status}`);
+      }
+      return json && typeof json === "object" && "result" in json ? json.result : json;
+    };
+    const followupNowMs = Date.now();
+    const followupPrefetch = await prefetchAvailability({
+      callTool: followupCallTool,
+      timeZone: clientTimeZone,
+      nowMs: followupNowMs,
+    });
+    const availabilityBlock = buildAvailabilityBlock(followupPrefetch);
+    const timeAnchorBlock = buildTimeAnchorBlock(clientTimeZone, followupNowMs);
+
+    const userMessage = buildFollowupUserMessage({
+      setterPrompt,
+      availabilityBlock,
+      timeAnchorBlock,
+      chatHistoryText,
       cancellationSection,
-      followupInstructions
-        ? `## Follow-up Instructions (apply these only if you decide to follow up)\n${followupInstructions}`
-        : "",
-      sequenceIndex > 1
-        ? `## Note\nThis is follow-up attempt #${sequenceIndex}. The lead has not responded to the previous follow-up(s). If you still decide to send one, be slightly more direct — but do not be pushy.`
-        : "",
-      "## Task\nAnalyze the conversation and return JSON as instructed in the system prompt.",
-    ]
-      .filter(Boolean)
-      .join("\n\n");
+      followupInstructions,
+      sequenceIndex,
+    });
 
     console.log(`Running follow-up decision #${sequenceIndex} for contact ${lead_id} using ${model}`);
 
