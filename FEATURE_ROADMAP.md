@@ -2,7 +2,7 @@
 
 Features to build, in rough priority order. Reconciled 2026-06-25 with Brendan.
 
-- **Companion lists:** bugs → `Docs/BUG_LIST.md` · your manual actions → `Docs/BRENDAN_TODO.md` · verify-after-build → `Docs/TEST_LIST.md` · deferred/gated features → `Docs/DEFERRED.md`.
+- **Companion lists:** bugs → `Docs/BUG_LIST.md` · your manual actions → `Docs/BRENDAN_TODO.md` · verify-after-build → `Docs/TEST_LIST.md` · deferred/gated features → `Docs/DEFERRED.md` · prompt-content edits (you apply via the UI) → `Docs/PROMPT_UPDATE_LIST.md`.
 - **Status:** `[ ]` planned · `[~]` partly built · `[x]` shipped (move to `Docs/archive/COMPLETED_LOG.md` + note in `Docs/ROADMAP.md`).
 - All items are **CODE**. When one ships, move it out and add a TEST_LIST entry for live verification.
 

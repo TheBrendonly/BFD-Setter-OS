@@ -4,8 +4,9 @@
 // Upstream lineage: structure inherited from the upstream OSS project at
 // github.com/genokadzin/1prompt-os. BFD applied a pure name swap on
 // 2026-05-14 to align persona, founder, and product names with the
-// BFD-setter / Building Flow / Gary brand hierarchy. Live BFD setters
-// live in bfdTextSetterPrompt.ts and bfdVoiceSetterPrompt.ts; the
+// BFD-setter / Building Flow / Gary brand hierarchy. Live setter prompts
+// live in the client's external text_prompts rows (bfdTextSetterPrompt.ts
+// and its deploy script were retired 2026-07-03, PROMPT-AUTH-1); the
 // templates below are admin-UI defaults only.
 
 export interface PromptSlotConfig {

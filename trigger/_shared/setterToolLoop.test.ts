@@ -218,3 +218,88 @@ test("unknown tool name => folded as an error result, callTool not invoked for i
   assert.equal(toolRan, false);
   assert.match(String(r.toolInvocations[0].error), /unknown tool/i);
 });
+
+// ── PROMPT-AUTH-1: validateToolArgs gate ──────────────────────────────────────
+
+test("(g) validateToolArgs rejection => callTool NOT invoked, result folded back, model re-offers", async () => {
+  const seq: LlmResult[] = [
+    { content: null, toolCalls: [toolCall("1", "book-appointments", { startDateTime: "2026-07-03T16:00:00+10:00" })] },
+    { content: '{"messages":["That time is not open, how about Monday 11am?"]}', toolCalls: [] },
+  ];
+  let i = 0;
+  const callLlm = async () => seq[i++];
+  let toolRan = false;
+  const callTool = async () => {
+    toolRan = true;
+    return { booked: true };
+  };
+  const refusal = {
+    booked: false,
+    status: "slot_unavailable",
+    available_slots: { "2026-07-06": ["11:00"] },
+  };
+  const r = await runSetterToolLoop(
+    baseArgs({
+      callLlm,
+      callTool,
+      validateToolArgs: (name) =>
+        name === "book-appointments"
+          ? { ok: false, error: "off-list time", result: refusal }
+          : { ok: true },
+    }),
+  );
+  assert.equal(toolRan, false);
+  assert.equal(r.toolInvocations.length, 1);
+  assert.equal(r.toolInvocations[0].error, "off-list time");
+  // the refusal payload (with the real alternatives) was folded back to the model
+  const toolMsg = r.transcript.find((m) => m.role === "tool");
+  assert.ok(toolMsg);
+  assert.match(String(toolMsg!.content), /slot_unavailable/);
+  assert.match(String(toolMsg!.content), /2026-07-06/);
+  assert.match(r.finalText, /Monday 11am/);
+});
+
+test("(h) validateToolArgs rewrite => callTool receives canonicalized args, identity intact", async () => {
+  const seq: LlmResult[] = [
+    { content: null, toolCalls: [toolCall("1", "book-appointments", { startDateTime: "2026-07-06T11:00" })] },
+    { content: '{"messages":["Booked!"]}', toolCalls: [] },
+  ];
+  let i = 0;
+  const callLlm = async () => seq[i++];
+  const captured: Array<Record<string, unknown>> = [];
+  const callTool = async (_name: string, args: Record<string, unknown>) => {
+    captured.push(args);
+    return { booked: true };
+  };
+  const r = await runSetterToolLoop(
+    baseArgs({
+      callLlm,
+      callTool,
+      validateToolArgs: () => ({ ok: true, args: { startDateTime: "2026-07-06T11:00:00+10:00" } }),
+    }),
+  );
+  assert.equal(captured.length, 1);
+  assert.equal(captured[0].startDateTime, "2026-07-06T11:00:00+10:00"); // canonical ISO
+  assert.equal(captured[0].contactId, "LEAD123"); // identity injection survives
+  assert.equal(captured[0].source, "sms");
+  assert.equal(r.toolInvocations[0].error, undefined);
+  // the persisted invocation records the canonicalized args
+  assert.equal(r.toolInvocations[0].args.startDateTime, "2026-07-06T11:00:00+10:00");
+});
+
+test("(i) no validateToolArgs => behavior unchanged (back-compat)", async () => {
+  const seq: LlmResult[] = [
+    { content: null, toolCalls: [toolCall("1", "get-available-slots", { startDateTime: "a", endDateTime: "b" })] },
+    { content: '{"messages":["ok"]}', toolCalls: [] },
+  ];
+  let i = 0;
+  const callLlm = async () => seq[i++];
+  let toolRan = false;
+  const callTool = async () => {
+    toolRan = true;
+    return {};
+  };
+  const r = await runSetterToolLoop(baseArgs({ callLlm, callTool }));
+  assert.equal(toolRan, true);
+  assert.equal(r.toolInvocations[0].error, undefined);
+});

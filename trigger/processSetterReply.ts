@@ -23,10 +23,12 @@
 
 import { task } from "@trigger.dev/sdk";
 import { createClient } from "@supabase/supabase-js";
-import { SETTER_TOOLS, SETTER_TOOL_NAMES, TOOL_USAGE_INSTRUCTION } from "./_shared/setterTools.ts";
+import { MULTI_MESSAGE_INSTRUCTION, SETTER_TOOLS, SETTER_TOOL_NAMES, TOOL_USAGE_INSTRUCTION } from "./_shared/setterTools.ts";
 import { normalizeLlmModel } from "./_shared/llmModel.ts";
 import { persistToolInvocations } from "./_shared/persistToolInvocations.ts";
 import { prefetchAvailability, buildAvailabilityBlock } from "./_shared/prefetchSlots.ts";
+import { buildTimeAnchorBlock, resolveClientTimeZone } from "./_shared/timeAnchor.ts";
+import { mergeCanonicalSlots, validateBookingArgs, type CanonicalSlotMap } from "./_shared/slotBinding.ts";
 import {
   runSetterToolLoop,
   ToolsUnsupportedError,
@@ -100,8 +102,6 @@ function parseSetterMessages(raw: string): string[] {
   return [trimmed];
 }
 
-const MULTI_MESSAGE_INSTRUCTION = `\n\n## Output format (REQUIRED)\nRespond with ONLY a single JSON object — no markdown, no code fences, no preamble:\n{"messages": ["first reply", "second reply if needed"]}\n\nRules:\n- One element if a single SMS is enough; up to 3 elements when the natural reply needs to be broken into separate SMS\n- Each element is a complete SMS by itself\n- Do not include any text outside the JSON\n- Plain text — no JSON inside the message strings`;
-
 type ChatHistoryRow = {
   message: { type: string; content: string } | null;
   timestamp: string;
@@ -141,6 +141,11 @@ export const processSetterReply = task({
     }
 
     const model = normalizeLlmModel(client.llm_model as string | null) || DEFAULT_MODEL;
+    // PROMPT-AUTH-1: resolve the client's timezone ONCE (valid IANA or the AU
+    // default) and use the same value for the availability query, the current-time
+    // anchor, and the booking identity — so a null/invalid client.timezone can't
+    // make the anchor and the slot map fall back to different zones (off-by-one day).
+    const clientTimeZone = resolveClientTimeZone(client.timezone as string | null);
 
     // ── STEP 2: Open client's external Supabase (where prompts + history live) ──
     let setterPrompt = "";
@@ -222,14 +227,18 @@ export const processSetterReply = task({
     };
     if (payload.Phone) identity.phone = payload.Phone;
     if (payload.Email) identity.email = payload.Email;
-    if (client.timezone) identity.timeZone = client.timezone as string;
+    identity.timeZone = clientTimeZone;
 
     const callLlm: CallLlm = async ({ messages: llmMessages, tools: llmTools, toolChoice }) => {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), LLM_TIMEOUT_MS);
       let aiResp: Response;
       try {
-        const reqBody: Record<string, unknown> = { model, messages: llmMessages, temperature: 0.5 };
+        // PROMPT-AUTH-1: tool-bearing calls run at temperature 0 (Gemini
+        // function-calling guidance — date/slot accuracy over prose variety);
+        // the no-tools finalize keeps 0.5 for natural wording.
+        const temperature = llmTools && llmTools.length > 0 ? 0 : 0.5;
+        const reqBody: Record<string, unknown> = { model, messages: llmMessages, temperature };
         if (llmTools && llmTools.length > 0) {
           reqBody.tools = llmTools;
           reqBody.tool_choice = toolChoice;
@@ -308,12 +317,34 @@ export const processSetterReply = task({
     // before the model speaks (mirrors the Voice setter). Best-effort — a prefetch
     // failure degrades to a "call get-available-slots" instruction, never blocks the
     // reply. Passing an epoch-ms window sidesteps BOOK-3's offset-less-ISO mis-parse.
+    const nowMs = Date.now();
     const prefetch = await prefetchAvailability({
       callTool,
-      timeZone: (client.timezone as string | null) ?? null,
-      nowMs: Date.now(),
+      timeZone: clientTimeZone,
+      nowMs,
     });
-    messages[0].content = `${messages[0].content ?? ""}\n\n${buildAvailabilityBlock(prefetch)}`;
+    // ── PROMPT-AUTH-1: append the availability map + a real current-time anchor.
+    // The anchor neutralizes stale in-prompt "now" text (e.g. a literal {{ $now }})
+    // so relative days resolve from the engine clock, not model guesswork. Both use
+    // the SAME resolved clientTimeZone as the prefetch above.
+    messages[0].content = [
+      messages[0].content ?? "",
+      buildAvailabilityBlock(prefetch),
+      buildTimeAnchorBlock(clientTimeZone, nowMs),
+    ].join("\n\n");
+
+    // ── PROMPT-AUTH-1: canonical slot map = every open slot the engine has seen
+    // this turn (prefetch + any mid-loop get-available-slots). book-appointments /
+    // update-appointment are validated against it before executing: a listed time
+    // is rewritten to GHL's exact ISO string; an off-list time is refused and the
+    // real alternatives are folded back (kills the "Thursday 2pm" -> Friday bug).
+    const canonicalSlots: CanonicalSlotMap = new Map();
+    mergeCanonicalSlots(canonicalSlots, prefetch.invocation.result);
+    const loopCallTool: CallTool = async (name, toolArgs) => {
+      const result = await callTool(name, toolArgs);
+      if (name === "get-available-slots") mergeCanonicalSlots(canonicalSlots, result);
+      return result;
+    };
 
     const loopResult = await runSetterToolLoop({
       messages,
@@ -321,7 +352,8 @@ export const processSetterReply = task({
       validToolNames: SETTER_TOOL_NAMES,
       identity,
       callLlm,
-      callTool,
+      callTool: loopCallTool,
+      validateToolArgs: (name, toolArgs) => validateBookingArgs(canonicalSlots, name, toolArgs),
     });
     if (loopResult.toolInvocations.length > 0) {
       console.log(

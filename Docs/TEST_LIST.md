@@ -52,7 +52,7 @@ When an item passes, move it to `Docs/archive/COMPLETED_LOG.md`. When it fails, 
   Turn **show rate to client** ON → log in as that client → AccountSettings shows a read-only "Your Rate $X.XX /min (AUD)"
   card with NO breakdown/markup; toggle OFF → the card disappears. (The trap — client cannot read markup via the API —
   is already proven 9/9; this is the UI behavioral check.)
-- [ ] **One SMS exchange to a test lead** (apply the BOOK-1 prompt tweak from BRENDAN_TODO first) → **BOOK-1** acceptance
+- [ ] **One SMS exchange to a test lead** (BOOK-1 booking rules are now CODE-owned via PROMPT-AUTH-1 — no prompt tweak needed; see `PROMPT_UPDATE_LIST.md` PU-2) → **BOOK-1** acceptance
   (offers real slots → books on acceptance) + **3.12 SMS booking** (`bookings.source='sms'` + execution ends) +
   **SMS-OBS-1** (rows appear in `tool_invocations`) + **MODEL-1** (engine answers; no silent 400).
 - [ ] **F9-1 / PHONE-CLEAR-1 / G3-8a** — locked-setter inline rename is refused with a clear error (no `setter_display_names`
@@ -103,7 +103,7 @@ When an item passes, move it to `Docs/archive/COMPLETED_LOG.md`. When it fails, 
 
 > **Deploy FIRST, in daylight, per the `2026-07-01-overnight-text-setter-repair-allbugs` handoff deploy checklist** (VM-1's retell-proxy v46→v47 is **Voice-regression GATED** — see the handoff). Nothing below is live until deployed. All coded + unit-verified on the branch (test:node 80/0, test:edge 125/0, vite build green; adversarial review DONE-CONFIRMED).
 
-- [ ] **BOOK-1 / 3.12 SMS booking (the acceptance test).** After the Trigger.dev deploy + applying the BOOK-1 report-only prompt tweak (BRENDAN_TODO): text "can I book a meeting?" from a lead on an OPEN calendar → the setter offers ONLY real open times and **books on acceptance**. Proof in the new `tool_invocations` table (platform Supabase): a `get-available-slots` row (the prefetch) THEN a `book-appointments` row with a confirmed result, + a real GHL appointment. The setter must NOT say "booked out"/"snapped up" against open slots. (Supersedes the BLOCKED 3.12 item above.)
+- [ ] **BOOK-1 / 3.12 SMS booking (the acceptance test).** After the Trigger.dev deploy (BOOK-1 booking rules are CODE-owned via PROMPT-AUTH-1 — no prompt tweak needed; the Setter-1 migration removes the stale booking blob): text "can I book a meeting?" from a lead on an OPEN calendar → the setter offers ONLY real open times and **books on acceptance**. Proof in the new `tool_invocations` table (platform Supabase): a `get-available-slots` row (the prefetch) THEN a `book-appointments` row with a confirmed result, + a real GHL appointment. The setter must NOT say "booked out"/"snapped up" against open slots. (Supersedes the BLOCKED 3.12 item above.)
 - [ ] **SMS-OBS-1 — tool invocations persisted.** After any SMS exchange that touches tools, `select * from tool_invocations where lead_id=... order by created_at` (platform Supabase, Mgmt API) shows the rows (name/args/result/error, `source='sms'`, the prefetch first). Confirms booking is no longer DB-blind. (The migration `20260701120000_tool_invocations.sql` must be applied first.)
 - [ ] **MODEL-1-HARDENING — invalid model degrades, never 400s.** In a throwaway client (NOT BFD), set `clients.llm_model` to a bad value (`gemini-flash-latest` or `gptjunk`) via Mgmt API → an SMS still gets a reply (alias remaps / no-slash falls back to the default; no 400). Restore. (Do NOT touch BFD's `clients.llm_model`.)
 - [ ] **F9-1 — locked voice setter refuses inline rename.** Retell-lock a voice setter → click its tile name heading and try to rename → refused with a clear "Retell-locked — unlock to rename" error and **no** `setter_display_names` write (the tile name is unchanged after refresh). Unlock → rename works again.
@@ -114,6 +114,32 @@ When an item passes, move it to `Docs/archive/COMPLETED_LOG.md`. When it fails, 
 ## Retests after the relevant fix ships
 
 - [ ] **B-5 / `{{first_name}}`** — a real inbound call from a number **NOT** in the CRM → the agent omits the name and never says the literal `{{first_name}}`. (NB: TEST_PHONE_A is a known lead, so B-5 needs a genuinely unknown number.)
+
+## PROMPT-AUTH-1 — Text-setter prompt authoring/visibility rebuild (added 2026-07-03; test AFTER the solo build ships)
+
+> Root-caused live in Session 7-finish (2026-07-03): the Text setter refused a genuinely-open Monday (hidden
+> `Available days: Tue/Wed/Thu ONLY` rule buried in the ~1680-line stored prompt) and then booked **Friday 4pm**
+> for an accepted **"Thursday 2pm"** (un-interpolated `{{ $now }}` → no real "today" anchor). The stored
+> `system_prompt` is largely invisible/uneditable in the current SETTER CORE editor. Bug = **PROMPT-AUTH-1** in
+> `BUG_LIST.md`; fix is a dedicated solo session (Fable research → Opus build).
+>
+> **STATUS 2026-07-03: BUILD DONE on branch `feature/prompt-auth-1-authoring` (all suites green), DEPLOY-GATED.**
+> Test AFTER: (1) GO given + Trigger.dev/`save-external-prompt`/`get-external-prompt`/frontend deployed;
+> (2) Brendan applies the Setter-1 migration via the UI (report + steps: run
+> `node --experimental-strip-types scripts/report_text_prompt_migration.mjs --out <dir>`). The date/time +
+> calendar checks below are expected to pass EVEN BEFORE the content migration (the injected time anchor +
+> slot-binding validator neutralize the stale blob); visibility/artifacts/efficiency need the deploy + migration.
+
+- [ ] **Full-prompt visibility** — the operator can view the COMPLETE assembled system prompt a text setter
+  sends (nothing load-bearing hidden) and can edit/override every availability + booking rule from the UI.
+- [ ] **Calendar-sourced availability** — a text booking on an OPEN Monday succeeds; the setter never refuses a
+  day the live calendar shows open (no stale hardcoded day-of-week rule can override the calendar).
+- [ ] **Date/time accuracy** — accept a specific offered slot → `book-appointments` books that EXACT day + time
+  (real "now" injected, no `{{ $now }}` literal), and the confirmation label matches the booked date.
+- [ ] **No leftover artifacts** — no `{{ … }}` n8n expressions, no duplicated/contradictory sections, and the
+  tool names referenced in the prompt match the real tools (`get-available-slots` / `book-appointments`).
+- [ ] **Efficiency** — the assembled prompt is materially leaner; tool-calling + date accuracy hold on the fast
+  model (`google/gemini-2.5-flash`).
 
 ## Standing rule
 

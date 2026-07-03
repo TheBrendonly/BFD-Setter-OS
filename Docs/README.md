@@ -4,7 +4,7 @@ Start here. The docs are a small, maintained set; everything historical lives in
 
 ## Tracking & sessions (start here)
 
-The live work-tracking is the **5 canonical lists** + the master session plan. Don't track open work anywhere else.
+The live work-tracking is the **6 canonical lists** + the master session plan. Don't track open work anywhere else.
 
 | Doc | What it covers |
 |-----|----------------|
@@ -14,6 +14,7 @@ The live work-tracking is the **5 canonical lists** + the master session plan. D
 | [`BRENDAN_TODO.md`](BRENDAN_TODO.md) | Manual / UI actions only Brendan can do. |
 | [`TEST_LIST.md`](TEST_LIST.md) | Things to live-verify after a build. |
 | [`DEFERRED.md`](DEFERRED.md) | Someday / gated (v2: lifecycle, A/B, HubSpot, analytics). |
+| [`PROMPT_UPDATE_LIST.md`](PROMPT_UPDATE_LIST.md) | Prompt-content edits Brendan applies via the UI (report-only; separate from code work). |
 
 Closed items move to [`archive/COMPLETED_LOG.md`](archive/COMPLETED_LOG.md).
 

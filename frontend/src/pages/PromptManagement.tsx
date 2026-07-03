@@ -6766,15 +6766,41 @@ const PromptManagement = () => {
             },
           });
           if (extError) {
-            throw new Error(extError.message || 'Failed to save prompt to external Supabase');
+            // PROMPT-AUTH-1: a 422 lint rejection carries the offending lines in the
+            // response body — surface them instead of a generic invoke error.
+            let lintMessage: string | null = null;
+            try {
+              const body = await (extError as { context?: Response }).context?.json?.();
+              const lintErrors = body?.lint_errors as Array<{ rule: string; line: number; excerpt: string; message: string }> | undefined;
+              if (lintErrors?.length) {
+                lintMessage = `Save blocked by prompt lint:\n${lintErrors
+                  .slice(0, 6)
+                  .map((f) => `Line ${f.line} [${f.rule}]: "${f.excerpt}"`)
+                  .join('\n')}${lintErrors.length > 6 ? `\n(+${lintErrors.length - 6} more)` : ''}`;
+              } else if (body?.error) {
+                lintMessage = body.error as string;
+              }
+            } catch { /* body not JSON — fall through to generic message */ }
+            throw new Error(lintMessage || extError.message || 'Failed to save prompt to external Supabase');
           }
 
-          const externalResult = (extResult || {}) as { success?: boolean; error?: string };
+          const externalResult = (extResult || {}) as {
+            success?: boolean;
+            error?: string;
+            lint_warnings?: Array<{ rule: string; line: number; excerpt: string; message: string }>;
+          };
           if (externalResult.error) {
             throw new Error(externalResult.error);
           }
           if (!externalResult.success) {
             throw new Error('External Supabase did not confirm the prompt save');
+          }
+          if (externalResult.lint_warnings && externalResult.lint_warnings.length > 0) {
+            const w = externalResult.lint_warnings;
+            toast({
+              title: `Prompt saved with ${w.length} lint warning${w.length === 1 ? '' : 's'}`,
+              description: `${w.slice(0, 3).map((f) => `Line ${f.line} [${f.rule}]`).join('; ')}${w.length > 3 ? ` (+${w.length - 3} more)` : ''} — open Verify Setter Prompt for details.`,
+            });
           }
 
           console.log('✅ Prompt saved to external Supabase:', extResult);

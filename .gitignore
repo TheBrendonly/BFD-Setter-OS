@@ -15,3 +15,6 @@ frontend/pnpm-lock.yaml
 
 # graphify knowledge-graph output (regenerated locally from synced code)
 graphify-out/
+
+# PROMPT-AUTH-1 migration report dumps (live client prompt content — never commit)
+Docs/investigations/prompt-migration-reports/

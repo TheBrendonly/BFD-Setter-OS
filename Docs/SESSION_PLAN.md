@@ -5,8 +5,9 @@ duplicate it. Every session keeps this file current, then emits the next session
 "100%" = rock-solid for the current live setup + ready to onboard a paying client. The deferred /
 lifecycle work (`Docs/DEFERRED.md`) is v2 and NOT on this critical path.
 
-The 5 canonical lists are the detail behind each session: `Docs/BUG_LIST.md`, `FEATURE_ROADMAP.md`,
-`Docs/BRENDAN_TODO.md`, `Docs/TEST_LIST.md`, `Docs/DEFERRED.md`. Closed items → `Docs/archive/COMPLETED_LOG.md`.
+The 6 canonical lists are the detail behind each session: `Docs/BUG_LIST.md`, `FEATURE_ROADMAP.md`,
+`Docs/BRENDAN_TODO.md`, `Docs/TEST_LIST.md`, `Docs/DEFERRED.md`, and `Docs/PROMPT_UPDATE_LIST.md` (prompt-content
+edits Brendan applies via the UI, report-only). Closed items → `Docs/archive/COMPLETED_LOG.md`.
 
 ---
 
