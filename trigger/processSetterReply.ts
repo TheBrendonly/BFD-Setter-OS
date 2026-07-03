@@ -26,6 +26,7 @@ import { createClient } from "@supabase/supabase-js";
 import { MULTI_MESSAGE_INSTRUCTION, SETTER_TOOLS, SETTER_TOOL_NAMES, TOOL_USAGE_INSTRUCTION } from "./_shared/setterTools.ts";
 import { normalizeLlmModel } from "./_shared/llmModel.ts";
 import { persistToolInvocations } from "./_shared/persistToolInvocations.ts";
+import { persistHumanTurn } from "./_shared/persistHumanTurn.ts";
 import { prefetchAvailability, buildAvailabilityBlock } from "./_shared/prefetchSlots.ts";
 import { buildTimeAnchorBlock, resolveClientTimeZone } from "./_shared/timeAnchor.ts";
 import { mergeCanonicalSlots, validateBookingArgs, type CanonicalSlotMap } from "./_shared/slotBinding.ts";
@@ -389,8 +390,23 @@ export const processSetterReply = task({
       response[`Message_${idx + 1}`] = m;
     });
 
-    // ── STEP 6: Append assistant turn to chat_history (best-effort) ──
+    // ── STEP 6: Append human + assistant turns to chat_history (best-effort) ──
     if (clientSupabase) {
+      // SMS-MEM-1: persist the inbound human turn too (was missing entirely in this
+      // normal path — only the setter_stopped branch in receive-twilio-sms wrote it),
+      // so the next reply's history read isn't blind to what the lead actually said.
+      // Timestamped one ms before the AI turn so ordering is correct on replay.
+      const nowMs = Date.now();
+      const humanResult = await persistHumanTurn({
+        supabase: clientSupabase,
+        leadId: payload.Lead_ID,
+        messageBody: payload.Message_Body || "",
+        timestamp: new Date(nowMs - 1).toISOString(),
+      });
+      if (!humanResult.ok) {
+        console.error(`processSetterReply: human-turn chat_history write failed (non-fatal): ${humanResult.error}`);
+      }
+
       try {
         const combined = setterMessages.join("\n\n");
         await clientSupabase.from("chat_history").insert({
@@ -411,7 +427,7 @@ export const processSetterReply = task({
             response_metadata: {},
             invalid_tool_calls: [],
           },
-          timestamp: new Date().toISOString(),
+          timestamp: new Date(nowMs).toISOString(),
         });
       } catch (writeErr) {
         console.error(`processSetterReply: chat_history write failed (non-fatal): ${(writeErr as Error).message}`);
