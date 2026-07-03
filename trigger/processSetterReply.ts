@@ -27,7 +27,7 @@ import { MULTI_MESSAGE_INSTRUCTION, SETTER_TOOLS, SETTER_TOOL_NAMES, TOOL_USAGE_
 import { normalizeLlmModel } from "./_shared/llmModel.ts";
 import { persistToolInvocations } from "./_shared/persistToolInvocations.ts";
 import { prefetchAvailability, buildAvailabilityBlock } from "./_shared/prefetchSlots.ts";
-import { buildTimeAnchorBlock } from "./_shared/timeAnchor.ts";
+import { buildTimeAnchorBlock, resolveClientTimeZone } from "./_shared/timeAnchor.ts";
 import { mergeCanonicalSlots, validateBookingArgs, type CanonicalSlotMap } from "./_shared/slotBinding.ts";
 import {
   runSetterToolLoop,
@@ -141,6 +141,11 @@ export const processSetterReply = task({
     }
 
     const model = normalizeLlmModel(client.llm_model as string | null) || DEFAULT_MODEL;
+    // PROMPT-AUTH-1: resolve the client's timezone ONCE (valid IANA or the AU
+    // default) and use the same value for the availability query, the current-time
+    // anchor, and the booking identity — so a null/invalid client.timezone can't
+    // make the anchor and the slot map fall back to different zones (off-by-one day).
+    const clientTimeZone = resolveClientTimeZone(client.timezone as string | null);
 
     // ── STEP 2: Open client's external Supabase (where prompts + history live) ──
     let setterPrompt = "";
@@ -222,7 +227,7 @@ export const processSetterReply = task({
     };
     if (payload.Phone) identity.phone = payload.Phone;
     if (payload.Email) identity.email = payload.Email;
-    if (client.timezone) identity.timeZone = client.timezone as string;
+    identity.timeZone = clientTimeZone;
 
     const callLlm: CallLlm = async ({ messages: llmMessages, tools: llmTools, toolChoice }) => {
       const controller = new AbortController();
@@ -315,16 +320,17 @@ export const processSetterReply = task({
     const nowMs = Date.now();
     const prefetch = await prefetchAvailability({
       callTool,
-      timeZone: (client.timezone as string | null) ?? null,
+      timeZone: clientTimeZone,
       nowMs,
     });
     // ── PROMPT-AUTH-1: append the availability map + a real current-time anchor.
     // The anchor neutralizes stale in-prompt "now" text (e.g. a literal {{ $now }})
-    // so relative days resolve from the engine clock, not model guesswork.
+    // so relative days resolve from the engine clock, not model guesswork. Both use
+    // the SAME resolved clientTimeZone as the prefetch above.
     messages[0].content = [
       messages[0].content ?? "",
       buildAvailabilityBlock(prefetch),
-      buildTimeAnchorBlock((client.timezone as string | null) ?? null, nowMs),
+      buildTimeAnchorBlock(clientTimeZone, nowMs),
     ].join("\n\n");
 
     // ── PROMPT-AUTH-1: canonical slot map = every open slot the engine has seen

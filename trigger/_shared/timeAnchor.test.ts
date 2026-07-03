@@ -10,7 +10,7 @@
 // DST, invalid timezones, and month/year rollovers.
 import test from "node:test";
 import { strict as assert } from "node:assert";
-import { buildTimeAnchorBlock } from "./timeAnchor.ts";
+import { buildTimeAnchorBlock, resolveClientTimeZone, DEFAULT_TIMEZONE } from "./timeAnchor.ts";
 
 // 2026-07-03T04:20:00Z = Friday 2026-07-03 14:20 in Australia/Brisbane (+10:00).
 const INCIDENT_NOW = Date.parse("2026-07-03T04:20:00Z");
@@ -49,13 +49,16 @@ test("DST timezone (Australia/Sydney, AEDT +11:00 in January)", () => {
   assert.match(block, /2026-01-15T13:00\+11:00/);
 });
 
-test("null / invalid timezone falls back to UTC and never throws", () => {
+test("null / invalid timezone falls back to the business default (Australia/Sydney), never throws", () => {
+  // PROMPT-AUTH-1 hardening: the anchor's fallback must match the booking pipeline's
+  // (Australia/Sydney), NOT UTC — a UTC anchor beside a Sydney-keyed slot map
+  // re-introduces the off-by-one-day bug. INCIDENT_NOW is 04:20Z = 14:20 Sydney (AEST +10, July).
   const blockNull = buildTimeAnchorBlock(null, INCIDENT_NOW);
-  assert.match(blockNull, /Today is Friday, 3 July 2026, 04:20 in UTC/);
-  assert.match(blockNull, /2026-07-03T04:20\+00:00/);
+  assert.match(blockNull, /Today is Friday, 3 July 2026, 14:20 in Australia\/Sydney/);
+  assert.match(blockNull, /2026-07-03T14:20\+10:00/);
 
   const blockBad = buildTimeAnchorBlock("Not/AZone", INCIDENT_NOW);
-  assert.match(blockBad, /in UTC/);
+  assert.match(blockBad, /in Australia\/Sydney/);
 });
 
 test("month rollover: anchors cross into the next month with correct dates", () => {
@@ -70,4 +73,15 @@ test("block instructs the model to ignore stale {{ \\$now }} residue and never g
   const block = buildTimeAnchorBlock("Australia/Brisbane", INCIDENT_NOW);
   assert.match(block, /\{\{ \$now \}\}/);
   assert.match(block, /Never guess or compute a date yourself/);
+});
+
+test("resolveClientTimeZone: valid IANA passes through, null/invalid -> business default", () => {
+  assert.equal(resolveClientTimeZone("Australia/Sydney"), "Australia/Sydney");
+  assert.equal(resolveClientTimeZone("Australia/Perth"), "Australia/Perth");
+  assert.equal(DEFAULT_TIMEZONE, "Australia/Sydney");
+  assert.equal(resolveClientTimeZone(null), DEFAULT_TIMEZONE);
+  assert.equal(resolveClientTimeZone(undefined), DEFAULT_TIMEZONE);
+  assert.equal(resolveClientTimeZone(""), DEFAULT_TIMEZONE);
+  assert.equal(resolveClientTimeZone("AEST"), DEFAULT_TIMEZONE); // not a valid IANA name
+  assert.equal(resolveClientTimeZone("Not/AZone"), DEFAULT_TIMEZONE);
 });

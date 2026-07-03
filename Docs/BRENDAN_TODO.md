@@ -1,7 +1,9 @@
 # BFD-Setter — Brendan's Manual / UI Todo List
 
 Things only Brendan can do (UI clicks, logins, provider dashboards, business calls). Reconciled 2026-06-25.
-Testing actions live in `TEST_LIST.md`; first-paying-client onboarding actions live in `DEFERRED.md`.
+Testing actions live in `TEST_LIST.md`; first-paying-client onboarding actions live in `DEFERRED.md`;
+**prompt-content edits (agent wording) live in `PROMPT_UPDATE_LIST.md`** (kept separate so you can work
+prompt tweaks independently).
 
 ## Active (do when you have time)
 
@@ -22,7 +24,7 @@ Testing actions live in `TEST_LIST.md`; first-paying-client onboarding actions l
 
 - [x] **Session 7.5 (Text-Setter repair + all bugs) + F8 — BUILT, MERGED to main, and DEPLOYED LIVE 2026-07-01 (overnight, Claude).** Brendan directed a go-live; everything is live. Trigger 20260630.1, `tool_invocations` + `client_pricing_config` migrations, `execute-lead-webhook` v1, `get-blended-rate` v1, frontend (Railway), **retell-proxy v47 (VM-1)** behind a read-only Voice smoke (0 agents mutated). F8 trap proof 9/9. Handoff: `Operations/handoffs/2026-07-01-f8-plus-7.5-deploy.md`. **No deploy left to do** — what remains is your consolidated live-test pass + the manual items below.
 - [ ] **VOICE-REGRESSION CONFIRMATION — do this FIRST (the one piece not run overnight).** Place one real outbound voice call on a canonical agent: confirm booking still works, B-3 (`latest_published`) + B-5 (default vars) survive, and a Voicemail "Save & push" now reports `voicemail_set` (not "partial"). If anything regressed, tell Claude to roll retell-proxy back to v46. `[B]`
-- [ ] **BOOK-1 prompt tweak (report-only — apply via the BFD UI, Text setter "Setter-N" system prompt) — AFTER the Trigger.dev deploy, BEFORE the 3.12 re-test.** The structural code half landed on the 7.5 branch (prefetch + inject ground-truth slots every reply + anti-fabrication guard); this prompt half is still yours to apply. Add a hard rule, roughly: *"Never tell a lead a time is unavailable unless the get-available-slots tool returned it as unavailable. Always call get-available-slots before discussing or offering times. When a lead accepts a specific time you offered, immediately call book-appointments for that exact time and confirm. Never invent scarcity or use 'snapped up' / 'booked out' language."* (Also in the `project_pending_prompt_changes` memory.) `[B]`
+- [→] **BOOK-1 prompt tweak — MOVED to `PROMPT_UPDATE_LIST.md` (PU-2) and now CODE-OWNED.** The booking rules it proposed adding to the stored prompt are owned code-side as of PROMPT-AUTH-1 (and the stale booking blob is being removed from the stored prompt via the Setter-1 migration). Do NOT hand-add booking rules to a stored persona. See `PROMPT_UPDATE_LIST.md` PU-2 for the full history.
 - [ ] **Revert the Property Coach name** — during the F9-unlock test the setter was renamed to **"Gary - Property Coach 1"** (cascaded live to Retell). Drop the trailing " 1" via the inline tile name editor when convenient (it'll cascade back). `[B]`
 - [x] **MODEL-1 — `clients.llm_model` corrected live** — was an invalid OpenRouter id (`google/gemini-flash-latest`) silently breaking all SMS + cadence AI; Claude set it to `google/gemini-2.5-flash` via Mgmt API (2026-06-30). FYI; the hardening (validate the field) is a code item in BUG_LIST (MODEL-1-HARDENING). If you change the model in the UI, use a valid OpenRouter id (e.g. `google/gemini-2.5-flash`).
 - [x] **SMS latency reduced** — `agent_settings.response_delay_seconds` for all 7 BFD setters set 60/82 → **12s** (2026-06-30, your call). Tune further in the setter config if 12s feels off.
@@ -30,7 +32,7 @@ Testing actions live in `TEST_LIST.md`; first-paying-client onboarding actions l
 ## After a build ships (I'll prompt you with the exact agent/version)
 
 - [ ] **Re-Save the 5 voice setters** once the B-5/B-3 fix ships (default-vars net + outbound version re-pin) so it takes on the live agents. The 5: Main Outbound (slot 1), Gary Property Coach / Mortgage Broker / Finance Strategist / Crazy Gary. **Never edit the prompts — re-Save/Push only.**
-- [ ] **Apply any report-only prompt tweaks** I surface, via the BFD setter UI (prompt content is hard report-only).
+- [ ] **Apply any report-only prompt tweaks** I surface, via the BFD setter UI (prompt content is hard report-only). **These now live in their own list: `PROMPT_UPDATE_LIST.md`.**
 - [x] **Flag the inbound setter (activates F2b)** — DONE (live DB: "Inbound BFD Agent" `is_inbound=true`; `clients.retell_inbound_agent_id` + Retell `+61481614530` inbound binding both point at `agent_b2f6495…`). Flipping this is what surfaced B-6 (now fixed in Session 3.1: the persistence held; the list badge was reading the wrong table). One setter per client; flipping another moves the flag.
 
 ## Notes

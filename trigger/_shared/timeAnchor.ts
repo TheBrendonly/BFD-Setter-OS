@@ -32,13 +32,23 @@ const WEEKDAYS = [
   "Saturday",
 ];
 
-function resolveTimeZone(timeZone: string | null | undefined): string {
-  if (!timeZone) return "UTC";
+// Business default timezone. BFD operates in AU; the live client is Australia/Sydney.
+// Falling back here (rather than UTC) keeps the current-time anchor, the GHL
+// availability query, and the booking identity resolving a null/invalid
+// client.timezone to the SAME zone — a mismatch re-introduces the off-by-one-day
+// booking bug this anchor exists to kill.
+export const DEFAULT_TIMEZONE = "Australia/Sydney";
+
+// Resolve a client's stored timezone to a VALID IANA name (or the business
+// default). Exported so callers can resolve ONCE and pass the same value to the
+// anchor, the availability prefetch, and the tool identity.
+export function resolveClientTimeZone(timeZone: string | null | undefined): string {
+  if (!timeZone) return DEFAULT_TIMEZONE;
   try {
     new Intl.DateTimeFormat("en-US", { timeZone });
     return timeZone;
   } catch {
-    return "UTC";
+    return DEFAULT_TIMEZONE;
   }
 }
 
@@ -96,7 +106,7 @@ function ymd(t: { year: number; month: number; day: number }): string {
 }
 
 export function buildTimeAnchorBlock(timeZone: string | null | undefined, nowMs: number): string {
-  const tz = resolveTimeZone(timeZone);
+  const tz = resolveClientTimeZone(timeZone);
   const now = localStamp(nowMs, tz);
   const todayYmd = ymd(now);
   const isoLocal = `${todayYmd}T${now.hour}:${now.minute}${now.offset}`;

@@ -94,7 +94,9 @@ export async function prefetchAvailability(args: {
 // anti-fabrication guard: with the real open times in front of it, a weak model may
 // not claim a listed time is "booked out" / unavailable (the BOOK-1 failure mode).
 export function buildAvailabilityBlock(result: PrefetchResult): string {
-  const tz = result.timezone || "the lead's timezone";
+  // The single timezone the whole flow runs in is the BUSINESS/calendar timezone
+  // (clients.timezone), NOT the lead's — never label it "the lead's timezone".
+  const tz = result.timezone || "the business timezone";
 
   if (result.status === "ok") {
     const dates = Object.keys(result.slots).sort().slice(0, MAX_BLOCK_DAYS);

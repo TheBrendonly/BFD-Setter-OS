@@ -3,7 +3,7 @@
 Open bugs and behavior fixes. Reconciled 2026-06-25 with Brendan (one-by-one triage of all lists).
 
 - **Status:** `[ ]` open · `[~]` partially done · `[B]` needs a Brendan input · `[x]` done (moved to archive)
-- **Companion lists:** features → `FEATURE_ROADMAP.md` · your manual actions → `BRENDAN_TODO.md` · things to verify → `TEST_LIST.md` · someday/gated → `DEFERRED.md` · closed items → `Docs/archive/COMPLETED_LOG.md`
+- **Companion lists:** features → `FEATURE_ROADMAP.md` · your manual actions → `BRENDAN_TODO.md` · things to verify → `TEST_LIST.md` · someday/gated → `DEFERRED.md` · prompt-content edits (Brendan via UI) → `PROMPT_UPDATE_LIST.md` · closed items → `Docs/archive/COMPLETED_LOG.md`
 - **Rule:** when a bug is fixed + verified, move it out of here (to `TEST_LIST.md` if it needs live verification, else to `COMPLETED_LOG.md`).
 - All items below are **CODE** (Claude builds) unless tagged `[B]`.
 
