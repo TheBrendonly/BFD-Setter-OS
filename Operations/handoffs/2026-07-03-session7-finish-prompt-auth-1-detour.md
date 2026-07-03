@@ -149,22 +149,13 @@ exchange item marked done), `BRENDAN_TODO.md` (added the Setter-1 migration-appl
 
 ## What genuinely still needs doing (the actual continuation)
 
-**A. Get `feature/overnight-bugfix` finished, verified, deployed, and live-regression-tested.**
-1. Confirm the MODEL-1-HARDENING UI change is finished + committed (or finish it).
-2. Re-run `test:node` + `test:edge` + `vite build` fresh (do not trust this doc's numbers if more commits landed).
-3. Brendan reviews + GO's a supervised deploy (Trigger.dev + frontend; no edge fn changes in this branch as far
-   as observed, but double-check).
-4. Live regression: a multi-turn SMS exchange confirming SMS-MEM-1 is fixed (`chat_history` has real
-   human/ai alternation, no re-asked questions); a follow-up/nudge trigger confirming FOLLOWUP-PROMPT-1 no
-   longer fabricates; a Prompt Management save attempt with Pascal-case/caps legacy content confirming
-   PROMPT-LINT-1 now blocks it; the model selector UI confirming MODEL-1-HARDENING's "Use anyway" gate.
-5. Move SMS-MEM-1 / FOLLOWUP-PROMPT-1 / PROMPT-LINT-1 / the MODEL-1-HARDENING UI note to `COMPLETED_LOG.md`.
+**Reordered 2026-07-03 per Brendan:** Batches 2-7 have been pending across MULTIPLE sessions now and have ZERO
+dependency on the `feature/overnight-bugfix` branch (they test things already live on `main`) — so they are
+PRIMARY, run first, not gated behind anything below. The branch work is SECONDARY (parallel/independent). The
+Setter-1 migration is a standalone Brendan-only action with no session dependency either way — do it whenever,
+it doesn't block or get blocked by anything else here.
 
-**B. Brendan applies the Setter-1 prompt migration via the UI** (report-only, steps + proposed content already
-generated — see `BRENDAN_TODO.md` and `Docs/investigations/prompt-migration-reports/`). Unlocks the remaining
-PROMPT-AUTH-1 `TEST_LIST.md` checks (full-prompt visibility X-Ray, no-leftover-artifacts, efficiency).
-
-**C. The ORIGINAL Session 7-finish remaining test matrix — completely untouched this session:**
+**A. PRIMARY — The ORIGINAL Session 7-finish remaining test matrix (do this first; untouched across sessions):**
 - **Batch 2** — Agency→client login pair: F8 panel+card, F13 ×4 (margin panel vs SQL hand-check, client
   toggle matrix, dashboard summary card both roles, period browsing + anchor clamp), INB-1/UI-1/F11. F14 email
   E2Es stay GATED on Resend SMTP (Brendan's own todo item, unconfirmed).
@@ -177,6 +168,24 @@ PROMPT-AUTH-1 `TEST_LIST.md` checks (full-prompt visibility X-Ray, no-leftover-a
   B-2 inbound-resolve, THEN clean up TEST_PHONE_A (+61405482446) to free it (3 BFD leads:
   `nD7x3GyZKRW3zxnMHiew` / `YKJKtmzrHrHCnAuBtaxe` / `MWPMQuRyatfRINnXukzG` + the GHL contact — capture
   read-only, gated-confirm with Brendan, delete).
+
+**B. SECONDARY / PARALLEL — Get `feature/overnight-bugfix` finished, verified, deployed, and
+live-regression-tested.** Independent of A; work it alongside or after, whichever fits.
+1. Confirm the MODEL-1-HARDENING UI change is finished + committed (or finish it).
+2. Re-run `test:node` + `test:edge` + `vite build` fresh (do not trust this doc's numbers if more commits landed).
+3. Brendan reviews + GO's a supervised deploy (Trigger.dev + frontend; no edge fn changes in this branch as far
+   as observed, but double-check).
+4. Live regression: a multi-turn SMS exchange confirming SMS-MEM-1 is fixed (`chat_history` has real
+   human/ai alternation, no re-asked questions); a follow-up/nudge trigger confirming FOLLOWUP-PROMPT-1 no
+   longer fabricates; a Prompt Management save attempt with Pascal-case/caps legacy content confirming
+   PROMPT-LINT-1 now blocks it; the model selector UI confirming MODEL-1-HARDENING's "Use anyway" gate.
+5. Move SMS-MEM-1 / FOLLOWUP-PROMPT-1 / PROMPT-LINT-1 / the MODEL-1-HARDENING UI note to `COMPLETED_LOG.md`.
+
+**C. STANDALONE, NOT SESSION-GATED — Brendan applies the Setter-1 prompt migration via the UI** whenever
+convenient (report-only, steps + proposed content already generated — see `BRENDAN_TODO.md` and
+`Docs/investigations/prompt-migration-reports/`). Can be done right now, independent of any Claude session.
+Unlocks the remaining PROMPT-AUTH-1 `TEST_LIST.md` checks (full-prompt visibility X-Ray, no-leftover-artifacts,
+efficiency) once done.
 
 **D. Session 9 (API-DEPR-1) and Session 10 (G3-7)** remain queued after Session 7-finish per `SESSION_PLAN.md`
 — unchanged, not started.
@@ -202,31 +211,41 @@ live-regression-confirmed working (booking accuracy, timezone naming). A separat
 `feature/overnight-bugfix` has 3 more fixes — SMS-MEM-1 (chat memory), FOLLOWUP-PROMPT-1 (follow-up channel
 protections), PROMPT-LINT-1 (lint bypass hardening) — all fix-staged (test:node 113/113, test:edge 200/200 as
 of 2026-07-03) but NOT deployed, plus a MODEL-1-HARDENING UI change that may or may not be finished/committed
-by now — CHECK. The ORIGINAL Session 7-finish remaining test matrix (Batches 2-7: F8/F13/F14 UI, LIVE-D,
-LIVE-E, G3-6, F9-1/PHONE-CLEAR-1/G3-8a, F1/B-5/B-2 unknown-number + TEST_PHONE_A cleanup) was NOT started.
+by now — CHECK. **The ORIGINAL Session 7-finish remaining test matrix (Batches 2-7) was NOT started and has now
+been pending across MULTIPLE sessions — it is the PRIORITY for this session.**
 
-SESSION SCOPE (in this order):
-1. Check `feature/overnight-bugfix`'s actual current state (git log, git status, re-run tests). If the
-   MODEL-1-HARDENING UI change is unfinished, either finish it or flag it clearly — do not deploy half-done
-   frontend work.
-2. Once that branch is clean + green, get Brendan's GO and deploy it (Trigger.dev if the follow-up path
-   changed, frontend for the model-selector UI; confirm exactly what needs deploying from the diff). Run the 4
-   live regression checks in TEST_LIST.md's "SMS-MEM-1 / FOLLOWUP-PROMPT-1 / PROMPT-LINT-1 / MODEL-1-HARDENING
-   (UI)" section. Move passes to COMPLETED_LOG.md.
-3. Remind Brendan (if not already done) to apply the Setter-1 prompt migration via the UI per
-   Docs/BRENDAN_TODO.md — this unlocks 3 remaining PROMPT-AUTH-1 TEST_LIST checks.
-4. THEN run the original Session 7-finish Batches 2-7 (see the "what genuinely still needs doing" section C in
-   this handoff for the full breakdown). Batch overlapping actions per the existing pattern; verify read-only;
-   run the unknown-number batch (7) LAST since it ends by freeing TEST_PHONE_A via CRM cleanup.
+SESSION SCOPE — PRIMARY FIRST, do not let anything below crowd it out:
+
+1. **PRIMARY — run the original Session 7-finish Batches 2-7** (full breakdown in the "what genuinely still
+   needs doing" section A of this handoff): Batch 2 (agency→client login: F8 panel+card, F13 ×4, INB-1/UI-1/F11;
+   F14 email stays Resend-gated), Batch 3 / LIVE-D (B-2 CSV + GHL-outage sim + repoint + deterministic pick +
+   manual send/429), Batch 4 / LIVE-E (F3 pause/resume + F4 tz nudge), Batch 5 (G3-6 Tier-3, set
+   `clients.supabase_table_name` first), Batch 6 (F9-1 + PHONE-CLEAR-1 + G3-8a), Batch 7 LAST (fresh GHL contact
+   from an unknown number → F1/B-5/B-2, then free TEST_PHONE_A via gated-confirm CRM cleanup). None of this
+   depends on `feature/overnight-bugfix` — it tests things already live on `main`. Batch overlapping actions;
+   verify read-only.
+
+2. **SECONDARY / PARALLEL, not blocking — `feature/overnight-bugfix`.** Work this alongside or after step 1,
+   whichever fits your time: check its actual current state (git log, git status, re-run tests — do not trust
+   this doc's numbers if more commits landed); if the MODEL-1-HARDENING UI change is unfinished, finish it or
+   flag it clearly (do not deploy half-done frontend work); once clean+green, get Brendan's GO and deploy
+   (Trigger.dev if the follow-up path changed, frontend for the model-selector UI); run the 4 live regression
+   checks in TEST_LIST.md's "SMS-MEM-1 / FOLLOWUP-PROMPT-1 / PROMPT-LINT-1 / MODEL-1-HARDENING (UI)" section;
+   move passes to COMPLETED_LOG.md.
+
+3. **STANDALONE reminder, not session-gated either way — the Setter-1 prompt migration.** This is a
+   Brendan-only manual UI action (report-only; steps already written in Docs/BRENDAN_TODO.md and
+   Docs/investigations/prompt-migration-reports/) that Claude cannot do and does not need to wait for. Just
+   remind Brendan if it's still open; don't block on it.
 
 CLAUDE WRITE-ACTIONS AUTHORIZED (test infra, revert after, per the standing Session 7-finish scope):
 clients.timezone (F4 test), clients.supabase_table_name (G3-6), clients.ghl_api_key break/restore (B-2 outage
 sim), CRM cleanup of +61405482446 (gated confirm with Brendan first).
 
-DONE WHEN: feature/overnight-bugfix deployed + regression-confirmed, Setter-1 migration applied + its 3
-TEST_LIST checks pass, and TEST_LIST is green / all fails logged for Batches 2-7. Then close out per the Relay
-Protocol (reconcile the 6 lists, tick SESSION_PLAN, dated handoff, commit+push, emit the Session 9 (API-DEPR-1)
-prompt).
+DONE WHEN: TEST_LIST is green / all fails logged for Batches 2-7 (the primary goal). If time/scope allows,
+also: feature/overnight-bugfix deployed + regression-confirmed, and the Setter-1 migration applied + its 3
+TEST_LIST checks pass. Then close out per the Relay Protocol (reconcile the 6 lists, tick SESSION_PLAN, dated
+handoff, commit+push, emit the Session 9 (API-DEPR-1) prompt).
 
 No em dashes; fenced; self-contained.
 ```
