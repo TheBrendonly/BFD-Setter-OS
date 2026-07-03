@@ -37,6 +37,7 @@ import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
+import { normalizePhone } from '@/lib/normalizePhone';
 
 interface Lead {
   id: string;
@@ -2174,6 +2175,9 @@ function ChatContactDetailsPanel({
         last_name: currentData['last_name'] || null,
         email: currentData['email'] || null,
         phone: currentData['phone'] || null,
+        // PHONE-CLEAR-1: recompute so clearing/changing the number also clears/updates
+        // the by-phone (inbound/STOP) match key (same fix as ContactDetail's save).
+        normalized_phone: normalizePhone(currentData['phone'] || null),
         business_name: currentData['business_name'] || null,
         custom_fields: customFields,
         tags: tagsPayload,

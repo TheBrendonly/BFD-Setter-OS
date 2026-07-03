@@ -11,6 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import PhoneInputComponent from 'react-phone-number-input';
 import 'react-phone-number-input/style.css';
 import { validatePhone, isValidEmail } from '@/utils/phoneValidation';
+import { normalizePhone } from '@/lib/normalizePhone';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -242,6 +243,9 @@ const Contacts = () => {
         last_name: addContactForm.last_name.trim() || null,
         email: addContactForm.email.trim() || null,
         phone: phoneValidation ? phoneValidation.normalized : null,
+        // PHONE-CLEAR-1: leads created here were never by-phone matchable — inbound/STOP
+        // resolution matches normalized_phone ONLY (see _shared/leadResolve.ts).
+        normalized_phone: normalizePhone(phoneValidation ? phoneValidation.normalized : null),
         business_name: addContactForm.business_name.trim() || null,
         lead_id: canonicalContactId,
         custom_fields: {},
@@ -1119,6 +1123,9 @@ const Contacts = () => {
           first_name: editFormData.first_name || null,
           last_name: editFormData.last_name || null,
           phone: editFormData.phone || null,
+          // PHONE-CLEAR-1: recompute so clearing/changing the number also clears/updates
+          // the by-phone (inbound/STOP) match key. A cleared phone -> null.
+          normalized_phone: normalizePhone(editFormData.phone || null),
           email: editFormData.email || null,
           business_name: editFormData.business_name || null,
           custom_fields: customFields,
