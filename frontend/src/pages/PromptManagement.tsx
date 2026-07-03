@@ -6773,7 +6773,9 @@ const PromptManagement = () => {
               const body = await (extError as { context?: Response }).context?.json?.();
               const lintErrors = body?.lint_errors as Array<{ rule: string; line: number; excerpt: string; message: string }> | undefined;
               if (lintErrors?.length) {
-                lintMessage = `Save blocked by prompt lint:\n${lintErrors
+                // Accuracy: platform copies (agent_settings, clients.system_prompt)
+                // are written BEFORE this external save, so only claim what is true.
+                lintMessage = `Live prompt save blocked by lint (platform copies were already saved):\n${lintErrors
                   .slice(0, 6)
                   .map((f) => `Line ${f.line} [${f.rule}]: "${f.excerpt}"`)
                   .join('\n')}${lintErrors.length > 6 ? `\n(+${lintErrors.length - 6} more)` : ''}`;

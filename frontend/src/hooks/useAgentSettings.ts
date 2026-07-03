@@ -2,6 +2,9 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { getCached, setCache, isFresh } from '@/lib/queryCache';
+// PROMPT-LINT-1: the shared lint module is pure (no Deno APIs), so the browser
+// imports the SAME source the save-external-prompt edge fn uses — no mirror.
+import { lintTextSetterPrompt } from '../../supabase/functions/_shared/promptLint';
 
 export interface AgentSettings {
   id?: string;
@@ -111,6 +114,32 @@ export function useAgentSettings(clientId: string | undefined) {
 
   const updateSettings = async (slotId: string, updates: Partial<AgentSettings>, options?: { silent?: boolean }) => {
     if (!clientId) return;
+
+    // PROMPT-LINT-1 (review follow-up): sendFollowup reads followup_instructions /
+    // followup_cancellation_instructions from THIS table, so the lint must gate THIS
+    // write path — the save-external-prompt lint only guards the external mirror,
+    // which the follow-up engine never reads. Text channel only (voice prompts
+    // legitimately carry {{...}} tokens). Lint ONLY the fields being changed in this
+    // call, never stored-but-untouched content, so legacy rows can't brick unrelated
+    // saves. Throws BEFORE any optimistic or DB write; the deploy flow's outer catch
+    // aborts the whole deploy on this, which is the intended contract.
+    if (!slotId.startsWith('Voice-Setter-')) {
+      const followupFields = [
+        ['followup_instructions', updates.followup_instructions],
+        ['followup_cancellation_instructions', updates.followup_cancellation_instructions],
+      ] as const;
+      for (const [field, value] of followupFields) {
+        if (typeof value === 'string' && value.trim()) {
+          const lint = lintTextSetterPrompt(value);
+          if (!lint.ok) {
+            const first = lint.errors[0];
+            const summary = `${field} blocked by prompt lint — line ${first.line} [${first.rule}]: "${first.excerpt}"${lint.errors.length > 1 ? ` (+${lint.errors.length - 1} more)` : ''}`;
+            toast({ title: 'Follow-up text blocked', description: summary, variant: 'destructive' });
+            throw new Error(summary);
+          }
+        }
+      }
+    }
 
     const previousSettings = settingsRef.current[slotId];
     const newSettings = {

@@ -121,17 +121,23 @@ export const AgentSettingsCard: React.FC<AgentSettingsCardProps> = ({
 
   const handleSave = async () => {
     setSaving(true);
-    await onSave(slotId, {
-      name: localSettings.name,
-      model: localSettings.model,
-      response_delay_seconds: localSettings.response_delay_seconds,
-      followup_instructions: localSettings.followup_instructions,
-      file_processing_enabled: localSettings.file_processing_enabled,
-      human_transfer_enabled: localSettings.human_transfer_enabled,
-      booking_function_enabled: localSettings.booking_function_enabled,
-      booking_prompt: localSettings.booking_prompt,
-    });
-    setSaving(false);
+    try {
+      await onSave(slotId, {
+        name: localSettings.name,
+        model: localSettings.model,
+        response_delay_seconds: localSettings.response_delay_seconds,
+        followup_instructions: localSettings.followup_instructions,
+        file_processing_enabled: localSettings.file_processing_enabled,
+        human_transfer_enabled: localSettings.human_transfer_enabled,
+        booking_function_enabled: localSettings.booking_function_enabled,
+        booking_prompt: localSettings.booking_prompt,
+      });
+    } catch {
+      // PROMPT-LINT-1: updateSettings throws on a lint refusal (it has already
+      // toasted the specifics) — without this catch the button spins forever.
+    } finally {
+      setSaving(false);
+    }
   };
 
   const selectedModel = LLM_OPTIONS.find(m => m.id === localSettings.model);

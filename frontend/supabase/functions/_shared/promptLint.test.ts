@@ -143,3 +143,24 @@ Deno.test("broadened patterns still let clean copy through with no false positiv
   assertEquals(r.ok, true, JSON.stringify(r.errors));
   assertEquals(r.errors.length, 0);
 });
+
+// PROMPT-LINT-1 review follow-up: the first hyphenated-range pattern used bare
+// stems + \w*, so ordinary compound words ("wedding-friendly") matched as a
+// day range and 422-blocked legitimate saves.
+Deno.test("hyphenated compound words are NOT day ranges (no save-blocking false positives)", () => {
+  const clean = [
+    "We recommend a wedding-friendly venue for the demo.",
+    "Keep replies thumb-friendly and satisfaction-friendly.",
+    "Use a monitor-friendly layout.",
+    "The sunset-thursday palette is our brand accent.",
+  ].join("\n");
+  const r = lintTextSetterPrompt(clean);
+  assertEquals(r.ok, true, JSON.stringify(r.errors));
+  assertEquals(r.errors.length, 0);
+});
+
+Deno.test("real abbreviated and plural day ranges are still rejected", () => {
+  assertEquals(lintTextSetterPrompt("Bookings Tues-Thurs.").ok, false);
+  assertEquals(lintTextSetterPrompt("Open Mondays-Fridays.").ok, false);
+  assertEquals(lintTextSetterPrompt("Mon - Fri only.").ok, false);
+});

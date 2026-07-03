@@ -38,8 +38,11 @@ const DAY = "(?:mon|tues|wednes|thurs|fri|satur|sun)days?";
 // PROMPT-LINT-1: abbreviated stems (Mon/Tue/Wed/Thu/Fri/Sat/Sun) for the
 // hyphenated-range pattern only — a bare "mon"/"tue" is too short to safely
 // match as a standalone weekday-policy signal, but "Mon-Fri"/"Monday-Friday"
-// as a hyphenated range is unambiguous.
-const DAY_STEM = "(?:mon|tue|wed|thu|fri|sat|sun)\\w*";
+// as a hyphenated range is unambiguous. Bounded alternation, NOT stem+\w*:
+// the \w* form matched ordinary compound words ("wedding-friendly",
+// "thumb-friendly") as day ranges and 422-blocked legitimate saves.
+const DAY_STEM =
+  "(?:mon(?:day)?|tue(?:s(?:day)?)?|wed(?:nesday)?|thu(?:r(?:s(?:day)?)?)?|fri(?:day)?|sat(?:urday)?|sun(?:day)?)s?";
 const WEEKDAY_POLICY_PATTERNS: RegExp[] = [
   /available\s+days?\s*(?:\*\*)?\s*:/i,
   new RegExp(`\\b(?:only\\s+(?:book|available|schedule)|book\\s+only|bookings?\\s+only)\\b[^.\\n]*\\b${DAY}\\b`, "i"),
