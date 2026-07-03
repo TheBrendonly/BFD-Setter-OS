@@ -102,3 +102,41 @@ test("buildAvailabilityBlock: error block tells the model to call get-available-
   assert.match(block, /get-available-slots/);
   assert.match(block, /never/i);
 });
+
+// FOLLOWUP-PROMPT-1 review follow-up: the followup channel has NO tool loop and a
+// strict-JSON output contract, so its variant must keep the anti-fabrication data +
+// rules but must NOT instruct the model to call get-available-slots /
+// book-appointments (tool-shaped output would fail the JSON parse and the run).
+test("buildAvailabilityBlock followup mode: ok block keeps data + guard, drops all tool instructions", async () => {
+  const callTool: CallTool = async () => RAW_GHL;
+  const r = await prefetchAvailability({ callTool, timeZone: "Australia/Sydney", nowMs: NOW, windowDays: 14 });
+  const block = buildAvailabilityBlock(r, { channel: "followup" });
+  assert.match(block, /09:00/);
+  assert.match(block, /booked out/i);
+  assert.doesNotMatch(block, /get-available-slots/);
+  assert.doesNotMatch(block, /book-appointments/);
+  assert.doesNotMatch(block, /\bcall\b/i);
+});
+
+test("buildAvailabilityBlock followup mode: empty and error blocks name no tools and forbid naming times", () => {
+  const empty = buildAvailabilityBlock(
+    { status: "empty", timezone: "Australia/Sydney", windowDays: 14, slots: {}, invocation: { name: "get-available-slots", args: {} } },
+    { channel: "followup" }
+  );
+  const error = buildAvailabilityBlock(
+    { status: "error", timezone: "Australia/Sydney", windowDays: 14, slots: {}, invocation: { name: "get-available-slots", args: {}, error: "boom" } },
+    { channel: "followup" }
+  );
+  for (const block of [empty, error]) {
+    assert.doesNotMatch(block, /get-available-slots/);
+    assert.doesNotMatch(block, /book-appointments/);
+    assert.match(block, /do not|don't|never/i);
+  }
+});
+
+test("buildAvailabilityBlock: default (reply) mode is unchanged by the followup variant", async () => {
+  const callTool: CallTool = async () => RAW_GHL;
+  const r = await prefetchAvailability({ callTool, timeZone: "Australia/Sydney", nowMs: NOW, windowDays: 14 });
+  assert.equal(buildAvailabilityBlock(r), buildAvailabilityBlock(r, { channel: "reply" }));
+  assert.match(buildAvailabilityBlock(r), /book-appointments/);
+});

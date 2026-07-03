@@ -28,6 +28,7 @@ import { normalizeLlmModel } from "./_shared/llmModel.ts";
 import { persistToolInvocations } from "./_shared/persistToolInvocations.ts";
 import { persistHumanTurn } from "./_shared/persistHumanTurn.ts";
 import { prefetchAvailability, buildAvailabilityBlock } from "./_shared/prefetchSlots.ts";
+import { makeVoiceBookingCallTool } from "./_shared/voiceBookingCallTool.ts";
 import { buildTimeAnchorBlock, resolveClientTimeZone } from "./_shared/timeAnchor.ts";
 import { mergeCanonicalSlots, validateBookingArgs, type CanonicalSlotMap } from "./_shared/slotBinding.ts";
 import {
@@ -48,10 +49,11 @@ const getMainSupabase = () =>
 const MAX_HISTORY_ROWS = 30;
 const DEFAULT_MODEL = "openai/gpt-4.1-nano";
 // Per-call timeouts. The tool loop caps iterations (default 4), so the worst
-// case is ~4 × (LLM_TIMEOUT + TOOL_TIMEOUT) + a final LLM wrap-up, which stays
-// well under the task's 600s maxDuration.
+// case is ~4 × (LLM_TIMEOUT + tool timeout) + a final LLM wrap-up, which stays
+// well under the task's 600s maxDuration. The 30s tool timeout lives in
+// _shared/voiceBookingCallTool.ts (DEFAULT_TOOL_TIMEOUT_MS), shared with
+// sendFollowup.
 const LLM_TIMEOUT_MS = 60 * 1000;
-const TOOL_TIMEOUT_MS = 30 * 1000;
 
 // Reuse the n8n-style human-content extractor so chat_history written by older
 // n8n turns still parses cleanly when the new task reads it.
@@ -217,7 +219,6 @@ export const processSetterReply = task({
     console.log(`processSetterReply: calling ${model} for lead ${payload.Lead_ID} (slot ${slotId}, history ${chatHistory.length} rows, tools on)`);
 
     const supabaseUrl = process.env.SUPABASE_URL!;
-    const toolEndpoint = `${supabaseUrl}/functions/v1/voice-booking-tools`;
 
     // Engine-injected identity — overrides anything the model supplies so the
     // booking always attaches to THIS lead (contactId = the GHL/internal lead
@@ -288,31 +289,13 @@ export const processSetterReply = task({
       return { content: aiMsg?.content ?? null, toolCalls };
     };
 
-    const callTool: CallTool = async (name, toolArgs) => {
-      const url = `${toolEndpoint}?tool=${encodeURIComponent(name)}&clientId=${encodeURIComponent(client.id)}`;
-      const headers: Record<string, string> = { "Content-Type": "application/json" };
-      if (client.intake_lead_secret) headers.Authorization = `Bearer ${client.intake_lead_secret}`;
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), TOOL_TIMEOUT_MS);
-      let resp: Response;
-      try {
-        resp = await fetch(url, {
-          method: "POST",
-          headers,
-          body: JSON.stringify(toolArgs),
-          signal: controller.signal,
-        });
-      } finally {
-        clearTimeout(timeoutId);
-      }
-      const json = (await resp.json().catch(() => null)) as { ok?: boolean; result?: unknown; error?: string } | null;
-      if (!resp.ok || (json && json.ok === false)) {
-        const msg = (json && (json.error || JSON.stringify(json))) || `HTTP ${resp.status}`;
-        throw new Error(`voice-booking-tools ${name} failed: ${String(msg).slice(0, 300)}`);
-      }
-      // Unwrap the { ok, tool, result } envelope so the model sees the payload.
-      return json && typeof json === "object" && "result" in json ? json.result : json;
-    };
+    // Shared with sendFollowup (which previously forked this closure and dropped
+    // the 30s timeout) — semantics unchanged for this path.
+    const callTool = makeVoiceBookingCallTool({
+      supabaseUrl,
+      clientId: client.id,
+      intakeSecret: client.intake_lead_secret ?? null,
+    });
 
     // ── BOOK-1: prefetch real calendar availability and inject it as ground truth
     // before the model speaks (mirrors the Voice setter). Best-effort — a prefetch

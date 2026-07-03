@@ -93,7 +93,17 @@ export async function prefetchAvailability(args: {
 // The ground-truth block injected into the system context. The wording is the
 // anti-fabrication guard: with the real open times in front of it, a weak model may
 // not claim a listed time is "booked out" / unavailable (the BOOK-1 failure mode).
-export function buildAvailabilityBlock(result: PrefetchResult): string {
+//
+// channel 'reply' (default) is the live tool-loop path and its wording is frozen
+// (the X-Ray mirror byte-tests it). channel 'followup' is for sendFollowup, which
+// has NO tool loop and a strict-JSON output contract — same data + fabrication
+// guards, but zero tool instructions (telling that model to "call
+// get-available-slots" invites tool-shaped output that fails the JSON parse).
+export function buildAvailabilityBlock(
+  result: PrefetchResult,
+  opts?: { channel?: "reply" | "followup" }
+): string {
+  const followup = opts?.channel === "followup";
   // The single timezone the whole flow runs in is the BUSINESS/calendar timezone
   // (clients.timezone), NOT the lead's — never label it "the lead's timezone".
   const tz = result.timezone || "the business timezone";
@@ -103,7 +113,9 @@ export function buildAvailabilityBlock(result: PrefetchResult): string {
     const trimmed: Record<string, string[]> = {};
     for (const d of dates) trimmed[d] = result.slots[d];
     const more = Object.keys(result.slots).length > dates.length
-      ? " (further dates available — call get-available-slots for a later window if asked)"
+      ? (followup
+        ? " (further dates exist beyond this window)"
+        : " (further dates available — call get-available-slots for a later window if asked)")
       : "";
     return [
       "## Live calendar availability (ground truth — already fetched for you this turn)",
@@ -113,8 +125,15 @@ export function buildAvailabilityBlock(result: PrefetchResult): string {
       "- Offer ONLY times that appear in this map. Never invent, guess, or round a time.",
       `- NEVER tell the lead a time is "booked out", "full", "snapped up", or unavailable if it appears in this map — it is genuinely open.`,
       "- If the time the lead wants is NOT in this map, say it isn't open and offer the nearest listed alternatives.",
-      "- To BOOK a chosen time: call book-appointments with startDateTime as the slot's date and time joined EXACTLY as listed, format YYYY-MM-DDTHH:MM (e.g. 2026-07-06T11:00). Copy the date and time verbatim from this map; never convert timezones or compute a datetime yourself.",
-      "- This snapshot is current; you do not need to re-check before offering. Only call get-available-slots again if the lead asks about a date beyond this window.",
+      ...(followup
+        ? [
+          "- You are drafting a one-way follow-up message: you CANNOT book anything or check other windows from here. If you mention times, mention ONLY times from this map.",
+          "- This snapshot is current for this follow-up; no re-checking is possible.",
+        ]
+        : [
+          "- To BOOK a chosen time: call book-appointments with startDateTime as the slot's date and time joined EXACTLY as listed, format YYYY-MM-DDTHH:MM (e.g. 2026-07-06T11:00). Copy the date and time verbatim from this map; never convert timezones or compute a datetime yourself.",
+          "- This snapshot is current; you do not need to re-check before offering. Only call get-available-slots again if the lead asks about a date beyond this window.",
+        ]),
     ].join("\n");
   }
 
@@ -122,12 +141,27 @@ export function buildAvailabilityBlock(result: PrefetchResult): string {
     return [
       "## Live calendar availability (ground truth — already fetched for you this turn)",
       `The calendar returned NO open times in the next ${result.windowDays} days (timezone ${tz}).`,
-      "- Do NOT invent times. If the lead wants to book, call get-available-slots for a different window, or let them know you'll check and follow up.",
-      `- Never tell the lead a specific time is unavailable without checking — say the near-term calendar looks full and offer to look further out.`,
+      ...(followup
+        ? [
+          "- Do NOT invent or name any specific time in this follow-up. You cannot re-check the calendar from here — invite the lead to share what suits them instead.",
+          "- Never tell the lead a specific time is unavailable; say the near-term calendar looks full.",
+        ]
+        : [
+          "- Do NOT invent times. If the lead wants to book, call get-available-slots for a different window, or let them know you'll check and follow up.",
+          `- Never tell the lead a specific time is unavailable without checking — say the near-term calendar looks full and offer to look further out.`,
+        ]),
     ].join("\n");
   }
 
   // status === "error"
+  if (followup) {
+    return [
+      "## Live calendar availability",
+      "(Could not pre-fetch availability for this follow-up.)",
+      "- You have NO availability data: do NOT name, offer, or rule out any specific time in this message.",
+      "- Never claim a time is open, unavailable, or booked out.",
+    ].join("\n");
+  }
   return [
     "## Live calendar availability",
     "(Could not pre-fetch availability this turn.)",

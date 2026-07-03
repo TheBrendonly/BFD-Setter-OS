@@ -7,6 +7,7 @@ import { isPhoneOptedOut } from "./_shared/optout";
 import { normalizeLlmModel } from "./_shared/llmModel";
 import { resolveClientTimeZone, buildTimeAnchorBlock } from "./_shared/timeAnchor";
 import { prefetchAvailability, buildAvailabilityBlock } from "./_shared/prefetchSlots";
+import { makeVoiceBookingCallTool } from "./_shared/voiceBookingCallTool.ts";
 import { buildFollowupUserMessage } from "./_shared/buildFollowupContext";
 import type { CallTool } from "./_shared/setterToolLoop";
 
@@ -243,26 +244,23 @@ export const sendFollowup = task({
     // slot-binding validator is needed — only the anchor + availability data.
     const clientTimeZone = resolveClientTimeZone(client.timezone as string | null);
     const supabaseUrl = process.env.SUPABASE_URL!;
-    const toolEndpoint = `${supabaseUrl}/functions/v1/voice-booking-tools`;
-    const followupCallTool: CallTool = async (name, toolArgs) => {
-      const url = `${toolEndpoint}?tool=${encodeURIComponent(name)}&clientId=${encodeURIComponent(client_id)}`;
-      const headers: Record<string, string> = { "Content-Type": "application/json" };
-      const intakeSecret = client.intake_lead_secret as string | null;
-      if (intakeSecret) headers.Authorization = `Bearer ${intakeSecret}`;
-      const resp = await fetch(url, { method: "POST", headers, body: JSON.stringify(toolArgs) });
-      const json = (await resp.json().catch(() => null)) as { ok?: boolean; result?: unknown; error?: string } | null;
-      if (!resp.ok || (json && json.ok === false)) {
-        throw new Error((json && json.error) || `HTTP ${resp.status}`);
-      }
-      return json && typeof json === "object" && "result" in json ? json.result : json;
-    };
+    // Shared factory (review follow-up): the forked closure here had silently
+    // dropped the live path's AbortController + 30s timeout, so a hung GHL/edge
+    // call could stall a followup run for undici's ~300s default.
+    const followupCallTool: CallTool = makeVoiceBookingCallTool({
+      supabaseUrl,
+      clientId: client_id,
+      intakeSecret: (client.intake_lead_secret as string | null) ?? null,
+    });
     const followupNowMs = Date.now();
     const followupPrefetch = await prefetchAvailability({
       callTool: followupCallTool,
       timeZone: clientTimeZone,
       nowMs: followupNowMs,
     });
-    const availabilityBlock = buildAvailabilityBlock(followupPrefetch);
+    // channel 'followup': same ground-truth data + fabrication guards, but no tool
+    // instructions — this path has no tool loop and a strict-JSON output contract.
+    const availabilityBlock = buildAvailabilityBlock(followupPrefetch, { channel: "followup" });
     const timeAnchorBlock = buildTimeAnchorBlock(clientTimeZone, followupNowMs);
 
     const userMessage = buildFollowupUserMessage({
