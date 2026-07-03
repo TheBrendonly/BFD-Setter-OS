@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Pencil, Check, X, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { FunctionsHttpError } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { useClientCredentials } from '@/hooks/useClientCredentials';
 import { setterKey, type SetterKind } from '@/lib/setterLabels';
@@ -145,7 +146,24 @@ export const InlineSetterNameEditor: React.FC<Props> = ({
             },
           });
           if (retellError) {
-            retellWarning = retellError.message || 'Retell push failed';
+            // F9-1: a structured 423 lock refusal means the client-side lock state
+            // was stale (the pre-write renameLocked gate above didn't fire). Honor
+            // the server: revert the already-persisted display-name write and refuse
+            // as an ERROR, instead of soft-warning while the tile keeps a name that
+            // never reached Retell / voice_setters (the original live repro).
+            const errBody = retellError instanceof FunctionsHttpError
+              ? await retellError.context.json().catch(() => ({} as Record<string, unknown>))
+              : ({} as Record<string, unknown>);
+            const status = retellError instanceof FunctionsHttpError ? retellError.context.status : undefined;
+            if (status === 423 || errBody?.code === 'setter_retell_locked') {
+              await updateCredential({ field: 'setter_display_names', value: stored });
+              toast.error('Retell-locked: unlock this setter to rename it', {
+                description: 'The name change was reverted.',
+              });
+              setEditing(false);
+              return;
+            }
+            retellWarning = (errBody?.error as string | undefined) || retellError.message || 'Retell push failed';
           } else if (retellResult?.action === 'skipped_no_agent') {
             retellWarning = retellResult.reason || 'No Retell agent exists for this slot yet — name saved locally';
           } else if (retellResult?.action === 'patched_but_publish_failed') {

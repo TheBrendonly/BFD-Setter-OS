@@ -7557,6 +7557,7 @@ const PromptManagement = () => {
           onPushFlow={handlePushFlow}
           onEnableConversationFlow={handleEnableConversationFlow}
           directions={voiceSetterDirections}
+          isLocked={isVoiceSlotLocked(editingSlotId)}
           onDirectionsChange={handleVoiceSetterDirectionsChange}
         />
         <AIPromptDialog

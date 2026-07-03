@@ -78,6 +78,10 @@ interface PromptDocPageProps {
   // lives in PromptManagement.
   directions?: string[];
   onDirectionsChange?: (next: string[]) => void;
+  // F9-1: Retell-lock state for this setter, forwarded to the header rename
+  // editor so a locked setter's doc view (reachable when handleEdit is entered
+  // without fromVoiceTab) cannot leak a display-name write.
+  isLocked?: boolean;
 }
 
 const MONO_STYLE: React.CSSProperties = {
@@ -113,6 +117,7 @@ export const PromptDocPage: React.FC<PromptDocPageProps> = ({
   onEnableConversationFlow,
   directions,
   onDirectionsChange,
+  isLocked,
 }) => {
   const [docText, setDocText] = useState('');
   const isFlowEngine = doc?.engine_type === 'conversation-flow';
@@ -242,6 +247,7 @@ export const PromptDocPage: React.FC<PromptDocPageProps> = ({
               slot={slotNumber}
               fallback={setterName || slotId}
               className="text-foreground font-semibold text-lg"
+              isLocked={isLocked}
             />
           ) : (
             <h2 className="text-lg font-semibold">{setterName || slotId}</h2>
