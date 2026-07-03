@@ -21,10 +21,13 @@ Deno.test("hangup mode -> voicemail_option only, NO deprecated detection fields"
   assert(!("voicemail_detection_timeout_ms" in r.patchBody));
 });
 
-Deno.test("static mode with text -> static action", () => {
+Deno.test("static mode with text -> static_text action (Retell enum; 'static' is not accepted)", () => {
   const r = buildVoicemailPatch({ mode: "static", text: "Sorry we missed you" });
   assert(r.ok);
-  assertEquals(r.patchBody.voicemail_option, { action: { type: "static", text: "Sorry we missed you" } });
+  // Stored config mode stays "static"; the EMITTED enum must be Retell's
+  // static_text (the OpenAPI enum is prompt / static_text / hangup /
+  // bridge_transfer) — emitting "static" made static-mode pushes invalid.
+  assertEquals(r.patchBody.voicemail_option, { action: { type: "static_text", text: "Sorry we missed you" } });
   assertEquals(Object.keys(r.patchBody), ["voicemail_option"]);
 });
 

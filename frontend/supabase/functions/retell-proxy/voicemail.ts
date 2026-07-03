@@ -31,7 +31,10 @@ export function buildVoicemailPatch(cfg: VoicemailConfig): VoicemailPatchResult 
     if (!cfg.text || !cfg.text.trim()) {
       return { ok: false, action: "skipped_missing_text", reason: "Static voicemail requires `text` to be non-empty." };
     }
-    voicemailOption = { action: { type: "static", text: cfg.text } };
+    // Stored config mode is "static"; Retell's enum is static_text (OpenAPI:
+    // prompt / static_text / hangup / bridge_transfer). Emitting "static" made
+    // static-mode pushes invalid even once the draft-first routing landed.
+    voicemailOption = { action: { type: "static_text", text: cfg.text } };
   } else if (cfg.mode === "prompt") {
     if (!cfg.text || !cfg.text.trim()) {
       return { ok: false, action: "skipped_missing_text", reason: "Prompt voicemail requires `text` to be non-empty." };

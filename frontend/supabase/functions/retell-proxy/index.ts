@@ -1553,12 +1553,11 @@ Deno.serve(async (req) => {
         } | null;
         // VM-1: build the patch body with voicemail_option ONLY. The deprecated
         // enable_voicemail_detection + voicemail_detection_timeout_ms fields are no
-        // longer in the live Retell agent schema and caused the whole PATCH to 4xx
-        // (the "Push partial" symptom). The hangup option already lands via this same
-        // raw PATCH, so voicemail_option alone is the proven path. (Routing through
-        // ensureEditableAgentDraft was considered but is unnecessary — hangup proves
-        // the raw PATCH applies; see the VM-1 note in the handoff for the Voice-gated
-        // live-test confirmation.)
+        // longer in the live Retell agent schema and caused the whole PATCH to 4xx.
+        // The v47 bet that a raw update-agent PATCH would stick was DISPROVEN by the
+        // 2026-07-03 behavioral verify (push landed on 0/5 agents): published agent
+        // versions are IMMUTABLE, so like every other write handler this must go
+        // draft -> edit -> publish -> repoint (see the loop below).
         const vm = buildVoicemailPatch(cfg);
         if (!vm.ok) {
           result = { success: false, action: vm.action, reason: vm.reason };
@@ -1573,24 +1572,39 @@ Deno.serve(async (req) => {
             ? cfg.detect_timeout_ms
             : 30000;
 
-        const agentIds = new Set<string>();
-        for (const col of allAgentCols) {
+        // An agent can serve multiple slots (shared master agents) — patch and
+        // publish each agent ONCE, then repoint the phone pins for every slot it
+        // serves.
+        const slotsByAgent = new Map<string, number[]>();
+        for (const [slotStr, col] of Object.entries(SLOT_TO_AGENT_COLUMN)) {
           const v = (clientRow as Record<string, string | null>)?.[col];
-          if (v) agentIds.add(v);
+          if (v) slotsByAgent.set(v, [...(slotsByAgent.get(v) ?? []), Number(slotStr)]);
         }
-        if (agentIds.size === 0) {
+        if (slotsByAgent.size === 0) {
           result = { success: true, action: "skipped_no_agents", reason: "No Retell agents are provisioned for this client yet." };
           break;
         }
 
         const patches: Array<{ agent_id: string; ok: boolean; error?: string; skipped?: boolean; reason?: string; name?: string }> = [];
-        for (const agentId of agentIds) {
+        for (const [agentId, slots] of slotsByAgent) {
           if (isAgentLocked(lockIdx, agentId)) { // F9 — Retell-locked: leave it alone
             patches.push({ agent_id: agentId, ok: true, skipped: true, reason: "retell_locked", name: lockIdx.nameByAgentId.get(agentId) });
             continue;
           }
           try {
+            // Published agent versions are IMMUTABLE (the v39 lesson): mint/reuse a
+            // draft, PATCH the draft, publish it, then repoint the phone version
+            // pins so the new voicemail actually serves calls.
+            const draft = await ensureEditableAgentDraft(apiKey, agentId);
             await retellFetch(apiKey, "PATCH", `update-agent/${agentId}`, patchBody);
+            const publishResp = await publishAgentVersion(apiKey, agentId, draft.draftVersion, "VM-1 voicemail push");
+            for (const slotNumber of slots) {
+              try {
+                await repointPhoneVersionsAfterPublish(supabaseAdmin, apiKey, clientId, slotNumber, agentId, publishResp?.version);
+              } catch (repointErr) {
+                console.warn(`[set-voicemail] phone repoint failed for agent ${agentId} slot ${slotNumber} (non-blocking)`, repointErr);
+              }
+            }
             patches.push({ agent_id: agentId, ok: true });
           } catch (e) {
             patches.push({ agent_id: agentId, ok: false, error: e instanceof Error ? e.message : String(e) });
