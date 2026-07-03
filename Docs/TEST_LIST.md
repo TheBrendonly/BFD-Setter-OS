@@ -158,24 +158,56 @@ When an item passes, move it to `Docs/archive/COMPLETED_LOG.md`. When it fails, 
 
 ## SMS-MEM-1 / FOLLOWUP-PROMPT-1 / PROMPT-LINT-1 / MODEL-1-HARDENING (UI) — retest AFTER `feature/overnight-bugfix` deploys
 
-> All fix-staged on branch `feature/overnight-bugfix` as of 2026-07-03 (test:node 113/113, test:edge 200/200
-> green), NOT yet deployed. `MODEL-1-HARDENING`'s UI half was still uncommitted/in-progress on that branch as of
-> this writing — confirm it landed before testing.
+> All fix-staged on branch `feature/overnight-bugfix` as of 2026-07-03. The overnight part-2 run (same date,
+> later) FINISHED the branch: MODEL-1's UI half is committed, all 6 adversarial-review findings are fixed, and
+> API-DEPR-1 + VM-1 landed on the same branch (final suite: test:node 122/122, test:frontend 8/8,
+> test:edge 202/202, tsc + vite build green). NOT yet deployed. NOTE the deploy now includes EDGE FNS
+> (retell-proxy v48, verify-credentials, save-external-prompt's shared lint module) + Trigger.dev + frontend —
+> see the 2026-07-03 overnight handoff for the exact checklist.
 
 - [ ] **SMS-MEM-1 — multi-turn SMS has real memory.** Send 2+ messages in one conversation (e.g. state a day,
   then separately accept a time) → the setter does NOT re-ask something already answered, and
   `select * from chat_history where session_id=... order by timestamp` (client's external Supabase) now shows
-  alternating `human`/`ai` rows, not `ai`-only.
+  alternating `human`/`ai` rows, not `ai`-only. (Known accepted behavior: if a run hard-fails before STEP 6 on
+  both attempts, that inbound turn is not persisted — the retry-safe placement trade-off.)
 - [ ] **FOLLOWUP-PROMPT-1 — automated follow-up respects the same date/availability ground truth.** Let a cold
-  lead trigger a cron follow-up (or check `nudgeColdReply.ts` if it also needed the fix) → the follow-up copy
-  never states a fabricated day policy or a literal `{{ $now }}`-style artifact.
-- [ ] **PROMPT-LINT-1 — lint bypasses closed.** In Prompt Management, try saving text content containing
-  `BookAppointment` (Pascal-case) or `GET_AVAILABLE_SLOT` (caps) or a `Mon-Fri` day restriction → save is now
-  BLOCKED (422) with the offending line flagged, not silently accepted.
+  lead trigger a cron follow-up → the copy never states a fabricated day policy or a literal `{{ $now }}`-style
+  artifact, and never "offers to check the calendar" (the followup-mode availability block names no tools —
+  review follow-up `29ce9a4`). `nudgeColdReply` confirmed NOT to need the fix (no `text_prompts` read, no
+  booking loop). Bonus check: `followup_timers.raw_exchange` shows the availability block was injected.
+- [ ] **PROMPT-LINT-1 — lint bypasses closed, on the RIGHT store.** (a) In Prompt Management, saving text content
+  containing `BookAppointment` (Pascal-case) / `GET_AVAILABLE_SLOT` (caps) / a `Mon-Fri` day restriction is
+  BLOCKED with the offending line flagged. (b) NEW (review follow-up `d8111d6`): the same `Mon-Fri` policy typed
+  into **Follow-up Instructions on the AgentSettingsCard** is ALSO blocked (that card writes `agent_settings`,
+  which is what `sendFollowup` actually reads). (c) False-positive check: copy containing "wedding-friendly" or
+  "thumb-friendly" saves CLEAN.
 - [ ] **MODEL-1-HARDENING (UI) — unknown model id needs explicit confirmation.** In the OpenRouter model
   selector, typing a made-up/invalid model id and clicking "use as custom" no longer applies it silently —
   it shows an "unknown id, may not exist" warning requiring an explicit "Use anyway" click; a real known id
-  still applies on one click.
+  still applies on one click. NEW (review follow-up `19a6fb4`): typing a KNOWN id in the wrong case (e.g.
+  `Google/Gemini-2.5-Flash`) saves the canonical lowercase id.
+
+## Overnight part-2 additions (same branch + `g3-7/vite-major`) — retest AFTER deploy
+
+- [ ] **VM-1 — voicemail push lands AND survives a call (refined fix `acfc387`; retell-proxy v47→v48,
+  Voice-gated).** Save & push mode=`prompt` → full "voicemail_set" success (NOT "partial"); all 5 push targets'
+  `voicemail_option` updated (draft→publish→repoint now runs per agent); locked setters skipped + reported;
+  then ONE answered-call booking regression to confirm v48 didn't disturb the frozen call path, and (if
+  practical) an unanswered call to hear the voicemail. `static` mode now emits `static_text` — try one static
+  push too.
+- [ ] **API-DEPR-1 — v2 list-agents serves the UI.** After deploying retell-proxy + verify-credentials:
+  VoiceAIRepSetup → Agents tab lists the agents with full detail (name/version/published/engine — now hydrated
+  via get-agent, one row per agent instead of legacy version-expanded rows); API Credentials → Verify shows
+  Retell "Connected"; Retell dashboard deprecation notice stops firing on the next sweep.
+- [ ] **F9-1 residual — locked rename refused EVERYWHERE.** With a setter Retell-locked: rename via the tile
+  heading AND via the prompt-doc page header → both refuse with a clear Retell-locked error; on a stale-lock
+  race the display name REVERTS instead of soft-warning (no tile/Retell name mismatch left behind).
+- [ ] **PHONE-CLEAR-1 residual — Contacts dialog + Chats panel.** Edit a lead's phone via the CONTACTS edit
+  dialog (not ContactDetail) → `normalized_phone` follows; clear it → NULL; add a NEW contact via the dialog →
+  `normalized_phone` is set (lead is inbound-matchable).
+- [ ] **G3-7 — app on vite 8 (branch `g3-7/vite-major`).** `npm run dev` (after the inotify sysctl bump, or
+  with `CHOKIDAR_USEPOLLING=true`) → app loads + a few pages navigate in a real browser; `npm run build` serves
+  fine on Railway preview. Then merge the branch.
 
 ## Standing rule
 

@@ -5,6 +5,27 @@ Testing actions live in `TEST_LIST.md`; first-paying-client onboarding actions l
 **prompt-content edits (agent wording) live in `PROMPT_UPDATE_LIST.md`** (kept separate so you can work
 prompt tweaks independently).
 
+## From the 2026-07-03 overnight stage-only bug-fix run (branch `feature/overnight-bugfix` + `g3-7/vite-major`)
+
+- [ ] **Deploy the `feature/overnight-bugfix` branch (supervised, your GO).** Merge to `main`, then deploy:
+  Trigger.dev (`npx trigger.dev@4.4.4 deploy` — SMS-MEM-1, FOLLOWUP-PROMPT-1) + edge fns via
+  `deploy_single_fn.mjs`/`deploy_with_shared.mjs` (**retell-proxy v47→v48** for VM-1 + API-DEPR-1,
+  **verify-credentials** for API-DEPR-1, **save-external-prompt** for the shared lint module) + frontend
+  (Railway, for MODEL-1/F9-1/PHONE-CLEAR-1/PROMPT-LINT-1 browser lint). retell-proxy v48 is **Voice-regression
+  gated** (frozen live baseline) — run the answered-call booking check after it. Exact per-item checklist is in
+  the 2026-07-03 overnight handoff. `[B]`
+- [ ] **Apply the RLS-SHAPE-1 migration** — `frontend/supabase/migrations/20260703120000_rls_shape_1_sms_delivery_events_agency_role_gate.sql`
+  is staged but deliberately NOT applied. Run it via the Mgmt API at the next migration window (it just
+  role-gates one SELECT policy; zero data change). `[B]`
+- [ ] **Merge the G3-7 vite-8 branch after a browser check** — `g3-7/vite-major` (off `feature/overnight-bugfix`)
+  bumps vite 5→8.1.3 and clears every npm audit advisory. Verified headless (build/tsc/tests/app-load green).
+  Before merging: `npm run dev` and click through a few pages in a real browser. `[B]`
+- [ ] **Raise the inotify watch limit on greenserver (unblocks `npm run dev`)** — vite 8's dev server (and any
+  file watcher) hits `ENOSPC: System limit for number of file watchers reached` because Syncthing + the VS Code
+  server + graphify already hold most watches. Fix (needs sudo): `echo 'fs.inotify.max_user_watches=524288' |
+  sudo tee /etc/sysctl.d/60-inotify.conf && sudo sysctl --system`. Until then, dev with
+  `CHOKIDAR_USEPOLLING=true npm run dev`. Not a vite-8 bug; production (static build) is unaffected. `[B]`
+
 ## Active (do when you have time)
 
 - [ ] **Apply the Setter-1 prompt content migration (PROMPT-AUTH-1, report-only)** — the legacy 511-line
