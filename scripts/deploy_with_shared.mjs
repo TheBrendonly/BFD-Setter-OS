@@ -22,6 +22,9 @@ const SLUGS = [
   'sync-ghl-contact','intake-lead',
   // Native bulk reactivation (2026-05-31): imports ../_shared/{assert-client-access,reactivate-list}.ts
   'reactivate-lead-list',
+  // Prompt authoring (PROMPT-AUTH-1, 2026-07-03): save imports ../_shared/{authorize-client-request,promptLint}.ts;
+  // get-external-prompt imports ../_shared/authorize-client-request.ts.
+  'save-external-prompt','get-external-prompt',
 ];
 
 const sharedFiles = readdirSync(join(FN_DIR, '_shared')).filter(f => f.endsWith('.ts'));
