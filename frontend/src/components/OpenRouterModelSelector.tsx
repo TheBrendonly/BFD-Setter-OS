@@ -10,6 +10,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { StatusTag } from '@/components/StatusTag';
+import { isKnownOpenRouterModelId } from '@/lib/isKnownOpenRouterModel';
 
 const POPULAR_MODELS = [
   { id: 'google/gemini-2.5-pro', name: 'Gemini 2.5 Pro', provider: 'Google' },
@@ -63,6 +64,7 @@ export function OpenRouterModelSelector({ value, onChange, isSavedConfigured, di
   const [remoteModels, setRemoteModels] = useState<RemoteModel[]>([]);
   const [loading, setLoading] = useState(false);
   const [fetched, setFetched] = useState(false);
+  const [pendingCustom, setPendingCustom] = useState<string | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -85,8 +87,25 @@ export function OpenRouterModelSelector({ value, onChange, isSavedConfigured, di
 
   useEffect(() => {
     if (open) { setTimeout(() => searchRef.current?.focus(), 100); setVisibleCount(20); }
-    else setSearch('');
+    else { setSearch(''); setPendingCustom(null); }
   }, [open]);
+
+  // MODEL-1-HARDENING: both "use as custom model" actions used to call
+  // onChange(search) directly with zero check against the fetched model list,
+  // so any slash-containing string (e.g. the invalid google/gemini-flash-latest
+  // that once silently broke every AI engine) reached clients.llm_model
+  // unchecked. Known ids are accepted immediately; anything else requires an
+  // explicit "use anyway" confirmation instead of a single click.
+  const handleUseCustom = (candidate: string) => {
+    const trimmed = candidate.trim();
+    if (!trimmed) return;
+    if (isKnownOpenRouterModelId(trimmed, allModels)) {
+      onChange(trimmed);
+      setOpen(false);
+      return;
+    }
+    setPendingCustom(trimmed);
+  };
 
   const allModels = useMemo(() => {
     if (remoteModels.length > 0) {
@@ -184,7 +203,7 @@ export function OpenRouterModelSelector({ value, onChange, isSavedConfigured, di
                     <button
                       className="block mx-auto mt-2 text-primary hover:underline"
                       style={{ ...monoStyle, fontSize: '12px' }}
-                      onClick={() => { onChange(search); setOpen(false); }}
+                      onClick={() => handleUseCustom(search)}
                     >
                       Use "{search}" as custom model
                     </button>
@@ -213,11 +232,35 @@ export function OpenRouterModelSelector({ value, onChange, isSavedConfigured, di
                 <button
                   className="flex items-center w-full gap-2 rounded-sm px-3 py-1.5 cursor-pointer hover:bg-accent hover:text-accent-foreground border-t border-border mt-1 pt-2"
                   style={{ ...monoStyle, textTransform: 'capitalize' }}
-                  onClick={() => { onChange(search); setOpen(false); }}
+                  onClick={() => handleUseCustom(search)}
                 >
                   <Check className="h-3.5 w-3.5 shrink-0 opacity-0" />
                   <span className="truncate flex-1 text-left">Use custom: {search}</span>
                 </button>
+              )}
+              {pendingCustom && (
+                <div className="border-t border-border mt-1 p-2 space-y-2">
+                  <p className="text-muted-foreground" style={{ ...monoStyle, fontSize: '11px', textTransform: 'none' }}>
+                    "{pendingCustom}" was not found in the OpenRouter model list — this ID may not exist. An
+                    invalid model id silently breaks every AI-driven feature for this client.
+                  </p>
+                  <div className="flex gap-2">
+                    <button
+                      className="flex-1 rounded-sm px-2 py-1 border border-destructive text-destructive hover:bg-destructive/10"
+                      style={{ ...monoStyle, fontSize: '12px' }}
+                      onClick={() => { onChange(pendingCustom); setOpen(false); setPendingCustom(null); }}
+                    >
+                      Use anyway
+                    </button>
+                    <button
+                      className="flex-1 rounded-sm px-2 py-1 border border-border hover:bg-accent"
+                      style={{ ...monoStyle, fontSize: '12px' }}
+                      onClick={() => setPendingCustom(null)}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
               )}
             </div>
           </div>

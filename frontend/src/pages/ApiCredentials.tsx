@@ -578,6 +578,19 @@ const ApiCredentials = () => {
       }
       const llmModel = settings.llm_model?.trim();
       if (llmModel) {
+        // MODEL-1-HARDENING: redundant defense-in-depth shape guard, in case
+        // OpenRouterModelSelector's confirm gate is ever bypassed or the field
+        // is wired elsewhere. An invalid model id (no provider/model shape)
+        // silently 400s every AI-driven engine for this client.
+        if (!/^[^/\s]+\/[^/\s]+/.test(llmModel)) {
+          toast({
+            title: "Invalid model ID",
+            description: "Model ID must look like provider/model (e.g. google/gemini-2.5-flash).",
+            variant: "destructive",
+          });
+          setSavingGroup(null);
+          return;
+        }
         updates.llm_model = llmModel;
       }
       if (Object.keys(updates).length === 0) {
