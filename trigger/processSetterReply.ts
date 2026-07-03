@@ -27,6 +27,8 @@ import { SETTER_TOOLS, SETTER_TOOL_NAMES, TOOL_USAGE_INSTRUCTION } from "./_shar
 import { normalizeLlmModel } from "./_shared/llmModel.ts";
 import { persistToolInvocations } from "./_shared/persistToolInvocations.ts";
 import { prefetchAvailability, buildAvailabilityBlock } from "./_shared/prefetchSlots.ts";
+import { buildTimeAnchorBlock } from "./_shared/timeAnchor.ts";
+import { mergeCanonicalSlots, validateBookingArgs, type CanonicalSlotMap } from "./_shared/slotBinding.ts";
 import {
   runSetterToolLoop,
   ToolsUnsupportedError,
@@ -229,7 +231,11 @@ export const processSetterReply = task({
       const timeoutId = setTimeout(() => controller.abort(), LLM_TIMEOUT_MS);
       let aiResp: Response;
       try {
-        const reqBody: Record<string, unknown> = { model, messages: llmMessages, temperature: 0.5 };
+        // PROMPT-AUTH-1: tool-bearing calls run at temperature 0 (Gemini
+        // function-calling guidance — date/slot accuracy over prose variety);
+        // the no-tools finalize keeps 0.5 for natural wording.
+        const temperature = llmTools && llmTools.length > 0 ? 0 : 0.5;
+        const reqBody: Record<string, unknown> = { model, messages: llmMessages, temperature };
         if (llmTools && llmTools.length > 0) {
           reqBody.tools = llmTools;
           reqBody.tool_choice = toolChoice;
@@ -308,12 +314,33 @@ export const processSetterReply = task({
     // before the model speaks (mirrors the Voice setter). Best-effort — a prefetch
     // failure degrades to a "call get-available-slots" instruction, never blocks the
     // reply. Passing an epoch-ms window sidesteps BOOK-3's offset-less-ISO mis-parse.
+    const nowMs = Date.now();
     const prefetch = await prefetchAvailability({
       callTool,
       timeZone: (client.timezone as string | null) ?? null,
-      nowMs: Date.now(),
+      nowMs,
     });
-    messages[0].content = `${messages[0].content ?? ""}\n\n${buildAvailabilityBlock(prefetch)}`;
+    // ── PROMPT-AUTH-1: append the availability map + a real current-time anchor.
+    // The anchor neutralizes stale in-prompt "now" text (e.g. a literal {{ $now }})
+    // so relative days resolve from the engine clock, not model guesswork.
+    messages[0].content = [
+      messages[0].content ?? "",
+      buildAvailabilityBlock(prefetch),
+      buildTimeAnchorBlock((client.timezone as string | null) ?? null, nowMs),
+    ].join("\n\n");
+
+    // ── PROMPT-AUTH-1: canonical slot map = every open slot the engine has seen
+    // this turn (prefetch + any mid-loop get-available-slots). book-appointments /
+    // update-appointment are validated against it before executing: a listed time
+    // is rewritten to GHL's exact ISO string; an off-list time is refused and the
+    // real alternatives are folded back (kills the "Thursday 2pm" -> Friday bug).
+    const canonicalSlots: CanonicalSlotMap = new Map();
+    mergeCanonicalSlots(canonicalSlots, prefetch.invocation.result);
+    const loopCallTool: CallTool = async (name, toolArgs) => {
+      const result = await callTool(name, toolArgs);
+      if (name === "get-available-slots") mergeCanonicalSlots(canonicalSlots, result);
+      return result;
+    };
 
     const loopResult = await runSetterToolLoop({
       messages,
@@ -321,7 +348,8 @@ export const processSetterReply = task({
       validToolNames: SETTER_TOOL_NAMES,
       identity,
       callLlm,
-      callTool,
+      callTool: loopCallTool,
+      validateToolArgs: (name, toolArgs) => validateBookingArgs(canonicalSlots, name, toolArgs),
     });
     if (loopResult.toolInvocations.length > 0) {
       console.log(

@@ -67,7 +67,7 @@ export const SETTER_TOOLS: OpenAiTool[] = [
           startDateTime: {
             type: "string",
             description:
-              "The chosen slot start time, ISO 8601 (e.g. 2026-06-20T14:00:00). Use a time that appeared in get-available-slots for that day.",
+              "The chosen slot's date and time copied VERBATIM from the availability data, format YYYY-MM-DDTHH:MM (e.g. 2026-06-20T14:00). It must exactly match a listed open slot; never construct, convert, or guess a datetime. The system validates it against the live calendar.",
           },
           notes: {
             type: "string",
@@ -105,7 +105,8 @@ export const SETTER_TOOLS: OpenAiTool[] = [
           },
           startDateTime: {
             type: "string",
-            description: "The new start time, ISO 8601 (e.g. 2026-06-21T10:00:00).",
+            description:
+              "The new slot's date and time copied VERBATIM from the availability data, format YYYY-MM-DDTHH:MM (e.g. 2026-06-21T10:00). It must exactly match a listed open slot; never construct or guess a datetime.",
           },
         },
         required: ["eventId", "startDateTime"],
@@ -167,12 +168,12 @@ The lead's identity (name, phone, email) is already known to the system. NEVER a
 How to book:
 1. Call get-available-slots for a sensible near-term window before offering any times.
 2. Offer the lead 2-3 specific options from the results in your reply.
-3. Only call book-appointments once the lead picks a concrete time.
+3. Only call book-appointments once the lead picks a concrete time, passing the chosen slot's date and time VERBATIM from the availability data (YYYY-MM-DDTHH:MM).
 4. Book at most one appointment per conversation.
 
 A live calendar availability snapshot is included in your system context each turn — treat it as the ground truth for what is open. NEVER tell a lead a time is "booked out", full, snapped up, or unavailable if it appears in that snapshot, and never invent unavailability. If a time the lead wants is not in the snapshot, say it isn't open and offer the nearest listed alternatives.
 
-If a booking or reschedule tool returns booked:false or status "slot_unavailable", the time was just taken — do NOT tell the lead it's booked. Offer only the times in the returned available_slots and ask them to choose.
+If a booking or reschedule tool returns booked:false or status "slot_unavailable", the time was just taken — do NOT tell the lead it's booked. Offer only the times in the returned available_slots and ask them to choose. If it returns status "availability_unknown", call get-available-slots first and book one of the times it returns.
 
 After a successful booking, confirm the exact day and time back to the lead in plain language.
 

@@ -111,6 +111,7 @@ export function buildAvailabilityBlock(result: PrefetchResult): string {
       "- Offer ONLY times that appear in this map. Never invent, guess, or round a time.",
       `- NEVER tell the lead a time is "booked out", "full", "snapped up", or unavailable if it appears in this map — it is genuinely open.`,
       "- If the time the lead wants is NOT in this map, say it isn't open and offer the nearest listed alternatives.",
+      "- To BOOK a chosen time: call book-appointments with startDateTime as the slot's date and time joined EXACTLY as listed, format YYYY-MM-DDTHH:MM (e.g. 2026-07-06T11:00). Copy the date and time verbatim from this map; never convert timezones or compute a datetime yourself.",
       "- This snapshot is current; you do not need to re-check before offering. Only call get-available-slots again if the lead asks about a date beyond this window.",
     ].join("\n");
   }

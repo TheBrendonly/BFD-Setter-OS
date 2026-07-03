@@ -40,6 +40,17 @@ export type CallLlm = (args: {
 
 export type CallTool = (name: string, args: Record<string, unknown>) => Promise<unknown>;
 
+// PROMPT-AUTH-1 — optional pre-execution gate. Runs AFTER identity injection,
+// BEFORE the tool executes. ok:true with args = canonicalized/rewritten arguments
+// (merged over the injected ones); ok:false = the call is refused, its `result`
+// is folded back to the model as the tool turn, and callTool is never invoked.
+export type ValidateToolArgs = (
+  name: string,
+  args: Record<string, unknown>,
+) =>
+  | { ok: true; args?: Record<string, unknown> }
+  | { ok: false; error: string; result: unknown };
+
 export type ToolInvocation = {
   name: string;
   args: Record<string, unknown>;
@@ -54,6 +65,7 @@ export type RunSetterToolLoopArgs = {
   identity: Record<string, unknown>;
   callLlm: CallLlm;
   callTool: CallTool;
+  validateToolArgs?: ValidateToolArgs;
   maxIterations?: number;
 };
 
@@ -146,11 +158,19 @@ export async function runSetterToolLoop(
         // Identity LAST so engine-injected contactId/phone/email/timeZone/source
         // always override anything the model supplied.
         finalArgs = { ...parsed, ...identity };
-        try {
-          result = await callTool(name, finalArgs);
-        } catch (err) {
-          error = (err as Error)?.message ?? String(err);
-          result = { error };
+        // PROMPT-AUTH-1: gate/canonicalize consequential args before executing.
+        const validation = args.validateToolArgs?.(name, finalArgs) ?? { ok: true as const };
+        if (!validation.ok) {
+          error = validation.error;
+          result = validation.result;
+        } else {
+          if (validation.args) finalArgs = { ...finalArgs, ...validation.args };
+          try {
+            result = await callTool(name, finalArgs);
+          } catch (err) {
+            error = (err as Error)?.message ?? String(err);
+            result = { error };
+          }
         }
       }
 
