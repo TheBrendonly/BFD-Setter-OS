@@ -115,6 +115,32 @@ When an item passes, move it to `Docs/archive/COMPLETED_LOG.md`. When it fails, 
 
 - [ ] **B-5 / `{{first_name}}`** — a real inbound call from a number **NOT** in the CRM → the agent omits the name and never says the literal `{{first_name}}`. (NB: TEST_PHONE_A is a known lead, so B-5 needs a genuinely unknown number.)
 
+## PROMPT-AUTH-1 — Text-setter prompt authoring/visibility rebuild (added 2026-07-03; test AFTER the solo build ships)
+
+> Root-caused live in Session 7-finish (2026-07-03): the Text setter refused a genuinely-open Monday (hidden
+> `Available days: Tue/Wed/Thu ONLY` rule buried in the ~1680-line stored prompt) and then booked **Friday 4pm**
+> for an accepted **"Thursday 2pm"** (un-interpolated `{{ $now }}` → no real "today" anchor). The stored
+> `system_prompt` is largely invisible/uneditable in the current SETTER CORE editor. Bug = **PROMPT-AUTH-1** in
+> `BUG_LIST.md`; fix is a dedicated solo session (Fable research → Opus build).
+>
+> **STATUS 2026-07-03: BUILD DONE on branch `feature/prompt-auth-1-authoring` (all suites green), DEPLOY-GATED.**
+> Test AFTER: (1) GO given + Trigger.dev/`save-external-prompt`/`get-external-prompt`/frontend deployed;
+> (2) Brendan applies the Setter-1 migration via the UI (report + steps: run
+> `node --experimental-strip-types scripts/report_text_prompt_migration.mjs --out <dir>`). The date/time +
+> calendar checks below are expected to pass EVEN BEFORE the content migration (the injected time anchor +
+> slot-binding validator neutralize the stale blob); visibility/artifacts/efficiency need the deploy + migration.
+
+- [ ] **Full-prompt visibility** — the operator can view the COMPLETE assembled system prompt a text setter
+  sends (nothing load-bearing hidden) and can edit/override every availability + booking rule from the UI.
+- [ ] **Calendar-sourced availability** — a text booking on an OPEN Monday succeeds; the setter never refuses a
+  day the live calendar shows open (no stale hardcoded day-of-week rule can override the calendar).
+- [ ] **Date/time accuracy** — accept a specific offered slot → `book-appointments` books that EXACT day + time
+  (real "now" injected, no `{{ $now }}` literal), and the confirmation label matches the booked date.
+- [ ] **No leftover artifacts** — no `{{ … }}` n8n expressions, no duplicated/contradictory sections, and the
+  tool names referenced in the prompt match the real tools (`get-available-slots` / `book-appointments`).
+- [ ] **Efficiency** — the assembled prompt is materially leaner; tool-calling + date accuracy hold on the fast
+  model (`google/gemini-2.5-flash`).
+
 ## Standing rule
 
 - After **any** BUG or FEATURE ships, smoke the touched area before marking it done here.
