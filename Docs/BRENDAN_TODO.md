@@ -7,6 +7,15 @@ prompt tweaks independently).
 
 ## Active (do when you have time)
 
+- [ ] **Apply the Setter-1 prompt content migration (PROMPT-AUTH-1, report-only)** — the legacy 511-line
+  "# BOOKING FUNCTION" blob in the stored Text-setter prompt (the root cause of the Monday/wrong-date booking
+  bug) is now safe to remove: booking mechanics are code-owned as of PROMPT-AUTH-1. Steps are written out in
+  `Docs/investigations/prompt-migration-reports/e467dabc-57ee-416c-8831-83ecd9c7c925_Setter-1.report.md`
+  (generated read-only, never touches the DB): open Prompt Management → Setter-1 → SETTER CORE → enable
+  "Booking Function" → "View Prompt" → clear the legacy booking text (or click "Return to Default" for the new
+  minimal template) → Save/Deploy (now lints on save + snapshots to `prompt_versions`) → re-open "Verify Setter
+  Prompt" → "Load live stored prompt" to confirm it's lean. Unblocks 3 `TEST_LIST.md` PROMPT-AUTH-1 checks
+  (full-prompt visibility via the new X-Ray, no-leftover-artifacts, efficiency). `[B]`
 - [ ] **5.1 Setup-guide screenshot re-shoot** — review and refresh. Lock the canonical BFD Retell **folder name** first, then the screenshots/text in `SetupGuideDialog.tsx` can be re-shot (it still says create a folder named "1Prompt"). `[B]`
 - [ ] **B-4 field-access (now self-serve config, not a build input)** — B-4 shipped Session 3. The per-field "which workspace settings a client may see/edit in My Account" is a **per-sub-account** governance editor you already control: open a sub-account → **Sub-Account Config → "My Account Field Access"** and toggle Visible/Editable per field (brand voice, contact hours, voicemail, logo…). Default set is unchanged; tune it per client there. `[B]`
 - [ ] **Shut down the n8n Railway service** — the native text engine is fully canonical (the n8n code path was already removed; `processMessages.ts` now throws if `use_native_text_engine` is false). The n8n Railway service can be stopped/deleted. (F5 close-out; the unused `clients.text_engine_webhook` column is deferred, see DEFERRED.) `[B]`

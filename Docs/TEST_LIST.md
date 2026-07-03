@@ -52,9 +52,9 @@ When an item passes, move it to `Docs/archive/COMPLETED_LOG.md`. When it fails, 
   Turn **show rate to client** ON → log in as that client → AccountSettings shows a read-only "Your Rate $X.XX /min (AUD)"
   card with NO breakdown/markup; toggle OFF → the card disappears. (The trap — client cannot read markup via the API —
   is already proven 9/9; this is the UI behavioral check.)
-- [ ] **One SMS exchange to a test lead** (BOOK-1 booking rules are now CODE-owned via PROMPT-AUTH-1 — no prompt tweak needed; see `PROMPT_UPDATE_LIST.md` PU-2) → **BOOK-1** acceptance
-  (offers real slots → books on acceptance) + **3.12 SMS booking** (`bookings.source='sms'` + execution ends) +
-  **SMS-OBS-1** (rows appear in `tool_invocations`) + **MODEL-1** (engine answers; no silent 400).
+- [x] **One SMS exchange to a test lead** — CONFIRMED 2026-07-03 via the PROMPT-AUTH-1 live regression (BOOK-1
+  acceptance, 3.12 SMS booking `source='sms'`, SMS-OBS-1 `tool_invocations` rows, MODEL-1 no 400 all passed —
+  see the PROMPT-AUTH-1 entry above). Not independently re-run by every session; a quick spot-check is fine.
 - [ ] **F9-1 / PHONE-CLEAR-1 / G3-8a** — locked-setter inline rename is refused with a clear error (no `setter_display_names`
   write); clearing a lead's phone nulls `leads.normalized_phone`; "execute lead" on a reactivation campaign fires the
   webhook + completes with NO `supabase_service_key` in any browser payload.
@@ -115,31 +115,67 @@ When an item passes, move it to `Docs/archive/COMPLETED_LOG.md`. When it fails, 
 
 - [ ] **B-5 / `{{first_name}}`** — a real inbound call from a number **NOT** in the CRM → the agent omits the name and never says the literal `{{first_name}}`. (NB: TEST_PHONE_A is a known lead, so B-5 needs a genuinely unknown number.)
 
-## PROMPT-AUTH-1 — Text-setter prompt authoring/visibility rebuild (added 2026-07-03; test AFTER the solo build ships)
+## PROMPT-AUTH-1 — Text-setter prompt authoring/visibility rebuild (added 2026-07-03; DEPLOYED LIVE, partial regression confirmed)
 
 > Root-caused live in Session 7-finish (2026-07-03): the Text setter refused a genuinely-open Monday (hidden
 > `Available days: Tue/Wed/Thu ONLY` rule buried in the ~1680-line stored prompt) and then booked **Friday 4pm**
-> for an accepted **"Thursday 2pm"** (un-interpolated `{{ $now }}` → no real "today" anchor). The stored
-> `system_prompt` is largely invisible/uneditable in the current SETTER CORE editor. Bug = **PROMPT-AUTH-1** in
-> `BUG_LIST.md`; fix is a dedicated solo session (Fable research → Opus build).
+> for an accepted **"Thursday 2pm"** (un-interpolated `{{ $now }}` → no real "today" anchor). Bug = **PROMPT-AUTH-1**
+> in `BUG_LIST.md`.
 >
-> **STATUS 2026-07-03: BUILD DONE on branch `feature/prompt-auth-1-authoring` (all suites green), DEPLOY-GATED.**
-> Test AFTER: (1) GO given + Trigger.dev/`save-external-prompt`/`get-external-prompt`/frontend deployed;
-> (2) Brendan applies the Setter-1 migration via the UI (report + steps: run
-> `node --experimental-strip-types scripts/report_text_prompt_migration.mjs --out <dir>`). The date/time +
-> calendar checks below are expected to pass EVEN BEFORE the content migration (the injected time anchor +
-> slot-binding validator neutralize the stale blob); visibility/artifacts/efficiency need the deploy + migration.
+> **STATUS 2026-07-03: DEPLOYED LIVE** (main `6c5c339` + `157bb8f`, Trigger `20260703.1`, `save-external-prompt`
+> v14, `get-external-prompt` v1, Railway). Adversarially verified pre-deploy (core booking-logic finding
+> REFUTED — holds); 4 other findings confirmed and logged/fixed as their own bugs (SMS-MEM-1,
+> FOLLOWUP-PROMPT-1, PROMPT-LINT-1 — see `BUG_LIST.md`, all fix-staged on `feature/overnight-bugfix`, not yet
+> deployed). **A live multi-turn SMS regression already ran** (reported via a parallel session / shared memory,
+> not independently re-verified by every session): booking succeeded (Wed 8 Jul 2:30pm Sydney,
+> `bookings.source='sms'`), no "Tue/Wed/Thu", no "snapped up"/"booked out", confirmation named "Sydney time".
+> That regression is what surfaced SMS-MEM-1 (a separate, pre-existing, unrelated bug). Given multiple parallel
+> sessions have touched this, **re-confirm with a fresh SMS exchange** the next time a human is at the keyboard,
+> especially once the `feature/overnight-bugfix` fixes (SMS-MEM-1 chat memory + FOLLOWUP-PROMPT-1 + PROMPT-LINT-1)
+> are also deployed — they need their OWN live regression too.
+>
+> Still open below: **Full-prompt visibility** (X-Ray UI — not yet behaviorally confirmed) and **No leftover
+> artifacts** (blocked on Brendan applying the Setter-1 content migration via the UI — report + proposed
+> replacement at `Docs/investigations/prompt-migration-reports/e467dabc-57ee-416c-8831-83ecd9c7c925_Setter-1.report.md`,
+> generated read-only via `scripts/report_text_prompt_migration.mjs --out <dir>`; steps are in that report) and
+> **Efficiency** (not measured live). **Calendar-sourced availability** and **Date/time accuracy** are reported
+> passed via the live regression above — do a quick spot-check, not a full re-run, unless something looks off.
 
 - [ ] **Full-prompt visibility** — the operator can view the COMPLETE assembled system prompt a text setter
   sends (nothing load-bearing hidden) and can edit/override every availability + booking rule from the UI.
 - [ ] **Calendar-sourced availability** — a text booking on an OPEN Monday succeeds; the setter never refuses a
-  day the live calendar shows open (no stale hardcoded day-of-week rule can override the calendar).
+  day the live calendar shows open (no stale hardcoded day-of-week rule can override the calendar). _Reported
+  passed via the 2026-07-03 live regression (Wed 8 Jul offer, no fabricated day restriction) — spot-check only._
 - [ ] **Date/time accuracy** — accept a specific offered slot → `book-appointments` books that EXACT day + time
-  (real "now" injected, no `{{ $now }}` literal), and the confirmation label matches the booked date.
+  (real "now" injected, no `{{ $now }}` literal), and the confirmation label matches the booked date. _Reported
+  passed via the 2026-07-03 live regression — spot-check only._
 - [ ] **No leftover artifacts** — no `{{ … }}` n8n expressions, no duplicated/contradictory sections, and the
   tool names referenced in the prompt match the real tools (`get-available-slots` / `book-appointments`).
+  **BLOCKED on Brendan applying the Setter-1 migration** (`BRENDAN_TODO.md`).
 - [ ] **Efficiency** — the assembled prompt is materially leaner; tool-calling + date accuracy hold on the fast
-  model (`google/gemini-2.5-flash`).
+  model (`google/gemini-2.5-flash`). **BLOCKED on the Setter-1 migration landing** (current stored prompt is
+  still the un-migrated 1680-line version until Brendan applies it).
+
+## SMS-MEM-1 / FOLLOWUP-PROMPT-1 / PROMPT-LINT-1 / MODEL-1-HARDENING (UI) — retest AFTER `feature/overnight-bugfix` deploys
+
+> All fix-staged on branch `feature/overnight-bugfix` as of 2026-07-03 (test:node 113/113, test:edge 200/200
+> green), NOT yet deployed. `MODEL-1-HARDENING`'s UI half was still uncommitted/in-progress on that branch as of
+> this writing — confirm it landed before testing.
+
+- [ ] **SMS-MEM-1 — multi-turn SMS has real memory.** Send 2+ messages in one conversation (e.g. state a day,
+  then separately accept a time) → the setter does NOT re-ask something already answered, and
+  `select * from chat_history where session_id=... order by timestamp` (client's external Supabase) now shows
+  alternating `human`/`ai` rows, not `ai`-only.
+- [ ] **FOLLOWUP-PROMPT-1 — automated follow-up respects the same date/availability ground truth.** Let a cold
+  lead trigger a cron follow-up (or check `nudgeColdReply.ts` if it also needed the fix) → the follow-up copy
+  never states a fabricated day policy or a literal `{{ $now }}`-style artifact.
+- [ ] **PROMPT-LINT-1 — lint bypasses closed.** In Prompt Management, try saving text content containing
+  `BookAppointment` (Pascal-case) or `GET_AVAILABLE_SLOT` (caps) or a `Mon-Fri` day restriction → save is now
+  BLOCKED (422) with the offending line flagged, not silently accepted.
+- [ ] **MODEL-1-HARDENING (UI) — unknown model id needs explicit confirmation.** In the OpenRouter model
+  selector, typing a made-up/invalid model id and clicking "use as custom" no longer applies it silently —
+  it shows an "unknown id, may not exist" warning requiring an explicit "Use anyway" click; a real known id
+  still applies on one click.
 
 ## Standing rule
 

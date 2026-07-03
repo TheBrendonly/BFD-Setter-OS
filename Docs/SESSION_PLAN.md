@@ -190,8 +190,25 @@ Status: `[ ]` not started · `[~]` in progress · `[x]` done. Effort is rough.
   live-confirmed (call `call_d5625539`, booking `4f7c76a0`); **v47 SAFE, no rollback**. Preconditions A1 (BOOK-1 rule added via
   the Text setter's IDENTITY→Agent Mission field) + A2 (5 setters re-saved) + A3 (Property Coach name reverted) DONE.
   **VM-1 FAILED** the gate (still "partial", 0/5 agents; re-opened in BUG_LIST — v47 insufficient, needs draft-first +
-  `static_text`). **Remaining → next session:** SMS exchange, F8 UI, F13 ×4, F14 ×2 (Resend-gated), fresh GHL contact
-  (F1/B-5/B-2 via the TEST_PHONE_A cleanup), INB-1/UI-1/F11, LIVE-D, LIVE-E, G3-6 Tier-3, F9-1, PHONE-CLEAR-1, G3-8a._
+  `static_text`)._
+
+  **CONTINUED 2026-07-03 (handoff `2026-07-03-session7-finish-prompt-auth-1-detour.md`): the SMS-exchange leg of the
+  remaining matrix triggered a full unplanned detour.** The SMS test found BOOK-1 recurring (a hidden stale prompt
+  rule "Available days: Tue/Wed/Thu ONLY" refused an open Monday, then booked the wrong day for an accepted time) →
+  root-caused as a systemic prompt-authoring problem, not a typo → filed **PROMPT-AUTH-1** (High) → a dedicated solo
+  session (Fable research/design → Opus build, both supervised in a separate session) built the full fix in ~3 hours
+  → independently re-verified in THIS session (tests re-run fresh, 2 riskiest files read line-by-line, new edge fn
+  authz checked, a live migration-report run generated fresh) → an adversarial multi-agent verify pass (3 lenses,
+  refute-gated) confirmed the core fix holds and surfaced 3 follow-on gaps (SMS-MEM-1, FOLLOWUP-PROMPT-1,
+  PROMPT-LINT-1) → Brendan deployed PROMPT-AUTH-1 live (main `6c5c339`+`157bb8f`) from a separate session → a live
+  multi-turn SMS regression confirmed the P0 fix works (Wed 8 Jul 2:30pm Sydney booking, no fabrication, "Sydney
+  time" named) AND surfaced SMS-MEM-1 (separate, pre-existing, unrelated) → all 3 follow-on bugs + a MODEL-1-HARDENING
+  UI hardening were then FIX-STAGED on a new branch `feature/overnight-bugfix` by further parallel work (not yet
+  deployed as of this writing; test:node 113/113, test:edge 200/200 green). Full detail + the exact commit graph in
+  the handoff. **The ORIGINAL Session 7-finish remaining test matrix (F8 UI, F13 ×4, F14 ×2 Resend-gated, fresh
+  GHL contact F1/B-5/B-2 + TEST_PHONE_A cleanup, INB-1/UI-1/F11, LIVE-D, LIVE-E, G3-6 Tier-3, F9-1, PHONE-CLEAR-1,
+  G3-8a) was NOT started this session** — Brendan chose to close out here and hand the rest to a fresh session once
+  the `feature/overnight-bugfix` branch is deployed + re-tested. → next session prompt in the handoff.
 - [x] **Session 8 — F8 cost-to-price calculator.** **BUILT + DEPLOYED LIVE 2026-07-01** (overnight; PLAN-mode
   approved then executed). Pure `computeBlendedRate` (integer micros, ONE FX step, bps markup + buffer,
   round-half-even once, line items sum exactly, separate fixed_monthly; 23 edge tests). Agency-only rate panel
