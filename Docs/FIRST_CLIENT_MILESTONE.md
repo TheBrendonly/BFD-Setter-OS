@@ -13,7 +13,9 @@ the onboarding SOP in `Company/knowledge`.
 ## The prompt
 
 ```
-BFD-setter - FIRST-CLIENT MILESTONE: production onboarding + go-live hardening. Model: Opus 4.8. Plan mode: ON.
+SETTINGS: Model Opus 4.8 [1m] · Thinking HIGH · Mode: plan ON (flips live production gates — plan + review first).
+
+BFD-setter - FIRST-CLIENT MILESTONE: production onboarding + go-live hardening.
 Brendan drives the dashboards; Claude does the code/config/verification halves. This is event-gated - run ONLY
 because a client has actually signed.
 

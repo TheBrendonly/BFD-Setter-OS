@@ -266,15 +266,20 @@ The whole path to v1 "100%", in order. Run each in a FRESH session by pasting it
 **▶ PIPELINE** footer so you always see what's left. Live done/not-done status is in `Docs/SESSION_PLAN.md`.
 
 ```
-[✓] Test session (this file)
-[ ] Session T-fix   — ONLY if the test pass logged failures (scoped from them)
-[ ] Session S       — supervised shared-fn: BOOK-2 + BOOK-3 + SMS-METER-1 (frozen voice-booking-tools)
-[ ] Session F15     — client ROI visibility pack (show-rate funnel + weekly report)
-[ ] Session F16     — never-miss-a-lead pack (+ F17 phase-1 AU compliance)
-[ ] First-Client Milestone — GATED: run ONLY when a contract signs. Full prompt in Docs/FIRST_CLIENT_MILESTONE.md
-                             (or just tell Claude "I'm onboarding a client"). After it, v1 is LIVE + 100%.
+                                                                            SETTINGS (each prompt restates these)
+[✓] Test session (this file)                                                Opus 4.8 [1m] · think HIGH · execute
+[ ] Session T-fix   — ONLY if the test pass logged failures                 Opus 4.8 [1m] · think HIGH · plan IF it
+                                                                            touches retell-proxy/voice-booking-tools/
+                                                                            live cadence, else execute
+[ ] Session S       — supervised: BOOK-2 + BOOK-3 + SMS-METER-1 (frozen)     Opus 4.8 [1m] · think HIGH · plan ON
+[ ] Session F15     — client ROI pack (show-rate funnel + weekly report)     Opus 4.8 [1m] · think HIGH · plan ON
+[ ] Session F16     — never-miss-a-lead pack (+ F17 phase-1 compliance)      Opus 4.8 [1m] · think HIGH · plan ON
+[ ] First-Client Milestone — GATED: only when a contract signs.             Opus 4.8 [1m] · think HIGH · plan ON
+     Full prompt in Docs/FIRST_CLIENT_MILESTONE.md (or say "I'm onboarding a client"). After it, v1 = LIVE + 100%.
 Post-client queue (later): F18 (AI confirm call) → F19 (QA digest) → F20 (revenue attribution) → F12 (cost opt).
 ```
+Rule of thumb baked into these: **plan mode ON for anything that touches a live/frozen surface** (retell-proxy,
+voice-booking-tools, outbound dial paths, new schema, the milestone gates); **execute** for verification + scoped fixes.
 
 Note: F15/F16 are the market-research pre-first-client features (`FEATURE_ROADMAP.md` F15-F20). If the demo is imminent,
 run **F16 before F15** (F16 is the flashier live demo; F15 is the retention spine that needs data to accrue anyway).
@@ -284,8 +289,10 @@ run **F16 before F15** (F16 is the flashier live demo; F15 is the retention spin
 ### ▶ Session T-fix — fix pass (ONLY if the test session logged failures)
 
 ```
-BFD-setter - FIX PASS for the TEST session failures. Model: Opus 4.8. Plan mode: ON if any fix touches
-retell-proxy / voice-booking-tools / the live cadence runtime, else execute.
+SETTINGS: Model Opus 4.8 [1m] · Thinking HIGH · Mode: plan ON only if a fix touches retell-proxy /
+voice-booking-tools / the live cadence runtime, otherwise execute.
+
+BFD-setter - FIX PASS for the TEST session failures.
 
 Repo /srv/bfd/Projects/bfd-setter, branch main (git pull first). Supabase ref bjgrgbgykvjrsuwwruoh. Creds in
 ./.env. Live DB via Supabase Management API /database/query (NOT postgres MCP). NEVER edit voice/text prompt
@@ -307,8 +314,11 @@ Next after this: Session S (below, or say "run session S").
 ### ▶ Session S — supervised shared-fn (BOOK-2 + BOOK-3 + SMS-METER-1)
 
 ```
+SETTINGS: Model Opus 4.8 [1m] · Thinking HIGH · Mode: plan ON. (The riskiest session — a frozen baseline
+shared by BOTH live voice and SMS booking — so plan + review before any edit is mandatory.)
+
 BFD-setter - SUPERVISED shared-fn session: BOOK-2 + BOOK-3 + SMS-METER-1 in the FROZEN voice-booking-tools.
-Model: Opus 4.8. Plan mode: ON. HARD GATE: Brendan is present and live; every edit to voice-booking-tools is
+HARD GATE: Brendan is present and live; every edit to voice-booking-tools is
 reviewed before deploy, and the deploy is followed the same day by one answered-call booking regression AND one
 SMS booking regression (voice-booking-tools is shared by BOTH channels).
 
@@ -340,8 +350,9 @@ Next after this: Session F15 (below, or say "run session F15").
 ### ▶ Session F15 — client ROI visibility pack (show-rate funnel + weekly report)
 
 ```
+SETTINGS: Model Opus 4.8 [1m] · Thinking HIGH · Mode: plan ON (new schema + a new GHL webhook surface; brainstorm first).
+
 BFD-setter - F15: client ROI visibility pack (show-rate funnel + weekly report).
-Model: Opus 4.8. Plan mode: ON (new schema + a new GHL webhook surface; brainstorm first).
 
 Repo /srv/bfd/Projects/bfd-setter, branch main (git pull first). Supabase ref bjgrgbgykvjrsuwwruoh. Creds in
 ./.env. Live DB via Mgmt API /database/query. NEVER edit prompt content. retell-proxy + voice-booking-tools
@@ -376,9 +387,10 @@ Next after this: Session F16 (below, or say "run session F16"). If the demo is i
 ### ▶ Session F16 — never-miss-a-lead pack + F17 phase-1 AU compliance
 
 ```
+SETTINGS: Model Opus 4.8 [1m] · Thinking HIGH · Mode: plan ON (touches outbound dial paths; the hours gate is a compliance control).
+
 BFD-setter - F16: never-miss-a-lead pack (speed-to-lead + missed-call text-back + live-transfer config)
 + F17 phase 1 (AU calling-hours enforcement + recording-disclosure toggle).
-Model: Opus 4.8. Plan mode: ON (touches outbound dial paths; the hours gate is a compliance control).
 
 Repo /srv/bfd/Projects/bfd-setter, branch main (git pull first). Supabase ref bjgrgbgykvjrsuwwruoh. Creds in
 ./.env. Live DB via Mgmt API. NEVER edit prompt content (the transfer phrasing + disclosure LINE are PU items
