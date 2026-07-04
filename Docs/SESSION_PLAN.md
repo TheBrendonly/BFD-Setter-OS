@@ -239,7 +239,7 @@ Status: `[ ]` not started · `[~]` in progress · `[x]` done. Effort is rough.
   Brendan's Resend/DNS items. ~40 new tests; test:edge 188/0, test:node 80/0, tsc + vite build green;
   `scripts/f13_usage_trap_proof.ts` ready to run at deploy. → next: Brendan review → supervised deploy →
   the F13/F14 TEST_LIST items fold into Session 7-finish.
-- [~] **Overnight stage-only bug-fix run — BUILT 2026-07-03, branch `feature/overnight-bugfix` (+ `g3-7/vite-major`), NOT DEPLOYED.**
+- [x] **Overnight stage-only bug-fix run — BUILT 2026-07-03; DEPLOYED LIVE 2026-07-04 (Session 9). Branch `feature/overnight-bugfix` merged to `main` (`4a22b8b`); `g3-7/vite-major` still on its own branch → Session 10.**
   A single unattended run cleared the residual staged queue after the PROMPT-AUTH-1 deploy. 10 items, one commit
   each, green after every one (final: test:node 122/122, test:frontend 8/8, test:edge 202/202, tsc + vite build
   green). SMS-MEM-1 (`379e5f6`), PROMPT-LINT-1 (`5e0305a` + review `d8111d6`), FOLLOWUP-PROMPT-1 (`709bf92` +
@@ -252,13 +252,19 @@ Status: `[ ]` not started · `[~]` in progress · `[x]` done. Effort is rough.
   `Operations/handoffs/2026-07-03-overnight-bugfix-run.md`. **This SUBSUMES most of Session 9's code** (API-DEPR-1
   is now mostly staged) and does Session 10's work early (G3-7). What remains: the SUPERVISED DEPLOY + live tests
   (below), and Session 9's leftover analysis-fields migration.
-- [ ] **Session 9 — API-DEPR-1 finish + supervised deploy of the overnight branch.** Deploy
-  `feature/overnight-bugfix` (Trigger.dev + retell-proxy v48 + verify-credentials + save-external-prompt +
-  frontend; retell-proxy is Voice-gated) and run the TEST_LIST retests. API-DEPR-1's list-agents/verify-creds
-  migration is already staged (`5d40ca2`); the one REMAINING code piece is the deprecated post-call analysis
-  prompt fields (`analysis_summary_prompt`/`analysis_successful_prompt`/`analysis_user_sentiment_prompt` →
-  `post_call_analysis_data` presets), deferred to this supervised pass because it changes live voice-analysis
-  behavior. Optional fold-in: **BOOK-2/3** + **SMS-METER-1** supervised shared-fn edits (Low; `voice-booking-tools`).
+- [x] **Session 9 — supervised deploy of the overnight branch. DONE 2026-07-04 (Opus 4.8, plan ON, Brendan GO).**
+  Merged `feature/overnight-bugfix` → `main` (`4a22b8b`, fast-forward), pushed origin+github. Deployed: **Trigger.dev
+  20260703.2** (SMS-MEM-1, FOLLOWUP-PROMPT-1), **retell-proxy v47→v48** (VM-1 + API-DEPR-1 list-agents), **verify-credentials
+  v2→v3**, **save-external-prompt v14→v15**, **RLS-SHAPE-1 migration applied** (role gate confirmed live). Read-only Voice
+  smoke on v48 PASSED (POST `/v2/list-agents`→24 agents + get-agent hydration, 0 agents mutated). **Frontend was ALREADY
+  live** — Railway had auto-deployed the branch to production overnight (proven: live prod bundle contains branch-only
+  MODEL-1 strings), so the fast-forward main push needed no rebuild. **New finding DEPLOY-1** (Low, BUG_LIST + BRENDAN_TODO):
+  Railway ships feature branches to the prod domain, bypassing the stage-only gate → pin prod deploy to `main`.
+  **Deferred out of Session 9 (Claude rec, Brendan agreed):** the deprecated `analysis_*_prompt` → `post_call_analysis_data`
+  migration is bigger + riskier than the plan framed (full-stack: VoiceRetellSettings UI + save path + retell-proxy + the two
+  downstream analysis webhooks; shifts live analysis behavior; fields still work today) → **its own scoped session (API-DEPR-2)**.
+  The answered-call Voice-regression + all frontend/SMS retests are Brendan-driven, now in TEST_LIST. Optional fold-in
+  (**BOOK-2/3** + **SMS-METER-1** shared-fn edits) NOT taken. → Session 10 (G3-7).
 - [ ] **Session 10 — G3-7 merge (mostly DONE).** The vite 5→8.1.3 bump is built + headless-verified on
   `g3-7/vite-major` (`6cf4f24`; 0 npm-audit vulns). Remaining: browser-verify the app + merge; raise the
   greenserver inotify watch limit so `npm run dev` boots without `CHOKIDAR_USEPOLLING=true` (see BRENDAN_TODO).
@@ -267,10 +273,11 @@ Status: `[ ]` not started · `[~]` in progress · `[x]` done. Effort is rough.
   GHL/Retell/Unipile webhook secrets + arm `retell_webhook_secret` (6.6), register AU SMS A2P for
   `+61481614530`. See `Docs/DEFERRED.md`. After this, v1 is live + 100%.
 
-**Remaining sequence to v1 "100%" (the relay follows this order):** Session 7-finish (live TEST pass, now
-incl. the F13/F14 checks; voice-regression call FIRST) → any fix-pass for failures → Session 9 (API-DEPR-1,
-optional fold-in BOOK-2/3 + SMS-METER-1 supervised shared-fn edits) → Session 10 (G3-7) → First-client
-milestone (event-gated).
+**Remaining sequence to v1 "100%" (the relay follows this order):** the live TEST pass (Session 7-finish +
+the Session-9 retests — voice-regression call FIRST, run async by Brendan) → any fix-pass for failures →
+Session 10 (G3-7 vite-8 merge) → **API-DEPR-2** (deprecated `analysis_*_prompt` → `post_call_analysis_data`,
+its own full-stack session) → optional BOOK-2/3 + SMS-METER-1 supervised shared-fn edits → First-client
+milestone (event-gated). DEPLOY-1 (pin Railway prod to `main`) is a Brendan dashboard task, do anytime.
 **Functional 100% = Sessions 0-8 `[x]` + TEST_LIST green** (reached at the end of Session 7-finish); Sessions
 9-10 clear the last open BUG_LIST items; the First-client milestone is the actual go-live. v2 = the lifecycle
 system + A/B + analytics + HubSpot + F9 v2 + F8 v2 (`Docs/DEFERRED.md`), off the 100% path.

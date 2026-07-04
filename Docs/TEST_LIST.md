@@ -3,6 +3,10 @@
 Everything that needs live verification. Brendan runs these **after all build + UI work is done** (his call, 2026-06-25).
 When an item passes, move it to `Docs/archive/COMPLETED_LOG.md`. When it fails, open a bug in `BUG_LIST.md`.
 
+> **⭐ Overnight bug-fix branch DEPLOYED + LIVE 2026-07-04 (Session 9).** ALL items are live and testable now: backend (SMS-MEM-1, FOLLOWUP-PROMPT-1 via Trigger 20260703.2; VM-1 + API-DEPR-1 list-agents via retell-proxy v48; PROMPT-LINT-1 edge via save-external-prompt v15; verify-credentials v3; RLS-SHAPE-1 migration applied) AND frontend (MODEL-1-HARDENING UI, F9-1, PHONE-CLEAR-1, PROMPT-LINT-1 browser gate — Railway had already deployed the branch to prod overnight; the live bundle was confirmed to contain the MODEL-1 code). **The retell-proxy v48 answered-call Voice-regression is the one live gate owed before v48 is fully trusted (item just below).** Note: DEPLOY-1 (BUG_LIST) — Railway shipped the feature branch to prod overnight; pin the prod deploy to `main` (BRENDAN_TODO).
+
+- [ ] **VOICE GATE — retell-proxy v48 answered-call booking regression (retell-proxy is the FROZEN Voice baseline).** Read-only smoke already PASSED 2026-07-04 (POST `/v2/list-agents`→24 agents + get-agent hydration, 0 agents mutated). Owed: place ONE answered outbound booking call (Main Outbound / Voice-Setter-master), run the booking to completion → confirm the call connects + books exactly as on v47 (compare to the 2026-07-03 gate `call_d5625539` / booking `4f7c76a0`). If it regresses, roll retell-proxy back to v47 via `deploy_single_fn.mjs`. Pairs with the VM-1 voicemail-lands check below (do both on the same call session where practical).
+
 > **Session 7 TEST pass — phone-half done 2026-06-30.** The passed items moved to `COMPLETED_LOG.md`:
 > B-4(6.2), F2c, G3-3, 6.11, 6.12b (call+SMS), the full **F9 lifecycle** (lock / bulk-skip / Pull+drift /
 > outbound-dials-while-locked / unlock+rename-no-423), B-3(6.4), B4-call-side, latency, and the LIVE-A UI

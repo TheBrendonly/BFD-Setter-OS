@@ -7,16 +7,9 @@ prompt tweaks independently).
 
 ## From the 2026-07-03 overnight stage-only bug-fix run (branch `feature/overnight-bugfix` + `g3-7/vite-major`)
 
-- [ ] **Deploy the `feature/overnight-bugfix` branch (supervised, your GO).** Merge to `main`, then deploy:
-  Trigger.dev (`npx trigger.dev@4.4.4 deploy` — SMS-MEM-1, FOLLOWUP-PROMPT-1) + edge fns via
-  `deploy_single_fn.mjs`/`deploy_with_shared.mjs` (**retell-proxy v47→v48** for VM-1 + API-DEPR-1,
-  **verify-credentials** for API-DEPR-1, **save-external-prompt** for the shared lint module) + frontend
-  (Railway, for MODEL-1/F9-1/PHONE-CLEAR-1/PROMPT-LINT-1 browser lint). retell-proxy v48 is **Voice-regression
-  gated** (frozen live baseline) — run the answered-call booking check after it. Exact per-item checklist is in
-  the 2026-07-03 overnight handoff. `[B]`
-- [ ] **Apply the RLS-SHAPE-1 migration** — `frontend/supabase/migrations/20260703120000_rls_shape_1_sms_delivery_events_agency_role_gate.sql`
-  is staged but deliberately NOT applied. Run it via the Mgmt API at the next migration window (it just
-  role-gates one SELECT policy; zero data change). `[B]`
+- [x] **Deploy the `feature/overnight-bugfix` branch (supervised, your GO).** DONE 2026-07-04 (Session 9, Claude, your GO): merged to `main` (`4a22b8b`, fast-forward), pushed origin+github. Deployed Trigger.dev 20260703.2 (SMS-MEM-1, FOLLOWUP-PROMPT-1), retell-proxy v48 (VM-1 + API-DEPR-1 list-agents), verify-credentials v3, save-external-prompt v15, RLS-SHAPE-1 migration applied. Frontend was ALREADY live (Railway auto-deployed the branch overnight — see DEPLOY-1). Read-only Voice smoke on v48 passed. **Still owed by you:** the live TEST_LIST pass (below), incl. the retell-proxy v48 answered-call Voice-regression + the VM-1 voicemail-lands check.
+- [x] **Apply the RLS-SHAPE-1 migration** — DONE 2026-07-04 (Session 9, Claude, Mgmt API): the role gate `get_user_role(auth.uid())='agency'` is confirmed live in `pg_policies` on `sms_delivery_events`.
+- [ ] **DEPLOY-1 — pin the Railway production frontend deploy to `main` only (found in Session 9).** Railway auto-deployed the `feature/overnight-bugfix` branch straight to the live domain `app.buildingflowdigital.com` overnight (proven: the live prod bundle contained branch-only MODEL-1 code, built ~06:14 AEST while `main` was still `b092c9d`). That bypasses the "stage → supervised GO → deploy" gate. In the Railway frontend service **Settings → Source**, set the production deploy branch to `main` and disable auto-deploy from other branches (or route feature branches to a separate non-prod environment). No code change. `[B]`
 - [ ] **Merge the G3-7 vite-8 branch after a browser check** — `g3-7/vite-major` (off `feature/overnight-bugfix`)
   bumps vite 5→8.1.3 and clears every npm audit advisory. Verified headless (build/tsc/tests/app-load green).
   Before merging: `npm run dev` and click through a few pages in a real browser. `[B]`
