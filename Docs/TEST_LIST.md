@@ -209,9 +209,12 @@ When an item passes, move it to `Docs/archive/COMPLETED_LOG.md`. When it fails, 
 - [ ] **PHONE-CLEAR-1 residual — Contacts dialog + Chats panel.** Edit a lead's phone via the CONTACTS edit
   dialog (not ContactDetail) → `normalized_phone` follows; clear it → NULL; add a NEW contact via the dialog →
   `normalized_phone` is set (lead is inbound-matchable).
-- [ ] **G3-7 — app on vite 8 (branch `g3-7/vite-major`).** `npm run dev` (after the inotify sysctl bump, or
-  with `CHOKIDAR_USEPOLLING=true`) → app loads + a few pages navigate in a real browser; `npm run build` serves
-  fine on Railway preview. Then merge the branch.
+- [ ] **G3-7 — app on vite 8 (MERGED to `main` `407b66e` + LIVE on Railway, Session 10 2026-07-04).** The merge +
+  headless gates are done (build/tsc/test:frontend/audit green, preview + dev server both served all routes 200 on
+  vite 8). REMAINING = the live human browser click-through: open `app.buildingflowdigital.com` (or `npm run dev`
+  with `CHOKIDAR_USEPOLLING=true` until the inotify sysctl is raised) → confirm the app renders and a few pages
+  navigate (login/dashboard, a setter/prompt page, contacts) with no console errors on the vite-8 prod bundle. Then
+  G3-7 → `COMPLETED_LOG.md`.
 
 ## Standing rule
 

@@ -265,19 +265,27 @@ Status: `[ ]` not started · `[~]` in progress · `[x]` done. Effort is rough.
   downstream analysis webhooks; shifts live analysis behavior; fields still work today) → **its own scoped session (API-DEPR-2)**.
   The answered-call Voice-regression + all frontend/SMS retests are Brendan-driven, now in TEST_LIST. Optional fold-in
   (**BOOK-2/3** + **SMS-METER-1** shared-fn edits) NOT taken. → Session 10 (G3-7).
-- [ ] **Session 10 — G3-7 merge (mostly DONE).** The vite 5→8.1.3 bump is built + headless-verified on
-  `g3-7/vite-major` (`6cf4f24`; 0 npm-audit vulns). Remaining: browser-verify the app + merge; raise the
-  greenserver inotify watch limit so `npm run dev` boots without `CHOKIDAR_USEPOLLING=true` (see BRENDAN_TODO).
+- [x] **Session 10 — G3-7 vite-8 merge. DONE 2026-07-04 (Opus 4.8, plan ON, Brendan GO: headless-verify + go live now).**
+  Rebased `g3-7/vite-major` onto `main` (clean — vite commit vs docs-only, no overlap) → `--ff-only` merge to `main`
+  (`407b66e`) → pushed origin + github → Railway prod rebuild on vite 8 triggered. After a fresh `npm install`
+  (node_modules confirmed **vite 8.1.3** + plugin-react-swc 4.3.1): `npm run build` exit 0 (4.74s, Rolldown — the
+  Railway-equivalent gate), `tsc --noEmit` 0, `test:frontend` 8/8, `npm audit` **0 vulns**; render gate = the
+  **preview of the prod build** (`vite preview :4173`) served index + all SPA routes 200, and the dev server booted
+  on vite 8 (464ms, polling). Per Brendan's call the **live human browser click-through was deferred to his testing
+  session** (kept as the G3-7 row in `TEST_LIST.md`) — G3-7 closes to `COMPLETED_LOG.md` when that renders green.
+  The greenserver inotify sysctl + DEPLOY-1 (pin Railway to `main`) remain open BRENDAN_TODO items. → emits the
+  **API-DEPR-2** prompt (or First-client if Brendan's async live TEST pass has gone green).
 - [ ] **First-client milestone (BRENDAN, gated).** Not a Claude code session. At the first paying client:
   flip Stripe live (backfill `subscription_status` → set `ENFORCE_SUBSCRIPTION_GATE=true`), provision the
   GHL/Retell/Unipile webhook secrets + arm `retell_webhook_secret` (6.6), register AU SMS A2P for
   `+61481614530`. See `Docs/DEFERRED.md`. After this, v1 is live + 100%.
 
 **Remaining sequence to v1 "100%" (the relay follows this order):** the live TEST pass (Session 7-finish +
-the Session-9 retests — voice-regression call FIRST, run async by Brendan) → any fix-pass for failures →
-Session 10 (G3-7 vite-8 merge) → **API-DEPR-2** (deprecated `analysis_*_prompt` → `post_call_analysis_data`,
-its own full-stack session) → optional BOOK-2/3 + SMS-METER-1 supervised shared-fn edits → First-client
-milestone (event-gated). DEPLOY-1 (pin Railway prod to `main`) is a Brendan dashboard task, do anytime.
+the Session-9 retests + the Session-10 G3-7 vite-8 browser click-through — voice-regression call FIRST, run
+async by Brendan) → any fix-pass for failures → **API-DEPR-2** (deprecated `analysis_*_prompt` →
+`post_call_analysis_data`, its own full-stack session) → optional BOOK-2/3 + SMS-METER-1 supervised shared-fn
+edits → First-client milestone (event-gated). DEPLOY-1 (pin Railway prod to `main`) is a Brendan dashboard task,
+do anytime. Session 10 (G3-7 merge) is DONE — vite 8 is live on `main`.
 **Functional 100% = Sessions 0-8 `[x]` + TEST_LIST green** (reached at the end of Session 7-finish); Sessions
 9-10 clear the last open BUG_LIST items; the First-client milestone is the actual go-live. v2 = the lifecycle
 system + A/B + analytics + HubSpot + F9 v2 + F8 v2 (`Docs/DEFERRED.md`), off the 100% path.
