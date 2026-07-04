@@ -17,7 +17,9 @@ Copilot, Gemini CLI, OpenAI Codex, Windsurf, Aider, and other AGENTS.md-aware to
 
 Closed items move to `Docs/archive/COMPLETED_LOG.md`. `Docs/ROADMAP.md` is build **history** (not an active to-do list).
 
-**TEST SESSION.** When Brendan says **"run test session" / "let's run test session" / "test session"**, read `Docs/TEST_SESSION.md` and execute it. That is the consolidated runbook: it batches every open `Docs/TEST_LIST.md` item into the fewest live runs (one voice-call session, one SMS session, one agency↔client login pass, one cadence/follow-up pass, one by-phone/GHL-outage pass, etc.), starts with a self-verify-state step (do not trust doc git-logs/versions), lists the pre-authorized test write-actions, and closes out per the Relay Protocol. `Docs/TEST_LIST.md` remains the source of truth for pass/fail bookkeeping.
+**TEST SESSION.** When Brendan says **"run test session" / "let's run test session" / "test session"**, read `Docs/TEST_SESSION.md` and execute it. That is the consolidated runbook: it batches every open `Docs/TEST_LIST.md` item into the fewest live runs (one voice-call session, one SMS session, one agency↔client login pass, one cadence/follow-up pass, one by-phone/GHL-outage pass, etc.), starts with a self-verify-state step (do not trust doc git-logs/versions), lists the pre-authorized test write-actions, ends with **RUN 9** (the Brendan manual checklist) + **RUN 10** (the self-chaining relay of the next-session prompts: T-fix -> Session S -> F15 -> F16 -> gated First-Client Milestone), and closes out per the Relay Protocol. `Docs/TEST_LIST.md` remains the source of truth for pass/fail bookkeeping. To run any downstream session, paste its prompt from `Docs/TEST_SESSION.md` RUN 10.
+
+**FIRST-CLIENT ONBOARDING.** When Brendan says **"I'm onboarding a client" / "onboarding a client" / "first client signed"**, read `Docs/FIRST_CLIENT_MILESTONE.md` and run its prompt. It is event-gated (flips Stripe / subscription enforcement / live webhook secrets / AU A2P) - do NOT run it before a contract actually signs. It is the last step to v1 "100%".
 
 ## Behavioral Guidelines
 

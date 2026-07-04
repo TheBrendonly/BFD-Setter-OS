@@ -311,6 +311,10 @@ Status: `[ ]` not started · `[~]` in progress · `[x]` done. Effort is rough.
    webhook signing secrets + arm `retell_webhook_secret` (6.6), AU A2P registration for `+61481614530`, GHL
    reminder-workflow snapshot at onboarding. After this, v1 is live + 100%.
 **API-DEPR-1/2 are DONE** (retell-proxy v49 live); Session 10 (G3-7) is DONE — vite 8 is live on `main`.
+
+**Ready-to-run prompts for the whole relay live in `Docs/TEST_SESSION.md` RUN 10** (T-fix → Session S → F15 → F16,
+each with a self-chaining ▶ PIPELINE footer) **and `Docs/FIRST_CLIENT_MILESTONE.md`** (the gated last step). Triggers:
+say "run test session" to start; say "I'm onboarding a client" to surface the milestone.
 **Functional 100% = Sessions 0-8 `[x]` + TEST_LIST green** (reached at the end of Session 7-finish); Sessions
 9-10 clear the last open BUG_LIST items; the First-client milestone is the actual go-live. v2 = the lifecycle
 system + A/B + analytics + HubSpot + F9 v2 + F8 v2 (`Docs/DEFERRED.md`), off the 100% path.

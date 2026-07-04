@@ -260,11 +260,169 @@ Messaging Service registration for `+61481614530`, and the GHL reminder-workflow
 
 ---
 
+## RUN 10 — Next sessions (the relay: run these in order after the test pass)
+
+The whole path to v1 "100%", in order. Run each in a FRESH session by pasting its fenced prompt. Each prompt carries a
+**▶ PIPELINE** footer so you always see what's left. Live done/not-done status is in `Docs/SESSION_PLAN.md`.
+
+```
+[✓] Test session (this file)
+[ ] Session T-fix   — ONLY if the test pass logged failures (scoped from them)
+[ ] Session S       — supervised shared-fn: BOOK-2 + BOOK-3 + SMS-METER-1 (frozen voice-booking-tools)
+[ ] Session F15     — client ROI visibility pack (show-rate funnel + weekly report)
+[ ] Session F16     — never-miss-a-lead pack (+ F17 phase-1 AU compliance)
+[ ] First-Client Milestone — GATED: run ONLY when a contract signs. Full prompt in Docs/FIRST_CLIENT_MILESTONE.md
+                             (or just tell Claude "I'm onboarding a client"). After it, v1 is LIVE + 100%.
+Post-client queue (later): F18 (AI confirm call) → F19 (QA digest) → F20 (revenue attribution) → F12 (cost opt).
+```
+
+Note: F15/F16 are the market-research pre-first-client features (`FEATURE_ROADMAP.md` F15-F20). If the demo is imminent,
+run **F16 before F15** (F16 is the flashier live demo; F15 is the retention spine that needs data to accrue anyway).
+
+---
+
+### ▶ Session T-fix — fix pass (ONLY if the test session logged failures)
+
+```
+BFD-setter - FIX PASS for the TEST session failures. Model: Opus 4.8. Plan mode: ON if any fix touches
+retell-proxy / voice-booking-tools / the live cadence runtime, else execute.
+
+Repo /srv/bfd/Projects/bfd-setter, branch main (git pull first). Supabase ref bjgrgbgykvjrsuwwruoh. Creds in
+./.env. Live DB via Supabase Management API /database/query (NOT postgres MCP). NEVER edit voice/text prompt
+CONTENT (report-only). retell-proxy is the FROZEN Voice baseline (changes are Voice-gated); voice-booking-tools
+stays frozen. Verify read-only before claiming done. No em dashes. Relay Protocol in Docs/SESSION_PLAN.md.
+READ FIRST: Docs/SESSION_PLAN.md, the latest test-session handoff, and the new FAIL entries in Docs/BUG_LIST.md.
+
+Scope: ONLY the bugs the test session logged. For each: reproduce read-only, fix, test, deploy per its surface
+(edge fn via scripts/deploy_single_fn.mjs, Trigger via TRIGGER_DEPLOY_PAT, frontend via main push), add a retest
+row to TEST_LIST.md. Close out per the Relay Protocol and emit the next prompt (Session S).
+
+▶ PIPELINE (run in order; live status in Docs/SESSION_PLAN.md):
+[✓] Test session   [•] T-fix (here)   [ ] Session S   [ ] F15   [ ] F16   [ ] First-Client Milestone (gated)
+Next after this: Session S (below, or say "run session S").
+```
+
+---
+
+### ▶ Session S — supervised shared-fn (BOOK-2 + BOOK-3 + SMS-METER-1)
+
+```
+BFD-setter - SUPERVISED shared-fn session: BOOK-2 + BOOK-3 + SMS-METER-1 in the FROZEN voice-booking-tools.
+Model: Opus 4.8. Plan mode: ON. HARD GATE: Brendan is present and live; every edit to voice-booking-tools is
+reviewed before deploy, and the deploy is followed the same day by one answered-call booking regression AND one
+SMS booking regression (voice-booking-tools is shared by BOTH channels).
+
+Repo /srv/bfd/Projects/bfd-setter, branch main (git pull first). Supabase ref bjgrgbgykvjrsuwwruoh. Creds in
+./.env. Live DB via Mgmt API /database/query. NEVER edit prompt content. Verify read-only before claiming done.
+No em dashes. Relay Protocol in Docs/SESSION_PLAN.md.
+READ FIRST: Docs/SESSION_PLAN.md, the latest handoff, the BOOK-2 / BOOK-3 / SMS-METER-1 entries in
+Docs/BUG_LIST.md (BOOK-2/3 have characterization tests in the repo already - find and run them first).
+
+Scope, one commit each:
+1. BOOK-2: resolveCanonicalSlot exact HH:MM grid-match false-negative. Snap to the nearest REAL grid slot, or
+   return slot_unavailable with real alternatives. NEVER loosen to fuzzy matching; the wall-clock matching is
+   load-bearing and live-proven, do not change the offset handling.
+2. BOOK-3: toMs() parses offset-less ISO as UTC, shifting the free-slots window ~10h for Sydney. Interpret
+   offset-less ISO in client.timezone.
+3. SMS-METER-1: toolSendSms never stamps message_queue channel='sms_outbound', so mid-call texts are invisible
+   to F13 metering. Add the same non-fatal post-send stamp the other writers use
+   (ghl_account_id = client.ghl_location_id || client.id, twilio_message_sid).
+Extend the characterization tests to pin each fix. Deploy voice-booking-tools ONCE at the end (Brendan GO), then
+run BOTH live regressions before closing anything. Close out per the Relay Protocol; emit F15.
+
+▶ PIPELINE (run in order; live status in Docs/SESSION_PLAN.md):
+[✓] Test session   [✓] T-fix (if needed)   [•] Session S (here)   [ ] F15   [ ] F16   [ ] First-Client Milestone (gated)
+Next after this: Session F15 (below, or say "run session F15").
+```
+
+---
+
+### ▶ Session F15 — client ROI visibility pack (show-rate funnel + weekly report)
+
+```
+BFD-setter - F15: client ROI visibility pack (show-rate funnel + weekly report).
+Model: Opus 4.8. Plan mode: ON (new schema + a new GHL webhook surface; brainstorm first).
+
+Repo /srv/bfd/Projects/bfd-setter, branch main (git pull first). Supabase ref bjgrgbgykvjrsuwwruoh. Creds in
+./.env. Live DB via Mgmt API /database/query. NEVER edit prompt content. retell-proxy + voice-booking-tools
+frozen (this feature should not touch either). Verify read-only before claiming done. No em dashes. Relay
+Protocol in Docs/SESSION_PLAN.md.
+READ FIRST: Docs/SESSION_PLAN.md, the latest handoff, the F15 entry + "Feature spec - 2026-07 market research"
+in FEATURE_ROADMAP.md, and the F13 usage plumbing (get-client-usage, computeUsage, billingPeriod) so the report
+reuses it rather than re-deriving numbers.
+
+Scope:
+(a) Show-rate funnel: ingest GHL appointment-status changes (GHL fires workflow triggers/webhooks for confirmed
+    / showed / no-show / cancelled) into the platform, keyed to the existing bookings rows. FIRST confirm the
+    exact GHL mechanism available on our location read-only against the live GHL API. Track booked -> confirmed
+    -> held -> no-show per setter and per lead source. Reuse the sync-ghl-contact ingress + webhook auth patterns.
+(b) Weekly client report: a Trigger.dev cron that assembles per-client - calls made/answered, SMS conversations,
+    appointments booked/confirmed/held, no-show rate, billed usage (from F13), top objections (existing analysis
+    data), plus an agency-editable "what we improved" block. Render white-label HTML email; send via Resend SMTP
+    (GATED: if Brendan's Resend item is still open per Docs/TEST_SESSION.md M1, build everything and stub the send
+    behind a flag + a preview URL in the dashboard). Client-visibility of each section follows the F13
+    client_display toggle pattern.
+Tests for the funnel state machine + report assembly. Deploy edge fn(s) + Trigger + frontend on GO. Live-verify:
+flip one real booking through confirmed -> showed in GHL and watch the funnel row update; generate one real report
+for the BFD dogfood client. Close out per the Relay Protocol; emit F16.
+
+▶ PIPELINE (run in order; live status in Docs/SESSION_PLAN.md):
+[✓] Test session   [✓] Session S   [•] F15 (here)   [ ] F16   [ ] First-Client Milestone (gated)
+Next after this: Session F16 (below, or say "run session F16"). If the demo is imminent, you may have run F16 first.
+```
+
+---
+
+### ▶ Session F16 — never-miss-a-lead pack + F17 phase-1 AU compliance
+
+```
+BFD-setter - F16: never-miss-a-lead pack (speed-to-lead + missed-call text-back + live-transfer config)
++ F17 phase 1 (AU calling-hours enforcement + recording-disclosure toggle).
+Model: Opus 4.8. Plan mode: ON (touches outbound dial paths; the hours gate is a compliance control).
+
+Repo /srv/bfd/Projects/bfd-setter, branch main (git pull first). Supabase ref bjgrgbgykvjrsuwwruoh. Creds in
+./.env. Live DB via Mgmt API. NEVER edit prompt content (the transfer phrasing + disclosure LINE are PU items
+Brendan applies; the toggles/engine are code). retell-proxy changes are Voice-gated; voice-booking-tools frozen.
+Verify read-only before claiming done. No em dashes. Relay Protocol in Docs/SESSION_PLAN.md.
+READ FIRST: Docs/SESSION_PLAN.md, the latest handoff, the F16 + F17 entries in FEATURE_ROADMAP.md,
+_shared/business-hours.ts (an hours guard already exists - map its coverage FIRST), and make-retell-outbound-call.
+
+Scope:
+(a) F17 phase 1 FIRST (it gates the dials): verify/extend hours enforcement so EVERY outbound voice dial and
+    cadence SMS respects Telemarketing Standard windows (weekdays 9am-8pm, Sat 9am-5pm, no Sun/public holidays)
+    in the lead's timezone falling back to clients.timezone. Add a per-client recording-disclosure toggle
+    (engine-side; the spoken line = PU-6, report-only).
+(b) Speed-to-lead: new lead via sync-ghl-contact -> AI voice call within 60s INSIDE the legal window, SMS fallback
+    outside hours or on no-answer. Per-client opt-in. Reuse campaign/dial plumbing; do not invent a new dial path.
+(c) Missed-call text-back: inbound call unanswered/abandoned (Twilio status webhook) -> SMS within 60s from the
+    same number into the existing multi-turn SMS booking engine. Dedupe against an answered-elsewhere race.
+(d) Live-transfer config: per-setter UI for Retell's native transfer_call tool (retell-proxy already passes it
+    through untouched) - target number from client config, plus an SMS context-summary fallback on failed
+    transfer. Report the recommended prompt line to PROMPT_UPDATE_LIST; do not write it.
+Tests per unit; deploys per surface on GO; live-verify each of the 4 behaviors. Close out per the Relay Protocol;
+emit the First-Client Milestone reminder (it is event-gated - do not run it until a client signs).
+
+▶ PIPELINE (run in order; live status in Docs/SESSION_PLAN.md):
+[✓] Test session   [✓] Session S   [✓] F15   [•] F16 (here)   [ ] First-Client Milestone (GATED on a signed client)
+Next: nothing runs until a client signs. When one does, say "I'm onboarding a client" -> Docs/FIRST_CLIENT_MILESTONE.md.
+```
+
+---
+
+### ▶ First-Client Milestone — GATED (do NOT run until a contract signs)
+
+The full prompt lives in **`Docs/FIRST_CLIENT_MILESTONE.md`** (kept separate so it surfaces on demand, not by accident).
+When a client actually signs, tell Claude **"I'm onboarding a client"** (or open that file) and run it. It covers Stripe
+go-live + the subscription gate, webhook signing secrets, AU A2P registration, onboarding the client, the GHL reminder
+snapshot, and the compliance close-out. **After that session, v1 is LIVE + 100%.**
+
+---
+
 ## Close-out
 
 Reconcile the 6 lists (passes → `Docs/archive/COMPLETED_LOG.md`, fails → `Docs/BUG_LIST.md`, plus
 `PROMPT_UPDATE_LIST.md` if any prompt-content need surfaced), tick `SESSION_PLAN.md`, write a dated handoff, and
-`git add -A && commit && push` to origin + github. **Emit the next prompt from REALITY:** all planned code sessions
-(0-10 + API-DEPR-1/2) are DONE, so the next real code item is the **SUPERVISED shared-fn session** (BOOK-2 / BOOK-3 /
-SMS-METER-1 in the frozen `voice-booking-tools`, daytime + Brendan present), then the **First-client milestone**
-(event-gated, `Docs/DEFERRED.md`). State that next prompt's model, thinking level, and plan-or-not.
+`git add -A && commit && push` to origin + github. **Hand Brendan the next prompt from RUN 10 above:** if the test
+pass logged failures, hand the **Session T-fix** prompt; otherwise the **Session S** prompt. Each RUN-10 prompt carries
+its own ▶ PIPELINE footer, so the relay self-chains: T-fix → S → F15 → F16 → (gated) First-Client Milestone. Also read
+out **RUN 9** (the Brendan manual checklist) so the manual items surface too.
