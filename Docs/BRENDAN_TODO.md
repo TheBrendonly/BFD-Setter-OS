@@ -10,9 +10,11 @@ prompt tweaks independently).
 - [x] **Deploy the `feature/overnight-bugfix` branch (supervised, your GO).** DONE 2026-07-04 (Session 9, Claude, your GO): merged to `main` (`4a22b8b`, fast-forward), pushed origin+github. Deployed Trigger.dev 20260703.2 (SMS-MEM-1, FOLLOWUP-PROMPT-1), retell-proxy v48 (VM-1 + API-DEPR-1 list-agents), verify-credentials v3, save-external-prompt v15, RLS-SHAPE-1 migration applied. Frontend was ALREADY live (Railway auto-deployed the branch overnight — see DEPLOY-1). Read-only Voice smoke on v48 passed. **Still owed by you:** the live TEST_LIST pass (below), incl. the retell-proxy v48 answered-call Voice-regression + the VM-1 voicemail-lands check.
 - [x] **Apply the RLS-SHAPE-1 migration** — DONE 2026-07-04 (Session 9, Claude, Mgmt API): the role gate `get_user_role(auth.uid())='agency'` is confirmed live in `pg_policies` on `sms_delivery_events`.
 - [ ] **DEPLOY-1 — pin the Railway production frontend deploy to `main` only (found in Session 9).** Railway auto-deployed the `feature/overnight-bugfix` branch straight to the live domain `app.buildingflowdigital.com` overnight (proven: the live prod bundle contained branch-only MODEL-1 code, built ~06:14 AEST while `main` was still `b092c9d`). That bypasses the "stage → supervised GO → deploy" gate. In the Railway frontend service **Settings → Source**, set the production deploy branch to `main` and disable auto-deploy from other branches (or route feature branches to a separate non-prod environment). No code change. `[B]`
-- [ ] **Merge the G3-7 vite-8 branch after a browser check** — `g3-7/vite-major` (off `feature/overnight-bugfix`)
-  bumps vite 5→8.1.3 and clears every npm audit advisory. Verified headless (build/tsc/tests/app-load green).
-  Before merging: `npm run dev` and click through a few pages in a real browser. `[B]`
+- [x] **Merge the G3-7 vite-8 branch** — DONE 2026-07-04 (Session 10, Claude): rebased `g3-7/vite-major` onto
+  `main` → `--ff-only` merge (`407b66e`) → pushed origin+github → Railway rebuilt prod on vite 8.1.3 (LIVE). All
+  headless gates green (build/tsc/test:frontend/audit; preview + dev server served all routes 200). **The only
+  remaining piece is the live human browser click-through**, which is a `TEST_LIST.md` item (open
+  `app.buildingflowdigital.com`, click a few pages, no console errors) — not a merge action.
 - [ ] **Raise the inotify watch limit on greenserver (unblocks `npm run dev`)** — vite 8's dev server (and any
   file watcher) hits `ENOSPC: System limit for number of file watchers reached` because Syncthing + the VS Code
   server + graphify already hold most watches. Fix (needs sudo): `echo 'fs.inotify.max_user_watches=524288' |
@@ -51,13 +53,19 @@ prompt tweaks independently).
   0/5 agents) — re-opened in `BUG_LIST.md` as its own item, does not gate v47. → `TEST_LIST.md` /
   `COMPLETED_LOG.md`. (This line was stale — left as open here after the check had already passed.)
 - [→] **BOOK-1 prompt tweak — MOVED to `PROMPT_UPDATE_LIST.md` (PU-2) and now CODE-OWNED.** The booking rules it proposed adding to the stored prompt are owned code-side as of PROMPT-AUTH-1 (and the stale booking blob is being removed from the stored prompt via the Setter-1 migration). Do NOT hand-add booking rules to a stored persona. See `PROMPT_UPDATE_LIST.md` PU-2 for the full history.
-- [ ] **Revert the Property Coach name** — during the F9-unlock test the setter was renamed to **"Gary - Property Coach 1"** (cascaded live to Retell). Drop the trailing " 1" via the inline tile name editor when convenient (it'll cascade back). `[B]`
+- [x] **Revert the Property Coach name** — DONE (confirmed live 2026-07-04: `get-agent` returns `agent_name` = "Gary - Property Coach", no trailing " 1"; also recorded as precondition A3 in the 2026-07-03 voice-gate handoff).
 - [x] **MODEL-1 — `clients.llm_model` corrected live** — was an invalid OpenRouter id (`google/gemini-flash-latest`) silently breaking all SMS + cadence AI; Claude set it to `google/gemini-2.5-flash` via Mgmt API (2026-06-30). FYI; the hardening (validate the field) is a code item in BUG_LIST (MODEL-1-HARDENING). If you change the model in the UI, use a valid OpenRouter id (e.g. `google/gemini-2.5-flash`).
 - [x] **SMS latency reduced** — `agent_settings.response_delay_seconds` for all 7 BFD setters set 60/82 → **12s** (2026-06-30, your call). Tune further in the setter config if 12s feels off.
 
 ## After a build ships (I'll prompt you with the exact agent/version)
 
-- [ ] **Re-Save the 5 voice setters** once the B-5/B-3 fix ships (default-vars net + outbound version re-pin) so it takes on the live agents. The 5: Main Outbound (slot 1), Gary Property Coach / Mortgage Broker / Finance Strategist / Crazy Gary. **Never edit the prompts — re-Save/Push only.**
+- [x] **Re-Save the 5 voice setters (for B-5/B-3)** — DONE 2026-07-03 (recorded as precondition A2 in the voice-gate
+  handoff; the live voice gate then confirmed B-5 `first_name` populated). **⚠️ A FRESH re-Save is now needed** to
+  push the two NEWER agent-level changes onto the live agents: **VM-1** (retell-proxy v48 voicemail draft-first) and
+  **API-DEPR-2** (retell-proxy v49 analysis-fields → `post_call_analysis_data` system-presets). That fresh re-Save is
+  part of the voice-gate / API-DEPR-2 checks in `TEST_LIST.md` (re-Save any setter, then `get-agent` shows the 3
+  `system-presets`). The 5: Main Outbound (slot 1), Gary Property Coach / Mortgage Broker / Finance Strategist /
+  Crazy Gary. **Never edit the prompts — re-Save/Push only.**
 - [ ] **Apply any report-only prompt tweaks** I surface, via the BFD setter UI (prompt content is hard report-only). **These now live in their own list: `PROMPT_UPDATE_LIST.md`.**
 - [x] **Flag the inbound setter (activates F2b)** — DONE (live DB: "Inbound BFD Agent" `is_inbound=true`; `clients.retell_inbound_agent_id` + Retell `+61481614530` inbound binding both point at `agent_b2f6495…`). Flipping this is what surfaced B-6 (now fixed in Session 3.1: the persistence held; the list badge was reading the wrong table). One setter per client; flipping another moves the flag.
 
