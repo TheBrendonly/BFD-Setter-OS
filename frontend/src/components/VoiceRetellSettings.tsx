@@ -25,6 +25,7 @@ import {
 import {
   DEFAULT_RETELL_ANALYSIS_SUCCESSFUL_PROMPT,
   DEFAULT_RETELL_ANALYSIS_SUMMARY_PROMPT,
+  DEFAULT_RETELL_ANALYSIS_USER_SENTIMENT_PROMPT,
   DEFAULT_RETELL_GENERAL_TOOLS,
   DEFAULT_RETELL_POST_CALL_ANALYSIS_DATA,
   DEFAULT_RETELL_USER_DTMF_OPTIONS,
@@ -103,7 +104,7 @@ export const DEFAULT_RETELL_VOICE_SETTINGS: RetellVoiceSettings = {
   post_call_analysis_model: 'gpt-4.1',
   analysis_successful_prompt: DEFAULT_RETELL_ANALYSIS_SUCCESSFUL_PROMPT,
   analysis_summary_prompt: DEFAULT_RETELL_ANALYSIS_SUMMARY_PROMPT,
-  analysis_user_sentiment_prompt: "Evaluate user's sentiment, mood and satisfaction level.",
+  analysis_user_sentiment_prompt: DEFAULT_RETELL_ANALYSIS_USER_SENTIMENT_PROMPT,
   webhook_url: '',
   webhook_timeout_ms: 15000,
   end_call_after_silence_enabled: true,

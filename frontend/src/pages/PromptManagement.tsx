@@ -58,6 +58,7 @@ import { DEFAULT_RETELL_VOICE_SETTINGS, type RetellVoiceSettings } from '@/compo
 import {
   DEFAULT_RETELL_ANALYSIS_SUCCESSFUL_PROMPT,
   DEFAULT_RETELL_ANALYSIS_SUMMARY_PROMPT,
+  DEFAULT_RETELL_ANALYSIS_USER_SENTIMENT_PROMPT,
   DEFAULT_RETELL_GENERAL_TOOLS,
   DEFAULT_RETELL_POST_CALL_ANALYSIS_DATA,
   DEFAULT_RETELL_USER_DTMF_OPTIONS,
@@ -6055,6 +6056,22 @@ const PromptManagement = () => {
           DEFAULT_RETELL_POST_CALL_ANALYSIS_DATA,
           'Post-call analysis fields'
         );
+        // API-DEPR-2: the three deprecated analysis prompt fields (Retell 06/15/2026 removal)
+        // migrate into post_call_analysis_data as system-presets. Their outputs still land
+        // TOP-LEVEL on call_analysis (call_summary/user_sentiment/call_successful), so the
+        // downstream analysis webhooks are unchanged. We keep editing the 3 prompts in their
+        // own textareas (and persist them separately in config) and merge them into the array
+        // only at the Retell wire boundary. Strip any presets already in the custom array so a
+        // re-loaded/migrated agent doesn't double them up. retell-proxy applies the same fold
+        // defensively for deploy-order safety.
+        const analysisSystemPresets = [
+          { type: 'system-presets', name: 'call_summary', description: retellVoiceSettings.analysis_summary_prompt?.trim() || DEFAULT_RETELL_ANALYSIS_SUMMARY_PROMPT },
+          { type: 'system-presets', name: 'call_successful', description: retellVoiceSettings.analysis_successful_prompt?.trim() || DEFAULT_RETELL_ANALYSIS_SUCCESSFUL_PROMPT },
+          { type: 'system-presets', name: 'user_sentiment', description: retellVoiceSettings.analysis_user_sentiment_prompt?.trim() || DEFAULT_RETELL_ANALYSIS_USER_SENTIMENT_PROMPT },
+        ];
+        const customAnalysisFields = (Array.isArray(parsedPostCallAnalysisData) ? parsedPostCallAnalysisData : [])
+          .filter((f: any) => !(f && f.type === 'system-presets'));
+        const mergedPostCallAnalysisData = [...analysisSystemPresets, ...customAnalysisFields];
         const parsedVoicemailOption = parseJsonConfig(
           retellVoiceSettings.voicemail_option,
           DEFAULT_RETELL_VOICEMAIL_OPTION,
@@ -6107,14 +6124,13 @@ const PromptManagement = () => {
               webhook_timeout_ms: retellVoiceSettings.webhook_timeout_ms,
               data_storage_setting: retellVoiceSettings.data_storage_setting?.trim() || 'everything',
               post_call_analysis_model: retellVoiceSettings.post_call_analysis_model?.trim() || 'gpt-4.1',
-              analysis_successful_prompt: retellVoiceSettings.analysis_successful_prompt?.trim() || DEFAULT_RETELL_ANALYSIS_SUCCESSFUL_PROMPT,
-              analysis_summary_prompt: retellVoiceSettings.analysis_summary_prompt?.trim() || DEFAULT_RETELL_ANALYSIS_SUMMARY_PROMPT,
-              post_call_analysis_data: parsedPostCallAnalysisData,
+              // API-DEPR-2: send the 3 analysis prompts as system-presets inside
+              // post_call_analysis_data (deprecated top-level analysis_*_prompt keys removed).
+              post_call_analysis_data: mergedPostCallAnalysisData,
               voicemail_option: parsedVoicemailOption,
               vocab_specialization: retellVoiceSettings.vocab_specialization?.trim() || 'general',
               user_dtmf_options: parsedUserDtmfOptions,
               backchannel_frequency: retellVoiceSettings.backchannel_frequency,
-              analysis_user_sentiment_prompt: retellVoiceSettings.analysis_user_sentiment_prompt?.trim() || "Evaluate user's sentiment, mood and satisfaction level.",
               stt_mode: retellVoiceSettings.stt_mode?.trim() || 'accurate',
               custom_stt_config: parseJsonConfig(retellVoiceSettings.custom_stt_config, { provider: 'deepgram', endpointing_ms: 1000 }, 'Custom STT config'),
               pii_config: parseJsonConfig(retellVoiceSettings.pii_config, { mode: 'post_call', categories: [] }, 'PII config'),

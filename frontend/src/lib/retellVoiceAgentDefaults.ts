@@ -2,6 +2,8 @@ export const DEFAULT_RETELL_ANALYSIS_SUCCESSFUL_PROMPT = "Evaluate whether the a
 
 export const DEFAULT_RETELL_ANALYSIS_SUMMARY_PROMPT = "Write a 1-3 sentence summary of the call based on the call transcript. Should capture the important information and actions taken during the call.";
 
+export const DEFAULT_RETELL_ANALYSIS_USER_SENTIMENT_PROMPT = "Evaluate user's sentiment, mood and satisfaction level.";
+
 export const DEFAULT_RETELL_POST_CALL_ANALYSIS_DATA = [
   {
     name: "Call result",

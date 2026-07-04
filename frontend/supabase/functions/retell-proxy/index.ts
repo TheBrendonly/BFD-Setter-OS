@@ -17,6 +17,7 @@ import {
   type LockIndex,
 } from "../_shared/retell-lock.ts";
 import { buildVoicemailPatch } from "./voicemail.ts";
+import { buildPostCallAnalysisData } from "./postCallAnalysis.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -705,10 +706,13 @@ function buildAgentUpdatesFromVoiceSettings(voiceSettings?: Record<string, unkno
     if (voiceSettings.reminder_max_count !== undefined) agentUpdates.reminder_max_count = voiceSettings.reminder_max_count;
     if (voiceSettings.opt_out_sensitive_data_storage !== undefined) agentUpdates.opt_out_sensitive_data_storage = voiceSettings.opt_out_sensitive_data_storage;
     if (voiceSettings.post_call_analysis_model !== undefined) agentUpdates.post_call_analysis_model = voiceSettings.post_call_analysis_model || "gpt-4.1";
-    if (voiceSettings.analysis_successful_prompt !== undefined) agentUpdates.analysis_successful_prompt = voiceSettings.analysis_successful_prompt;
-    if (voiceSettings.analysis_summary_prompt !== undefined) agentUpdates.analysis_summary_prompt = voiceSettings.analysis_summary_prompt;
-    if (voiceSettings.analysis_user_sentiment_prompt !== undefined) agentUpdates.analysis_user_sentiment_prompt = voiceSettings.analysis_user_sentiment_prompt;
-    if (Array.isArray(voiceSettings.post_call_analysis_data)) agentUpdates.post_call_analysis_data = voiceSettings.post_call_analysis_data;
+    // API-DEPR-2: the deprecated analysis_summary_prompt / analysis_successful_prompt /
+    // analysis_user_sentiment_prompt agent fields (Retell 06/15/2026 removal) are folded into
+    // post_call_analysis_data as system-presets. Their outputs still land TOP-LEVEL on
+    // call_analysis (call_summary/user_sentiment/call_successful), so the downstream analysis
+    // webhooks are unaffected. Never emit the deprecated field names on the agent.
+    const postCallAnalysisData = buildPostCallAnalysisData(voiceSettings);
+    if (postCallAnalysisData !== undefined) agentUpdates.post_call_analysis_data = postCallAnalysisData;
     if (voiceSettings.voicemail_option !== undefined && typeof voiceSettings.voicemail_option === "object") {
       agentUpdates.voicemail_option = voiceSettings.voicemail_option;
     }

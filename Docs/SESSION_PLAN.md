@@ -275,17 +275,31 @@ Status: `[ ]` not started · `[~]` in progress · `[x]` done. Effort is rough.
   session** (kept as the G3-7 row in `TEST_LIST.md`) — G3-7 closes to `COMPLETED_LOG.md` when that renders green.
   The greenserver inotify sysctl + DEPLOY-1 (pin Railway to `main`) remain open BRENDAN_TODO items. → emits the
   **API-DEPR-2** prompt (or First-client if Brendan's async live TEST pass has gone green).
+- [x] **API-DEPR-2 — deprecated Retell analysis-prompt fields → `post_call_analysis_data`. DONE 2026-07-04 (Opus 4.8, plan ON, Brendan approved).**
+  Migrated `analysis_summary_prompt`/`analysis_successful_prompt`/`analysis_user_sentiment_prompt` (Retell 06/15/2026 removal) into
+  `post_call_analysis_data` `type:"system-presets"` entries (`call_summary`/`call_successful`/`user_sentiment`). **The Session-9 "coordinated
+  webhook changes" worry was REFUTED** by current docs + the `get-call` schema + live reads: system-preset outputs stay **TOP-LEVEL** on
+  `call_analysis`, so the two analysis webhooks (`retell-call-webhook`, `retell-call-analysis-webhook`) were NOT touched. Full-stack but storage
+  model unchanged: new pure `retell-proxy/postCallAnalysis.ts` (`buildPostCallAnalysisData`, 6 unit tests, idempotent + dedup-by-name +
+  deploy-order-safe) wired into `buildAgentUpdatesFromVoiceSettings`; frontend `PromptManagement.tsx` save payload folds the 3 prompts into
+  presets and drops the deprecated keys (the 3 textareas + config persistence stay); `DEFAULT_RETELL_ANALYSIS_USER_SENTIMENT_PROMPT` const added.
+  tsc 0, vite build green, test:edge **208/0**. **retell-proxy v48→v49 (Voice-gated): read-only smoke PASSED** (list-agents 200; canonical
+  agents byte-for-byte unchanged, 0 mutated). Accepted minor REPORTING-only shift (the app's analysis prompts now actually apply; today they were
+  silently stripped so analysis ran on Retell defaults) — no call/booking behavior touched. API-DEPR-1 is now fully code-complete. Owed = the
+  Brendan-driven answered-call Voice gate (shared with v48) + a post-save `get-agent` shape check → `TEST_LIST.md`. → next = First-client (or the
+  async live TEST pass if still open).
 - [ ] **First-client milestone (BRENDAN, gated).** Not a Claude code session. At the first paying client:
   flip Stripe live (backfill `subscription_status` → set `ENFORCE_SUBSCRIPTION_GATE=true`), provision the
   GHL/Retell/Unipile webhook secrets + arm `retell_webhook_secret` (6.6), register AU SMS A2P for
   `+61481614530`. See `Docs/DEFERRED.md`. After this, v1 is live + 100%.
 
 **Remaining sequence to v1 "100%" (the relay follows this order):** the live TEST pass (Session 7-finish +
-the Session-9 retests + the Session-10 G3-7 vite-8 browser click-through — voice-regression call FIRST, run
-async by Brendan) → any fix-pass for failures → **API-DEPR-2** (deprecated `analysis_*_prompt` →
-`post_call_analysis_data`, its own full-stack session) → optional BOOK-2/3 + SMS-METER-1 supervised shared-fn
-edits → First-client milestone (event-gated). DEPLOY-1 (pin Railway prod to `main`) is a Brendan dashboard task,
-do anytime. Session 10 (G3-7 merge) is DONE — vite 8 is live on `main`.
+the Session-9 retests + the Session-10 G3-7 vite-8 browser click-through + the API-DEPR-2 v49 answered-call
+Voice gate — voice-regression call FIRST, run async by Brendan) → any fix-pass for failures → optional
+BOOK-2/3 + SMS-METER-1 supervised shared-fn edits → First-client milestone (event-gated). DEPLOY-1 (pin
+Railway prod to `main`) is a Brendan dashboard task, do anytime. **API-DEPR-2 is DONE** (analysis fields
+migrated, retell-proxy v49 live); API-DEPR-1 is fully code-complete. Session 10 (G3-7 merge) is DONE — vite 8
+is live on `main`.
 **Functional 100% = Sessions 0-8 `[x]` + TEST_LIST green** (reached at the end of Session 7-finish); Sessions
 9-10 clear the last open BUG_LIST items; the First-client milestone is the actual go-live. v2 = the lifecycle
 system + A/B + analytics + HubSpot + F9 v2 + F8 v2 (`Docs/DEFERRED.md`), off the 100% path.
