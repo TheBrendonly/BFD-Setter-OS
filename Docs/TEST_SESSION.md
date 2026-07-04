@@ -204,6 +204,62 @@ Claude drives the outage sim (set a bad `ghl_api_key` via Mgmt API, then restore
 
 ---
 
+## RUN 9 — Brendan manual checklist (surface this at the END of every test session)
+
+These are the manual / dashboard / UI actions Claude cannot do. Read them out to Brendan at the end of the run with
+their current status. **Done items (Claude verified):** DEPLOY-1 (Railway pinned to `main`) · inotify sysctl (raised
+to 524288 live) · Twilio ACMA sender-ID check (CLEAN, 0 alpha senders). **Still open below** — each has step-by-step
+detail so Brendan can just do it. Canonical status lives in `BRENDAN_TODO.md` / `PROMPT_UPDATE_LIST.md`.
+
+**M1 — Resend SMTP (unblocks the F14 email tests AND the future F15 weekly ROI report email).**
+1. Sign up free at https://resend.com.
+2. **Domains → Add Domain → `buildingflowdigital.com`.** Resend shows DKIM + SPF (+ optional MX) DNS records.
+3. Add those records at the domain's DNS host (wherever `buildingflowdigital.com` DNS lives), then wait for Resend to
+   flip the domain to **Verified** (minutes to a few hours).
+4. **API Keys → Create API Key** → copy the `re_…` key.
+5. Hand the `re_…` key to Claude in a session and say "wire Resend SMTP". Claude runs the Supabase Management API
+   PATCH `/config/auth` (host `smtp.resend.com`, port 465, user `resend`, pass = the key, sender name + admin email) —
+   the exact payload is in `Operations/handoffs/2026-07-02-usage-billing-auth.md`. Guide:
+   https://resend.com/docs/send-with-supabase-smtp
+   → then re-run the F14 invite + self-reset checks (RUN 1, currently gated).
+
+**M2 — Setter-1 prompt content migration (unblocks the 2 blocked PROMPT-AUTH-1 checks: "No leftover artifacts" +
+"Efficiency").** Report-only; Claude must not edit prompt content.
+- In the BFD setter UI: **Prompt Management → Setter-1 → SETTER CORE →** enable **"Booking Function" → "View Prompt"**
+  → clear the legacy booking text (or click **"Return to Default"** for the new minimal template) → **Save/Deploy**
+  (now lints on save + snapshots to `prompt_versions`) → re-open **"Verify Setter Prompt" → "Load live stored prompt"**
+  to confirm it is lean.
+- Full generated report + the proposed replacement prompt (42 errors / 26 warnings on the current stored prompt):
+  `Docs/investigations/prompt-migration-reports/e467dabc-57ee-416c-8831-83ecd9c7c925_Setter-1.report.md`.
+
+**M3 — n8n Railway shutdown (SAFE now).** The native text engine is canonical (`trigger/processMessages.ts` throws if
+`use_native_text_engine` is false), so nothing runtime depends on n8n. In Railway → the n8n service → **Settings →
+Remove Service** (or pause it). No code change; the unused `clients.text_engine_webhook` column stays (deferred).
+
+**M4 — Pricing tune (OPTIONAL; defaults are already sane, do per client).** BFD setter UI → **Sub-Account Config →
+Cost-to-Price Calculator / Usage & Billing:** set the **billing anchor day** (default 1st), the **sms_llm per-message
+rate** (default US$0.003, enabled), and flip whichever of the **4 client-visibility toggles** (rate / minutes / texts /
+month-total) each client may see (default all OFF). Nothing is required for 100% — this is tuning to taste.
+
+**M5 — Voice prompt-content items (report-only; apply via Prompt Management, one Retell sweep).** Detail per item is in
+`PROMPT_UPDATE_LIST.md`. Priority order:
+- **PU-6 (compliance) — call-recording disclosure line** on every voice setter's opener (NSW/WA/SA all-party consent).
+- **PU-7 (compliance) — Crazy Gary opener** lacks company + purpose; add them IF it's used for real outbound (else
+  confirm it's demo-only). Property Coach already compliant (Claude verified). Spot-check Finance Strategist / Mortgage
+  Broker / Main Outbound the same way.
+- **PU-4** Property Coach real company name (removes the `[placeholder]`), **PU-3** `{{first_name}}` outbound opener
+  (guard against empty on inbound), **PU-1** name the business timezone on booking, **PU-5** stand up Main Outbound V2.
+
+**M6 — Setup-guide screenshots (low priority).** `5.1` — lock the canonical BFD Retell folder name, then re-shoot the
+`SetupGuideDialog.tsx` screenshots (it still says folder "1Prompt").
+
+**M7 — FIRST-CLIENT-GATED (do NOT do until a contract signs; the milestone session covers these).** Stripe live +
+`ENFORCE_SUBSCRIPTION_GATE=true`, provision webhook signing secrets + arm `retell_webhook_secret` (6.6), AU SMS A2P /
+Messaging Service registration for `+61481614530`, and the GHL reminder-workflow snapshot at onboarding. Full detail in
+`Docs/DEFERRED.md` (first-paying-client cluster) + the First-Client Milestone session prompt in `SESSION_PLAN.md`.
+
+---
+
 ## Close-out
 
 Reconcile the 6 lists (passes → `Docs/archive/COMPLETED_LOG.md`, fails → `Docs/BUG_LIST.md`, plus

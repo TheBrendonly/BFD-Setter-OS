@@ -9,25 +9,25 @@ prompt tweaks independently).
 
 - [x] **Deploy the `feature/overnight-bugfix` branch (supervised, your GO).** DONE 2026-07-04 (Session 9, Claude, your GO): merged to `main` (`4a22b8b`, fast-forward), pushed origin+github. Deployed Trigger.dev 20260703.2 (SMS-MEM-1, FOLLOWUP-PROMPT-1), retell-proxy v48 (VM-1 + API-DEPR-1 list-agents), verify-credentials v3, save-external-prompt v15, RLS-SHAPE-1 migration applied. Frontend was ALREADY live (Railway auto-deployed the branch overnight — see DEPLOY-1). Read-only Voice smoke on v48 passed. **Still owed by you:** the live TEST_LIST pass (below), incl. the retell-proxy v48 answered-call Voice-regression + the VM-1 voicemail-lands check.
 - [x] **Apply the RLS-SHAPE-1 migration** — DONE 2026-07-04 (Session 9, Claude, Mgmt API): the role gate `get_user_role(auth.uid())='agency'` is confirmed live in `pg_policies` on `sms_delivery_events`.
-- [ ] **DEPLOY-1 — pin the Railway production frontend deploy to `main` only (found in Session 9).** Railway auto-deployed the `feature/overnight-bugfix` branch straight to the live domain `app.buildingflowdigital.com` overnight (proven: the live prod bundle contained branch-only MODEL-1 code, built ~06:14 AEST while `main` was still `b092c9d`). That bypasses the "stage → supervised GO → deploy" gate. In the Railway frontend service **Settings → Source**, set the production deploy branch to `main` and disable auto-deploy from other branches (or route feature branches to a separate non-prod environment). No code change. `[B]`
+- [x] **DEPLOY-1 — pin the Railway production frontend deploy to `main` only.** DONE 2026-07-04 (Brendan, screenshot-confirmed): Railway `1prompt-os` → production → Settings → Source shows "Branch connected to production" = `main` with auto-deploy on push. The auto-deploy-any-branch hole is closed.
 - [x] **Merge the G3-7 vite-8 branch** — DONE 2026-07-04 (Session 10, Claude): rebased `g3-7/vite-major` onto
   `main` → `--ff-only` merge (`407b66e`) → pushed origin+github → Railway rebuilt prod on vite 8.1.3 (LIVE). All
   headless gates green (build/tsc/test:frontend/audit; preview + dev server served all routes 200). **The only
   remaining piece is the live human browser click-through**, which is a `TEST_LIST.md` item (open
   `app.buildingflowdigital.com`, click a few pages, no console errors) — not a merge action.
-- [ ] **Raise the inotify watch limit on greenserver (unblocks `npm run dev`)** — vite 8's dev server (and any
-  file watcher) hits `ENOSPC: System limit for number of file watchers reached` because Syncthing + the VS Code
-  server + graphify already hold most watches. Fix (needs sudo): `echo 'fs.inotify.max_user_watches=524288' |
-  sudo tee /etc/sysctl.d/60-inotify.conf && sudo sysctl --system`. Until then, dev with
-  `CHOKIDAR_USEPOLLING=true npm run dev`. Not a vite-8 bug; production (static build) is unaffected. `[B]`
+- [x] **Raise the inotify watch limit on greenserver (unblocks `npm run dev`)** — DONE 2026-07-04 (Claude, via
+  passwordless sudo): `/etc/sysctl.d/60-inotify.conf` now sets `fs.inotify.max_user_watches=524288` and
+  `sudo sysctl --system` applied it live (confirmed `fs.inotify.max_user_watches = 524288`). `npm run dev` no
+  longer needs `CHOKIDAR_USEPOLLING=true`.
 
 ## Active (do when you have time)
 
-- [ ] **Verify no alphanumeric SMS sender ID is configured in Twilio (ACMA; 2 minutes).** The ACMA Sender ID
-  Register enforcement began 1 July 2026: unregistered alpha sender IDs now get rewritten to "Unverified" on AU
-  handsets. BFD sends from plain Twilio numbers (exempt), but check the Twilio console (Messaging → Services +
-  any sender pools) to confirm no alpha sender ID is set anywhere, and treat any future "branded sender" client
-  request as needing ACMA registration first (weeks of lead time). Source: 2026-07-04 compliance research. `[B]`
+- [x] **Verify no alphanumeric SMS sender ID is configured in Twilio (ACMA).** DONE 2026-07-04 (Claude, read-only
+  against the live Twilio account `AC11c162…` "Building Flow Digital" using the creds in the `clients` table):
+  the one Messaging Service ("BFD", `MG4843…`) has **0 alphanumeric sender IDs**, and the account holds one plain
+  long code (`+61481614530`, ACMA-exempt). No rewrite risk. **Standing note for Brendan:** treat any future
+  "branded/alpha sender" client request as needing ACMA Sender ID Register registration FIRST (weeks of lead
+  time) — https://www.acma.gov.au/sms-sender-id-register.
 - [ ] **GHL reminder-workflow snapshot (no-show stack; do at/just before first-client onboarding).** Build ONE
   canonical GHL workflow set in the BFD location and snapshot it for client onboarding: instant booking-confirm
   SMS → 24h reminder with a confirm trigger-link (tap = confirmed, suppresses later nags) → 2h short reminder →

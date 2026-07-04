@@ -60,11 +60,19 @@ can be worked independently.
   the wording itself is this item. Source: 2026-07-04 market/compliance research (recordinglaw.com,
   sprintlaw.com.au).
 
-- [ ] **PU-7 — Caller identification within ~30 seconds (voice, outbound; AU compliance check).** The
+- [~] **PU-7 — Caller identification within ~30 seconds (voice, outbound; AU compliance check).** The
   Telemarketing Standard requires outbound calls to state name, company, and purpose within ~30 seconds.
-  Read the live outbound openers (read-only) and confirm each does this; where one doesn't, tighten the
-  opener wording via the UI. Likely already satisfied ("this is Gary, Brendan's AI assistant at Building
-  Flow Digital…") — verify, don't assume. Source: 2026-07-04 compliance research (waboom.ai).
+  **Read-only check DONE 2026-07-04 (Claude, live Retell `begin_message`):** **Gary - Property Coach** is
+  COMPLIANT — opener = *"Hey {{first_name}}, it's Gary, from Building Flow Property, giving you a quick call
+  about the property info you requested. Got a sec for a chat?"* (persona + company + purpose all present).
+  **⚠️ Gary - Crazy Gary needs attention IF used for real outbound** — opener = *"G'day {{first_name}}, it's
+  Rusty Bumblethorpe here, your AI assistant, and oh, do I have stories. What can I dazzle you with today?"*
+  — names the persona + discloses AI but states **no company and no clear purpose**. **Your action (only if
+  Crazy Gary is used for genuine outbound telemarketing, not just a demo/novelty persona):** add a company +
+  brief purpose to its opener via Prompt Management. If it's demo-only, no change needed — just confirm it's
+  not on a live outbound campaign. (Not yet checked: Finance Strategist, Mortgage Broker, Main Outbound /
+  Voice-Setter-master — same one-line check applies; verify on your next Retell sweep.) Source: 2026-07-04
+  compliance research (waboom.ai).
 
 - [ ] **PU-5 — Stand up "Main Outbound V2" (voice).** A full new-prompt draft is ready:
   `Docs/archive/MAIN_OUTBOUND_V2_PROMPT_2026-06-16.md` (folds the Eddie/"Steven" structure into BFD V1: call-flow
