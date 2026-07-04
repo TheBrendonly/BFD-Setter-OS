@@ -23,6 +23,18 @@ prompt tweaks independently).
 
 ## Active (do when you have time)
 
+- [ ] **Verify no alphanumeric SMS sender ID is configured in Twilio (ACMA; 2 minutes).** The ACMA Sender ID
+  Register enforcement began 1 July 2026: unregistered alpha sender IDs now get rewritten to "Unverified" on AU
+  handsets. BFD sends from plain Twilio numbers (exempt), but check the Twilio console (Messaging → Services +
+  any sender pools) to confirm no alpha sender ID is set anywhere, and treat any future "branded sender" client
+  request as needing ACMA registration first (weeks of lead time). Source: 2026-07-04 compliance research. `[B]`
+- [ ] **GHL reminder-workflow snapshot (no-show stack; do at/just before first-client onboarding).** Build ONE
+  canonical GHL workflow set in the BFD location and snapshot it for client onboarding: instant booking-confirm
+  SMS → 24h reminder with a confirm trigger-link (tap = confirmed, suppresses later nags) → 2h short reminder →
+  reschedule link in every touch → post-appointment branch on status (showed / no-show). SMS reminders cut
+  no-shows 38-40% and this is config, not code (research verdict: do NOT build a reminder engine in-product;
+  GHL's appointment-status triggers + trigger links do it all). Pairs with F15's status sync-back. `[B]`
+
 - [ ] **Apply the Setter-1 prompt content migration (PROMPT-AUTH-1, report-only)** — the legacy 511-line
   "# BOOKING FUNCTION" blob in the stored Text-setter prompt (the root cause of the Monday/wrong-date booking
   bug) is now safe to remove: booking mechanics are code-owned as of PROMPT-AUTH-1. Steps are written out in

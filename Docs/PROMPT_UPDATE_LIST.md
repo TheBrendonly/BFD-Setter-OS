@@ -52,6 +52,20 @@ can be worked independently.
   on a dedicated OUTBOUND opener/path, or guard it. Parked for your next Retell prompt sweep. Source: BUG_LIST
   6.8.
 
+- [ ] **PU-6 — Call-recording disclosure line (voice, ALL setters; AU compliance).** NSW, WA and SA require
+  ALL-PARTY consent to record calls, and Retell records calls. Add a short disclosure near the top of every
+  voice setter's opening (e.g. *"Just letting you know this call is recorded for quality."*) — continuing
+  after the announcement counts as implied consent. Apply via the UI to the canonical set (Main Outbound +
+  the 4 Garys + the inbound agent). The per-client disclosure TOGGLE (engine-side) is feature F17 phase 1;
+  the wording itself is this item. Source: 2026-07-04 market/compliance research (recordinglaw.com,
+  sprintlaw.com.au).
+
+- [ ] **PU-7 — Caller identification within ~30 seconds (voice, outbound; AU compliance check).** The
+  Telemarketing Standard requires outbound calls to state name, company, and purpose within ~30 seconds.
+  Read the live outbound openers (read-only) and confirm each does this; where one doesn't, tighten the
+  opener wording via the UI. Likely already satisfied ("this is Gary, Brendan's AI assistant at Building
+  Flow Digital…") — verify, don't assume. Source: 2026-07-04 compliance research (waboom.ai).
+
 - [ ] **PU-5 — Stand up "Main Outbound V2" (voice).** A full new-prompt draft is ready:
   `Docs/archive/MAIN_OUTBOUND_V2_PROMPT_2026-06-16.md` (folds the Eddie/"Steven" structure into BFD V1: call-flow
   map, consent/AI-disclosure beat, path triage + goal hierarchy Book>Callback>Info, booking-failure ladder,

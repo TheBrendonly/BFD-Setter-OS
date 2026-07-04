@@ -293,13 +293,24 @@ Status: `[ ]` not started · `[~]` in progress · `[x]` done. Effort is rough.
   GHL/Retell/Unipile webhook secrets + arm `retell_webhook_secret` (6.6), register AU SMS A2P for
   `+61481614530`. See `Docs/DEFERRED.md`. After this, v1 is live + 100%.
 
-**Remaining sequence to v1 "100%" (the relay follows this order):** the live TEST pass (Session 7-finish +
-the Session-9 retests + the Session-10 G3-7 vite-8 browser click-through + the API-DEPR-2 v49 answered-call
-Voice gate — voice-regression call FIRST, run async by Brendan) → any fix-pass for failures → optional
-BOOK-2/3 + SMS-METER-1 supervised shared-fn edits → First-client milestone (event-gated). DEPLOY-1 (pin
-Railway prod to `main`) is a Brendan dashboard task, do anytime. **API-DEPR-2 is DONE** (analysis fields
-migrated, retell-proxy v49 live); API-DEPR-1 is fully code-complete. Session 10 (G3-7 merge) is DONE — vite 8
-is live on `main`.
+**Remaining sequence to v1 "100%" (the relay follows this order):**
+1. **Session T — the consolidated live TEST pass** (say "run test session" → `Docs/TEST_SESSION.md`; Brendan
+   drives, Claude verifies; voice-regression call FIRST). Covers Session 7-finish + Session-9 retests + the
+   G3-7 vite-8 browser click-through + the API-DEPR-2 v49 answered-call Voice gate.
+2. **Session T-fix — fix-pass** (conditional; scoped from whatever T fails).
+3. **Session S — SUPERVISED shared-fn session** (BOOK-2 + BOOK-3 + SMS-METER-1 in the frozen
+   `voice-booking-tools`; daytime, Brendan present, Voice-gated).
+4. **Brendan solo block (parallel, no Claude session):** DEPLOY-1 (pin Railway to `main`), inotify sysctl,
+   Setter-1 prompt migration, Resend SMTP → F14 E2E, sms_llm rate + billing anchor/toggles, n8n Railway
+   shutdown, Twilio alpha-sender-ID check, PROMPT_UPDATE_LIST items (PU-1/3/4/5/6/7).
+5. **Candidate pre-first-client feature sessions (Brendan picks; from the 2026-07-04 market research,
+   `FEATURE_ROADMAP.md` F15-F17):** F15 client ROI visibility pack (show-rate funnel + weekly report) ·
+   F16 never-miss-a-lead pack (speed-to-lead + missed-call text-back + live-transfer config) · F17 phase-1
+   AU compliance (hours enforcement check + recording-disclosure toggle). Post-client queue: F18/F19/F20 + F12.
+6. **First-client milestone (event-gated, Brendan + Claude assist):** Stripe live + `ENFORCE_SUBSCRIPTION_GATE`,
+   webhook signing secrets + arm `retell_webhook_secret` (6.6), AU A2P registration for `+61481614530`, GHL
+   reminder-workflow snapshot at onboarding. After this, v1 is live + 100%.
+**API-DEPR-1/2 are DONE** (retell-proxy v49 live); Session 10 (G3-7) is DONE — vite 8 is live on `main`.
 **Functional 100% = Sessions 0-8 `[x]` + TEST_LIST green** (reached at the end of Session 7-finish); Sessions
 9-10 clear the last open BUG_LIST items; the First-client milestone is the actual go-live. v2 = the lifecycle
 system + A/B + analytics + HubSpot + F9 v2 + F8 v2 (`Docs/DEFERRED.md`), off the 100% path.

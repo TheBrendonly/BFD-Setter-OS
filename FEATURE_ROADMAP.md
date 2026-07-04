@@ -15,6 +15,62 @@ Features to build, in rough priority order. Reconciled 2026-06-25 with Brendan.
 - [x] **F8 - Configurable cost-to-price calculator (per-minute, multi-currency).** SHIPPED + DEPLOYED LIVE 2026-07-01 (overnight) → `TEST_LIST.md` (live UI verify) + this note. **Resolved 5 decisions:** (1) audience = agency-internal tool PLUS the opt-in client display card; (2) per-sub-account override on a global default rate card; (3) admin-set fixed FX + buffer % + "last updated" stamp (live feed = v2); (4) Twilio toggles default OFF; (5) fixed monthly costs (number rental, A2P) = a SEPARATE line, markup on per-minute only. **Config store** = new `client_pricing_config` table (jsonb, agency-RLS **role-gated** — an adversarial council VETO caught that a verbatim agency `FOR ALL` policy matched client-role users; fixed with `get_user_role(...)='agency'`). **Compute** = pure `_shared/computeBlendedRate.ts` (integer micros, one FX step, bps markup+buffer, round-half-even once). **Gated read** = `get-blended-rate` edge fn (client gets ONLY the blended scalar when the toggle is on; live trap proof 9/9). v2 deferred (`DEFERRED.md`). _Original spec retained below._ (split from F9; Brendan 2026-06-26: F9 first, F8 after the TEST pass). Admin-set, **agency-only** panel on Sub-Account Config that computes a blended displayed price per minute from real provider costs (Retell + OpenRouter LLM + Twilio voice/SMS + number rental + other), with a per-provider on/off toggle (e.g. Twilio off when the client runs their own Twilio), a display currency + admin-set USD-to-AUD FX, and a markup percentage (10 / 50 / 100% etc.). **Decided scope (Brendan):** per-sub-account override on a global default rate card. **NEW requirement:** a per-sub-account "**show rate to client**" toggle (set in the agency settings) that surfaces a **read-only** blended-$/min **display card in that client's own account settings** — markup/breakdown stay agency-only; only the final blended $/min shows to the client when the toggle is on. The LLM line is a live model-aware estimate; voice has Retell's actual per-call cost to reconcile against. Full spec + provider-rate research in the "Feature spec - F8" section below. Effort L.
 - [x] **F11 - Credentials "Configured" masked indicator + optional-key labelling.** SHIPPED 2026-06-29 (overnight frontend-only build) → `TEST_LIST.md` + `COMPLETED_LOG.md`. Option (A): a fixed-length **dot-mask** `••••••••••••` shown as the **placeholder** (never the value, so the blank-save guard still treats the box as "unchanged" — zero real chars sent to the browser, G3-6 preserved) + a bolder **"Configured ✓"** on every configured secret in `ApiCredentials.tsx` (via the shared `CredentialInputField`/`ApiCredentialField`) and `SetupGuideDialog.tsx` (5 inline secret fields, parity). Supabase PAT + OpenRouter Management Key now labelled **(Optional)** (new `isOptional` on `CredentialInputField`; suppresses their red "Not Configured" pulse). Frontend-only; tsc + build green; **no edge deploy**.
 - [x] **F9 - Per-setter Retell lock + ownership-based config sync.** SHIPPED Session 6.5 2026-06-26 → `TEST_LIST.md`. v1: `voice_setters.is_retell_locked` (+ `retell_locked_at`/`retell_synced_at`/`retell_synced_version`/`retell_config_snapshot`, migration `20260627130000`); **server-enforced** write-guard in retell-proxy across all write paths via `_shared/retell-lock.ts` (single-target THROW 423 `setter_retell_locked`; bulk `set-voicemail`/`refresh-booking-tool-messages` SKIP locked setters + report them); `make-retell-outbound-call` skips the at-call voicemail PATCH for a locked setter but **still dials**; new `set-setter-lock` + READ-ONLY `pull-retell-config` actions (snapshot + version drift); tile lock toggle + confirm dialogs + Retell-locked/sync badges + Pull button + Edit-entry gating in `PromptManagement.tsx`. retell-proxy **v46**, make-retell-outbound-call **v27**. 12 guard-core unit tests. **v2 (deferred → DEFERRED.md):** scheduled drift poll, booking-tools-present alert, auto "pull Retell into BFD before unlock". Full spec in "Feature spec - F9" below.
+## Candidate queue — 2026-07-04 market research (Brendan picks; not yet committed builds)
+
+> Source: a deep web-research pass (competitors: Phonely/Air.ai/Bland/Synthflow/GHL AI Employee/Closebot;
+> agency churn data; AU compliance; show-rate practice). Key frame: the #1 churn driver for AI-setter
+> retainers is "no visible ROI"; clients judge HELD meetings, not booked ones (target 65-80% show rate);
+> prompts are portable so the moat is integration depth + compliance + reporting + the managed service.
+> GHL's native AI Employee is US$97/mo unlimited, so the A$2,000 retainer must be justified by what
+> GHL-native cannot do. Full research + sources in the "Feature spec - 2026-07 market research" section below.
+
+- [ ] **F15 - Client ROI visibility pack: show-rate funnel + weekly report (PRE-first-client; the retention build).**
+  (a) Ingest GHL appointment-status changes (confirmed / showed / no-show / cancelled — GHL fires workflow
+  triggers/webhooks) into the platform so every booking tracks booked -> confirmed -> held -> no-show, per setter
+  and per lead source. (b) A Trigger.dev cron emails each client a weekly white-label report: calls made/answered,
+  SMS conversations, appointments booked/confirmed/held, no-show rate, estimated pipeline value, top objections,
+  plus 2-3 "what we improved" bullets (agency-editable). Directly attacks the #1 churn driver; the show-rate metric
+  is what retainers live or die on. Email sending is gated on the Resend SMTP item in BRENDAN_TODO. Effort M.
+- [ ] **F16 - Never-miss-a-lead pack: speed-to-lead + missed-call text-back + live-transfer config (PRE-first-client; the demo build).**
+  (a) Speed-to-lead: new GHL lead -> AI voice call within 60s (inside legal calling hours; SMS fallback outside
+  hours / on no-answer) — sub-60s contact shows ~391% higher conversion and only ~7% of companies hit 5 minutes.
+  (b) Missed-call text-back: inbound call unanswered/abandoned -> SMS within 60s from the same number into the
+  existing multi-turn SMS booking engine (recovers 40-60% of missed calls). (c) Live/warm transfer: per-setter
+  config UI for Retell's native `transfer_call` tool (already passes through retell-proxy untouched) so a hot lead
+  who asks for a human is transferred to the client's mobile with an SMS context summary fallback. Effort M total
+  ((a)/(b) S-M each on existing plumbing, (c) S config UI + report-only prompt line).
+- [ ] **F17 - AU compliance pack (phase 1 PRE-first-client, phase 2 post).** Phase 1: verify + enforce
+  contact-hours windows for outbound VOICE and cadence SMS (Telemarketing Standard: weekdays 9am-8pm, Sat 9am-5pm,
+  no Sun/public holidays — check existing `_shared/business-hours.ts` + F4 nudge gate coverage extends to voice
+  dials); per-client call-recording disclosure toggle (NSW/WA/SA are all-party consent; the disclosure LINE itself
+  is prompt content -> PU-6). Phase 2 (post-client, gate: first cold list): consent audit trail per lead (source/
+  method/timestamp, 2+ yr retention, exportable — Spam Act burden of proof is on the sender) + a DNC Register wash
+  step gated on cold-list campaign enrollment (30-day validity; consented + business numbers exempt). Compliance
+  infrastructure is a genuine moat vs US-centric competitors. Effort M (phase 1 S-M).
+- [ ] **F18 - AI voice confirmation call ~24h before appointment (POST-first-client fast-follow).** Outbound Retell
+  call confirming tomorrow's appointment; on "can't make it" offers open slots and REBOOKS in the same call; SMS
+  fallback on no-answer. A 135k-appointment study showed ~50% relative no-show reduction from AI reminder calls;
+  a whole product category in 2026; GHL workflows cannot do this. Reuses outbound-voice + booking-tools infra.
+  Effort M.
+- [ ] **F19 - Call QA digest with sentiment/failure flagging (POST-first-client).** Weekly agency-facing queue of
+  flagged calls/conversations (negative sentiment, booking-tool failure, abrupt hang-up) built on the post-call
+  analysis + analyze-sms-conversation data already ingested — review the worst 5, not 200 transcripts. Call
+  quality is the #2 churn driver and why the first client is leaving Phonely. Effort S-M.
+- [ ] **F20 - Booked-revenue attribution (POST-first-client, before the first renewal).** Tag held appointments
+  with outcome + deal value from the GHL opportunity pipeline; report "AI-sourced pipeline: $X" per lead source
+  per month. Turns the renewal conversation from "cost A$2,000" into "generated A$40k of pipeline". Effort M.
+
+> **Explicit DO-NOT-BUILD list (research-backed, solo-founder managed retainer):** an in-product reminder engine
+> (GHL workflows do confirmation SMS / trigger-link confirms / reschedule links natively — provision a canonical
+> GHL reminder workflow at onboarding instead: instant confirm SMS, 24h reminder with confirm trigger-link, 2h
+> short SMS, reschedule links; that SOP task lives in BRENDAN_TODO/onboarding); A/B testing (already deferred; no
+> statistical power at 1-client volume); a self-serve agent-builder / white-label SaaS portal (invites
+> prompt-portability churn; sell outcomes not tooling); WhatsApp/IG/FB DM expansion (GHL covers if asked); voice
+> cloning (gimmick for this ICP); own scheduling engine (GHL calendars do round-robin/multi-staff); per-appointment
+> performance pricing (creates volume-over-quality incentives — the quality retainer is the differentiation).
+
+## Build queue (committed)
+
 - [ ] **F12 - Voice-agent per-minute cost optimization (GATED: after the first paying client — NOT before a deal, per Brendan 2026-07-01).** Cut the setter's real per-minute cost without hurting booking performance / conversational quality. **Verified current cost = A$0.34/min all-in** (US$0.22/min, from live Retell billing across 23 recent gemini-3.0-flash calls, 2026-07-01; the earlier prompt-bloat that spiked calls to ~A$2/min is already fixed). Biggest levers: stop pre-injecting 30 days of calendar slots + full chat/call history into model context every turn (fetch slots on-demand via the existing `get-available-slots` tool; keep ~last 10 turns + a rolling summary); turn off `model_high_priority`; cheaper AU TTS than the ElevenLabs custom voice (~A$0.06/min line); cheaper post-call-analysis model than gpt-4.1; review `stt_mode=accurate`. Report-only on the Retell/prompt side (Brendan applies). A ready-to-run **cost-reduction council brief** + the full cost breakdown live in "Feature spec - F12" below. Target ~A$0.20/min. Effort M.
 _(F2, F5, F6, F7 SHIPPED Session 3 2026-06-25 → TEST_LIST + COMPLETED_LOG. F5's optional `text_engine_webhook` column drop is deferred — see DEFERRED.md — because the column is wired into the `clients_public` view; the n8n code path itself was already gone.)_
 _(F1 SHIPPED Session 4 2026-06-26 (sync-ghl-contact v24 + `clients.ghl_conversation_link_field_id` migration). **F3 + F4 were ALREADY built** before Session 4 — F3 in commit `4b7dbc1` (pause/resume edge fns live v1 + runEngagement `isPaused()` exit + UI buttons), F4 in `b0c6bea` (nudgeColdReply per-lead-local-hour gate). Session 4 verified them live, redeployed Trigger.dev prod (`20260625.1`, 12 tasks) to guarantee the runtime, and reconciled all three → TEST_LIST + COMPLETED_LOG. They were never moved off this queue — a docs-drift catch, not a rebuild.)_
@@ -171,6 +227,30 @@ DELIVERABLE:
 **Effort.** M (mostly Retell config + context-injection changes Brendan applies; the rolling-summary/on-demand-slot design may need a small code change to how dynamic variables are populated). Reconcile the A$0.34/min figure against fresh call data before relying on it (rates drift).
 
 ---
+
+## Feature spec - 2026-07 market research (context for F15-F20)
+
+> Captured 2026-07-04 from a deep research pass (18 searches/fetches). Headline findings:
+> - #1 churn driver for agency voice-AI retainers = "no visible ROI" (ahead of quality, integrations, price);
+>   clients who can see what the AI does are ~40% less likely to cancel in 90 days (Trillet).
+> - Clients judge HELD meetings: <60% show rate = weak reminders/qualification; 65-80% = target; >80% pairs with
+>   two reminder touches (day-before + morning-of). SMS reminders cut no-shows 38-40%; AI reminder CALLS ~50%.
+> - Speed-to-lead: contact in 5 min = ~100x more likely to connect than 30 min; sub-60s = 391% higher conversion.
+> - Phonely's documented weaknesses (the first client's incumbent): limited outbound, 1-2 week onboarding,
+>   variable peak-hour performance, unpredictable overage billing, human-escalation gaps. Air.ai was FTC-banned
+>   03/2026 (US$18M), so trust/transparency features carry extra weight in this category.
+> - "Prompts are portable" (SaaStr): stickiness = integration depth + compliance infra + vertical expertise +
+>   reporting, which favors the managed-retainer + deep-GHL model.
+> - AU compliance notes: ACMA Sender ID Register enforcement began 1 July 2026 (unregistered alpha sender IDs
+>   rewrite to "Unverified"; plain Twilio numbers exempt — verify none configured). NSW/WA/SA = all-party
+>   call-recording consent (disclosure line -> PU-6). Telemarketing Standard hours: weekdays 9am-8pm, Sat 9am-5pm,
+>   no Sun/public holidays. Spam Act: consent records 2+ years, burden of proof on sender. DNC wash only needed
+>   for cold consumer lists. No AI-specific disclosure law in AU as of mid-2026.
+> Sources: dialora.ai + ainora.lt + skipcalls.com (Phonely), tested.media + retellai.com (platform comparison),
+> gohighlevel.com help (AI Employee, appointment-status triggers), ftc.gov (Air AI), trillet.ai (retention),
+> saastr.com (prompt portability), cronical.ai + growleads.io (benchmarks), mybcat.com + getprosper.ai +
+> famulor.io (reminders), greetnow.com + digitalapplied.com (speed-to-lead), getaira.io (missed-call text-back),
+> acma.gov.au + donotcall.gov.au + waboom.ai + recordinglaw.com + sprintlaw.com.au (AU compliance).
 
 ## Hard constraints (apply to any feature touching these)
 
