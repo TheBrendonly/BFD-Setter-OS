@@ -3,6 +3,18 @@
 Items closed out of the active lists. Newest first. The active lists are in the repo root + `Docs/`
 (`BUG_LIST.md`, `FEATURE_ROADMAP.md`, `BRENDAN_TODO.md`, `TEST_LIST.md`, `DEFERRED.md`).
 
+## 2026-07-05 — Build pass reconcile: 7 deployed `[~]` bugs closed (live-verified by the 2026-07-05 TEST SESSION + Test-finish)
+
+Reconcile step of the fix-all-bugs BUILD PASS. These were all DEPLOYED in Session 9 (2026-07-04) and confirmed live-verified across `Operations/handoffs/2026-07-05-test-session.md` (RUN 1/2/3) + `2026-07-05-test-finish.md` (RUN 4). Removed from the active `BUG_LIST.md`; no rebuild. (PHONE-CLEAR-1 deliberately NOT closed here — no RUN in either handoff reports a PHONE-CLEAR-1 pass, so its live Contacts-dialog verify is still owed; it stays `[~]` in BUG_LIST with a TEST_LIST row.)
+
+- **SMS-MEM-1 — Text setter now persists the inbound human turn (PASS).** RUN 3: multi-turn SMS shows alternating human/ai `chat_history` rows and the setter no longer re-asks an already-answered question. Deployed via Trigger 20260703.2 (`trigger/_shared/persistHumanTurn.ts`).
+- **FOLLOWUP-PROMPT-1 — follow-up channel got the PROMPT-AUTH-1 protections (PASS).** RUN 4: `sendFollowup` injects the `## Live calendar availability` block (follow-up ONE-WAY variant, names no booking tools), the `## Current date & time` anchor, and the stale-`{{ $now }}` neutralizer; decided `cancelled`, 0 outbound. Deployed via Trigger 20260703.2 (`trigger/_shared/buildFollowupContext.ts`).
+- **PROMPT-LINT-1 — save-time lint casing/wording bypasses closed (PASS).** RUN 1: all bypass cases (Pascal/caps tool names, lowercased header, hyphenated day-ranges, reworded day policies, follow-up fields) now caught; ordinary "weekdays" copy still passes clean. Deployed via save-external-prompt v15 + browser `useAgentSettings` gate.
+- **SMS-OBS-1 — Text-engine tool calls/results persisted (PASS).** RUN 3: `tool_invocations` rows written on the SMS path (name/args/result), so booking failures are DB-visible. Deployed via Trigger 20260703.2 + the `tool_invocations` table.
+- **MODEL-1-HARDENING — invalid `clients.llm_model` can't silently break the engines (PASS).** RUN 1: 8/8 — known ids apply as the canonical lowercase list id, unknown ids require an explicit "Use anyway" confirmation, `provider/model` shape guard anchored. Deployed via the prod frontend (`isKnownOpenRouterModel.ts`) + the MODEL-1a trigger-side alias map.
+- **F9-1 — Retell-locked tile rename no longer leaks the display-name write (PASS).** RUN 1: a rename attempt on a locked tile is REFUSED (structured 423 surfaced as an error, no `setter_display_names` write) via both the tile heading and the doc-page header. Deployed via the prod frontend.
+- **VM-1 — `set-voicemail` client-wide push lands (PASS).** RUN 2: Save & push (mode=`prompt`) succeeded on all 5 push-target agents with NO "partial" (v48 fix confirmed — `ensureEditableAgentDraft` → publish → repoint, `static`→`static_text` enum), and a real voicemail played (~15s). Deployed via retell-proxy v48.
+
 ## 2026-07-05 — Test-finish (AUTONOMOUS): RUN 4 (F3/F4/FOLLOWUP-PROMPT-1) + RUN 7 (F1) all PASS
 
 Claude drove these fully autonomously via the harness (Mgmt-API SQL, service-key edge fns, the Trigger.dev v1 REST endpoint, GHL/Retell REST) after the 2026-07-05 TEST SESSION. All test-writes reverted, all test artifacts deleted (final sweep: 0 residual leads/workflows/campaigns/timers; client config restored — `auto_engagement_workflow_id` set, `timezone=Australia/Sydney`). No prompt content edited; `retell-proxy` (v49) + `voice-booking-tools` untouched.
