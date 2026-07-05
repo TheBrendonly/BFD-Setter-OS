@@ -658,7 +658,8 @@ const Logs = () => {
   const [campaignNameCache, setCampaignNameCache] = useState<Record<string, string>>({});
 
   // ── Lead name cache for display ──
-  // Maps any identifier (UUID id or GHL lead_id) → display name
+  // Maps GHL lead_id → display name (every log surface keys leads by the external
+  // text lead_id / contact_id, never by the leads.id uuid — see SWEEP-1c)
   const [leadNameCache, setLeadNameCache] = useState<Record<string, string>>({});
   // Maps GHL lead_id → UUID id for navigation
   const [leadIdToUuid, setLeadIdToUuid] = useState<Record<string, string>>({});
@@ -667,46 +668,31 @@ const Logs = () => {
 
   // Fetch lead names for visible lead IDs
   useEffect(() => {
-    const uuidIds = new Set<string>();
+    // Every log surface identifies a lead by the external text lead_id (or, for
+    // outbound calls, contact_id), NOT the leads.id uuid — so all buckets resolve
+    // via .in('lead_id', …). Filtering leads.id (uuid) with a text lead_id 400s
+    // (invalid input syntax for uuid). SWEEP-1c.
     const ghlIds = new Set<string>();
 
     if (tab === 'errors') {
-      logs.forEach(l => { if (l.lead_id) uuidIds.add(l.lead_id); });
+      logs.forEach(l => { if (l.lead_id) ghlIds.add(l.lead_id); });
     } else if (tab === 'followups') {
       followups.forEach(f => { if (f.lead_id) ghlIds.add(f.lead_id); });
     } else if (tab === 'outbound-calls') {
-      callHistory.forEach(c => { if (c.contact_id) uuidIds.add(c.contact_id); });
+      callHistory.forEach(c => { if (c.contact_id) ghlIds.add(c.contact_id); });
     } else if (tab === 'bookings') {
-      bookings.forEach(b => { if (b.lead_id) uuidIds.add(b.lead_id); });
+      bookings.forEach(b => { if (b.lead_id) ghlIds.add(b.lead_id); });
     }
 
-    const unknownUuids = [...uuidIds].filter(id => !leadNameCache[id]);
     const unknownGhl = [...ghlIds].filter(id => !leadNameCache[id]);
 
-    if (unknownUuids.length === 0 && unknownGhl.length === 0) {
+    if (unknownGhl.length === 0) {
       setLeadNamesLoading(false);
       return;
     }
 
     setLeadNamesLoading(true);
     const promises: Promise<void>[] = [];
-
-    if (unknownUuids.length > 0) {
-      promises.push((async () => {
-        const { data } = await (supabase as any)
-          .from('leads')
-          .select('id, first_name, last_name')
-          .in('id', unknownUuids.slice(0, 100));
-        if (data && data.length > 0) {
-          const newCache: Record<string, string> = {};
-          for (const lead of data) {
-            const name = [lead.first_name, lead.last_name].filter(Boolean).join(' ').trim();
-            if (name) newCache[lead.id] = name;
-          }
-          setLeadNameCache(prev => ({ ...prev, ...newCache }));
-        }
-      })());
-    }
 
     if (unknownGhl.length > 0) {
       promises.push((async () => {
