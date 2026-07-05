@@ -659,7 +659,7 @@ const Logs = () => {
 
   // ── Lead name cache for display ──
   // Maps GHL lead_id → display name (every log surface keys leads by the external
-  // text lead_id / contact_id, never by the leads.id uuid — see SWEEP-1c)
+  // text lead_id / contact_id, never by the leads.id uuid (see SWEEP-1c)
   const [leadNameCache, setLeadNameCache] = useState<Record<string, string>>({});
   // Maps GHL lead_id → UUID id for navigation
   const [leadIdToUuid, setLeadIdToUuid] = useState<Record<string, string>>({});
@@ -669,7 +669,7 @@ const Logs = () => {
   // Fetch lead names for visible lead IDs
   useEffect(() => {
     // Every log surface identifies a lead by the external text lead_id (or, for
-    // outbound calls, contact_id), NOT the leads.id uuid — so all buckets resolve
+    // outbound calls, contact_id), NOT the leads.id uuid, so all buckets resolve
     // via .in('lead_id', …). Filtering leads.id (uuid) with a text lead_id 400s
     // (invalid input syntax for uuid). SWEEP-1c.
     const ghlIds = new Set<string>();
