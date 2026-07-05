@@ -48,7 +48,7 @@ Deno.serve(async (req) => {
     // Get client configuration
     const { data: client, error: clientError } = await supabase
       .from('clients')
-      .select('supabase_url, supabase_service_key, supabase_table_name, analytics_webhook_url, openrouter_api_key')
+      .select('supabase_url, supabase_service_key, analytics_webhook_url, openrouter_api_key')
       .eq('id', clientId)
       .single()
 
@@ -59,7 +59,7 @@ Deno.serve(async (req) => {
       )
     }
 
-    if (!client.supabase_url || !client.supabase_service_key || !client.supabase_table_name) {
+    if (!client.supabase_url || !client.supabase_service_key) {
       return new Response(
         JSON.stringify({ error: 'Client Supabase configuration is incomplete' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -88,12 +88,17 @@ Deno.serve(async (req) => {
 
         console.log(`Fetching data from ${startDate.toISOString()} to ${endDate.toISOString()}`)
 
+        // Chat lives in the external "chat_history" table, same as every sibling reader
+        // (get-chat-history / fetch-thread-previews / receive-twilio-sms / …). Do NOT read
+        // clients.supabase_table_name here, that column is the external LEADS table (G3-6-SCHEMA-1).
+        const CHAT_TABLE = 'chat_history';
+
         // Determine which timestamp column exists by probing common names with a filtered query
         let timestampColumn: string | null = null;
         const candidates = ['created_at', 'timestamp', 'time', 'date', 'created', 'inserted_at'];
         for (const col of candidates) {
           const test = externalSupabase
-            .from(client!.supabase_table_name)
+            .from(CHAT_TABLE)
             .select(col)
             .gte(col, startDate.toISOString())
             .lte(col, endDate.toISOString())
@@ -111,7 +116,7 @@ Deno.serve(async (req) => {
 
 
         // Fetch chat data from external Supabase with appropriate filters
-        let query = externalSupabase.from(client!.supabase_table_name).select('*');
+        let query = externalSupabase.from(CHAT_TABLE).select('*');
         
         if (timestampColumn) {
           query = query

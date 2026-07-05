@@ -160,7 +160,7 @@ Deno.serve(async (req) => {
 
     const { data: client, error: clientError } = await supabase
       .from("clients")
-      .select("supabase_url, supabase_service_key, supabase_table_name, openrouter_api_key")
+      .select("supabase_url, supabase_service_key, openrouter_api_key")
       .eq("id", client_id)
       .single();
 
@@ -185,7 +185,9 @@ Deno.serve(async (req) => {
       );
     }
 
-    const tableName = client.supabase_table_name || "chat_history";
+    // Chat lives in the external "chat_history" table, same as every sibling reader.
+    // Not clients.supabase_table_name, that column is the external LEADS table (G3-6-SCHEMA-1).
+    const tableName = "chat_history";
     const userModel = model || "google/gemini-2.5-pro";
 
     // Connect to external Supabase and fetch conversations

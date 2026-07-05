@@ -681,12 +681,15 @@ Deno.serve(async (req) => {
     // body-supplied client_supabase_* values are ignored.
     const { data: clientRow } = await supabase
       .from("clients")
-      .select("supabase_url, supabase_service_key, supabase_table_name")
+      .select("supabase_url, supabase_service_key")
       .eq("id", client_id)
       .maybeSingle();
     const extUrl = (clientRow?.supabase_url as string | null) || null;
     const extKey = (clientRow?.supabase_service_key as string | null) || null;
-    const extTable = (clientRow?.supabase_table_name as string | null) || "";
+    // Text analytics reads the external "chat_history" table, same as every sibling reader.
+    // Not clients.supabase_table_name, that column is the external LEADS table, and feeding it
+    // here made resolveHistoryTable append "_history" (e.g. leads -> leads_history 404). G3-6-SCHEMA-1.
+    const extTable = "chat_history";
 
     // Voice analytics reads the PLATFORM call_history (Retell transcripts); text
     // analytics reads the client's external DB. Route the source by type.
