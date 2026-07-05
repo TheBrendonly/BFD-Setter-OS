@@ -226,6 +226,36 @@ When an item passes, move it to `Docs/archive/COMPLETED_LOG.md`. When it fails, 
   navigate (login/dashboard, a setter/prompt page, contacts) with no console errors on the vite-8 prod bundle. Then
   G3-7 → `COMPLETED_LOG.md`.
 
+## 2026-07-05 BUILD PASS retests
+
+Deployed/live (schema + edge + frontend), confirm behaviorally:
+- [ ] **SWEEP-1a: /account-settings loads.** Open `/account-settings` as agency + as a client → the My Account
+  billing card renders with NO console 400 on `clients_public` (stripe/subscription fields show blank until Stripe).
+- [ ] **SWEEP-1b: /chats star + dismiss.** Open `/chats` → NO 404 for `chat_starred` / `dismissed_error_alerts`;
+  star a conversation (persists across reload), dismiss a lead-error banner (stays dismissed). Confirm a client-role
+  user can star/dismiss its OWN rows (RLS).
+- [ ] **SWEEP-1c: /logs names hydrate.** Open `/logs` Errors + Bookings + Outbound-calls tabs → lead names hydrate,
+  NO "invalid input syntax for uuid" 400 in the console.
+- [ ] **SYNC-LOG-1: intake audit persists.** Trigger a `sync-ghl-contact` intake → one `sync_ghl_executions` row is
+  written (client_id, external_id, status, steps). (Was silently no-oping on a missing table.)
+- [ ] **G3-6-SCHEMA-1: analytics still run.** Run chat analytics for BFD (Analytics V2 / analyze-chat-history) →
+  reads the external `chat_history` and returns results unchanged (column was null; now hardcoded). Deployed
+  analyze-chat-history v19 / analytics-v2-process v19 / compute-analytics v16.
+
+STAGED, needs Brendan's supervised deploy + regression (voice-booking-tools is the frozen live baseline):
+- [ ] **CANCEL-1: SMS + voice cancel/reschedule bind a real eventId.** After deploying voice-booking-tools
+  (`deploy_single_fn.mjs`) + the Trigger.dev bundle: (SMS) book via `scripts/test-harness/sms_inbound.mjs`, then
+  "cancel that meeting" → the cancel hits the REAL GHL eventId (no 404), the appointment flips cancelled, the
+  `bookings` row flips `status='cancelled'` (assert via `q.mjs`). Repeat a reschedule. (Voice) place an answered call
+  and cancel/reschedule an existing appt → same. Confirm a fabricated-id attempt is refused with the real list folded
+  back (check `tool_invocations`), never a false "done".
+- [ ] **BOOK-2/BOOK-3: booking regression holds.** After the same deploy, run a voice + an SMS booking end-to-end
+  (`dial.mjs` + `sms_inbound.mjs`) → books the exact accepted Sydney time, no false "unavailable", window not
+  day-shifted. (These change the frozen slot path, run the full booking regression.)
+- [ ] **SMS-METER-1: mid-call text meters.** After deploy, have a voice agent send a mid-call SMS → a
+  `message_queue` `channel='sms_outbound'` row appears (ghl_account_id = location id or client uuid) and F13 usage
+  counts it.
+
 ## Standing rule
 
 - After **any** BUG or FEATURE ships, smoke the touched area before marking it done here.
