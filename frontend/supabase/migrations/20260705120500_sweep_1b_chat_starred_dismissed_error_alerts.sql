@@ -1,10 +1,10 @@
--- SWEEP-1b: /chats 404 — ship the two per-client UI-state tables the browser reads/writes.
+-- SWEEP-1b: /chats 404, ship the two per-client UI-state tables the browser reads/writes.
 --   chat_starred          <- Chats.tsx (star a conversation)          upsert onConflict (client_id, lead_id)
 --   dismissed_error_alerts<- useLeadErrorAlert.ts (dismiss a banner)  upsert onConflict (client_id, lead_id, error_log_id)
 -- Old 2026-04 Lovable-era migrations for these tables were never applied to this project
 -- (information_schema -> 0 rows); applied here to LIVE prod via the Management API (no migration
 -- runner). Both are CLIENT-readable/writable UI state written under the client-role browser JWT, so
--- they use the agency_id-scoped FOR ALL policy WITHOUT the get_user_role()='agency' gate — the exact
+-- they use the agency_id-scoped FOR ALL policy WITHOUT the get_user_role()='agency' gate, the exact
 -- client_account_field_config (20260617120000) pattern: a client-role JWT shares its client's agency_id
 -- so it matches the policy for its own rows (read + write). No cross-tenant leak (scope = the client's
 -- own agency; onboarding mints a fresh agency per top-level client). NOT the client_pricing_config

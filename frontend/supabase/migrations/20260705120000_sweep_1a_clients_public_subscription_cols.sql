@@ -1,4 +1,4 @@
--- SWEEP-1a: /account-settings 400 — add the 3 Stripe/subscription columns AccountSettings.tsx selects.
+-- SWEEP-1a: /account-settings 400, add the 3 Stripe/subscription columns AccountSettings.tsx selects.
 -- Applied to LIVE prod via the Management API (this repo has no migration runner; file is for record).
 -- The base columns were never applied to prod (20260319185040 drift); add them (nullable, needed at the
 -- Stripe milestone) + surface them through clients_public (non-secret refs; subscription_status already present).
