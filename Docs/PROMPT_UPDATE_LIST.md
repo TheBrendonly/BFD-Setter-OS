@@ -26,6 +26,16 @@ can be worked independently.
 
 ## Open
 
+- [ ] **PU-8 — Voicemail message says a literal "[Your Name]" placeholder (voice).** Found in the TEST SESSION
+  2026-07-05 voice run: on an unanswered outbound call the pushed voicemail landed and the agent left a message,
+  but it said *"Hi Brendan, this is **[Your Name]** calling. I wanted to discuss an important update…"* — the
+  `[Your Name]` placeholder is never substituted, so the agent literally speaks it. Same class as the
+  `{{first_name}}` opener issue but for the AGENT's own name. Fix in the voicemail/opener persona: replace
+  `[Your Name]` with the actual setter name (e.g. "Gary") or the correct dynamic variable, on every voice setter
+  whose voicemail is used. (VM-1 push + playback themselves now WORK — v48 fix verified; this is purely the
+  spoken placeholder.) Report-only; apply via Prompt Management. Priority: medium (a live-sounding voicemail is
+  the point). Spot-check all 5 voice setters for the same `[Your Name]` / bracketed placeholders.
+
 - [ ] **PU-1 — Confirm the timezone with the lead when offering/booking (both).** The setter should name the
   business timezone when it offers times and when it confirms a booking, so a lead knows *which* "2pm" (e.g.
   *"Booked for Thursday 2:00pm, Sydney time."*). **Engine half is now code-side** (this was added to
@@ -80,6 +90,22 @@ can be worked independently.
   post-booking prep, TTS formatting, rapport). Stand it up yourself via the BFD setter UI (duplicate Main
   Outbound → rename V2 → paste → Save+Push → canary publish), then send Claude a `call_id` for read-only
   verification. **This supersedes the older standalone "booking guardrail" voice item** (V2 includes it).
+
+- [ ] **PU-8 — Inbound-unknown-caller robustness: never speak placeholders, de-outbound the opener (voice,
+  demo line first, worth mirroring in all setters).** Evidence: inbound calls to the dogfood number
+  (+61 481 614 530) Jun 17-23 show the answering agent (Voice-Setter-Test v22 per the call records; number-vs-agent
+  caveat above noted) speaking literal `{{first_name}}` aloud ("I've got you down as {{first_name}}") and using the
+  CRM fallback "SMS Lead" as a spoken name. A Jun 26 prompt patch (empty-string defaults + an inbound-fallback
+  section) exists but is UNVERIFIED: zero calls since. Two report-only changes for whichever persona answers the
+  demo line: (1) the `begin_message` is outbound-shaped ("Hey {{first_name}}, ... you put your hand up for some
+  info...") which for an unknown inbound caller renders as "Hey , ..." plus a false claim; make it name-free and
+  direction-neutral (e.g. *"G'day, Gary here at Building Flow Digital. How's it going?"*) and let the persona use
+  the name later only once known. (2) Add to SETTER CORE: *"If a lead detail (name, business) is empty, unknown,
+  or looks like a placeholder or a system value (for example 'SMS Lead'), never say it aloud: speak without a
+  name and ask naturally who's calling."* Verify via the two-number regression test queued in
+  `/srv/bfd/Operations/needs-brendan.md` (one call from a known number, one from a number not in the CRM). The
+  booking backend is independently healthy (2026-07-05 read-only `get-available-slots` probe returned real
+  Sydney slots). Source: 2026-07-05 Gary line health check (call records `call_7250ce...`, `call_c4922c...`).
 
 ## Superseded by code (kept for the record)
 

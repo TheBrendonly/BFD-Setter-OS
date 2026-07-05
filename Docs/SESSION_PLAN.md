@@ -294,12 +294,18 @@ Status: `[ ]` not started · `[~]` in progress · `[x]` done. Effort is rough.
   `+61481614530`. See `Docs/DEFERRED.md`. After this, v1 is live + 100%.
 
 **Remaining sequence to v1 "100%" (the relay follows this order):**
-1. **Session T — the consolidated live TEST pass** (say "run test session" → `Docs/TEST_SESSION.md`; Brendan
-   drives, Claude verifies; voice-regression call FIRST). Covers Session 7-finish + Session-9 retests + the
-   G3-7 vite-8 browser click-through + the API-DEPR-2 v49 answered-call Voice gate.
-2. **Session T-fix — fix-pass** (conditional; scoped from whatever T fails).
-3. **Session S — SUPERVISED shared-fn session** (BOOK-2 + BOOK-3 + SMS-METER-1 in the frozen
-   `voice-booking-tools`; daytime, Brendan present, Voice-gated).
+1. **Session T — the consolidated live TEST pass — DONE (largely AUTOMATED) 2026-07-05.** Claude drove it via
+   a new harness (headless Playwright + Twilio-signed inbound-SMS simulation + programmatic Retell dials +
+   Mgmt-API SQL); only 3 phone calls needed Brendan. RUN 0/1/2/3/5/6 all PASSED (voice booking on v49, VM-1
+   push+play, B-5, SMS booking/memory/obs/STOP, B-2 outage, F8/F13/F11/UI-1/F9-1/PROMPT-LINT-1/MODEL-1/X-Ray).
+   Bugs found: **CANCEL-1, SWEEP-1 (a/b/c), G3-6-SCHEMA-1** + PU-8. Full results + reusable harness + the next
+   prompts: `Operations/handoffs/2026-07-05-test-session.md` (+ `scripts/test-harness/`). STILL OWED (next
+   session, autonomous): API-DEPR-2(a), RUN 4 (F3/F4/followup), RUN 7 (F1), F13 client-eye (via Fable).
+1b. **Session Test-finish — AUTONOMOUS, run every remaining RUN + emit the build + Fable prompts.** Prompt in
+   the 2026-07-05 handoff (Prompt A). This is the new NEXT step.
+2. **Session Build — fix EVERY open bug** (handoff Prompt B; folds in Session S's BOOK-2/3 + SMS-METER-1).
+3. **Session Fable — END-TO-END new-client onboarding via the SOP** to find holes + what a real first-client
+   onboarding needs (handoff Prompt C; overnight). Includes the F13 client-eye check.
 4. **Brendan solo block (parallel, no Claude session):** DEPLOY-1 (pin Railway to `main`), inotify sysctl,
    Setter-1 prompt migration, Resend SMTP → F14 E2E, sms_llm rate + billing anchor/toggles, n8n Railway
    shutdown, Twilio alpha-sender-ID check, PROMPT_UPDATE_LIST items (PU-1/3/4/5/6/7).
