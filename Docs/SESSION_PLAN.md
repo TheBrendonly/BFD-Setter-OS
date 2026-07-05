@@ -301,8 +301,14 @@ Status: `[ ]` not started · `[~]` in progress · `[x]` done. Effort is rough.
    Bugs found: **CANCEL-1, SWEEP-1 (a/b/c), G3-6-SCHEMA-1** + PU-8. Full results + reusable harness + the next
    prompts: `Operations/handoffs/2026-07-05-test-session.md` (+ `scripts/test-harness/`). STILL OWED (next
    session, autonomous): API-DEPR-2(a), RUN 4 (F3/F4/followup), RUN 7 (F1), F13 client-eye (via Fable).
-1b. **Session Test-finish — AUTONOMOUS, run every remaining RUN + emit the build + Fable prompts.** Prompt in
-   the 2026-07-05 handoff (Prompt A). This is the new NEXT step.
+1b. **Session Test-finish — AUTONOMOUS — DONE 2026-07-05.** Claude drove every remaining drivable RUN
+   send-free via the harness (Mgmt-API SQL, service-key edge fns, Trigger.dev v1 REST, GHL/Retell REST):
+   **RUN 4 F4** (tz nudge SKIP: scanned 3 / skipped 3 / nudged 0), **RUN 4 F3** (cadence pause→resume→END NOW,
+   no double-send), **RUN 4 FOLLOWUP-PROMPT-1** (raw_exchange shows the injected availability + time-anchor
+   blocks, cancel branch, 0 sends), **RUN 7 F1** (fresh GHL contact deep-link field set, one write, no 2nd SMS)
+   — all PASS → `COMPLETED_LOG.md`. New Low bug **SYNC-LOG-1** (missing `sync_ghl_executions` table). **API-DEPR-2(a)**
+   + **F13 client-eye** carried to the Fable session (both need a fresh throwaway agent/client; retell-proxy needs
+   a real user JWT). Handoff `Operations/handoffs/2026-07-05-test-finish.md`; emitted the Build + Fable prompts.
 2. **Session Build — fix EVERY open bug** (handoff Prompt B; folds in Session S's BOOK-2/3 + SMS-METER-1).
 3. **Session Fable — END-TO-END new-client onboarding via the SOP** to find holes + what a real first-client
    onboarding needs (handoff Prompt C; overnight). Includes the F13 client-eye check.
