@@ -157,8 +157,11 @@ Separately (throwaway client, NOT BFD): **MODEL-1-HARDENING** — set `clients.l
   lead** → the webhook fires + the row reaches `completed`; in the browser Network tab the request goes to
   `execute-lead-webhook` and **no** `supabase_service_key` appears in any browser payload; a failure marks the row
   `failed`.
-- **G3-6 — analytics features still work (Tier 3)** — FIRST discover BFD's external chat table and set
-  `clients.supabase_table_name` (currently null). Then: ChatAnalytics time-series over a date range (via
+- **G3-6 — analytics features still work (Tier 3)** — NOTE (2026-07-05): do NOT set `clients.supabase_table_name`
+  to the chat table. It is OVERLOADED (leads-table for intake/process-lead/sync; chat-table only for
+  `analyze-chat-history`/`analytics-v2-process`), the RUN-5 fns below hardcode `chat_history` and never read it,
+  and setting it to `chat_history` BREAKS leads sync. BFD external chat table = `chat_history` (verified, 250 rows);
+  leave the column NULL. See BUG_LIST **G3-6-SCHEMA-1**. Then: ChatAnalytics time-series over a date range (via
   `get-chat-history` mode:range), Contacts last-interaction timestamps (via `fetch-thread-previews`), custom-metric AI
   analysis (via `analyze-metric`), AnalyticsV2 / CreateMetricDialog suggestions (via `analytics-v2-suggest-widgets`),
   and the OpenRouter usage panel (via `get-openrouter-usage`).
