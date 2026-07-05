@@ -5,6 +5,32 @@ Testing actions live in `TEST_LIST.md`; first-paying-client onboarding actions l
 **prompt-content edits (agent wording) live in `PROMPT_UPDATE_LIST.md`** (kept separate so you can work
 prompt tweaks independently).
 
+## From the 2026-07-06 end-to-end onboarding dry run (what a REAL first client needs)
+
+Full report: `Docs/ONBOARDING_GAP_REPORT_2026-07-06.md`. The app alone cannot stand up a client; the
+un-automated prerequisites, roughly in order (most are code-fixable → see BUG_LIST ONBOARD-1/2, GOLIVE-1):
+
+- [ ] **External Supabase project (SOP §2.1) — the #1 un-automated blocker.** Fully manual: create a
+  `<slug>-setter-live` project on supabase.com, grab URL + `sb_secret_*` key, run the 5-table seed SQL,
+  paste into the client's Credentials page. It is a HARD dependency for BOTH text and voice setter
+  authoring (create-setter and text-save 400 without it — confirmed live). Nothing in the app or
+  `onboard-client.mjs` provisions it. Consider a provisioning script / one-click template.
+- [ ] **GHL location + Private Integration Token** (Contacts, Conversations, Calendars, Workflows,
+  Custom Fields) → `ghl_location_id`, `ghl_calendar_id`, `ghl_assignee_id`, plus the custom fields
+  (`last_synced_from` echo-guard, conversation deep-link field, `ghl_channel_field_id`,
+  `ghl_conversation_provider_id`) and the webhook actions carrying `x-wh-token`. **Everything lead-side
+  is GHL-gated**: `intake-lead` 409s "Client has no GHL credentials configured" (confirmed live), so
+  even the SOP §7.1 synthetic dry-run can't run until GHL is wired; voice booking 409s without GHL.
+- [ ] **Twilio BYO (client-owned): SID + auth token + E.164 number — NOT UI-editable.** ApiCredentials
+  has no Twilio input/save (the token is never even read back). Set via `onboard-client.mjs` or SQL.
+  Number must be UNIQUE (sharing another client's `retell_phone_1` breaks inbound routing) and imported
+  into Retell before inbound bind / "Configure Twilio Webhook" can complete. A2P is the client's (weeks).
+- [ ] **Flip `subscription_status`→`active` and `use_native_text_engine`→`true`** on the new client
+  (UI create sets `free` + leaves the text engine OFF — see BUG_LIST ONBOARD-1). SQL/script today.
+- [ ] **Confirm the canonical text `llm_model` (SOP §11).** DB default `google/gemini-2.5-pro`;
+  onboard-client.mjs default `openai/gpt-4.1-nano`; voice setters seed `gemini-3.0-flash`. A UI-created
+  client silently gets gemini-2.5-pro for the text engine. Decide the one true production text model.
+
 ## From the 2026-07-03 overnight stage-only bug-fix run (branch `feature/overnight-bugfix` + `g3-7/vite-major`)
 
 - [x] **Deploy the `feature/overnight-bugfix` branch (supervised, your GO).** DONE 2026-07-04 (Session 9, Claude, your GO): merged to `main` (`4a22b8b`, fast-forward), pushed origin+github. Deployed Trigger.dev 20260703.2 (SMS-MEM-1, FOLLOWUP-PROMPT-1), retell-proxy v48 (VM-1 + API-DEPR-1 list-agents), verify-credentials v3, save-external-prompt v15, RLS-SHAPE-1 migration applied. Frontend was ALREADY live (Railway auto-deployed the branch overnight — see DEPLOY-1). Read-only Voice smoke on v48 passed. **Still owed by you:** the live TEST_LIST pass (below), incl. the retell-proxy v48 answered-call Voice-regression + the VM-1 voicemail-lands check.

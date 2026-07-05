@@ -623,6 +623,25 @@ present? Sig 403 -> correct secret column for the provider?
 
 ## 11. Known issues and current gaps
 
+> **2026-07-06 onboarding-gate dry-run findings** (full report:
+> `Docs/ONBOARDING_GAP_REPORT_2026-07-06.md`; code bugs tracked as ONBOARD-1/2, GOLIVE-1, ACCESS-1 in
+> `Docs/BUG_LIST.md`):
+> - **The in-app "New Sub-Account" wizard (`CreateClient`) does NOT set `use_native_text_engine`** →
+>   it stays at the DB default `false`, and `processMessages` hard-throws when false, so a client
+>   created purely through the UI has a DEAD SMS text engine. There is NO UI toggle for it. Use
+>   `onboard-client.mjs` (which sets it true) for a managed onboard, or flip it by SQL.
+> - **Creating a setter requires the external Supabase FIRST.** With no external DB, "Create new setter"
+>   errors and leaves an orphan `prompts` row, and text-setter save 400s. Do section 2.1 before section
+>   4.3. (The old "born-bookable" create-setter bug in 4.3 is now FIXED on main — a fresh voice push is
+>   born bookable with 5/5 tools.)
+> - **The `intake-lead` synthetic dry-run (section 7.1) is GHL-gated** — it 409s "Client has no GHL
+>   credentials configured" until `ghl_api_key` + `ghl_location_id` are set. Run it AFTER GHL is wired.
+> - **`goLiveReady: true` is NOT a real readiness signal (section 8.1).** It only checks that
+>   `ghl_webhook_secret` is a non-null string, which is auto-minted at creation, so it is true from
+>   birth for a completely unconfigured client. Do not trust it alone — confirm GHL connected, Twilio
+>   number set + imported into Retell, ≥1 setter pushed, external Supabase set, and a non-null
+>   "last received" on the two required webhooks before flipping `auto_engagement_workflow_id`.
+
 - **Create-setter "born bookable" fix is committed on a branch, not yet deployed (2026-06-17).** The
   live app still needs the booking-toggle workaround (section 4.3). The fix lives on branch
   `fix/create-setter-bookable`, pending merge to `main` + Railway deploy.
