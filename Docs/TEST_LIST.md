@@ -242,7 +242,9 @@ Deployed/live (schema + edge + frontend), confirm behaviorally:
   reads the external `chat_history` and returns results unchanged (column was null; now hardcoded). Deployed
   analyze-chat-history v19 / analytics-v2-process v19 / compute-analytics v16.
 
-STAGED, needs Brendan's supervised deploy + regression (voice-booking-tools is the frozen live baseline):
+DEPLOYED LIVE 2026-07-05 (edge voice-booking-tools v23 + Trigger 20260705.1); read-only smoke passed. The
+MUTATING live regression below is OWED (run it in the autonomous test session; the SMS + booking legs are
+harness-drivable, the answered voice call needs a human):
 - [ ] **CANCEL-1: SMS + voice cancel/reschedule bind a real eventId.** After deploying voice-booking-tools
   (`deploy_single_fn.mjs`) + the Trigger.dev bundle: (SMS) book via `scripts/test-harness/sms_inbound.mjs`, then
   "cancel that meeting" → the cancel hits the REAL GHL eventId (no 404), the appointment flips cancelled, the
