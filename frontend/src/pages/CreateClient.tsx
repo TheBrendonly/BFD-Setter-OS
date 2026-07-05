@@ -114,6 +114,11 @@ export default function CreateClient() {
         subscription_status: "free",
         intake_lead_secret: mintSecret(),
         ghl_webhook_secret: mintSecret(),
+        // ONBOARD-1: the native SMS engine hard-throws when this is false
+        // (trigger/processMessages.ts, n8n path decommissioned) and no UI toggle
+        // exists, so a UI-created client must be born with it on. Mirrors
+        // scripts/onboard-client.mjs.
+        use_native_text_engine: true,
       });
 
       if (createError) throw createError;

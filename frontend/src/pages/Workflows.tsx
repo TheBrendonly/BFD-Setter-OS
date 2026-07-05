@@ -490,8 +490,10 @@ export default function Workflows() {
         const { data: clientRow } = await (supabase as any)
           .from('clients_public').select('auto_engagement_workflow_id').eq('id', clientId).maybeSingle();
         if (!clientRow?.auto_engagement_workflow_id) {
+          // ONBOARD-1: going live implies the native SMS engine; heal clients
+          // created before CreateClient/Onboarding set this flag (no UI toggle).
           await (supabase as any).from('clients')
-            .update({ auto_engagement_workflow_id: ew.id }).eq('id', clientId);
+            .update({ auto_engagement_workflow_id: ew.id, use_native_text_engine: true }).eq('id', clientId);
           setDefaultWorkflowId(ew.id);
         } else {
           setDefaultWorkflowId(clientRow.auto_engagement_workflow_id as string);
@@ -558,7 +560,9 @@ export default function Workflows() {
     setDefaultWorkflowId(ew.id);
     const { error } = await (supabase as any)
       .from('clients')
-      .update({ auto_engagement_workflow_id: ew.id })
+      // ONBOARD-1: going live implies the native SMS engine; heal clients
+      // created before CreateClient/Onboarding set this flag (no UI toggle).
+      .update({ auto_engagement_workflow_id: ew.id, use_native_text_engine: true })
       .eq('id', clientId);
     if (error) {
       toast.error('Failed to set default campaign');
