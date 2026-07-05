@@ -30,8 +30,19 @@ interface Manifest {
   ok: boolean;
   entries: ManifestEntry[];
   goLiveReady: boolean;
+  // GOLIVE-1: per-check breakdown behind goLiveReady (absent on older fn versions).
+  goLiveChecklist?: Record<string, boolean>;
   generated: string[];
 }
+
+const GO_LIVE_CHECK_LABELS: Record<string, string> = {
+  requiredWebhooksSecured: 'required webhook secrets',
+  ghlLocationConfigured: 'GHL location',
+  retellPhoneConfigured: 'Retell phone number',
+  voiceSetterPushed: 'a pushed voice setter',
+  externalSupabaseConfigured: 'external Supabase',
+  requiredWebhooksReceived: 'traffic on the required webhooks',
+};
 
 const DESTINATION_HINT: Record<string, string> = {
   GoHighLevel: 'Paste into GoHighLevel → Workflows → Custom Webhook action.',
@@ -128,6 +139,15 @@ export function WebhookManifestCard({ clientId }: { clientId: string }) {
           screen, then check that "last received" shows a recent hit. Required webhooks must be
           secured before the engagement workflow goes live.
         </CardDescription>
+        {manifest && !manifest.goLiveReady && manifest.goLiveChecklist && (
+          <p className="text-xs text-amber-600">
+            Still missing:{' '}
+            {Object.entries(manifest.goLiveChecklist)
+              .filter(([, ok]) => !ok)
+              .map(([key]) => GO_LIVE_CHECK_LABELS[key] || key)
+              .join(', ')}
+          </p>
+        )}
       </CardHeader>
       <CardContent className="space-y-6">
         {loading && (

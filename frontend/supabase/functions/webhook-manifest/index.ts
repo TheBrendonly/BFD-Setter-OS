@@ -58,7 +58,7 @@ Deno.serve(async (req) => {
 
     const { data: client, error: clientErr } = await supabase
       .from("clients")
-      .select("id, ghl_location_id, ghl_webhook_secret, intake_lead_secret, retell_webhook_secret, unipile_webhook_secret, retell_phone_1, retell_phone_2, retell_phone_3, auto_engagement_workflow_id")
+      .select("id, ghl_location_id, ghl_webhook_secret, intake_lead_secret, retell_webhook_secret, unipile_webhook_secret, retell_phone_1, retell_phone_2, retell_phone_3, auto_engagement_workflow_id, supabase_url, supabase_service_key")
       .eq("id", clientId)
       .maybeSingle();
     if (clientErr || !client) return json({ error: "Client not found" }, 404);
@@ -101,12 +101,24 @@ Deno.serve(async (req) => {
         return null;
       }
     }
-    const [ghlSig, callSig, msgSig, intakeSig] = await Promise.all([
+    const [ghlSig, callSig, msgSig, intakeSig, bookingSig] = await Promise.all([
       lastReceived("sync_ghl_executions"),
       lastReceived("call_history"),
       lastReceived("message_queue"),
       lastReceived("engagement_executions"),
+      lastReceived("bookings"),
     ]);
+
+    // GOLIVE-1: ≥1 voice setter actually pushed to Retell (retell-proxy records
+    // every successful sync-voice-setter in voice_setters with the agent id).
+    const { data: pushedSetter } = await supabase
+      .from("voice_setters")
+      .select("id")
+      .eq("client_id", clientId)
+      .eq("is_active", true)
+      .not("retell_agent_id", "is", null)
+      .limit(1)
+      .maybeSingle();
 
     const ghlHeaders = ghlSecret
       ? [{ key: "x-wh-token", value: ghlSecret }, { key: "Content-Type", value: "application/json" }]
@@ -132,7 +144,7 @@ Deno.serve(async (req) => {
         key: "bookings-webhook", label: "Calendar appointment created / updated / cancelled",
         url: `${base}/bookings-webhook`, method: "POST",
         headers: ghlHeaders, destination: "GoHighLevel",
-        sopRef: "5.5", lastReceivedAt: null,
+        sopRef: "5.5", lastReceivedAt: bookingSig,
         required: true, secretStatus: ghlSecret ? "secured" : "forgeable",
       },
       {
@@ -206,17 +218,30 @@ Deno.serve(async (req) => {
       },
     ];
 
-    const requiredSecured = entries
-      .filter((e) => e.required)
-      .every((e) => e.secretStatus === "secured");
+    const requiredEntries = entries.filter((e) => e.required);
+    const requiredSecured = requiredEntries.every((e) => e.secretStatus === "secured");
+
+    // GOLIVE-1: "secured" only proves the secrets exist, and they are auto-minted
+    // at client creation, so on its own it made every brand-new client read
+    // go-live ready. Real readiness also needs the provisioning that the SOP
+    // requires before the auto_engagement_workflow_id flip (SOP 8.1).
+    const goLiveChecklist = {
+      requiredWebhooksSecured: requiredSecured,
+      ghlLocationConfigured: Boolean(ghlLocation),
+      retellPhoneConfigured: Boolean(client.retell_phone_1),
+      voiceSetterPushed: Boolean(pushedSetter?.id),
+      externalSupabaseConfigured: Boolean(client.supabase_url && client.supabase_service_key),
+      requiredWebhooksReceived: requiredEntries.every((e) => e.lastReceivedAt !== null),
+    };
 
     return json({
       ok: true,
       clientId,
       entries,
-      // Go-live readiness: every REQUIRED inbound webhook is secured. The UI gates
-      // the auto_engagement_workflow_id flip (SOP 8.1) on this.
-      goLiveReady: requiredSecured,
+      // Go-live readiness: every checklist item must hold. The UI gates the
+      // auto_engagement_workflow_id flip (SOP 8.1) on this.
+      goLiveReady: Object.values(goLiveChecklist).every(Boolean),
+      goLiveChecklist,
       generated: Object.keys(fills),
     });
   } catch (err) {
