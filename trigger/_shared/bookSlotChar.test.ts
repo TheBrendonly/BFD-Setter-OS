@@ -1,38 +1,67 @@
-// BOOK-2 / BOOK-3 — CHARACTERIZATION tests (documentation only; NO edit to the shared fn).
+// BOOK-2 / BOOK-3: regression tests for the fixed slot-matching behaviour.
 //
 // Run with Node 22+:
 //   node --experimental-strip-types --test trigger/_shared/bookSlotChar.test.ts
 //
-// frontend/supabase/functions/voice-booking-tools/index.ts is SHARED with the live Voice
-// path, has ZERO tests, and is part of the frozen Session-7 edge baseline — so it is
-// READ-ONLY this session and cannot be edited to export its internals. These tests instead
-// MIRROR its two tiny pure functions verbatim and assert their CURRENT behaviour, so the
-// two latent defects are captured executably as the spec for a supervised daytime edit.
-// They assert what IS (they pass); the fix is WRITTEN UP in Docs/BUG_LIST.md (BOOK-2/3),
-// not applied. The Text engine is the consumer that feeds these (setterTools.ts:46 tells
-// the model to send an offset-less ISO), which is why the characterization lives here.
+// frontend/supabase/functions/voice-booking-tools/index.ts is a Deno edge module that
+// can't be imported from Node, so these MIRROR its two fixed pure helpers
+// (voice-booking-tools/bookingHelpers.ts: pickCanonicalSlot + wallClockLocalToEpochMs)
+// verbatim and lock the intended behaviour. The authoritative unit tests for the real
+// module run under Deno (bookingHelpers.test.ts). These started life as characterization
+// tests capturing the BOOK-2/3 defects; the supervised shared-fn pass applied the fix, so
+// they now assert what the handler DOES after the fix.
 import test from "node:test";
 import { strict as assert } from "node:assert";
 
-// ── Mirror of voice-booking-tools/index.ts resolveCanonicalSlot matching (~line 227) ──
-// The handler deliberately ignores the model's tz offset and matches WALL-CLOCK HH:MM
-// against GHL's own slot grid (BOOK-2: this offset-ignoring is LOAD-BEARING and proven —
-// do NOT "fix" it). The narrow defect: it requires an EXACT HH:MM-vs-grid match.
-function canonicalMatch(startDateTime: string, gridSlots: string[]): string | null {
-  const timeM = startDateTime.match(/T(\d{2}:\d{2})/);
-  if (!timeM) return null;
-  const hhmm = timeM[1];
-  const canonical = gridSlots.find((s) => s.match(/T(\d{2}:\d{2})/)?.[1] === hhmm);
-  return canonical ?? null;
+// ── Mirror of voice-booking-tools/bookingHelpers.ts pickCanonicalSlot (BOOK-2) ──
+// Offset-ignoring wall-clock match is LOAD-BEARING (do NOT change). The fix: an exact
+// HH:MM match wins; otherwise snap to the nearest real slot within a tight tolerance so
+// an off-by-a-minute model time isn't a false "unavailable"; anything further stays null.
+const SNAP_TOLERANCE_MIN = 2;
+function slotHhmm(slot: string): string | null {
+  return slot.match(/T(\d{2}:\d{2})/)?.[1] ?? null;
+}
+function hhmmToMin(hhmm: string): number | null {
+  const m = hhmm.match(/^(\d{2}):(\d{2})$/);
+  return m ? Number(m[1]) * 60 + Number(m[2]) : null;
+}
+function pickCanonicalSlot(grid: string[], requestedHhmm: string, tol = SNAP_TOLERANCE_MIN): string | null {
+  const exact = grid.find((s) => slotHhmm(s) === requestedHhmm);
+  if (exact) return exact;
+  const want = hhmmToMin(requestedHhmm);
+  if (want == null) return null;
+  let best: string | null = null;
+  let bestDiff = Infinity;
+  for (const s of grid) {
+    const sh = slotHhmm(s);
+    const sm = sh ? hhmmToMin(sh) : null;
+    if (sm == null) continue;
+    const diff = Math.abs(sm - want);
+    if (diff <= tol && diff < bestDiff) { best = s; bestDiff = diff; }
+  }
+  return best;
 }
 
-// ── Mirror of voice-booking-tools/index.ts toMs (~line 445-451) ──
-function toMs(s: string): string {
-  const n = Number(s);
-  if (Number.isFinite(n)) return String(Math.trunc(n));
-  const d = new Date(s);
-  if (!Number.isNaN(d.getTime())) return String(d.getTime());
-  return s;
+// ── Mirror of voice-booking-tools/bookingHelpers.ts wallClockLocalToEpochMs (BOOK-3) ──
+function offsetMsForZone(timeZone: string, epochMs: number): number {
+  const dtf = new Intl.DateTimeFormat("en-US", {
+    timeZone, hourCycle: "h23",
+    year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", second: "2-digit",
+  });
+  const m: Record<string, number> = {};
+  for (const p of dtf.formatToParts(new Date(epochMs))) if (p.type !== "literal") m[p.type] = Number(p.value);
+  return Date.UTC(m.year, m.month - 1, m.day, m.hour, m.minute, m.second) - epochMs;
+}
+function hasExplicitOffset(iso: string): boolean {
+  return /([+-]\d{2}:?\d{2}|Z)$/.test(iso.trim());
+}
+function wallClockLocalToEpochMs(iso: string, timeZone: string): number | null {
+  const m = iso.trim().match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2}))?/);
+  if (!m) return null;
+  const [, y, mo, d, h, mi, s] = m;
+  const guessUtc = Date.UTC(+y, +mo - 1, +d, +h, +mi, s ? +s : 0);
+  return guessUtc - offsetMsForZone(timeZone, guessUtc);
 }
 
 const GRID = [
@@ -41,39 +70,25 @@ const GRID = [
   "2026-07-02T16:00:00+10:00",
 ];
 
-test("BOOK-2 (current behaviour): an on-grid HH:MM matches regardless of the model's offset", () => {
-  // Same wall-clock time, different offsets, all match the grid's :00 slot — this is the
-  // load-bearing, live-proven behaviour we must NOT change.
-  assert.equal(canonicalMatch("2026-07-02T14:00:00", GRID), "2026-07-02T14:00:00+10:00");
-  assert.equal(canonicalMatch("2026-07-02T14:00:00+10:00", GRID), "2026-07-02T14:00:00+10:00");
-  assert.equal(canonicalMatch("2026-07-02T14:00:00Z", GRID), "2026-07-02T14:00:00+10:00");
+test("BOOK-2: an on-grid HH:MM matches regardless of the model's offset (load-bearing)", () => {
+  assert.equal(pickCanonicalSlot(GRID, "14:00"), "2026-07-02T14:00:00+10:00");
+  assert.equal(pickCanonicalSlot(GRID, "16:00"), "2026-07-02T16:00:00+10:00");
 });
 
-test("BOOK-2 (defect): an OFF-grid minute fails the exact match -> null -> false 'unavailable'", () => {
-  // The model offering 14:01 (a minute off GHL's :00/:30 grid) returns null, which the
-  // handler turns into buildSlotUnavailable ("That time isn't available") even though
-  // 14:00 is open. FIX (supervised daytime): snap to the nearest real grid slot or return
-  // slot_unavailable WITH alternatives — never loosen to fuzzy match, never POST an
-  // unvalidated time.
-  assert.equal(canonicalMatch("2026-07-02T14:01:00", GRID), null);
-  assert.equal(canonicalMatch("2026-07-02T15:00:00", GRID), null); // genuinely absent — correct
+test("BOOK-2 (fixed): an off-by-a-minute near miss snaps to the real slot", () => {
+  assert.equal(pickCanonicalSlot(GRID, "14:01"), "2026-07-02T14:00:00+10:00");
+  assert.equal(pickCanonicalSlot(GRID, "14:29"), "2026-07-02T14:30:00+10:00");
+  // A genuinely absent time (beyond tolerance) still returns null -> real alternatives.
+  assert.equal(pickCanonicalSlot(GRID, "15:00"), null);
+  assert.equal(pickCanonicalSlot(GRID, "14:05"), null);
 });
 
-test("BOOK-3 (defect): an offset-less ISO is interpreted in the HOST timezone, not the client's", () => {
-  // setterTools.ts:46 tells the model to send an offset-less ISO (e.g. 2026-07-01T00:00:00);
-  // toMs() does new Date(s).getTime(), which interprets it in the HOST process timezone.
-  // The edge fns run on UTC hosts, so in production that is UTC midnight — 10h AHEAD of an
-  // Australia/Sydney lead's intended local midnight, skewing the get-available-slots window
-  // (the local day can be off by one). This assertion is host-TZ-robust: it locks that toMs
-  // uses the host-local interpretation, and that the UTC vs AU interpretations genuinely
-  // differ by the offset.
+test("BOOK-3 (fixed): an offset-less ISO is read in the client timezone, not the host's", () => {
   const offsetless = "2026-07-01T00:00:00";
-  assert.equal(toMs(offsetless), String(new Date(offsetless).getTime())); // host-local, not client tz
-  const utcMidnight = Date.parse("2026-07-01T00:00:00Z");
-  const auMidnight = Date.parse("2026-07-01T00:00:00+10:00");
-  assert.notEqual(utcMidnight, auMidnight); // the two interpretations differ by 10h
-  // FIX (supervised daytime): interpret an offset-less ISO in client.timezone, or have the
-  // model pass startDate/endDate as epoch ms. The epoch-ms path is already safe — toMs
-  // passes a numeric string straight through:
-  assert.equal(toMs(String(auMidnight)), String(auMidnight));
+  assert.equal(hasExplicitOffset(offsetless), false);
+  // Australia/Sydney local midnight == the AU-offset instant, NOT UTC midnight.
+  assert.equal(wallClockLocalToEpochMs(offsetless, "Australia/Sydney"), Date.parse("2026-07-01T00:00:00+10:00"));
+  assert.notEqual(Date.parse("2026-07-01T00:00:00+10:00"), Date.parse("2026-07-01T00:00:00Z"));
+  // An offset-carrying string is left to normal Date parsing (already correct).
+  assert.equal(hasExplicitOffset("2026-07-01T00:00:00+10:00"), true);
 });

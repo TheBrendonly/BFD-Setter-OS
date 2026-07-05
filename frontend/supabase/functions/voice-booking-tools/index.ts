@@ -36,6 +36,14 @@ import { normalizePhone } from "../_shared/phone.ts";
 import { resolveLeadByPhone } from "../_shared/leadResolve.ts";
 import { isPhoneOptedOut } from "../_shared/optout.ts";
 import { bookingSourceFromBody } from "../_shared/toolBookingSource.ts";
+import {
+  pickCanonicalSlot,
+  hasExplicitOffset,
+  wallClockLocalToEpochMs,
+  extractApptEvents,
+  realEventIds,
+  activeAppointments,
+} from "./bookingHelpers.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -224,8 +232,10 @@ async function resolveCanonicalSlot(
   const base = Date.parse(`${day}T00:00:00Z`);
   const raw = await fetchSlotsRaw(client, calendarId, base - 86400000, base + 2 * 86400000);
   const slots = Array.isArray(raw[day]?.slots) ? (raw[day].slots as unknown[]) : [];
-  const canonical = slots.find((s) => typeof s === "string" && s.match(/T(\d{2}:\d{2})/)?.[1] === hhmm);
-  return { parsed: true, canonical: (canonical as string) ?? null };
+  // BOOK-2: exact wall-clock match first, else snap to the nearest real slot within a
+  // tight tolerance so an off-by-a-minute model time isn't a false "unavailable".
+  const canonical = pickCanonicalSlot(slots, hhmm);
+  return { parsed: true, canonical };
 }
 
 // Build the recoverable "slot_unavailable" result carrying REAL alternative open times the agent
@@ -442,14 +452,6 @@ async function toolGetAvailableSlots(args: {
     throw new ToolError(400, "startDateTime and endDateTime are required (or startDate/endDate)");
   }
 
-  const toMs = (s: string): string => {
-    const n = Number(s);
-    if (Number.isFinite(n)) return String(Math.trunc(n));
-    const d = new Date(s);
-    if (!Number.isNaN(d.getTime())) return String(d.getTime());
-    return s;
-  };
-
   const timezone = pickStr(
     body.timeZone,
     body.timezone,
@@ -457,6 +459,22 @@ async function toolGetAvailableSlots(args: {
     url.searchParams.get("timezone"),
   ) || client.timezone;
   const userId = pickStr(body.userId, url.searchParams.get("userId"));
+
+  // BOOK-3: the model sends an offset-less ISO (setterTools tells it to); new Date()
+  // reads that in the HOST tz (UTC on the edge host), skewing an Australia/Sydney lead's
+  // window ~10h. Interpret a bare wall clock in the client/requested timezone instead.
+  // Epoch-ms and offset-carrying strings pass through unchanged (both already correct).
+  const toMs = (s: string): string => {
+    const n = Number(s);
+    if (Number.isFinite(n)) return String(Math.trunc(n));
+    if (timezone && !hasExplicitOffset(s)) {
+      const ms = wallClockLocalToEpochMs(s, timezone);
+      if (ms != null) return String(ms);
+    }
+    const d = new Date(s);
+    if (!Number.isNaN(d.getTime())) return String(d.getTime());
+    return s;
+  };
 
   const sp = new URLSearchParams();
   sp.set("startDate", toMs(startRaw));
@@ -636,6 +654,32 @@ async function toolGetContactAppointments(args: {
   return r.body;
 }
 
+// CANCEL-1: server-authoritative eventId binding for cancel + reschedule. The model
+// (voice or SMS) may pass a HALLUCINATED eventId that matches nothing GHL returned
+// (proven live: a fabricated id -> GHL 404 -> cancel silently fails). Before the
+// mutating PUT, resolve the contact and confirm the id is one of their REAL
+// appointments; if not, refuse and fold the real active list back so the model
+// re-binds. Returns { checked:false } when we can't resolve the contact or list
+// appointments (no identity / GHL error), the caller then proceeds unchanged, so
+// callers that only have an eventId keep working (no regression).
+async function verifyEventIdForContact(
+  client: ClientRow,
+  body: Record<string, unknown>,
+  appointmentId: string,
+  supabase: any,
+): Promise<{ checked: boolean; valid: boolean; appointments: ApptEvent[] }> {
+  let contactId: string;
+  try {
+    ({ contactId } = await resolveContactId({ client, body, createIfMissing: false, supabase }));
+  } catch {
+    return { checked: false, valid: false, appointments: [] };
+  }
+  const r = await ghlGet(`/contacts/${contactId}/appointments/`, client.ghl_api_key as string);
+  if (r.status >= 400) return { checked: false, valid: false, appointments: [] };
+  const events = extractApptEvents(r.body);
+  return { checked: true, valid: realEventIds(events).has(appointmentId), appointments: activeAppointments(events) };
+}
+
 // ── Tool: update-appointment ──────────────────────────────────────────────
 // Body: { eventId | appointmentId, startDateTime?, endDateTime?, title?, appointmentStatus? }
 // Retell tool schema sends `eventId`; legacy callers used `appointmentId`. Both work.
@@ -649,6 +693,18 @@ async function toolUpdateAppointment(args: {
     || (typeof body.eventId === "string" && body.eventId)
     || null;
   if (!appointmentId) throw new ToolError(400, "appointmentId or eventId is required");
+
+  // CANCEL-1: reject a fabricated eventId before mutating GHL (reschedule half).
+  const idCheck = await verifyEventIdForContact(client, body, appointmentId, supabase);
+  if (idCheck.checked && !idCheck.valid) {
+    return {
+      rescheduled: false,
+      status: "event_not_found",
+      message: "That appointment id is not one of this contact's appointments. Call get-contact-appointments and reschedule using the exact events[].id it returns; never invent an id.",
+      appointments: idCheck.appointments,
+    };
+  }
+
   const calendarId = (typeof body.calendarId === "string" && body.calendarId) || client.ghl_calendar_id;
 
   const updateBody: Record<string, unknown> = {};
@@ -712,6 +768,17 @@ async function toolCancelAppointments(args: {
     || (typeof body.eventId === "string" && body.eventId)
     || null;
   if (!appointmentId) throw new ToolError(400, "appointmentId or eventId is required");
+
+  // CANCEL-1: reject a fabricated eventId before mutating GHL.
+  const check = await verifyEventIdForContact(client, body, appointmentId, supabase);
+  if (check.checked && !check.valid) {
+    return {
+      cancelled: false,
+      status: "event_not_found",
+      message: "That appointment id is not one of this contact's appointments. Call get-contact-appointments and cancel using the exact events[].id it returns; never invent an id.",
+      appointments: check.appointments,
+    };
+  }
 
   // Soft-cancel via PUT with appointmentStatus="cancelled" rather than DELETE.
   // GHL DELETE on appointments requires an extra IAM scope on the PIT token
@@ -982,6 +1049,21 @@ async function toolSendSms(args: { client: ClientRow; body: Record<string, unkno
     await supabase.from("leads").update({ last_outbound_at: new Date().toISOString() })
       .eq("client_id", client.id).eq("lead_id", contactId);
   } catch { /* non-fatal */ }
+
+  // 4) SMS-METER-1: stamp the platform message_queue (channel='sms_outbound') so this
+  //    mid-call text is counted by F13 usage metering, like every other Twilio-direct
+  //    writer (ghl_account_id = location id or the client uuid). Non-fatal.
+  try {
+    await supabase.from("message_queue").insert({
+      lead_id: contactId ?? toNumber,
+      ghl_account_id: client.ghl_location_id ?? client.id,
+      message_body: message,
+      contact_phone: toNumber,
+      channel: "sms_outbound",
+      twilio_message_sid: sid,
+      processed: true,
+    });
+  } catch (mqErr) { console.warn("send-sms: message_queue meter stamp failed (non-fatal):", mqErr); }
 
   return { sent: true, sid };
 }

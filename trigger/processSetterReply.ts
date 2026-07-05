@@ -31,6 +31,7 @@ import { prefetchAvailability, buildAvailabilityBlock } from "./_shared/prefetch
 import { makeVoiceBookingCallTool } from "./_shared/voiceBookingCallTool.ts";
 import { buildTimeAnchorBlock, resolveClientTimeZone } from "./_shared/timeAnchor.ts";
 import { mergeCanonicalSlots, validateBookingArgs, type CanonicalSlotMap } from "./_shared/slotBinding.ts";
+import { mergeEventIds, validateEventIdArgs, type EventIdSet } from "./_shared/eventIdBinding.ts";
 import {
   runSetterToolLoop,
   ToolsUnsupportedError,
@@ -324,9 +325,15 @@ export const processSetterReply = task({
     // real alternatives are folded back (kills the "Thursday 2pm" -> Friday bug).
     const canonicalSlots: CanonicalSlotMap = new Map();
     mergeCanonicalSlots(canonicalSlots, prefetch.invocation.result);
+    // ── CANCEL-1: known appointment ids the engine has shown the model this turn
+    // (from get-contact-appointments). cancel-appointments / update-appointment are
+    // validated against it before executing: a fabricated eventId is refused with the
+    // real ids folded back (mirrors the slot binding; the edge fn also checks server-side).
+    const knownEventIds: EventIdSet = new Set();
     const loopCallTool: CallTool = async (name, toolArgs) => {
       const result = await callTool(name, toolArgs);
       if (name === "get-available-slots") mergeCanonicalSlots(canonicalSlots, result);
+      if (name === "get-contact-appointments") mergeEventIds(knownEventIds, result);
       return result;
     };
 
@@ -337,7 +344,14 @@ export const processSetterReply = task({
       identity,
       callLlm,
       callTool: loopCallTool,
-      validateToolArgs: (name, toolArgs) => validateBookingArgs(canonicalSlots, name, toolArgs),
+      // Run the eventId binding first (validates cancel/reschedule ids); on pass, run
+      // the slot binding (validates/rewrites book/reschedule datetimes). Neither of the
+      // event-id branch's outcomes rewrites args, so slot binding still owns any rewrite.
+      validateToolArgs: (name, toolArgs) => {
+        const ev = validateEventIdArgs(knownEventIds, name, toolArgs);
+        if (!ev.ok) return ev;
+        return validateBookingArgs(canonicalSlots, name, toolArgs);
+      },
     });
     if (loopResult.toolInvocations.length > 0) {
       console.log(
