@@ -279,8 +279,11 @@ const App = () => {
                   Pages moved to frontend/src/pages/_archived/. To revive: restore
                   the 6 lazy imports + 7 routes + move pages back. */}
               <Route path="prompts" element={<Navigate to="prompts/text" replace />} />
-              <Route path="prompts/text" element={<PromptManagement />} />
-              <Route path="prompts/voice" element={<PromptManagement />} />
+              {/* ACCESS-1: prompts are BFD-managed; a client-role user must not
+                  reach the setter editor (the edge fns authorize a client for its
+                  own client_id, so the route is the enforcement point). */}
+              <Route path="prompts/text" element={<AgencyRoute><PromptManagement /></AgencyRoute>} />
+              <Route path="prompts/voice" element={<AgencyRoute><PromptManagement /></AgencyRoute>} />
               <Route path="prompts/viz-demo" element={<VisualizationDemo />} />
               <Route path="deploy-ai-reps" element={<DeployAIReps />} />
               <Route path="debug-ai-reps" element={<CreatorRouteGuard><DebugAIReps /></CreatorRouteGuard>} />

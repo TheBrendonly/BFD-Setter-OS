@@ -742,6 +742,10 @@ function ClientSidebar() {
                 <>
                   {menuConfig
                     .filter(i => i.visible)
+                    // ACCESS-1: the setter editors are agency-only (the routes are
+                    // AgencyRoute-wrapped), so never offer them to a client login
+                    // even when a saved menu config marks them visible.
+                    .filter(i => isAgency || (i.key !== 'text-setter' && i.key !== 'voice-setter'))
                     .map((item) => {
                       if (item.type === 'section-label') {
                         return <div key={item.key} className="sidebar-section-label">{item.label}</div>;
@@ -846,6 +850,8 @@ function ClientSidebar() {
                   </NavLink>
                 </SidebarMenuButton>
               </SidebarMenuItem>
+              {/* ACCESS-1: setter editors are agency-only (routes are AgencyRoute-wrapped). */}
+              {isAgency && <>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild>
                   <NavLink to={`/client/${clientId}/prompts/text`} className="flex items-center gap-3 px-3 py-2 transition-colors hover:bg-muted/50 sidebar-nav-item" activeClassName="bg-primary/10 text-primary border-l-2 border-primary">
@@ -862,6 +868,7 @@ function ClientSidebar() {
                   </NavLink>
                 </SidebarMenuButton>
               </SidebarMenuItem>
+              </>}
               {isAgency && <>
               <div className="sidebar-section-label">OPS</div>
               <SidebarMenuItem>
