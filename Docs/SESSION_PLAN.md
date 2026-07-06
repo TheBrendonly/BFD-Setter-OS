@@ -345,6 +345,14 @@ Status: `[ ]` not started · `[~]` in progress · `[x]` done. Effort is rough.
    **CONTACTS-EDIT-DEAD-1**; **PU-9** (voice dead-air), **PU-10** (reschedule honesty). Handoff
    `Operations/handoffs/2026-07-06-voice-browser-session.md`. **Emitted F15.** Only F15 → F16 → the gated
    First-Client Milestone remain to v1 "100%".
+3e. **Combined build session (bugs + F15 + F16) — QUEUED 2026-07-06 (Brendan's call: one mega-session, not a
+   split relay).** Bundles the four open CODE bugs (HOURS-1 + folded FOLLOWUP-DURING-CALL-1, RESCHED-SMS-1,
+   CHATS-DM-1, CONTACTS-EDIT-DEAD-1) as Phase A, then F15 (Phase B) and F16 + F17-phase-1 (Phase C). HOURS-1
+   builds ONE shared business-hours module (extracted from `runEngagement.ts`); F17-phase-1 later extends it
+   to voice dials + the AU legal windows (chosen split). The ready-to-run prompt is in the
+   `Operations/handoffs/2026-07-06-*` handoff for this planning turn. A separate **non-build closeout** prompt
+   handles the report-only PU-* edits + Brendan action pack + stale-marker reconciliation. Pipeline:
+   `[✓] Voice + browser  [•] Combined build: bugs + F15 + F16 (next)  [ ] First-Client Milestone (gated)`.
 4. **Brendan solo block (parallel, no Claude session):** DEPLOY-1 (pin Railway to `main`), inotify sysctl,
    Setter-1 prompt migration, Resend SMTP → F14 E2E, sms_llm rate + billing anchor/toggles, n8n Railway
    shutdown, Twilio alpha-sender-ID check, PROMPT_UPDATE_LIST items (PU-1/3/4/5/6/7).
