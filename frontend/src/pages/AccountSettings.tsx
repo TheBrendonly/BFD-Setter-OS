@@ -16,6 +16,7 @@ import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
 import { ClientAccountSettingsCard } from "@/components/ClientAccountSettingsCard";
 import { ClientPricingDisplayCard } from "@/components/ClientPricingDisplayCard";
 import { ClientUsagePanel } from "@/components/ClientUsagePanel";
+import { ShowRateFunnelCard } from "@/components/ShowRateFunnelCard";
 
 
 export default function AccountSettings() {
@@ -278,6 +279,8 @@ export default function AccountSettings() {
 
           {/* F13 Usage & Billing (server decides the role shape + toggled parts) */}
           {clientId && <ClientUsagePanel clientId={clientId} />}
+          {/* F15 show-rate funnel (visible to the client only when toggled on) */}
+          {clientId && <ShowRateFunnelCard clientId={clientId} />}
         </div>
       </main>
     </div>

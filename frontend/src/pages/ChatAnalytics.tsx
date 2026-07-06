@@ -41,6 +41,7 @@ import { DateRangePicker } from '@/components/ui/date-range-picker';
 import { ConversationsDrawer, type AiMatch } from '@/components/ConversationsDrawer';
 import RetroLoader from '@/components/RetroLoader';
 import { UsageSummaryCard } from '@/components/UsageSummaryCard';
+import { ShowRateFunnelCard } from '@/components/ShowRateFunnelCard';
 
 // Persistence helpers for Supabase storage
 const STORAGE_KEYS = {
@@ -2676,6 +2677,8 @@ const ChatAnalytics = () => {
       {/* F13 billing-period usage summary — server-branched by role (client sees
           only the admin-toggled parts; agency sees billed/cost/margin). */}
       {activeTab === 'dashboard' && clientId && <UsageSummaryCard clientId={clientId} />}
+      {/* F15 show-rate funnel — booked/held/no-show + show rate (server-gated by role). */}
+      {activeTab === 'dashboard' && clientId && <ShowRateFunnelCard clientId={clientId} />}
       {/* Refresh overlay - scoped to dashboard content area only */}
       {(analyzing || webhookSending) && (
         <div className="absolute inset-0 z-40 bg-background/80 backdrop-blur-sm flex items-center justify-center">

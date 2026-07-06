@@ -206,7 +206,7 @@ Deno.serve(async (req) => {
     // event for an appointment that was already created by the voice agent.
     const { data: existingBooking, error: selectErr } = await supabase
       .from("bookings")
-      .select("source")
+      .select("id, source, status")
       .eq("client_id", client.id)
       .eq("ghl_appointment_id", appointmentId)
       .maybeSingle();
@@ -215,6 +215,7 @@ Deno.serve(async (req) => {
       return jsonResponse({ ok: false, error: "existing booking read failed" }, 500);
     }
     const existingSource = existingBooking?.source as string | null | undefined;
+    const previousStatus = (existingBooking?.status as string | null) ?? null;
 
     // Upsert bookings row (idempotent on UNIQUE (client_id, ghl_appointment_id))
     const upsertRow: Record<string, unknown> = {
@@ -240,6 +241,35 @@ Deno.serve(async (req) => {
     if (upsertErr) {
       console.error("bookings-webhook: upsert failed", upsertErr);
       return jsonResponse({ ok: false, error: "upsert failed" }, 500);
+    }
+
+    // F15(a) show-rate funnel: append the status transition (best-effort; never
+    // fail the webhook). Only logged when the status actually changed, so a GHL
+    // re-fire of the same status is idempotent.
+    if (previousStatus !== mappedStatus) {
+      try {
+        let bookingId = (existingBooking?.id as string | null) ?? null;
+        if (!bookingId) {
+          const { data: fresh } = await supabase
+            .from("bookings")
+            .select("id")
+            .eq("client_id", client.id)
+            .eq("ghl_appointment_id", appointmentId)
+            .maybeSingle();
+          bookingId = (fresh?.id as string | null) ?? null;
+        }
+        await supabase.from("booking_status_events").insert({
+          client_id: client.id,
+          booking_id: bookingId,
+          ghl_appointment_id: appointmentId,
+          from_status: previousStatus,
+          to_status: mappedStatus,
+          source: (upsertRow.source as string | null) ?? existingSource ?? null,
+          raw: body,
+        });
+      } catch (evErr) {
+        console.warn("bookings-webhook: booking_status_events insert failed (non-fatal)", evErr);
+      }
     }
 
     // End any active cadence on appointment-created/confirmed
