@@ -19,6 +19,16 @@ Closed items move to `Docs/archive/COMPLETED_LOG.md`. `Docs/ROADMAP.md` is build
 
 **FIRST-CLIENT ONBOARDING.** When Brendan says **"I'm onboarding a client" / "onboarding a client" / "first client signed"**, read `Docs/FIRST_CLIENT_MILESTONE.md` and run its prompt. It is event-gated (flips Stripe / subscription enforcement / live webhook secrets / AU A2P) — do NOT run it before a contract actually signs. It is the last step to v1 "100%".
 
+## ⚠️ LOGIN ACCESS / 2FA - CHECK AT THE START OF ANY SESSION THAT MAY LOG IN (Playwright)
+
+**Access is deliberately NON-PERSISTENT.** The BFD app agency login has TOTP (2FA), and Supabase's refresh token is single-use (rotates on every refresh) and expires ~17h. There is no standing test account and no committed credential. So:
+
+- **If a session will (or might) need a browser-authenticated action** - any headless Playwright run against the live app, the browser-UI test re-checks (SWEEP-1a/b/c, F9-1, PHONE-CLEAR-1, ACCESS-1, G3-7 nav, the onboarding-fix live rows), or anything that reads/writes as the agency user in the UI - **ASK BRENDAN FOR A FRESH 6-DIGIT 2FA CODE AT THE START, before doing other work.** State plainly: "I'll need a 2FA code to drive the browser; please have your authenticator ready." Do not assume a saved session still works.
+- **How the login works** (harness `scripts/test-harness/README.md`): admin `generate_link {type:"magiclink"}` (service key, no email sent) → navigate the `action_link` → the app demands the TOTP → fill Brendan's code → `context.storageState()` saved to the SESSION scratchpad. Reuse it for the rest of that session.
+- **Never burn the token on a "is it still valid?" probe.** The first refresh CONSUMES the refresh token and returns a NEW one you MUST save, or the session dies. (This happened 2026-07-06.) Just drive through the browser, which refreshes auth itself, and re-save `storageState` after.
+- **Client-role checks (e.g. ACCESS-1) do NOT need a code:** create a throwaway client user with a known password (admin `createUser`), log in via `grant_type=password` (fresh client users have no MFA), verify, then delete the throwaway.
+- The saved `storageState.json` lives in the session scratchpad (NOT the repo) and does not carry across sessions - expect to re-auth each session that needs it.
+
 ## Behavioral Guidelines
 
 Source: forrestchang/andrej-karpathy-skills. Behavioral guidelines to reduce common LLM coding mistakes. These bias toward caution over speed; use judgment on trivial tasks.
