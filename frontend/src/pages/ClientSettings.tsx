@@ -192,8 +192,8 @@ export default function ClientSettings() {
   };
 
   const handleUpdatePassword = async () => {
-    if (!newPassword || newPassword.length < 6) {
-      toast.error("Password must be at least 6 characters");
+    if (!newPassword || newPassword.length < 12) {
+      toast.error("Password must be at least 12 characters");
       return;
     }
     setUpdatingPassword(true);
@@ -435,7 +435,7 @@ export default function ClientSettings() {
                     <Input
                       id="new-password"
                       type="password"
-                      placeholder="Minimum 6 characters"
+                      placeholder="Minimum 12 characters"
                       value={newPassword}
                       onChange={(e) => setNewPassword(e.target.value)}
                       className="field-text"
@@ -443,7 +443,7 @@ export default function ClientSettings() {
                   </div>
                   <Button
                     onClick={handleUpdatePassword}
-                    disabled={updatingPassword || newPassword.length < 6}
+                    disabled={updatingPassword || newPassword.length < 12}
                   >
                     {updatingPassword ? "Updating..." : "Update Password"}
                   </Button>

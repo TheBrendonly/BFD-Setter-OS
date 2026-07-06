@@ -379,7 +379,7 @@ export default function CreateClient() {
                           type="password"
                           value={loginData.password}
                           onChange={(e) => setLoginData({ ...loginData, password: e.target.value })}
-                          placeholder="Min 6 characters"
+                          placeholder="Min 12 characters"
                           className="field-text"
                         />
                       </div>

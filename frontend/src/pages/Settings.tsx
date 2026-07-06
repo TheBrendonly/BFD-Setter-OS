@@ -218,10 +218,10 @@ const Settings = () => {
       return;
     }
 
-    if (newPassword.length < 6) {
+    if (newPassword.length < 12) {
       toast({
         title: "Error",
-        description: "Password must be at least 6 characters",
+        description: "Password must be at least 12 characters",
         variant: "destructive"
       });
       return;

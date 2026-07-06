@@ -508,6 +508,12 @@ function ClientSidebar() {
   const handleAddClient = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
+    // AUTH-LEN-1/ONBOARD-3: admin createUser bypasses the GoTrue 12-char policy,
+    // so without this check a weak sub-account login would really be created.
+    if (createLogin && loginData.password && loginData.password.length < 12) {
+      toast.error('Password must be at least 12 characters');
+      return;
+    }
     setUploading(true);
     try {
       const {
@@ -1074,7 +1080,7 @@ function ClientSidebar() {
                   </div>
                   <div className="space-y-1">
                     <Label htmlFor="login-password" className="text-xs">Password *</Label>
-                    <Input id="login-password" type="password" value={loginData.password} onChange={e => setLoginData({ ...loginData, password: e.target.value })} placeholder="Min 6 characters" />
+                    <Input id="login-password" type="password" value={loginData.password} onChange={e => setLoginData({ ...loginData, password: e.target.value })} placeholder="Min 12 characters" />
                   </div>
                 </div>
               )}
