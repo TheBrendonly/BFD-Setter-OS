@@ -34,7 +34,7 @@ import { normalizeLlmModel } from "./_shared/llmModel";
 import {
   DEFAULT_QUIET_HOURS,
   resolveLeadTimezone,
-  isWithinQuietHoursWindow,
+  isWithinSendingWindow,
   parseQuietHours,
 } from "./_shared/businessHours";
 import { isVoiceCallActive } from "./_shared/voiceCallActive";
@@ -180,7 +180,7 @@ export const nudgeColdReply = schedules.task({
           ? { ...nudgeQuietHours, tz: nudgeClientTz }
           : nudgeQuietHours;
       const nudgeLeadTz = resolveLeadTimezone((lead.phone as string | null) ?? undefined, nudgeEffectiveQH.tz);
-      if (!isWithinQuietHoursWindow(now, nudgeEffectiveQH, nudgeLeadTz)) {
+      if (!isWithinSendingWindow(now, nudgeEffectiveQH, nudgeLeadTz)) {
         stats.skipped++;
         continue;
       }

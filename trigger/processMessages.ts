@@ -9,7 +9,7 @@ import { isPhoneOptedOut } from "./_shared/optout";
 import {
   DEFAULT_QUIET_HOURS,
   resolveLeadTimezone,
-  getNextQuietHoursStart,
+  getNextSendingOpening,
   parseQuietHours,
 } from "./_shared/businessHours";
 
@@ -538,7 +538,7 @@ export const processMessages = task({
               ? { ...fuQuietHours, tz: fuClientTz }
               : fuQuietHours;
           const fuLeadTz = resolveLeadTimezone(contact_phone ?? undefined, fuEffectiveQH.tz);
-          const firesAt = getNextQuietHoursStart(
+          const firesAt = getNextSendingOpening(
             new Date(Date.now() + followupDelay * 1000),
             fuEffectiveQH,
             fuLeadTz,

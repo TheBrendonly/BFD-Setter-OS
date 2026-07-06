@@ -11,8 +11,8 @@ import { normalizeLlmModel } from "./_shared/llmModel";
 import {
   DEFAULT_QUIET_HOURS,
   resolveLeadTimezone,
-  isWithinQuietHoursWindow,
-  getNextQuietHoursStart,
+  isWithinSendingWindow,
+  getNextSendingOpening,
   parseQuietHours,
 } from "./_shared/businessHours";
 
@@ -76,9 +76,8 @@ type EngagementNode =
 // ── Phase 4b — Quiet hours ─────────────────────────────────────────────────
 // Quiet-hours / business-hours logic now lives in ./_shared/businessHours.ts
 // (HOURS-1) so runEngagement, sendFollowup and nudgeColdReply share ONE copy.
-// QuietHoursConfig, DEFAULT_QUIET_HOURS, resolveLeadTimezone,
-// isWithinQuietHoursWindow, getNextQuietHoursStart, parseQuietHours are imported
-// at the top of this file.
+// The cadence gate uses isWithinSendingWindow / getNextSendingOpening (the client
+// window intersected with the F17 AU legal calling-hours clamp); imported above.
 
 // HOURS-1 (d): new-lead first-touch confirmation SMS. For node 0 of a
 // is_new_leads_campaign workflow the acknowledgement text fires INSTANTLY
@@ -733,8 +732,8 @@ export const runEngagement = task({
 
       const enforceQuietHoursBeforeSend = async (label: string): Promise<boolean> => {
         const now = new Date();
-        if (isWithinQuietHoursWindow(now, quietHours, leadTz)) return true;
-        const resumeAt = getNextQuietHoursStart(now, quietHours, leadTz);
+        if (isWithinSendingWindow(now, quietHours, leadTz)) return true;
+        const resumeAt = getNextSendingOpening(now, quietHours, leadTz);
         const waitSecs = Math.max(0, Math.round((resumeAt.getTime() - Date.now()) / 1000));
         const localTime = resumeAt.toLocaleTimeString("en-US", {
           timeZone: leadTz,
@@ -932,7 +931,7 @@ export const runEngagement = task({
           // variant); the phone_call and any other channel keep the normal gate,
           // re-applied per-channel because the node-level gate is skipped here.
           const isNewLeadFirstTouch = workflowRow?.is_new_leads_campaign === true && i === 0;
-          const withinHoursAtEnroll = isWithinQuietHoursWindow(new Date(), quietHours, leadTz);
+          const withinHoursAtEnroll = isWithinSendingWindow(new Date(), quietHours, leadTz);
 
           // Phase 4b — quiet hours gate (always-on per-client fallback).
           if (!isNewLeadFirstTouch) {

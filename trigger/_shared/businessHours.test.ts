@@ -8,6 +8,10 @@ import {
   isWithinQuietHoursWindow,
   getNextQuietHoursStart,
   parseQuietHours,
+  isAuTimezone,
+  isWithinAuLegalWindow,
+  isWithinSendingWindow,
+  getNextSendingOpening,
 } from "./businessHours.ts";
 
 const BRIS = "Australia/Brisbane"; // UTC+10, no DST — stable for wall-time asserts
@@ -71,4 +75,47 @@ test("DEFAULT_QUIET_HOURS is 09-21 all week Brisbane", () => {
   assert.equal(DEFAULT_QUIET_HOURS.start, "09:00");
   assert.equal(DEFAULT_QUIET_HOURS.end, "21:00");
   assert.deepEqual(DEFAULT_QUIET_HOURS.days, [1, 2, 3, 4, 5, 6, 7]);
+});
+
+// ── F17 phase 1: AU Telemarketing Standard clamp ──
+test("AU legal clamp: weekday capped at 20:00", () => {
+  assert.equal(isWithinAuLegalWindow(new Date("2026-07-06T10:00:00Z"), BRIS), true);  // Mon 20:00
+  assert.equal(isWithinAuLegalWindow(new Date("2026-07-06T10:30:00Z"), BRIS), false); // Mon 20:30
+});
+
+test("AU legal clamp: Saturday capped at 17:00, Sunday closed", () => {
+  assert.equal(isWithinAuLegalWindow(new Date("2026-07-04T07:00:00Z"), BRIS), true);  // Sat 17:00
+  assert.equal(isWithinAuLegalWindow(new Date("2026-07-04T07:30:00Z"), BRIS), false); // Sat 17:30
+  assert.equal(isWithinAuLegalWindow(new Date("2026-07-05T02:00:00Z"), BRIS), false); // Sun 12:00
+});
+
+test("AU legal clamp: national public holiday closed", () => {
+  // Australia Day, Mon 26 Jan 2026, noon Brisbane.
+  assert.equal(isWithinAuLegalWindow(new Date("2026-01-26T02:00:00Z"), BRIS), false);
+});
+
+test("isWithinSendingWindow = client window intersect AU legal (AU tz)", () => {
+  const at = new Date("2026-07-06T10:30:00Z"); // Mon 20:30 Brisbane
+  assert.equal(isWithinQuietHoursWindow(at, ALL_DAYS, BRIS), true); // client 09-21 says OK
+  assert.equal(isWithinSendingWindow(at, ALL_DAYS, BRIS), false);   // AU caps at 20:00
+  const holiday = new Date("2026-01-26T02:00:00Z");
+  assert.equal(isWithinSendingWindow(holiday, ALL_DAYS, BRIS), false); // holiday blocked
+});
+
+test("non-AU timezone: AU clamp is a no-op (delegates to client window)", () => {
+  assert.equal(isAuTimezone("America/New_York"), false);
+  assert.equal(isAuTimezone("Australia/Brisbane"), true);
+  const NY = { start: "09:00", end: "21:00", tz: "America/New_York", days: [1, 2, 3, 4, 5, 6, 7] };
+  const at = new Date("2026-07-05T16:00:00Z"); // Sunday around midday in NY
+  assert.equal(
+    isWithinSendingWindow(at, NY, "America/New_York"),
+    isWithinQuietHoursWindow(at, NY, "America/New_York"),
+  );
+});
+
+test("getNextSendingOpening lands inside the AU legal window", () => {
+  const sun = new Date("2026-07-05T02:00:00Z"); // Sunday noon Brisbane
+  const open = getNextSendingOpening(sun, ALL_DAYS, BRIS);
+  assert.equal(isWithinSendingWindow(open, ALL_DAYS, BRIS), true);
+  assert.ok(open.getTime() > sun.getTime(), "must move forward");
 });

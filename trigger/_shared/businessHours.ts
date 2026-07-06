@@ -88,3 +88,84 @@ export function parseQuietHours(raw: unknown): QuietHoursConfig | null {
   if (!start || !end || !tz || !days || days.length === 0) return null;
   return { start, end, tz, days };
 }
+
+// ── F17 phase 1: AU Telemarketing Standard calling-hours clamp ──────────────
+// Layered ON TOP of the client's cadence_quiet_hours: weekdays 09:00-20:00,
+// Saturday 09:00-17:00, no Sunday, no national public holiday. Applied only when
+// the resolved timezone is Australian (a no-op elsewhere), so a lead in another
+// tz keeps the client-config window unchanged. The effective sending window is
+// the INTERSECTION of the client window and this legal window.
+
+// 1=Mon..7=Sun. null = no telemarketing that day.
+export const AU_LEGAL_WINDOWS: Record<number, { start: string; end: string } | null> = {
+  1: { start: "09:00", end: "20:00" },
+  2: { start: "09:00", end: "20:00" },
+  3: { start: "09:00", end: "20:00" },
+  4: { start: "09:00", end: "20:00" },
+  5: { start: "09:00", end: "20:00" },
+  6: { start: "09:00", end: "17:00" }, // Saturday
+  7: null, // Sunday
+};
+
+// National AU public holidays (YYYY-MM-DD), incl. common observed substitutes.
+// State-specific holidays + an annual refresh are a later refinement; these are
+// the nation-wide prohibited telemarketing days. REVIEW ANNUALLY.
+export const AU_PUBLIC_HOLIDAYS = new Set<string>([
+  // 2026
+  "2026-01-01", "2026-01-26", "2026-04-03", "2026-04-06", "2026-04-25",
+  "2026-12-25", "2026-12-26", "2026-12-28",
+  // 2027
+  "2027-01-01", "2027-01-26", "2027-03-26", "2027-03-29", "2027-04-25",
+  "2027-04-26", "2027-12-25", "2027-12-27", "2027-12-28",
+]);
+
+export function isAuTimezone(tz: string): boolean {
+  return typeof tz === "string" && tz.startsWith("Australia/");
+}
+
+// tz-local date (YYYY-MM-DD), ISO weekday (1=Mon..7=Sun) and HH:MM, via Intl.
+function localCalendarParts(now: Date, tz: string): { dateStr: string; day: number; hhmm: string } {
+  const dateStr = new Intl.DateTimeFormat("en-CA", {
+    timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit",
+  }).format(now);
+  const wd = new Intl.DateTimeFormat("en-US", { timeZone: tz, weekday: "short" }).format(now);
+  const dayMap: Record<string, number> = { Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6, Sun: 7 };
+  const day = dayMap[wd] ?? 1;
+  const hhmm = new Intl.DateTimeFormat("en-GB", {
+    timeZone: tz, hour: "2-digit", minute: "2-digit", hourCycle: "h23",
+  }).format(now);
+  return { dateStr, day, hhmm };
+}
+
+// True when `now` falls inside the AU legal calling window for its tz-local day
+// (and it is not a public holiday / Sunday).
+export function isWithinAuLegalWindow(now: Date, tz: string): boolean {
+  const { dateStr, day, hhmm } = localCalendarParts(now, tz);
+  if (AU_PUBLIC_HOLIDAYS.has(dateStr)) return false;
+  const win = AU_LEGAL_WINDOWS[day];
+  if (!win) return false; // Sunday
+  return hhmm >= win.start && hhmm <= win.end;
+}
+
+// The effective "may we send/dial now?" check: the client window AND (for AU
+// timezones) the AU legal window. This is what every cadence send + voice dial
+// should gate on (HOURS-1 gave the client-window base; F17 adds the legal clamp).
+export function isWithinSendingWindow(now: Date, qh: QuietHoursConfig, tz: string): boolean {
+  if (!isWithinQuietHoursWindow(now, qh, tz)) return false;
+  if (isAuTimezone(tz) && !isWithinAuLegalWindow(now, tz)) return false;
+  return true;
+}
+
+// Next instant at which isWithinSendingWindow is true (5-min step, 21-day cap so
+// a run of holidays can't overshoot). Returns `now` if already inside.
+export function getNextSendingOpening(now: Date, qh: QuietHoursConfig, tz: string): Date {
+  if (isWithinSendingWindow(now, qh, tz)) return now;
+  let probe = new Date(now);
+  const stepMs = 5 * 60_000;
+  const maxIters = (21 * 24 * 60) / 5;
+  for (let i = 0; i < maxIters; i++) {
+    probe = new Date(probe.getTime() + stepMs);
+    if (isWithinSendingWindow(probe, qh, tz)) return probe;
+  }
+  return now; // 21-day soft cap
+}

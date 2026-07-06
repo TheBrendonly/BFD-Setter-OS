@@ -7,8 +7,8 @@ import { isPhoneOptedOut } from "./_shared/optout";
 import {
   DEFAULT_QUIET_HOURS,
   resolveLeadTimezone,
-  isWithinQuietHoursWindow,
-  getNextQuietHoursStart,
+  isWithinSendingWindow,
+  getNextSendingOpening,
   parseQuietHours,
 } from "./_shared/businessHours";
 import { isVoiceCallActive } from "./_shared/voiceCallActive";
@@ -206,8 +206,8 @@ export const sendFollowup = task({
     );
     {
       const nowForGate = new Date();
-      if (!isWithinQuietHoursWindow(nowForGate, effectiveQuietHours, followupLeadTz)) {
-        const openAt = getNextQuietHoursStart(nowForGate, effectiveQuietHours, followupLeadTz);
+      if (!isWithinSendingWindow(nowForGate, effectiveQuietHours, followupLeadTz)) {
+        const openAt = getNextSendingOpening(nowForGate, effectiveQuietHours, followupLeadTz);
         console.log(
           `Follow-up timer ${timer_id}: outside business hours — deferring until ${openAt.toISOString()} (${followupLeadTz}).`,
         );
@@ -559,10 +559,10 @@ export const sendFollowup = task({
       if (followupDelay <= 0) {
         console.log(`No delay configured for follow-up #${nextIndex} — stopping sequence.`);
       } else {
-        // HOURS-1: snap the next-in-sequence timer forward to the next business-
-        // hours opening so it never lands outside the client's sending window.
+        // HOURS-1 + F17: snap the next-in-sequence timer forward to the next
+        // sending opening (client window intersect AU legal window).
         const rawNextFiresAt = new Date(Date.now() + followupDelay * 1000);
-        const nextFiresAt = getNextQuietHoursStart(rawNextFiresAt, effectiveQuietHours, followupLeadTz);
+        const nextFiresAt = getNextSendingOpening(rawNextFiresAt, effectiveQuietHours, followupLeadTz);
 
         // Cancel any other pending timers for this contact (safety)
         await supabase
