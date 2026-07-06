@@ -534,7 +534,11 @@ function ClientSidebar() {
         email: clientData.email || null,
         description: clientData.description || null,
         agency_id: profile.agency_id,
-        sort_order: maxSortOrder + 1
+        sort_order: maxSortOrder + 1,
+        // ONBOARD-1: the native SMS engine hard-throws when this is false
+        // (trigger/processMessages.ts, n8n path decommissioned) and no UI toggle
+        // exists. Same fix as CreateClient.tsx / Onboarding.tsx.
+        use_native_text_engine: true
       }).select().single();
       if (clientError) throw clientError;
       let imageUrl = null;
