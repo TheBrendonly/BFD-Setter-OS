@@ -74,7 +74,15 @@ Deno.serve(async (req) => {
       .eq("client_id", client_id)
       .maybeSingle();
     const config = (pricingRow?.config ?? {}) as Record<string, unknown>;
-    const reportCfg = (config.report ?? {}) as { show_funnel_to_client?: boolean };
+
+    // Visibility lives in the separate client_report_config (F15) so the F13
+    // pricing editor can't clobber it on save.
+    const { data: reportRow } = await supabase
+      .from("client_report_config")
+      .select("config")
+      .eq("client_id", client_id)
+      .maybeSingle();
+    const reportCfg = (reportRow?.config ?? {}) as { show_funnel_to_client?: boolean };
     const showFunnelToClient = reportCfg.show_funnel_to_client === true;
 
     // Client with the funnel toggled off sees nothing (React never gates alone).

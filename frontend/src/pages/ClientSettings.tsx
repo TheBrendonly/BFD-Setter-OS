@@ -17,6 +17,7 @@ import { ClientAccountFieldConfigEditor } from "@/components/ClientAccountFieldC
 import { ClientPricingConfigEditor } from "@/components/ClientPricingConfigEditor";
 import { ClientUsagePanel } from "@/components/ClientUsagePanel";
 import { ShowRateFunnelCard } from "@/components/ShowRateFunnelCard";
+import { ReportSettingsCard } from "@/components/ReportSettingsCard";
 import { useSubscription } from "@/hooks/useSubscription";
 import { UnsavedChangesDialog } from '@/components/UnsavedChangesDialog';
 import { ClientVoicemailCard } from '@/components/setters/ClientVoicemailCard';
@@ -479,6 +480,10 @@ export default function ClientSettings() {
               {/* F15 show-rate funnel for this sub-account (agency view). */}
               <div className="mt-4">
                 <ShowRateFunnelCard clientId={clientId} />
+              </div>
+              {/* F15 ROI reporting settings + weekly report preview. */}
+              <div className="mt-4">
+                <ReportSettingsCard clientId={clientId} />
               </div>
             </div>
           )}
