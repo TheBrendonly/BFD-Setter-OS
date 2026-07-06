@@ -586,24 +586,26 @@ export default function Chats() {
         const chunk = leadExternalIds.slice(i, i + dmChunkSize);
         const { data: dmExecs } = await supabase
           .from('dm_executions')
-          .select('lead_id,status,started_at,completed_at,messages,channel')
+          .select('lead_id,status,started_at,completed_at,setter_messages,grouped_message,channel')
           .in('lead_id', chunk)
           .gte('started_at', oneDayAgo)
           .order('started_at', { ascending: false });
 
         for (const exec of dmExecs || []) {
-          const messages = Array.isArray((exec as any).messages) ? (exec as any).messages : [];
-          const latestPendingMessage = [...messages].reverse().find((msg: any) => {
-            const content = msg?.body || msg?.content || '';
-            return typeof content === 'string' && content.trim().length > 0;
-          });
+          // setter_messages is a string[] of the setter's outbound reply texts
+          // (the "recent outbound preview" source); fall back to the grouped
+          // inbound message only when no outbound reply exists yet.
+          const setterMessages = Array.isArray((exec as any).setter_messages) ? (exec as any).setter_messages : [];
+          const latestText =
+            [...setterMessages].reverse().find((m: any) => typeof m === 'string' && m.trim().length > 0) ||
+            (typeof (exec as any).grouped_message === 'string' ? (exec as any).grouped_message : '');
 
-          if (!latestPendingMessage) continue;
+          if (!latestText || !latestText.trim()) continue;
 
-          const cleaned = cleanPreviewContent(latestPendingMessage.body || latestPendingMessage.content || '');
+          const cleaned = cleanPreviewContent(latestText);
           if (!cleaned) continue;
 
-          const timestamp = latestPendingMessage.received_at || latestPendingMessage.timestamp || exec.completed_at || exec.started_at;
+          const timestamp = exec.completed_at || exec.started_at;
           if (!timestamp) continue;
 
           const existing = latestPendingBySession[exec.lead_id];
