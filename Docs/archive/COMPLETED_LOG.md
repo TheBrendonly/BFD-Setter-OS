@@ -3,6 +3,90 @@
 Items closed out of the active lists. Newest first. The active lists are in the repo root + `Docs/`
 (`BUG_LIST.md`, `FEATURE_ROADMAP.md`, `BRENDAN_TODO.md`, `TEST_LIST.md`, `DEFERRED.md`).
 
+## 2026-07-07 — Session P1 audit reconciliation: backlog items confirmed passed 2026-07-03/05/06 but never archived
+
+A full list-vs-live-state audit (git log, edge-fn versions, table/column existence, and the dated handoffs)
+found several items that had already passed their live test — in some cases days earlier — but were left
+sitting as open/duplicate rows in `BUG_LIST.md` / `TEST_LIST.md` instead of being moved here. No new testing
+was done this session; these are archival-only, each cited to the run/handoff where it actually passed.
+Full audit table: `Operations/handoffs/2026-07-07-p1-audit-reconciliation.md`.
+
+- **BOOK-1 + 3.12 SMS booking (the acceptance test) — PASS, 2026-07-05 TEST SESSION RUN 3.** The SMS setter no
+  longer fabricates "booked out" against an open calendar: RUN 3's multi-turn SMS exchange (signed inbound to
+  TEST_PHONE_A) shows "3.12 booking, SMS-OBS-1, SMS-MEM-1 (alternating human/ai, no re-ask), BOOK-1/BOOK-3
+  (books exact accepted Sydney time), STOP respected" all passing (handoff `2026-07-05-test-session.md` RUN 3).
+  This is the acceptance test that had been blocking 3.12 SMS booking since Session 7 (2026-06-30); both are
+  now closed.
+- **DEPLOY-1 — Railway production pinned to `main`. DONE 2026-07-04 (Brendan, screenshot-confirmed).** Railway
+  `1prompt-os` → production → Settings → Source shows "Branch connected to production" = `main` with
+  auto-deploy on push only. The auto-deploy-any-branch hole (any pushed feature branch reaching the live
+  domain unreviewed, discovered during the Session 9 deploy) is closed.
+- **F11 — Credentials "Configured" masked indicator. PASS, 2026-07-05 TEST SESSION RUN 1** (headless, all 17
+  agency routes): dot-mask placeholder + "Configured ✓" render correctly; write-only guard intact.
+- **UI-1 — plain setter labels. PASS, 2026-07-05 TEST SESSION RUN 1.** "Voice Setter Names" card shows plain
+  "Setter N" labels, no stale role-hint suffixes.
+- **F13 — margin panel + period/anchor browsing + 4-toggle client-visibility matrix. PASS, 2026-07-05 TEST
+  SESSION RUN 1.** "F13 margin + period/anchor + 4-toggle flip (+ `show_rate_to_client` mirror) + volumes vs
+  SQL (voice 3min/1call, SMS 19)" — live edit-save persisted, blended $/min hand-checked against SQL. (The
+  fourth F13 check, the dashboard-summary-card render for both roles, was not explicitly covered by this run
+  and stays open in `TEST_LIST.md`.)
+- **PROMPT-AUTH-1 — Full-prompt-visibility X-Ray check. PASS, 2026-07-05 TEST SESSION RUN 1.** "PROMPT-AUTH-1
+  X-Ray (full assembled prompt + matches badge)" — the operator-facing X-Ray view shows the complete assembled
+  system prompt and matches the live stored value. (The "no leftover artifacts" and "efficiency" checks in that
+  same BUG_LIST item remain blocked on Brendan applying the Setter-1 content migration — still open in
+  `TEST_LIST.md` / `BRENDAN_TODO.md`.) The PROMPT-AUTH-1 bug entry itself (the booking-logic root cause: a
+  hidden stale `Available days: Tue/Wed/Thu` rule + un-interpolated `{{ $now }}` causing wrong-day bookings) is
+  also closed here — code deployed 2026-07-03 (main `6c5c339`+`157bb8f`), live SMS regression confirmed the
+  same day (Wed 8 Jul 2:30pm Sydney booking, no fabrication), and adversarial pre-deploy review refuted the
+  only surviving concern. The one remaining piece, a content-hygiene migration Brendan applies himself via the
+  UI (removing the legacy 511-line booking blob from the stored Text-setter prompt), is tracked as its own row
+  in `BRENDAN_TODO.md` ("Apply the Setter-1 prompt content migration").
+- **B-2 — GHL-outage inbound resilience leg. PASS, 2026-07-05 TEST SESSION RUN 6.** "B-2 outage: inbound never
+  dropped, `bfd-<phone>` synthetic lead, `ghl_contact_resolve_degraded` (not `_failed`), Twilio-direct reply, 0
+  dups, key restored." This is the (1b/1c) resilient-miss-path leg from the Session 5 by-phone pivot. (The
+  other three B-2 checks — CSV `normalized_phone`, background-repoint convergence, deterministic GHL pick on a
+  multi-contact phone — were not covered by this run and stay open in `TEST_LIST.md`.)
+- **API-DEPR-2(a) + F13 client-eye view — PASS, 2026-07-06 (Fable onboarding run).** Pushed `sync-voice-setter`
+  with a real AGENCY user JWT on a fresh throwaway client → created agent `agent_c09e76046be7e61b57c030104d`;
+  `get-agent` showed `post_call_analysis_data` = 3 `type:"system-presets"` entries (`call_summary`/
+  `call_successful`/`user_sentiment`) + 6 custom fields, no dupes, the 3 deprecated `analysis_*_prompt` fields
+  absent, born-bookable. Separately, `get-client-usage` as a real CLIENT JWT on a throwaway client/user proved
+  the server-enforced visibility whitelist (all toggles OFF → `{show:false}`; each toggle exposes only its own
+  figure; all ON → all four; the AGENCY JWT still gets the full margin payload), and the client-role
+  `/account-settings` UI rendered the "Usage & Billing" card correctly under each toggle state. Throwaway
+  agent/client/user all deleted after.
+
+### PROMPT_UPDATE_LIST items confirmed already resolved (live Retell verification, read-only)
+
+A dedicated read-only pass against the actual live Retell agents (list-agents/get-agent/get-retell-llm, no
+writes) for the Brendan action pack turned up four items already in a resolved state — likely from Brendan's
+own 2026-07-05 prompt push (the 4 Garys + Inbound BFD Agent were all last edited within seconds of each other
+that day):
+
+- **PU-1 (timezone confirmation)** — "Sydney time" / "Australia/Sydney" wording is hardcoded directly in the
+  stored prompt on every canonical agent, not just runtime-injected.
+- **PU-4 (Property Coach company-name placeholder)** — now reads "Company name: Building Flow Property", no
+  bracket placeholder, no config note.
+- **PU-8 (voicemail "[Your Name]" placeholder)** — the 4 Garys + the shared Main-Outbound/Inbound BFD Agent's
+  voicemail message reads "Leave a breif message saying you will try again later and why you called. Thanks."
+  on all five — no placeholder.
+
+**Important correction made mid-session:** an initial verification pass misidentified "Main Outbound" as the
+Retell agent literally named `Voice-Setter-Test` (`agent_f45f4dd…`), based on the phone number's static
+`outbound_agents` binding — precisely the trap this project's own `CLAUDE.md` warns against ("ignore the
+phone number attached to an agent in Retell"). Cross-checked against the platform `voice_setters` table (the
+"Main Outbound" row's `retell_agent_id`, which is what `make-retell-outbound-call` actually uses via
+`override_agent_id`) and three dated real-call citations already in this file: **the real live "Main
+Outbound" is `agent_b2f6495…` — the same physical Retell agent as "Inbound BFD Agent."** This means **PU-3
+(outbound opener personalization) is still genuinely open**, not resolved — corrected back to open in
+`PROMPT_UPDATE_LIST.md` with the caution that inbound and outbound currently share one prompt, so
+`{{first_name}}` can't just be added to the shared opener without breaking inbound. **PU-6** and **PU-7** were
+also corrected: Main Outbound (being the same agent as Inbound) already has the recording disclosure, so only
+3 agents (not 4) still need it; and Main Outbound's own Telemarketing Standard compliance is borderline (states
+persona+company+disclosure but closes with an inbound-style question, not a stated outbound purpose), not
+clean-compliant as first reported. `Voice-Setter-Test` (`agent_f45f4dd…`) itself is confirmed genuinely unused
+by the live call path — `CLAUDE.md`'s existing note about it was correct all along.
+
 ## 2026-07-06 — Voice + browser test session (finishes the shared-fn pass; closes CANCEL-1/BOOK-2/BOOK-3/SMS-METER-1)
 
 Hybrid session: Claude drove the browser-UI + SMS legs autonomously via headless Playwright + the harness (one 2FA code from Brendan at the start, then a warm `storageState` for the whole session); Brendan did the one answered outbound voice call. Handoff: `Operations/handoffs/2026-07-06-voice-browser-session.md`. RUN 0 green (git in sync `380a889`; edge fns voice-booking-tools v23 / retell-proxy v49 / webhook-manifest v3 / analyze-chat-history v19 / analytics-v2-process v19 / compute-analytics v16 all ACTIVE; test:node 127/127, test:edge 217/217).

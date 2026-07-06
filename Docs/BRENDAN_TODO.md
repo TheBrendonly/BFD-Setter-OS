@@ -25,11 +25,13 @@ prompt tweaks independently).
 
 ## Onboarding-fix pass 2026-07-06 — one push to ship it
 
-- [ ] **Run `git push github main` from `/srv/bfd/Projects/bfd-setter`.** The five onboarding-fix
-  commits (`9f5b959`..`bb6322a`: ONBOARD-1/2/3, GOLIVE-1 card, ACCESS-1) are on Forgejo `origin/main`
-  but Railway builds from the GitHub remote, and the auto-mode classifier blocked Claude from pushing
-  there. Until this push, prod frontend does NOT have the fixes. webhook-manifest v3 (the GOLIVE-1
-  server half) is already deployed + verified live. Then run the TEST_LIST "Onboarding-fix pass" rows.
+- [x] **Run `git push github main` from `/srv/bfd/Projects/bfd-setter`.** DONE (confirmed 2026-07-07,
+  Session P1): the 2026-07-07 combined-build push carried the five onboarding-fix commits
+  (`9f5b959`..`bb6322a`: ONBOARD-1/2/3, GOLIVE-1 card, ACCESS-1) to GitHub — `git log` confirms
+  `bb6322a` is an ancestor of `github/main`, and `origin/main`/`github/main` are fully in sync (0
+  commits divergent either way, both at `0ad9c83`). webhook-manifest v3 (the GOLIVE-1 server half) was
+  already live; all five are now confirmed live end-to-end (the TEST_LIST "Onboarding-fix pass" rows
+  already passed 2026-07-06 → `COMPLETED_LOG.md`).
 
 ## From the 2026-07-06 end-to-end onboarding dry run (what a REAL first client needs)
 

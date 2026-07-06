@@ -359,9 +359,32 @@ Status: `[ ]` not started · `[~]` in progress · `[x]` done. Effort is rough.
    Handoff `Operations/handoffs/2026-07-07-combined-build-bugs-f15-f16.md`; live checks → TEST_LIST; manual steps
    (dogfood-enable, GHL appt-status workflow, PU-6/10/11) → BRENDAN_TODO. Pipeline:
    `[✓] Voice + browser  [✓] Combined build: bugs + F15 + F16 (DONE 2026-07-07)  [ ] First-Client Milestone (gated)`.
-4. **Brendan solo block (parallel, no Claude session):** DEPLOY-1 (pin Railway to `main`), inotify sysctl,
-   Setter-1 prompt migration, Resend SMTP → F14 E2E, sms_llm rate + billing anchor/toggles, n8n Railway
-   shutdown, Twilio alpha-sender-ID check, PROMPT_UPDATE_LIST items (PU-1/3/4/5/6/7).
+3f. **Session P1 — full list audit + reconciliation + Brendan action pack. DONE 2026-07-07 (Sonnet, execute
+   mode, docs/report-only — no product code, no deploys, no prompt edits).** Cross-checked every open row across
+   all 6 lists + `MASTER-TODO.md` against the live DB (edge-fn versions, table/column existence via
+   `q.mjs`), git log, and the dated handoffs. **Result: `BUG_LIST.md` is now at 0 open items** — every logged
+   CODE bug is either live-verified + archived, or shipped+deployed and awaiting only Brendan's behavioral pass
+   (tracked solely in `TEST_LIST.md` now, no more duplication). Found + fixed a real reconciliation backlog: 8
+   items had already passed their live test (some as early as 2026-07-03/05) but were never physically archived
+   — **BOOK-1 + 3.12 SMS booking, DEPLOY-1, F11, UI-1, three of the four F13 UI checks, the PROMPT-AUTH-1
+   full-prompt-visibility X-Ray check, the B-2 GHL-outage resilience leg, and API-DEPR-2(a) + the F13
+   client-eye view** — all now in `COMPLETED_LOG.md` with their real pass dates cited. ~20 further stale/duplicate
+   `[x]`-but-still-present rows across `BUG_LIST.md`/`TEST_LIST.md` (HOURS-1, RESCHED-SMS-1, CHATS-DM-1,
+   FOLLOWUP-DURING-CALL-1, CONTACTS-EDIT-DEAD-1, the whole 5-bug onboarding-gate cluster, API-DEPR-1, G3-8,
+   CANCEL-1/BOOK-2/BOOK-3/SMS-METER-1/VM-1/F9-1/PHONE-CLEAR-1/SWEEP-1abc/G3-7/F1/F3/F4/SMS-MEM-1/
+   FOLLOWUP-PROMPT-1/PROMPT-LINT-1/MODEL-1-HARDENING(UI) duplicates) were removed since they were already
+   correctly archived elsewhere. Fixed the duplicate `PU-8` id in `PROMPT_UPDATE_LIST.md` (renumbered the
+   inbound-robustness item to **PU-12**). Ticked the `BRENDAN_TODO` "git push github main" row (confirmed via
+   `git log`: `origin/main` and `github/main` are fully in sync, both carrying the onboarding-fix commits).
+   Confirmed `Docs/ROADMAP.md` is still correctly banner'd as build history only (no change needed). Produced
+   the consolidated **Brendan action pack** (`Operations/handoffs/2026-07-07-brendan-action-pack.md`): every
+   `PROMPT_UPDATE_LIST` item verified live against the actual Retell agents (read-only), plus every open
+   `BRENDAN_TODO` manual gate ordered by leverage. Full audit table + methodology in the dated handoff
+   `Operations/handoffs/2026-07-07-p1-audit-reconciliation.md`. Pipeline:
+   `[✓] Combined build  [✓] P1 audit + action pack (DONE 2026-07-07)  [ ] P2 (Brendan picks: DEFERRED.md review, or skip to P3)  [ ] P3 review+cleanup+research  [ ] First-Client Milestone (gated)`.
+4. **Brendan solo block (parallel, no Claude session):** Setter-1 prompt migration, Resend SMTP → F14 E2E,
+   sms_llm rate + billing anchor/toggles, n8n Railway shutdown, PROMPT_UPDATE_LIST items (see the 2026-07-07
+   action pack for the full ordered list with exact live wording + paste-ready changes).
 5. **Candidate pre-first-client feature sessions (Brendan picks; from the 2026-07-04 market research,
    `FEATURE_ROADMAP.md` F15-F17):** F15 client ROI visibility pack (show-rate funnel + weekly report) ·
    F16 never-miss-a-lead pack (speed-to-lead + missed-call text-back + live-transfer config) · F17 phase-1
@@ -370,10 +393,15 @@ Status: `[ ]` not started · `[~]` in progress · `[x]` done. Effort is rough.
    webhook signing secrets + arm `retell_webhook_secret` (6.6), AU A2P registration for `+61481614530`, GHL
    reminder-workflow snapshot at onboarding. After this, v1 is live + 100%.
 **API-DEPR-1/2 are DONE** (retell-proxy v49 live); Session 10 (G3-7) is DONE — vite 8 is live on `main`.
+**`BUG_LIST.md` is at 0 open items as of Session P1 (2026-07-07)** — nothing is blocking the First-Client
+Milestone on the CODE side; what remains is Brendan's live behavioral TEST_LIST pass (mostly the 2026-07-07
+combined-build checks) + the BRENDAN_TODO manual gates in the 2026-07-07 action pack.
 
 **Ready-to-run prompts for the whole relay live in `Docs/TEST_SESSION.md` RUN 10** (T-fix → Session S → F15 → F16,
 each with a self-chaining ▶ PIPELINE footer) **and `Docs/FIRST_CLIENT_MILESTONE.md`** (the gated last step). Triggers:
 say "run test session" to start; say "I'm onboarding a client" to surface the milestone.
 **Functional 100% = Sessions 0-8 `[x]` + TEST_LIST green** (reached at the end of Session 7-finish); Sessions
-9-10 clear the last open BUG_LIST items; the First-client milestone is the actual go-live. v2 = the lifecycle
-system + A/B + analytics + HubSpot + F9 v2 + F8 v2 (`Docs/DEFERRED.md`), off the 100% path.
+9-10 + P1 clear the last open BUG_LIST items + the doc/list backlog; the First-client milestone is the actual
+go-live. **P2 (Brendan picks) and P3 (review+cleanup+research)** are optional polish sessions between here and
+the milestone — see the emitted prompts in the 2026-07-07 P1 handoff. v2 = the lifecycle system + A/B +
+analytics + HubSpot + F9 v2 + F8 v2 (`Docs/DEFERRED.md`), off the 100% path.

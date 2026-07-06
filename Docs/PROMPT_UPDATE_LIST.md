@@ -26,17 +26,21 @@ can be worked independently.
 
 ## Open
 
-- [ ] **PU-8 — Voicemail message says a literal "[Your Name]" placeholder (voice).** Found in the TEST SESSION
-  2026-07-05 voice run: on an unanswered outbound call the pushed voicemail landed and the agent left a message,
-  but it said *"Hi Brendan, this is **[Your Name]** calling. I wanted to discuss an important update…"* — the
-  `[Your Name]` placeholder is never substituted, so the agent literally speaks it. Same class as the
-  `{{first_name}}` opener issue but for the AGENT's own name. Fix in the voicemail/opener persona: replace
-  `[Your Name]` with the actual setter name (e.g. "Gary") or the correct dynamic variable, on every voice setter
-  whose voicemail is used. (VM-1 push + playback themselves now WORK — v48 fix verified; this is purely the
-  spoken placeholder.) Report-only; apply via Prompt Management. Priority: medium (a live-sounding voicemail is
-  the point). Spot-check all 5 voice setters for the same `[Your Name]` / bracketed placeholders.
+- [x] **PU-8 — Voicemail message says a literal "[Your Name]" placeholder (voice). CONFIRMED RESOLVED
+  2026-07-07 (Session P1 live verification) — move to `COMPLETED_LOG.md`.** Checked the live `voicemail_option`
+  on the 5 distinct canonical agents (the 4 Garys + the shared Main-Outbound/Inbound BFD Agent): all show the
+  identical text *"Leave a breif message saying you will try again later and why you called. Thanks."* (an
+  instruction, not a literal script) — no `[Your Name]` or any bracket placeholder anywhere. Likely fixed via
+  a 2026-07-05 batch prompt push. ~~Original: on an unanswered outbound call the pushed voicemail landed and
+  the agent left a message, but it said *"Hi Brendan, this is **[Your Name]** calling…"* — the placeholder was
+  never substituted.~~
 
-- [ ] **PU-1 — Confirm the timezone with the lead when offering/booking (both).** The setter should name the
+- [x] **PU-1 — Confirm the timezone with the lead when offering/booking (both). CONFIRMED ALREADY DONE
+  2026-07-07 (Session P1 live verification) — move to `COMPLETED_LOG.md`.** Checked general_prompt on all 6
+  canonical agents: explicit "Sydney time" / "Australia/Sydney" wording is hardcoded directly in the stored
+  prompt text on every agent (e.g. "Say 'Sydney time' when confirming bookings"), not just runtime-injected —
+  it's visible and editable in Prompt Management today. No further Brendan action needed. Original text below
+  for the record.
   business timezone when it offers times and when it confirms a booking, so a lead knows *which* "2pm" (e.g.
   *"Booked for Thursday 2:00pm, Sydney time."*). **Engine half is now code-side** (this was added to
   `trigger/_shared/setterTools.ts` `TOOL_USAGE_INSTRUCTION` + the availability block in
@@ -49,40 +53,63 @@ can be worked independently.
   own zone) is a v2 feature, logged in `Docs/DEFERRED.md` (BOOK-TZ-1). Source: PROMPT-AUTH-1 timezone-alignment
   audit, 2026-07-03.
 
-- [ ] **PU-4 — Property Coach company-name placeholder (voice).** Live `Gary - Property Coach` COMPANY FACTS
-  still reads `[Your Property Coaching Company Name] = "Building Flow Property"` with an explicit "(Config note
-  for Brendan: the company-name field is still the placeholder…)". Set the real company name, remove the
-  placeholder bracket, and delete the config note. This was flagged (2026-06-16 live read) as the only
-  confirmed still-open voice prompt item. (llm ref `llm_112c2353`.)
+- [x] **PU-4 — Property Coach company-name placeholder (voice). CONFIRMED RESOLVED 2026-07-07 (Session P1
+  live verification) — move to `COMPLETED_LOG.md`.** Live `Gary - Property Coach` COMPANY FACTS now reads
+  *"Company name: Building Flow Property"* — no bracket placeholder, no config note. Already fixed since the
+  2026-06-16 finding (likely via the 2026-07-05 batch push). No further action needed. ~~Original: still read
+  `[Your Property Coaching Company Name] = "Building Flow Property"` with an explicit config note.~~
 
-- [ ] **PU-3 — Personalize the outbound opener with `{{first_name}}` (voice, 6.8).** On OUTBOUND calls to known
-  leads, greet by name: *"Hey {{first_name}}, this is Gary, I'm Brendan's AI assistant at Building Flow
-  Digital…"*. `{{first_name}}` is a live dynamic var. **CAUTION:** the opener is shared inbound+outbound; on
-  INBOUND (unknown caller) `{{first_name}}` is usually empty → "Hey , this is Gary" sounds broken. Add it only
-  on a dedicated OUTBOUND opener/path, or guard it. Parked for your next Retell prompt sweep. Source: BUG_LIST
-  6.8.
+- [ ] **PU-3 — Personalize the outbound opener with `{{first_name}}` (voice, 6.8). STILL OPEN — corrected
+  2026-07-07 after an agent-identification error.** ⚠️ An earlier pass during this session misidentified
+  "Main Outbound" as the Retell agent literally named `Voice-Setter-Test` (`agent_f45f4dd…`), based on which
+  agent the phone number's static `outbound_agents` binding lists — which is exactly the trap this project's
+  own `CLAUDE.md` warns against ("ignore the phone number attached to an agent in Retell"). Cross-checked
+  against the platform DB (`voice_setters` row "Main Outbound", `id=b09624b5…`, whose `retell_agent_id` is
+  what `make-retell-outbound-call` actually reads via `override_agent_id`) and three dated real-call citations
+  in `COMPLETED_LOG.md` (2026-07-03, 2026-07-06 ×2): **the real live "Main Outbound" is `agent_b2f6495…` — the
+  SAME physical Retell agent as "Inbound BFD Agent."** Its actual begin_message (re-verified directly) is
+  *"Hey, this is Gary, I'm Brendan's AI assistant at Building Flow Digital. Just so you know, this call is
+  being recorded for quality. What can I help you with?"* — **no `{{first_name}}`** anywhere. So the original
+  PU-3 request is still unmet, and the original CAUTION is now confirmed to matter even more than the draft
+  assumed: since inbound and outbound genuinely share one prompt/agent today, adding `{{first_name}}` directly
+  to this opener WOULD break on every inbound call (where it's usually blank). **Recommended fix:** since
+  Retell's `begin_message` can't easily branch on call direction within one agent, either (a) split outbound
+  onto its own dedicated agent so it can safely use `{{first_name}}`, or (b) add a conditional phrase the
+  model is instructed to use only "if a first name is known," rather than baking `{{first_name}}` into the
+  literal begin_message text. Flag for Brendan: worth deciding whether inbound+outbound sharing one Retell
+  agent is intentional going forward, or worth splitting.
 
-- [ ] **PU-6 — Call-recording disclosure line (voice, ALL setters; AU compliance).** NSW, WA and SA require
-  ALL-PARTY consent to record calls, and Retell records calls. Add a short disclosure near the top of every
-  voice setter's opening (e.g. *"Just letting you know this call is recorded for quality."*) — continuing
-  after the announcement counts as implied consent. Apply via the UI to the canonical set (Main Outbound +
-  the 4 Garys + the inbound agent). The per-client disclosure TOGGLE (engine-side) is feature F17 phase 1;
-  the wording itself is this item. Source: 2026-07-04 market/compliance research (recordinglaw.com,
-  sprintlaw.com.au).
+- [ ] **PU-6 — Call-recording disclosure line (voice; AU compliance). CORRECTED 2026-07-07 (same
+  agent-identification fix as PU-3): Main Outbound already has it (it's the same agent as Inbound), 3 of 6
+  distinct agents still need it.** NSW, WA and SA require ALL-PARTY consent to record calls, and Retell
+  records calls. **Already present:** Gary - Mortgage Broker, and the shared Main-Outbound/Inbound BFD Agent
+  (*"…this call is being recorded for quality…"* plus a full "Transparency: AI disclosure and recording
+  consent" prompt section — the strongest of the set). **Still missing entirely** (no disclosure anywhere in
+  begin_message or the prompt body): **Gary - Crazy Gary**, **Gary - Finance Strategist**, **Gary - Property
+  Coach**. Add a short disclosure near the top of each of these three's opening (e.g. *"Just letting you know
+  this call is recorded for quality."*) — continuing after the announcement counts as implied consent. The
+  literal token `{{recording_disclosure}}` (the F17 per-client toggle's dynamic variable) is not referenced in
+  ANY of the checked prompts today — the engine injects it but nothing in any stored prompt consumes it,
+  confirming the toggle is currently a no-op until this wording lands somewhere. Source: 2026-07-04 market/
+  compliance research (recordinglaw.com, sprintlaw.com.au).
 
-- [~] **PU-7 — Caller identification within ~30 seconds (voice, outbound; AU compliance check).** The
-  Telemarketing Standard requires outbound calls to state name, company, and purpose within ~30 seconds.
-  **Read-only check DONE 2026-07-04 (Claude, live Retell `begin_message`):** **Gary - Property Coach** is
-  COMPLIANT — opener = *"Hey {{first_name}}, it's Gary, from Building Flow Property, giving you a quick call
-  about the property info you requested. Got a sec for a chat?"* (persona + company + purpose all present).
-  **⚠️ Gary - Crazy Gary needs attention IF used for real outbound** — opener = *"G'day {{first_name}}, it's
-  Rusty Bumblethorpe here, your AI assistant, and oh, do I have stories. What can I dazzle you with today?"*
-  — names the persona + discloses AI but states **no company and no clear purpose**. **Your action (only if
-  Crazy Gary is used for genuine outbound telemarketing, not just a demo/novelty persona):** add a company +
-  brief purpose to its opener via Prompt Management. If it's demo-only, no change needed — just confirm it's
-  not on a live outbound campaign. (Not yet checked: Finance Strategist, Mortgage Broker, Main Outbound /
-  Voice-Setter-master — same one-line check applies; verify on your next Retell sweep.) Source: 2026-07-04
-  compliance research (waboom.ai).
+- [~] **PU-7 — Caller identification within ~30 seconds (voice, outbound; AU compliance check). CORRECTED
+  2026-07-07: Main Outbound's own compliance is borderline, not clean-compliant as previously reported —
+  needs Brendan's read.** The Telemarketing Standard requires outbound calls to state name, company, and
+  purpose within ~30 seconds. **COMPLIANT** (persona + company + purpose all present in the first sentence or
+  two): Gary - Property Coach, Gary - Finance Strategist, Gary - Mortgage Broker (all re-confirmed
+  2026-07-07). **Main Outbound (the real one, `agent_b2f6495`, shared with Inbound) is borderline:** its
+  opener states persona ("Gary, Brendan's AI assistant") + company ("Building Flow Digital") + the recording
+  disclosure, but closes with *"What can I help you with?"* — a question that reads as inbound-style
+  (asking the caller their reason) rather than stating an outbound call's own purpose. **Your call:** if this
+  agent is used for genuine outbound telemarketing (not just inbound), consider whether it needs an
+  outbound-specific purpose line (this pairs with the PU-3 discussion above about splitting inbound/outbound).
+  **⚠️ Gary - Crazy Gary** — opener = *"G'day {{first_name}}, it's Rusty Bumblethorpe here, your AI assistant,
+  and oh, do I have stories. What can I dazzle you with today?"* — names the persona + discloses AI but
+  states no company and no clear purpose. **Your action (only if Crazy Gary is used for genuine outbound
+  telemarketing, not just a demo/novelty persona):** add a company + brief purpose to its opener via Prompt
+  Management. If it's demo-only, no change needed — just confirm it's not on a live outbound campaign. Source:
+  2026-07-04 compliance research (waboom.ai).
 
 - [ ] **PU-5 — Stand up "Main Outbound V2" (voice).** A full new-prompt draft is ready:
   `Docs/archive/MAIN_OUTBOUND_V2_PROMPT_2026-06-16.md` (folds the Eddie/"Steven" structure into BFD V1: call-flow
@@ -91,8 +118,21 @@ can be worked independently.
   Outbound → rename V2 → paste → Save+Push → canary publish), then send Claude a `call_id` for read-only
   verification. **This supersedes the older standalone "booking guardrail" voice item** (V2 includes it).
 
-- [ ] **PU-8 — Inbound-unknown-caller robustness: never speak placeholders, de-outbound the opener (voice,
-  demo line first, worth mirroring in all setters).** Evidence: inbound calls to the dogfood number
+- [ ] **PU-12 — Inbound-unknown-caller robustness: never speak placeholders, de-outbound the opener (voice,
+  demo line first, worth mirroring in all setters). PART (1) CONFIRMED ALREADY DONE, PART (2) CONFIRMED STILL
+  NEEDED — 2026-07-07 (Session P1 live verification).** _(Renumbered 2026-07-07 from a duplicate "PU-8" id —
+  this item is unrelated to the voicemail-placeholder PU-8 above; found in the same 2026-07-05 line-health
+  check.)_ **Part (1), name-free direction-neutral opener, is DONE:** the Inbound BFD Agent's live
+  `begin_message` is now *"Hey, this is Gary, I'm Brendan's AI assistant at Building Flow Digital. Just so you
+  know, this call is being recorded for quality. What can I help you with?"* — no `{{first_name}}`, already
+  name-free and direction-neutral. **Part (2), the specific "never speak a placeholder" guard, is still
+  missing** — the general_prompt has a good general fallback ("When dynamic variables are EMPTY (common on
+  inbound calls)" — look up by `call.from_number`, never guess), but a text search for "SMS Lead" and "looks
+  like a placeholder" across all 6 agents returned zero hits, so the exact failure mode below is not yet
+  guarded. **Remaining action:** add to SETTER CORE (on the Inbound BFD Agent — the one that answers the demo
+  line): *"If a lead detail (name, business) is empty, unknown, or looks like a placeholder or a system value
+  (for example 'SMS Lead'), never say it aloud: speak without a name and ask naturally who's calling."*
+  Original evidence below. Evidence: inbound calls to the dogfood number
   (+61 481 614 530) Jun 17-23 show the answering agent (Voice-Setter-Test v22 per the call records; number-vs-agent
   caveat above noted) speaking literal `{{first_name}}` aloud ("I've got you down as {{first_name}}") and using the
   CRM fallback "SMS Lead" as a spoken name. A Jun 26 prompt patch (empty-string defaults + an inbound-fallback
@@ -111,7 +151,20 @@ can be worked independently.
 
 - [ ] **PU-10 — Reschedule/cancel: list first, and never confirm without a real success (text; pairs with CODE fix RESCHED-SMS-1).** Found 2026-07-06 (SMS leg): on a reschedule the fast text model called `get-available-slots` instead of `get-contact-appointments` before `update-appointment` (so the eventId binding refused it), and once said *"I've moved your Friday call to 3pm, all set"* while calling no mutation tool — a false confirmation. Prompt half (report-only): in the text setter's reschedule/cancel guidance, be explicit that it must call **`get-contact-appointments`** (not get-available-slots) to load the real appointment before any change, and must **only confirm "moved / cancelled / done" after the tool actually returns success** — if the tool is refused or errors, say so and re-list, never claim it worked. The load-bearing half is the code guard (BUG_LIST RESCHED-SMS-1); this is the persona-side reinforcement. (Note the report-only boundary: this is honesty/flow wording, not a booking MECHANIC.) Priority Medium.
 
-- [ ] **PU-11 — Live-transfer prompt line (voice; pairs with F16(d) live-transfer config).** Added 2026-07-07 (combined build). The engine side is DONE: a per-setter transfer destination number is set in the BFD setter UI (Prompt Management → the setter's Voice/Retell settings → Tools → the `transfer_call` tool → "Transfer destination number"), which writes it into the Retell agent's `transfer_call` tool (flows through retell-proxy untouched). But the agent won't OFFER a transfer unless the prompt tells it to. **Apply (report-only, per voice setter that should transfer):** add a short instruction near the persona/rules, e.g. *"If the caller clearly asks to speak to a human, or you can't help, offer to connect them and use the transfer_call tool."* Keep it natural. **Related deferred build (NOT a prompt item):** the "SMS a context-summary to the human on a FAILED transfer" fallback was NOT built this session — the Retell failed-transfer signal (disconnection_reason / transfer_option) needs live confirmation before shipping an auto-SMS from `retell-call-analysis-webhook`; logged for a later Voice session. Priority Medium.
+- [ ] **PU-11 — Live-transfer prompt line (voice; pairs with F16(d) live-transfer config). GAP IS BIGGER THAN
+  ORIGINALLY SCOPED — confirmed 2026-07-07 (Session P1 live verification): the tool itself doesn't exist on
+  any agent yet, not just the prompt line.** Checked `general_tools` on all 6 canonical agents: **none of
+  them have a `transfer_call` tool configured** (all 6 share the identical 8 tools — end_call,
+  update-appointment, get-available-slots, book-appointments, cancel-appointments, get-contact-appointments,
+  send-sms, schedule-callback — zero transfer tooling). The engine (retell-proxy) will pass a `transfer_call`
+  tool through untouched if one is configured, but doesn't create one automatically. **Two steps needed, in
+  order, per voice setter that should transfer:** (1) **first add the tool itself** via Prompt Management →
+  the setter's Voice/Retell settings → Tools → add the `transfer_call` tool with a real destination number;
+  (2) **then** add the prompt line so the agent actually offers it, e.g. *"If the caller clearly asks to speak
+  to a human, or you can't help, offer to connect them and use the transfer_call tool."* Keep it natural.
+  **Related deferred build (NOT a prompt item):** the "SMS a context-summary to the human on a FAILED
+  transfer" fallback was NOT built — the Retell failed-transfer signal needs live confirmation before shipping
+  an auto-SMS from `retell-call-analysis-webhook`; logged for a later Voice session. Priority Medium.
 
 ## Superseded by code (kept for the record)
 
