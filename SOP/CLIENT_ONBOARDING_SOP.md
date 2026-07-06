@@ -720,3 +720,10 @@ retention: 90 days post-offboard.
 
 See also: [GHL_SETUP.md](GHL_SETUP.md) (GHL forms/automations/webhooks),
 [PERSONA_SETUP.md](PERSONA_SETUP.md) (per-persona setters), [RUNBOOK.md](RUNBOOK.md) (deploys + ops).
+
+**Verification history:** this SOP was exercised end-to-end on 2026-07-06 by standing up a real
+throwaway client through the live UI (created + fully deleted). The gaps that dry run found (and which
+drove the section-11 notes above) are in
+[ONBOARDING_GAP_REPORT_2026-07-06.md](../Docs/ONBOARDING_GAP_REPORT_2026-07-06.md); the step-by-step
+record of how the run went is in
+[Operations/handoffs/2026-07-06-onboarding-gate.md](../Operations/handoffs/2026-07-06-onboarding-gate.md).
