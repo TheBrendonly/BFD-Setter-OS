@@ -3,6 +3,18 @@
 Items closed out of the active lists. Newest first. The active lists are in the repo root + `Docs/`
 (`BUG_LIST.md`, `FEATURE_ROADMAP.md`, `BRENDAN_TODO.md`, `TEST_LIST.md`, `DEFERRED.md`).
 
+## 2026-07-06 — Onboarding-fix pass: GOLIVE-1 closed (server-verified live); ONBOARD-1/2/3 + ACCESS-1 built
+
+The five onboarding-gate bugs from `Docs/ONBOARDING_GAP_REPORT_2026-07-06.md`, one commit each
+(`9f5b959`..`bb6322a`). Frontend fixes ride Brendan's `git push github main` (Railway builds from
+GitHub; the auto-mode classifier blocked that push) → live rows in TEST_LIST "Onboarding-fix pass".
+
+- **GOLIVE-1 — goLiveReady no longer a birth false-positive (CLOSED, server half verified live).** webhook-manifest v2→v3 ACTIVE. goLiveReady now = requiredWebhooksSecured AND ghl_location_id AND retell_phone_1 AND ≥1 pushed voice setter (voice_setters retell_agent_id + is_active) AND external Supabase (url + service key) AND lastReceivedAt on both required hooks (bookings-webhook gained a real `bookings` lastReceived signal, was hardcoded null). Response carries the per-check `goLiveChecklist`; the card shows "Still missing: …". Verified live 2026-07-06: Synthetic Probe (blank) → goLiveReady:false with only the secrets check true; BFD dogfood → all provisioning checks true, requiredWebhooksReceived honestly false (sync_ghl_executions created 2026-07-05, 0 rows yet; flips on the next GHL sync). UI line rides the frontend deploy.
+- **ONBOARD-1 — UI-created clients born with the SMS engine ON (BUILT).** `use_native_text_engine: true` added to ALL THREE UI client-create inserts (CreateClient.tsx, Onboarding.tsx, ClientLayout sidebar Add Sub-Account dialog) + the two Workflows.tsx go-live-flip writes (heals pre-fix clients when a default campaign is set). Live verify → TEST_LIST.
+- **ONBOARD-2 — create-setter/text-save guarded on external Supabase, no orphan (BUILT).** Up-front `clients_public` supabase_url + has_supabase_service_key check in handleCreateNewSetter (both channels) and handleSavePrompt (non-voice) with a clear "configure the external Supabase on Credentials first" toast; create now does the external write BEFORE inserting the platform `prompts` row. Live verify → TEST_LIST.
+- **ACCESS-1 — setter editors agency-only (BUILT).** `prompts/text` + `prompts/voice` AgencyRoute-wrapped (same redirect as /credentials); Text/Voice Setter sidebar items hidden from client logins in both the menu-config and default menus. Live verify (client-role login) → TEST_LIST.
+- **ONBOARD-3 — 12-char password copy/validation sweep (BUILT).** CreateClient + sidebar-dialog placeholders 6→12; Settings/ClientSettings checks + copy + button gate 6→12; NEW: the sidebar Add Sub-Account dialog create-login had NO length validation and admin createUser BYPASSES the GoTrue policy, so it could actually create weak client logins — now refused client-side. TOTP 6-digit checks untouched. Live verify → TEST_LIST.
+
 ## 2026-07-05 — Build pass: SWEEP-1 (a/b/c) + SYNC-LOG-1 + G3-6-SCHEMA-1 fixed + deployed
 
 The autonomous, low-risk half of the fix-all-bugs BUILD PASS. Schema applied to LIVE prod via the Management API (this project has no migration runner); frontend + edge deployed per surface. Verified read-only. (The shared-fn pass CANCEL-1/BOOK-2/BOOK-3/SMS-METER-1 is BUILT + STAGED, awaiting Brendan's supervised deploy, so it stays `[~]` in BUG_LIST.)

@@ -312,6 +312,19 @@ Status: `[ ]` not started · `[~]` in progress · `[x]` done. Effort is rough.
 2. **Session Build — fix EVERY open bug** (handoff Prompt B; folds in Session S's BOOK-2/3 + SMS-METER-1).
 3. **Session Fable — END-TO-END new-client onboarding via the SOP** to find holes + what a real first-client
    onboarding needs (handoff Prompt C; overnight). Includes the F13 client-eye check.
+3b. **Session Onboarding-fix — AUTONOMOUS — DONE 2026-07-06.** Fixed all five onboarding-gate bugs, one
+   commit each (`9f5b959`..`bb6322a`): **ONBOARD-1** (`use_native_text_engine:true` in ALL THREE UI create
+   paths: CreateClient, Onboarding, sidebar Add Sub-Account dialog, plus the two go-live-flip writes),
+   **GOLIVE-1** (webhook-manifest v2→v3 DEPLOYED + live-verified: blank client now `goLiveReady:false`;
+   per-check `goLiveChecklist` in the response + a "Still missing" line on the card; bookings-webhook got a
+   real lastReceived signal), **ONBOARD-2** (up-front external-Supabase guard on create-setter + text-save,
+   external-write-first so no orphan `prompts` row), **ACCESS-1** (AgencyRoute on `prompts/text`+`prompts/voice`
+   + client sidebar trim), **ONBOARD-3** (12-char password sweep, incl. a REAL hole: the sidebar dialog's
+   create-login had no length check and admin createUser bypasses the GoTrue policy). Tests 127/127 node +
+   8/8 frontend + 217/217 edge; tsc + vite build green. GOLIVE-1 → `COMPLETED_LOG.md`. **The 4 frontend fixes
+   are NOT live until Brendan runs `git push github main`** (auto-mode blocked the GitHub push; Railway
+   builds from GitHub) → live rows in `TEST_LIST.md` "Onboarding-fix pass". Handoff
+   `Operations/handoffs/2026-07-06-onboarding-fix.md`.
 4. **Brendan solo block (parallel, no Claude session):** DEPLOY-1 (pin Railway to `main`), inotify sysctl,
    Setter-1 prompt migration, Resend SMTP → F14 E2E, sms_llm rate + billing anchor/toggles, n8n Railway
    shutdown, Twilio alpha-sender-ID check, PROMPT_UPDATE_LIST items (PU-1/3/4/5/6/7).

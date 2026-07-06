@@ -5,6 +5,14 @@ Testing actions live in `TEST_LIST.md`; first-paying-client onboarding actions l
 **prompt-content edits (agent wording) live in `PROMPT_UPDATE_LIST.md`** (kept separate so you can work
 prompt tweaks independently).
 
+## Onboarding-fix pass 2026-07-06 — one push to ship it
+
+- [ ] **Run `git push github main` from `/srv/bfd/Projects/bfd-setter`.** The five onboarding-fix
+  commits (`9f5b959`..`bb6322a`: ONBOARD-1/2/3, GOLIVE-1 card, ACCESS-1) are on Forgejo `origin/main`
+  but Railway builds from the GitHub remote, and the auto-mode classifier blocked Claude from pushing
+  there. Until this push, prod frontend does NOT have the fixes. webhook-manifest v3 (the GOLIVE-1
+  server half) is already deployed + verified live. Then run the TEST_LIST "Onboarding-fix pass" rows.
+
 ## From the 2026-07-06 end-to-end onboarding dry run (what a REAL first client needs)
 
 Full report: `Docs/ONBOARDING_GAP_REPORT_2026-07-06.md`. The app alone cannot stand up a client; the
@@ -25,8 +33,9 @@ un-automated prerequisites, roughly in order (most are code-fixable → see BUG_
   has no Twilio input/save (the token is never even read back). Set via `onboard-client.mjs` or SQL.
   Number must be UNIQUE (sharing another client's `retell_phone_1` breaks inbound routing) and imported
   into Retell before inbound bind / "Configure Twilio Webhook" can complete. A2P is the client's (weeks).
-- [ ] **Flip `subscription_status`→`active` and `use_native_text_engine`→`true`** on the new client
-  (UI create sets `free` + leaves the text engine OFF — see BUG_LIST ONBOARD-1). SQL/script today.
+- [ ] **Flip `subscription_status`→`active`** on the new client (UI create sets `free`). SQL/script
+  today. (The `use_native_text_engine` half is FIXED 2026-07-06: all three UI create paths now set it
+  `true` at birth — see the onboarding-fix pass.)
 - [ ] **Confirm the canonical text `llm_model` (SOP §11).** DB default `google/gemini-2.5-pro`;
   onboard-client.mjs default `openai/gpt-4.1-nano`; voice setters seed `gemini-3.0-flash`. A UI-created
   client silently gets gemini-2.5-pro for the text engine. Decide the one true production text model.
