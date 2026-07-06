@@ -334,6 +334,17 @@ Status: `[ ]` not started · `[~]` in progress · `[x]` done. Effort is rough.
    one). Browser-UI re-checks could not run (harness Playwright agency session expired / refresh token
    single-use). Shared-fn pass stays `[~]` until the voice half lands. Handoff
    `Operations/handoffs/2026-07-06-autonomous-test-pass.md` (carries the Prompt-2 human voice prompt).
+3d. **Session Voice + browser (finishes the shared-fn pass) — DONE 2026-07-06.** Hybrid: Claude drove the
+   browser-UI + SMS legs autonomously (headless Playwright + harness, one 2FA code at the start), Brendan did
+   the one answered outbound voice call. **PART A** browser (ONBOARD-1/2/3, GOLIVE-1 UI, ACCESS-1, SWEEP-1a/b/c,
+   F9-1, PHONE-CLEAR-1, G3-7) + SMS (CANCEL-1 cancel + fabricated-id refusal, BOOK-2/3) all PASS; **PART B**
+   voice on v49+v23 (VOICE GATE booked, CANCEL-1 reschedule+cancel bound the real eventId, SMS-METER-1 in-call
+   stamped a meter row) all PASS. **Shared-fn pass CLOSED** — CANCEL-1/BOOK-2/BOOK-3/SMS-METER-1 both halves
+   green → `COMPLETED_LOG.md` (out of BUG_LIST). New bugs: **RESCHED-SMS-1** (SMS reschedule false-done +
+   tool-selection), **CHATS-DM-1** (`dm_executions.messages` 400), **FOLLOWUP-DURING-CALL-1**,
+   **CONTACTS-EDIT-DEAD-1**; **PU-9** (voice dead-air), **PU-10** (reschedule honesty). Handoff
+   `Operations/handoffs/2026-07-06-voice-browser-session.md`. **Emitted F15.** Only F15 → F16 → the gated
+   First-Client Milestone remain to v1 "100%".
 4. **Brendan solo block (parallel, no Claude session):** DEPLOY-1 (pin Railway to `main`), inotify sysctl,
    Setter-1 prompt migration, Resend SMTP → F14 E2E, sms_llm rate + billing anchor/toggles, n8n Railway
    shutdown, Twilio alpha-sender-ID check, PROMPT_UPDATE_LIST items (PU-1/3/4/5/6/7).
