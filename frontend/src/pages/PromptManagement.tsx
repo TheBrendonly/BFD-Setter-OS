@@ -5660,6 +5660,23 @@ const PromptManagement = () => {
     if (!clientId || creatingNewSetter) return;
     setCreatingNewSetter(true);
     try {
+      // ONBOARD-2: creating a setter writes the slot to the client's EXTERNAL
+      // Supabase (save-external-prompt, both channels), which 400s when the
+      // external creds are missing. Check up front with a clear message instead
+      // of failing mid-flow.
+      const { data: extCreds } = await supabase
+        .from('clients_public')
+        .select('supabase_url, has_supabase_service_key')
+        .eq('id', clientId)
+        .maybeSingle();
+      if (!extCreds?.supabase_url || !extCreds.has_supabase_service_key) {
+        toast({
+          title: 'External Supabase not configured',
+          description: 'Configure this client\'s external Supabase (URL + service key) on the Credentials page first, then create the setter.',
+          variant: 'destructive',
+        });
+        return;
+      }
       const isVoice = activeTab === 'voice';
       const prefix = isVoice ? 'Voice-Setter-' : 'Setter-';
       const channel = isVoice ? 'voice' : 'text';
@@ -5727,6 +5744,20 @@ const PromptManagement = () => {
       const cardName = `Setter-${nextNum}`;
       const existingInternalPrompt = (dbSlots || []).find((slot) => slot.slot_id === newSlotId) || null;
 
+      // ONBOARD-2: external write FIRST — if it fails, no platform `prompts` row
+      // has been inserted yet, so a failed create leaves no orphan slot behind.
+      const { error: externalSaveError } = await supabase.functions.invoke('save-external-prompt', {
+        body: {
+          client_id: clientId,
+          card_name: cardName,
+          content: existingInternalPrompt?.content || '',
+          persona: existingInternalPrompt?.persona || '',
+          channel,
+        },
+      });
+
+      if (externalSaveError) throw externalSaveError;
+
       if (!existingInternalPrompt) {
         try { localStorage.removeItem(`prompt_configs_${clientId}_${newSlotId}`); } catch {}
         try { localStorage.removeItem(`param_states_${clientId}_${newSlotId}`); } catch {}
@@ -5743,18 +5774,6 @@ const PromptManagement = () => {
 
         if (insertError) throw insertError;
       }
-
-      const { error: externalSaveError } = await supabase.functions.invoke('save-external-prompt', {
-        body: {
-          client_id: clientId,
-          card_name: cardName,
-          content: existingInternalPrompt?.content || '',
-          persona: existingInternalPrompt?.persona || '',
-          channel,
-        },
-      });
-
-      if (externalSaveError) throw externalSaveError;
 
       // Auto-create Retell agent for voice setters
       if (isVoice) {
@@ -6595,6 +6614,28 @@ const PromptManagement = () => {
         });
         setSaving(false);
         return;
+      }
+
+      // ONBOARD-2: non-voice saves hard-require the client's EXTERNAL Supabase
+      // (save-external-prompt rethrows its 400), and the platform copies are
+      // written before that call. Check up front so a missing external DB gives
+      // a clear message instead of a half-saved prompt. Voice setters stay
+      // non-blocking (Retell sync is the canonical voice write).
+      if (editingSlotId && !editingSlotId.startsWith('Voice-Setter-')) {
+        const { data: extCreds } = await supabase
+          .from('clients_public')
+          .select('supabase_url, has_supabase_service_key')
+          .eq('id', clientId)
+          .maybeSingle();
+        if (!extCreds?.supabase_url || !extCreds.has_supabase_service_key) {
+          toast({
+            title: 'External Supabase not configured',
+            description: 'Configure this client\'s external Supabase (URL + service key) on the Credentials page first, then save this prompt.',
+            variant: 'destructive',
+          });
+          setSaving(false);
+          return;
+        }
       }
 
       // Determine category from editingSlotId if available
