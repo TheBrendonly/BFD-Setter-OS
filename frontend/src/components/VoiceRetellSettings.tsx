@@ -784,6 +784,28 @@ DtmfEditor.displayName = 'DtmfEditor';
 // ── Tools Visual Editor ──
 interface RetellTool { name: string; type: string; description?: string; url?: string; method?: string; timeout_ms?: number; speak_after_execution?: boolean; speak_during_execution?: boolean; execution_message_description?: string; parameters?: unknown; [key: string]: unknown; }
 
+// F16(d) live-transfer: read/write the transfer_call tool's destination number.
+// Retell's current schema uses transfer_destination: { type: 'predefined', number }.
+// The number lives in general_tools (the Retell agent), flowed through
+// retell-proxy untouched, so no DB column is needed.
+function getTransferNumber(tool: RetellTool): string {
+  const td = (tool as { transfer_destination?: { number?: unknown } }).transfer_destination;
+  if (td && typeof td === 'object' && typeof td.number === 'string') return td.number;
+  const legacy = (tool as { number?: unknown }).number;
+  if (typeof legacy === 'string') return legacy;
+  return '';
+}
+function setTransferNumber(tool: RetellTool, num: string): RetellTool {
+  const next: RetellTool = { ...tool };
+  const trimmed = num.trim();
+  if (trimmed) {
+    (next as Record<string, unknown>).transfer_destination = { type: 'predefined', number: trimmed };
+  } else {
+    delete (next as Record<string, unknown>).transfer_destination;
+  }
+  return next;
+}
+
 const ToolCard = memo(({ tool, index, disabled, onRemove, onUpdate }: { tool: RetellTool; index: number; disabled?: boolean; onRemove: () => void; onUpdate: (t: RetellTool) => void }) => {
   const [expanded, setExpanded] = useState(false);
   const [showRawTool, setShowRawTool] = useState(false);
@@ -802,7 +824,21 @@ const ToolCard = memo(({ tool, index, disabled, onRemove, onUpdate }: { tool: Re
         </CollapsibleTrigger>
         <CollapsibleContent>
           <div className="px-3 pb-3 space-y-2.5 border-t border-border/50 pt-2.5">
-            {isSystem ? (
+            {tool.type === 'transfer_call' ? (
+              <div className="space-y-1.5">
+                <span className="text-muted-foreground block" style={subtitleStyle}>Transfer destination number (E.164)</span>
+                <DebouncedInput
+                  value={getTransferNumber(tool)}
+                  onChange={(v) => onUpdate(setTransferNumber(tool, v))}
+                  placeholder="+61400000000"
+                  disabled={disabled}
+                />
+                <p className="text-muted-foreground" style={{ ...subtitleStyle, fontSize: '10px' }}>
+                  The agent warm-transfers to this number when a lead asks for a human. Add the transfer
+                  instruction to the prompt (PU-11, report-only) for the agent to actually offer it.
+                </p>
+              </div>
+            ) : isSystem ? (
               <p className="text-muted-foreground" style={subtitleStyle}>Built-in system tool. No configuration needed.</p>
             ) : showRawTool ? (
               <>

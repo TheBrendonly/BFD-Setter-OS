@@ -688,7 +688,7 @@ export const runEngagement = task({
       // ── Load client config ────────────────────────────────────────────────
       const { data: client } = await supabase
         .from("clients")
-        .select("send_engagement_webhook_url, supabase_url, supabase_service_key, cadence_quiet_hours, twilio_account_sid, twilio_auth_token, twilio_default_phone, retell_phone_1, ghl_api_key, ghl_location_id, ghl_conversation_provider_id, openrouter_api_key, llm_model, timezone, brand_voice, is_system")
+        .select("send_engagement_webhook_url, supabase_url, supabase_service_key, cadence_quiet_hours, twilio_account_sid, twilio_auth_token, twilio_default_phone, retell_phone_1, ghl_api_key, ghl_location_id, ghl_conversation_provider_id, openrouter_api_key, llm_model, timezone, brand_voice, is_system, speed_to_lead_enabled")
         .eq("id", client_id)
         .single();
 
@@ -984,8 +984,19 @@ export const runEngagement = task({
               }
             }
 
-            // Wait the inter-channel delay (skip for the first channel)
-            if (ci > 0 && ch.delay_seconds > 0) {
+            // F16(b) speed-to-lead: on a new-lead first-touch node, dial the
+            // phone_call channel IMMEDIATELY (skip its inter-channel delay) when
+            // the client is opted in, so contact happens within ~60s inside the
+            // legal window. The legal-window gate still applies via the
+            // HOURS-1(d) per-channel re-gate below; the out-of-hours SMS fallback
+            // is the HOURS-1 node-0 instant confirmation SMS.
+            const speedToLeadDial =
+              isNewLeadFirstTouch &&
+              (client as { speed_to_lead_enabled?: boolean }).speed_to_lead_enabled === true &&
+              ch.type === "phone_call";
+
+            // Wait the inter-channel delay (skip for the first channel + speed-to-lead dial)
+            if (ci > 0 && ch.delay_seconds > 0 && !speedToLeadDial) {
               const chResumeAt = new Date(Date.now() + ch.delay_seconds * 1000);
               await updateExecution({
                 stage_description: `Engage: waiting ${formatDuration(ch.delay_seconds)} before ${ch.type}...`,

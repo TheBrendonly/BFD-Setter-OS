@@ -1432,6 +1432,8 @@ export type Database = {
           updated_at: string
           use_native_text_engine: boolean
           recording_disclosure_enabled: boolean
+          speed_to_lead_enabled: boolean
+          missed_call_textback_enabled: boolean
           user_details_webhook_url: string | null
           voicemail_audio_url: Json | null
           voicemail_config: Json | null
@@ -1549,6 +1551,8 @@ export type Database = {
           updated_at?: string
           use_native_text_engine?: boolean
           recording_disclosure_enabled?: boolean
+          speed_to_lead_enabled?: boolean
+          missed_call_textback_enabled?: boolean
           user_details_webhook_url?: string | null
           voicemail_audio_url?: Json | null
           voicemail_config?: Json | null
@@ -1666,6 +1670,8 @@ export type Database = {
           updated_at?: string
           use_native_text_engine?: boolean
           recording_disclosure_enabled?: boolean
+          speed_to_lead_enabled?: boolean
+          missed_call_textback_enabled?: boolean
           user_details_webhook_url?: string | null
           voicemail_audio_url?: Json | null
           voicemail_config?: Json | null
@@ -4993,6 +4999,8 @@ export type Database = {
           updated_at: string
           use_native_text_engine: boolean
           recording_disclosure_enabled: boolean
+          speed_to_lead_enabled: boolean
+          missed_call_textback_enabled: boolean
           user_details_webhook_url: string | null
           voicemail_audio_url: Json | null
           voicemail_config: Json | null

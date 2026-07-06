@@ -71,7 +71,7 @@ Deno.serve(async (req) => {
     // Find client by matching the agent_id across all 10 agent slots
     const { data: clients, error: clientErr } = await internalSupabase
       .from("clients")
-      .select("id, ghl_location_id, supabase_url, supabase_service_key, retell_webhook_secret")
+      .select("id, ghl_location_id, supabase_url, supabase_service_key, retell_webhook_secret, missed_call_textback_enabled, twilio_account_sid, twilio_auth_token, twilio_default_phone, retell_phone_1")
       .or(
         `retell_inbound_agent_id.eq.${agentId},retell_outbound_agent_id.eq.${agentId},retell_outbound_followup_agent_id.eq.${agentId},retell_agent_id_4.eq.${agentId},retell_agent_id_5.eq.${agentId},retell_agent_id_6.eq.${agentId},retell_agent_id_7.eq.${agentId},retell_agent_id_8.eq.${agentId},retell_agent_id_9.eq.${agentId},retell_agent_id_10.eq.${agentId}`
       );
@@ -138,6 +138,84 @@ Deno.serve(async (req) => {
         return new Response(JSON.stringify({ error: "Forbidden" }), {
           status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
+      }
+    }
+
+    // ── F16(c) missed-call text-back ──────────────────────────────────────────
+    // An inbound call that abandoned quickly (caller hung up before engaging, or
+    // a technical drop) triggers an SMS back from our number into the SMS booking
+    // engine. Inbound voice is Retell-terminated (the number is imported into
+    // Retell, so there is NO Twilio voice webhook), so this is driven off the
+    // Retell call disposition. Best-effort, never throws. Per-client opt-in
+    // (default OFF). Fires once (call_ended only) and dedupes on the caller phone.
+    if (
+      payload.event === "call_ended" &&
+      (client as { missed_call_textback_enabled?: boolean }).missed_call_textback_enabled === true
+    ) {
+      try {
+        const dir = String(call.direction || call.call_type || "").toLowerCase();
+        const inbound = dir.includes("inbound");
+        const durMs = call.duration_ms ?? call.call_duration_ms ?? null;
+        const durSec = typeof durMs === "number" ? Math.round(durMs / 1000) : null;
+        const fromNum = typeof call.from_number === "string" ? call.from_number : null;
+        // "Missed" = an inbound call that never really engaged (very short). A
+        // genuine booking conversation runs far longer than 20s.
+        const abandoned = inbound && !!fromNum && (durSec === null || durSec < 20);
+        const cc = client as {
+          twilio_account_sid?: string | null; twilio_auth_token?: string | null;
+          twilio_default_phone?: string | null; retell_phone_1?: string | null;
+        };
+        const twilioSid = cc.twilio_account_sid;
+        const twilioAuth = cc.twilio_auth_token;
+        const fromSetter = cc.twilio_default_phone || cc.retell_phone_1 ||
+          (typeof call.to_number === "string" ? call.to_number : null);
+        if (abandoned && twilioSid && twilioAuth && fromSetter) {
+          // Dedupe: skip if we already texted this caller back in the last 15 min
+          // (repeat abandons + the answered-elsewhere / already-in-conversation race).
+          const since = new Date(Date.now() - 15 * 60 * 1000).toISOString();
+          const { data: recent } = await internalSupabase
+            .from("message_queue")
+            .select("id")
+            .eq("channel", "sms_outbound")
+            .eq("contact_phone", fromNum)
+            .gte("created_at", since)
+            .limit(1)
+            .maybeSingle();
+          if (!recent) {
+            const bodyText =
+              "Sorry we missed you just now! Happy to help over text: what were you after, and would you like me to book you a time?";
+            const twilioUrl = `https://api.twilio.com/2010-04-01/Accounts/${twilioSid}/Messages.json`;
+            const resp = await fetch(twilioUrl, {
+              method: "POST",
+              headers: {
+                Authorization: `Basic ${btoa(`${twilioSid}:${twilioAuth}`)}`,
+                "Content-Type": "application/x-www-form-urlencoded",
+              },
+              body: new URLSearchParams({ To: fromNum as string, From: fromSetter, Body: bodyText }).toString(),
+            });
+            const tj = await resp.json().catch(() => ({} as Record<string, unknown>));
+            if (resp.ok) {
+              await internalSupabase.from("message_queue").insert({
+                client_id: client.id,
+                lead_id: contactId || (fromNum as string),
+                ghl_contact_id: contactId || null,
+                ghl_account_id: (client.ghl_location_id as string | null) || client.id,
+                channel: "sms_outbound",
+                message_body: bodyText,
+                contact_phone: fromNum,
+                twilio_message_sid: (tj as { sid?: string }).sid ?? null,
+                processed: true,
+              });
+              console.log(`retell-call-webhook: F16(c) missed-call text-back sent to ${fromNum} (call ${call.call_id ?? "?"})`);
+            } else {
+              console.warn(
+                `retell-call-webhook: F16(c) Twilio send failed: ${(tj as { code?: unknown }).code ?? "?"} ${(tj as { message?: unknown }).message ?? ""}`,
+              );
+            }
+          }
+        }
+      } catch (mcErr) {
+        console.warn("retell-call-webhook: F16(c) missed-call text-back failed (non-fatal):", (mcErr as Error).message);
       }
     }
 
