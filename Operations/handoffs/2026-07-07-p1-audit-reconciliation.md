@@ -172,3 +172,85 @@ nothing to actually build; if so, this session is a fast no-op). **P3** is a rev
 (security/quality review pass — the last one was 2026-06-05, a month before this rapid-fire feature/bug
 stretch; doc/dead-code hygiene; a refresh of the F18-F20 post-client research so those are build-ready the
 moment a client signs). Both prompts are below (P2 primary; skip straight to P3 if Brendan prefers).
+
+### Session P2 prompt (primary)
+
+```
+SETTINGS: Model Opus 4.8 [1m] · Thinking HIGH · Mode: plan ON (may involve new feature design - research + approve before any edits).
+
+BFD-setter continuation. Repo /srv/bfd/Projects/bfd-setter, branch main (git pull first).
+Supabase ref bjgrgbgykvjrsuwwruoh. Creds in ./.env (SUPABASE_PAT, TRIGGER_DEPLOY_PAT, BFD_RETELL_API_KEY).
+Live DB via Supabase Management API /database/query (NOT postgres MCP). Live Retell via api.retellai.com
+with BFD_RETELL_API_KEY. To know which agent serves a direction, read the PHONE-NUMBER binding
+(list-phone-numbers inbound_agent_id/outbound_agent_id) — never trust old memory. NEVER edit voice
+prompts (report-only: report location + change, Brendan applies in the BFD setter UI). Verify read-only
+before claiming done. No em dashes. Follow the Relay Protocol in Docs/SESSION_PLAN.md.
+READ FIRST: Docs/SESSION_PLAN.md, the 2026-07-07 P1 handoff + action pack, Docs/DEFERRED.md.
+
+BFD-setter - Session P2: deferred-feature pick session.
+
+Scope: this is a Brendan-driven triage, not a default build session. Most of Docs/DEFERRED.md is
+explicitly gated on something that hasn't happened yet (a paying client, real usage data, a Supabase Pro
+upgrade, an explicit client ask) — the point of this session is to check whether any of those gates have
+now been met, or whether Brendan wants to pull something forward regardless of its gate, NOT to build the
+list wholesale.
+
+1. Walk Docs/DEFERRED.md with Brendan section by section (Lead lifecycle system, F8 v2, 2.6 cost dashboard,
+   3.1 A/B testing, 3.2 agent-by-form-field, 3.3 campaign-level default setter, 3.9 cost-ceiling aggregates,
+   3.11 HubSpot+GHL, 4.1 pricing model, 4.3 multi-Twilio failover, BOOK-TZ-1 per-lead timezone, E-1, email
+   provider, HIBP, the text_engine_webhook column drop, the by-phone Spec-2 N-row merge, F9 v2). For each,
+   ask: has the stated gate been met, or does Brendan want it built anyway?
+2. For anything Brendan greenlights: use superpowers:brainstorming first (this is new feature work), then
+   writing-plans, then build it following the same TDD + verify-before-completion discipline as every other
+   session here.
+3. If nothing is greenlit: say so plainly, do not invent scope, and close this session out as a fast no-op.
+4. Do NOT touch the gated First-Client Milestone items (Stripe, webhook secrets, AU A2P) - those stay in
+   Docs/DEFERRED.md's "First-paying-client onboarding cluster" and DEFERRED.md's other still-gated items.
+
+Close out per the Relay Protocol regardless of outcome (update the lists if anything shipped, write a dated
+handoff, commit/push). Then emit the Session P3 prompt (or, if this session decides P3's scope should change
+based on what got built here, an adjusted version of it) verbatim in chat + save it into the handoff.
+
+▶ PIPELINE: [✓] P1 audit + action pack   [•] P2 (here)   [ ] P3 review+cleanup+research   [ ] First-Client Milestone (GATED)
+```
+
+### Session P3 prompt (alternative — skip straight here if Brendan doesn't want a P2 pick session)
+
+```
+SETTINGS: Model Opus 4.8 [1m] · Thinking HIGH · Mode: plan ON (touches security-review-driven fixes across many surfaces).
+
+BFD-setter continuation. Repo /srv/bfd/Projects/bfd-setter, branch main (git pull first).
+Supabase ref bjgrgbgykvjrsuwwruoh. Creds in ./.env (SUPABASE_PAT, TRIGGER_DEPLOY_PAT, BFD_RETELL_API_KEY).
+Live DB via Supabase Management API /database/query (NOT postgres MCP). Live Retell via api.retellai.com
+with BFD_RETELL_API_KEY. NEVER edit voice prompts (report-only). Verify read-only before claiming done.
+No em dashes. Follow the Relay Protocol in Docs/SESSION_PLAN.md.
+READ FIRST: Docs/SESSION_PLAN.md, the 2026-07-07 P1 handoff + action pack, Docs/SECURITY_REVIEW_2026-06-05.md.
+
+BFD-setter - Session P3: review + cleanup + research (polish pass before the First-Client Milestone).
+
+Scope:
+1. Security/quality review pass. The last full security review was 2026-06-05 — a full month of rapid
+   feature + bug-fix work has landed since (F8/F9/F13/F14/F15/F16/F17-p1, the onboarding-gate cluster, the
+   shared-fn booking/cancel fixes, PROMPT-AUTH-1). Run the /security-review skill and a /code-review high
+   pass over everything shipped since 4a22b8b (Session 9). Report findings; fix anything Critical/High
+   directly (with tests), log Medium/Low to BUG_LIST.md if genuinely new.
+2. Doc + dead-code hygiene. Known small items to close out: the ClientLayout.tsx:618 dead
+   presentation_only_mode redirect branch (harmless, but confirm and remove if still genuinely dead); revisit
+   whether the clients.text_engine_webhook column drop (DEFERRED.md) is worth doing now; a light pass over
+   any other "noted but out of scope" dead-code callouts accumulated across the BUG_LIST/COMPLETED_LOG
+   history (grep COMPLETED_LOG.md for "dead" / "orphan" / "unwired").
+3. Refresh F18-F20 post-client research. F18 (AI confirmation call ~24h pre-appointment), F19 (call QA
+   digest), F20 (booked-revenue attribution) are all "post-first-client fast-follow" in FEATURE_ROADMAP.md,
+   based on 2026-07-04 market research. Do a light refresh pass (has anything material changed since then?
+   any new competitor/compliance developments?) so these are genuinely build-ready the moment a client signs
+   — per the research's own finding, "no visible ROI" is the #1 retainer-churn driver, so post-client speed
+   on these matters.
+4. Confirm Docs/FIRST_CLIENT_MILESTONE.md's prerequisite checklist is airtight given everything shipped since
+   it was last touched (2026-07-04) - do not run the milestone itself.
+
+Close out per the Relay Protocol. Emit the First-Client Milestone prompt as the next step (it's already
+written in Docs/FIRST_CLIENT_MILESTONE.md - confirm it's still accurate rather than rewriting it, and remind
+Brendan it is event-gated: only run it once a client has actually signed).
+
+▶ PIPELINE: [✓] P1 audit + action pack   [✓ or skipped] P2   [•] P3 (here)   [ ] First-Client Milestone (GATED)
+```
