@@ -9,7 +9,36 @@ Open bugs and behavior fixes. Reconciled 2026-06-25 with Brendan; full re-audit 
 
 ---
 
-## Status: 0 open bugs (2026-07-07)
+## 🟠 Medium — new finding this session
+
+- [ ] **MAIN-OUTBOUND-SHARED-1 (found 2026-07-07, Session P1) — "Main Outbound" appears to have silently lost
+  its dedicated Retell agent; it now shares "Inbound BFD Agent"'s agent/prompt, likely an undetected
+  regression, not a deliberate change.** Verified live 2026-07-07: the `voice_setters` row named "Main
+  Outbound" (`id=b09624b5…`) has `retell_agent_id = agent_b2f6495f3e5c4160528f11b618` — the exact same Retell
+  agent as the row named "Inbound BFD Agent". `make-retell-outbound-call` uses this column directly
+  (`agentId = setter.retell_agent_id` → `override_agent_id`), so real outbound dials placed "as Main Outbound"
+  are actually running Inbound's agent/prompt today. **This contradicts this project's own memory record**: on
+  2026-06-24/25, inbound was deliberately split OUT into its own dedicated agent specifically so it wouldn't
+  share config with outbound (see the now-corrected memory `project_inbound_outbound_share_agent_2026_06_24` —
+  at that time Main Outbound = `agent_f45f4dd…`, a DIFFERENT agent, confirmed by 3 dated live-call citations in
+  `COMPLETED_LOG.md` from 2026-06-28 through 2026-07-01). Multiple `COMPLETED_LOG.md` entries from 2026-07-03
+  onward already show Main Outbound = `agent_b2f6495…`, so whatever caused the repoint happened sometime
+  between 2026-06-25 and 2026-07-03 — no session in that window reports intentionally doing this. **User-facing
+  effect (confirmed live 2026-07-07):** the shared agent's opener has no `{{first_name}}` (so outbound calls to
+  known leads aren't personalized — PU-3 in `PROMPT_UPDATE_LIST.md`) and closes with an inbound-style question
+  ("What can I help you with?") rather than stating the call's purpose (a Telemarketing Standard compliance
+  question — PU-7). The separate agent `Voice-Setter-Test` (`agent_f45f4dd…`) that WAS the old Main Outbound
+  still exists, unused, and is what the phone number's static (and irrelevant) `outbound_agents` binding
+  points to — checking that field instead of the platform DB or the actual calling code is what caused the
+  misidentification during this session's own live-verification pass (see the P1 handoff for the full
+  self-correction). **Needs investigation, not yet root-caused:** find what changed `voice_setters."Main
+  Outbound".retell_agent_id` between 2026-06-25 and 2026-07-03 (check the F9 lock/pull machinery, the
+  duplicate-setter-config path, and any admin/manual repoint) and confirm whether Brendan wants Main Outbound
+  restored to its own dedicated agent (recommended, matches the original 2026-06-24/25 design intent) or
+  whether sharing with Inbound is now intentional. Severity Medium (real live behavior gap; not
+  data-destroying). Effort S-M investigation, TBD fix.
+
+## Status: 0 open bugs otherwise (2026-07-07)
 
 Every CODE bug that had been logged is now either **shipped + live-verified** (→ `Docs/archive/COMPLETED_LOG.md`)
 or **shipped + deployed, awaiting Brendan's live behavioral pass** (→ `Docs/TEST_LIST.md` — nothing left needing

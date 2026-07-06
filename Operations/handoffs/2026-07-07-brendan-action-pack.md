@@ -9,18 +9,25 @@ One document, two parts. Part A is prompt-content wording — you apply these yo
 highest-leverage items are first. Every item below was checked against the *actual live* state today, not
 just doc text — several things the docs still called "open" turned out to already be fixed.
 
-## Important note on agent identity (read this first)
+## New finding: Main Outbound has likely lost its dedicated agent (read this first — logged as BUG_LIST MAIN-OUTBOUND-SHARED-1)
 
-**"Main Outbound" and "Inbound BFD Agent" are currently the SAME physical Retell agent** (`agent_b2f6495…`).
-There's a separate agent literally named `Voice-Setter-Test` (`agent_f45f4dd…`) that sits statically bound as
-the phone number's default outbound agent in Retell's own config — but it's **not actually used** by any real
-call (confirmed by reading `make-retell-outbound-call`'s code: it always overrides the agent per-call using
-the specific setter's `retell_agent_id`, which for "Main Outbound" resolves to the shared `agent_b2f6495`, not
-`Voice-Setter-Test`). This is worth knowing because it's exactly the trap this project's own `CLAUDE.md`
-already flags ("ignore the phone number attached to an agent in Retell — it doesn't indicate which agent is
-live") — a first pass during this session got caught by it before a code-level check corrected it. Practical
-upshot: whatever you check or change on "Inbound BFD Agent" in Prompt Management applies to outbound calls
-too, since it's the same underlying agent and prompt.
+**"Main Outbound" and "Inbound BFD Agent" are currently the SAME physical Retell agent** (`agent_b2f6495…`),
+and this looks like an **undetected regression**, not a deliberate change. Your own project memory shows
+inbound was deliberately split into its own dedicated agent on 2026-06-24/25 specifically so it wouldn't share
+config with outbound (Main Outbound was `agent_f45f4dd…` — a different agent — at that time, confirmed by
+several dated live-call records through 2026-07-01). Sometime between 2026-06-25 and 2026-07-03, "Main
+Outbound"'s stored agent pointer changed to match Inbound's — no session in that window reports doing this on
+purpose. **Concrete effect today:** outbound calls aren't personalized with the lead's first name (PU-3
+below) and the opener asks "What can I help you with?" instead of stating the call's purpose (a
+Telemarketing Standard compliance question, PU-7 below). There's a separate, genuinely unused agent named
+`Voice-Setter-Test` (`agent_f45f4dd…`) still sitting in the account — it's what the phone number's static
+config still points to, but real calls don't use it (confirmed by reading `make-retell-outbound-call`'s code).
+**Recommended:** decide whether you want Main Outbound restored to its own dedicated agent (matches your
+original design) — this needs a quick investigation into what changed it before it can be fixed with
+confidence. Full detail in `Docs/BUG_LIST.md` (MAIN-OUTBOUND-SHARED-1).
+
+Practical upshot for right now: whatever you check or change on "Inbound BFD Agent" in Prompt Management
+applies to outbound calls too, since it's the same underlying agent and prompt, until this is resolved.
 
 ## Part A — prompt-content items (verified live, paste-ready)
 
