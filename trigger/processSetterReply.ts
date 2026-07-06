@@ -32,6 +32,7 @@ import { makeVoiceBookingCallTool } from "./_shared/voiceBookingCallTool.ts";
 import { buildTimeAnchorBlock, resolveClientTimeZone } from "./_shared/timeAnchor.ts";
 import { mergeCanonicalSlots, validateBookingArgs, type CanonicalSlotMap } from "./_shared/slotBinding.ts";
 import { mergeEventIds, validateEventIdArgs, type EventIdSet } from "./_shared/eventIdBinding.ts";
+import { needsRescheduleHonestyRewrite } from "./_shared/rescheduleHonestyGuard.ts";
 import {
   runSetterToolLoop,
   ToolsUnsupportedError,
@@ -49,6 +50,11 @@ const getMainSupabase = () =>
 
 const MAX_HISTORY_ROWS = 30;
 const DEFAULT_MODEL = "openai/gpt-4.1-nano";
+// RESCHED-SMS-1: honest holding message used when the model falsely claims a
+// reschedule/cancel succeeded without a successful mutation tool this turn.
+// Code-side default Brendan can tune; the prompt-side reinforcement is PU-10.
+const RESCHEDULE_CANCEL_FALLBACK_REPLY =
+  "Sorry, I wasn't able to make that change just now. Let me take another look and I'll confirm the details with you shortly.";
 // Per-call timeouts. The tool loop caps iterations (default 4), so the worst
 // case is ~4 × (LLM_TIMEOUT + tool timeout) + a final LLM wrap-up, which stays
 // well under the task's 600s maxDuration. The 30s tool timeout lives in
@@ -377,9 +383,23 @@ export const processSetterReply = task({
     }
 
     // ── STEP 5: Parse + return n8n-shaped response ──
-    const setterMessages = parseSetterMessages(rawText);
+    let setterMessages = parseSetterMessages(rawText);
     if (setterMessages.length === 0) {
       throw new Error(`processSetterReply: no parseable messages in model output: ${rawText.slice(0, 200)}`);
+    }
+
+    // ── RESCHED-SMS-1: honesty guard ──
+    // If the reply claims a reschedule/cancel succeeded but no update-appointment
+    // / cancel-appointments returned ok this turn, the appointment did NOT move —
+    // replace the false confirmation with an honest holding message (mirrors the
+    // eventId binding's "never claim success without a real result"). The
+    // prompt-side reinforcement ("list first, only confirm on success") is PU-10.
+    if (needsRescheduleHonestyRewrite(rawText, loopResult.toolInvocations)) {
+      console.warn(
+        `processSetterReply: RESCHED-SMS-1 guard fired — reply claimed a reschedule/cancel with no successful ` +
+        `mutation this turn; rewriting to an honest holding message. lead=${payload.Lead_ID}`,
+      );
+      setterMessages = [RESCHEDULE_CANCEL_FALLBACK_REPLY];
     }
 
     const response: Record<string, string> = {};
