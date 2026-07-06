@@ -32,8 +32,9 @@ CANCEL-1 / BOOK-2 / BOOK-3 / SMS-METER-1 stay `[~]` in BUG_LIST until the voice 
 ## The relay from here (session by session to v1 100%)
 
 1. **Prompt 2 - HUMAN voice session (below).** Brendan on a live call; Claude verifies read-only. Covers the
-   deferred CANCEL-1 cancel/reschedule (SMS + voice), the VOICE GATE booking regression, SMS-METER-1 in-call,
-   VM-1, and (optional) the human browser click-through of the UI re-checks. Closes the shared-fn pass.
+   deferred CANCEL-1 cancel/reschedule (SMS + voice), the VOICE GATE booking regression on the v23 stack, and
+   SMS-METER-1 in-call. (VM-1 already PASSED 2026-07-05, do NOT redo.) Optionally the human browser click-through
+   of the UI re-checks. Closes the shared-fn pass.
 2. **F15 - client ROI visibility pack** (plan mode; `Docs/TEST_SESSION.md` RUN 10 has the full prompt).
 3. **F16 - never-miss-a-lead pack + F17 phase-1 AU compliance** (plan mode; same source). If a demo is
    imminent, F16 before F15.
@@ -76,9 +77,11 @@ ask before TEST_PHONE_B.
 3. SMS-METER-1 (VOICE) - during the answered call, have the agent send a mid-call SMS to the caller. Claude
    verifies a message_queue channel='sms_outbound' row was stamped (the in-call path; the direct-tool half passed
    in part 1).
-4. VM-1 voicemail-lands - place a call that goes to voicemail; confirm the voicemail actually plays/leaves (human
-   ear); Claude confirms the push landed on the agents read-only.
-5. Optional browser click-through (part 1 could not drive these - agency Playwright session expired): SWEEP-1a/b/c
+4. (VM-1 is NOT owed - it PASSED 2026-07-05 RUN 2, push on all 5 agents + voicemail plays, in COMPLETED_LOG;
+   retell-proxy v49 did not touch the voicemail path. Only re-check if you happen to hit voicemail on a call.)
+5. Optional browser click-through (part 1 could not drive these - agency Playwright session expired; NOTE most of
+   these already PASSED on 2026-07-05 per COMPLETED_LOG, so treat as an optional post-deploy spot-check, NOT owed
+   work): SWEEP-1a/b/c
    UI (no console 400 on /account-settings, /chats star+dismiss, /logs names), F9-1 locked-rename refused,
    PHONE-CLEAR-1 Contacts dialog, G3-7 vite-8 nav, ACCESS-1 (client login cannot reach /prompts/voice), and the
    onboarding-fix live rows (ONBOARD-1 flag on a throwaway create, ONBOARD-2 guard, ONBOARD-3 copy, GOLIVE-1

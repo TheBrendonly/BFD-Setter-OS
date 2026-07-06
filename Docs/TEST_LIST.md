@@ -134,7 +134,7 @@ When an item passes, move it to `Docs/archive/COMPLETED_LOG.md`. When it fails, 
 - [ ] **SMS-OBS-1 — tool invocations persisted.** After any SMS exchange that touches tools, `select * from tool_invocations where lead_id=... order by created_at` (platform Supabase, Mgmt API) shows the rows (name/args/result/error, `source='sms'`, the prefetch first). Confirms booking is no longer DB-blind. (The migration `20260701120000_tool_invocations.sql` must be applied first.)
 - [ ] **MODEL-1-HARDENING — invalid model degrades, never 400s.** In a throwaway client (NOT BFD), set `clients.llm_model` to a bad value (`gemini-flash-latest` or `gptjunk`) via Mgmt API → an SMS still gets a reply (alias remaps / no-slash falls back to the default; no 400). Restore. (Do NOT touch BFD's `clients.llm_model`.)
 - [ ] **F9-1 — locked voice setter refuses inline rename.** Retell-lock a voice setter → click its tile name heading and try to rename → refused with a clear "Retell-locked — unlock to rename" error and **no** `setter_display_names` write (the tile name is unchanged after refresh). Unlock → rename works again.
-- [ ] **VM-1 — voicemail push lands (not "partial").** Set a `static` or `prompt` voicemail on the client Voicemail card → **Save & push** → result is **"voicemail_set"** success (NOT "Push partial"); the unlocked agents' `voicemail_option` updates; locked agents are skipped + reported. (Voice-regression gate must pass before deploying retell-proxy v47.) **Open question to confirm live:** that the new voicemail actually applies on the next call without a republish — if it does not, the daytime follow-up is draft-first+publish+repoint (see VM-1 note in the handoff).
+- [x] **VM-1 — voicemail push lands (not "partial"). DONE 2026-07-05 (RUN 2) → COMPLETED_LOG.** (Duplicate of the VM-1 row below; both closed. Push landed on all 5 agents, real voicemail played ~15s.)
 - [ ] **PHONE-CLEAR-1 — clearing a phone clears the match key.** On a lead, clear the phone + Save → `select normalized_phone from leads where id=...` is **null** (Mgmt API); an inbound SMS from the old number no longer resolves to that lead. Changing the phone updates `normalized_phone` to the new E.164.
 - [ ] **G3-8(a) — reactivation webhook fires server-side, no browser secret.** On a reactivation campaign, click **execute lead** → the webhook fires + the lead row reaches `completed`; in the browser Network tab the request goes to `execute-lead-webhook` (Supabase fn) and **no** `supabase_service_key` appears in any browser payload. A failure marks the row `failed` with the error.
 
@@ -216,12 +216,10 @@ When an item passes, move it to `Docs/archive/COMPLETED_LOG.md`. When it fails, 
 
 ## Overnight part-2 additions (same branch + `g3-7/vite-major`) — retest AFTER deploy
 
-- [ ] **VM-1 — voicemail push lands AND survives a call (refined fix `acfc387`; retell-proxy v47→v48,
-  Voice-gated).** Save & push mode=`prompt` → full "voicemail_set" success (NOT "partial"); all 5 push targets'
-  `voicemail_option` updated (draft→publish→repoint now runs per agent); locked setters skipped + reported;
-  then ONE answered-call booking regression to confirm v48 didn't disturb the frozen call path, and (if
-  practical) an unanswered call to hear the voicemail. `static` mode now emits `static_text` — try one static
-  push too.
+- [x] **VM-1 — voicemail push lands AND survives a call. DONE 2026-07-05 (RUN 2) → COMPLETED_LOG.** Save & push
+  (mode=`prompt`) succeeded on all 5 push-target agents with NO "partial" (v48 fix, `ensureEditableAgentDraft` →
+  publish → repoint, `static`→`static_text`), and a real voicemail played (~15s). retell-proxy v49 (API-DEPR-2)
+  did not touch the voicemail path, so this stays valid. Not owed in the voice session.
 - [ ] **API-DEPR-1 — v2 list-agents serves the UI.** After deploying retell-proxy + verify-credentials:
   VoiceAIRepSetup → Agents tab lists the agents with full detail (name/version/published/engine — now hydrated
   via get-agent, one row per agent instead of legacy version-expanded rows); API Credentials → Verify shows
