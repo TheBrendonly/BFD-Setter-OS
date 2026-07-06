@@ -251,23 +251,23 @@ Deployed/live (schema + edge + frontend), confirm behaviorally:
   NO "invalid input syntax for uuid" 400 in the console.
 - [ ] **SYNC-LOG-1: intake audit persists.** Trigger a `sync-ghl-contact` intake → one `sync_ghl_executions` row is
   written (client_id, external_id, status, steps). (Was silently no-oping on a missing table.)
-- [ ] **G3-6-SCHEMA-1: analytics still run.** Run chat analytics for BFD (Analytics V2 / analyze-chat-history) →
+- [~] **G3-6-SCHEMA-1: analytics still run.** _Partly verified 2026-07-06: `analytics-v2-process` (service key) cleared its config gate for BFD (asks for a widget, NOT "configuration incomplete"/400 on the de-overloaded column), and the code hardcodes `chat_history` (v19 live, confirmed by reading the fn). `analyze-chat-history` needs a user JWT (the harness agency token expired), so the full analytics render is left to a browser run._ Run chat analytics for BFD (Analytics V2 / analyze-chat-history) →
   reads the external `chat_history` and returns results unchanged (column was null; now hardcoded). Deployed
   analyze-chat-history v19 / analytics-v2-process v19 / compute-analytics v16.
 
 DEPLOYED LIVE 2026-07-05 (edge voice-booking-tools v23 + Trigger 20260705.1); read-only smoke passed. The
 MUTATING live regression below is OWED (run it in the autonomous test session; the SMS + booking legs are
 harness-drivable, the answered voice call needs a human):
-- [ ] **CANCEL-1: SMS + voice cancel/reschedule bind a real eventId.** After deploying voice-booking-tools
+- [~] **CANCEL-1: SMS + voice cancel/reschedule bind a real eventId.** _SMS BOOK half exercised 2026-07-06 (book cycle clean, no 404); the CANCEL/RESCHEDULE half was NOT run autonomously — TEST_PHONE_A holds a live confirmed Jul-8 appt, so an unattended misbind could cancel a real one. Cancel/reschedule (SMS + voice) → the supervised voice session (Prompt 2)._ After deploying voice-booking-tools
   (`deploy_single_fn.mjs`) + the Trigger.dev bundle: (SMS) book via `scripts/test-harness/sms_inbound.mjs`, then
   "cancel that meeting" → the cancel hits the REAL GHL eventId (no 404), the appointment flips cancelled, the
   `bookings` row flips `status='cancelled'` (assert via `q.mjs`). Repeat a reschedule. (Voice) place an answered call
   and cancel/reschedule an existing appt → same. Confirm a fabricated-id attempt is refused with the real list folded
   back (check `tool_invocations`), never a false "done".
-- [ ] **BOOK-2/BOOK-3: booking regression holds.** After the same deploy, run a voice + an SMS booking end-to-end
+- [~] **BOOK-2/BOOK-3: booking regression holds.** _SMS half PASSED 2026-07-06: "Tue 7 Jul 3:30pm" booked to `bookings.appointment_time=2026-07-07 05:30 UTC` (exact 3:30pm Sydney, confirmed, source sms); `get-available-slots` returned correct Sydney days with `+10:00` (no day-shift). Voice half owed → Prompt 2._ After the same deploy, run a voice + an SMS booking end-to-end
   (`dial.mjs` + `sms_inbound.mjs`) → books the exact accepted Sydney time, no false "unavailable", window not
   day-shifted. (These change the frozen slot path, run the full booking regression.)
-- [ ] **SMS-METER-1: mid-call text meters.** After deploy, have a voice agent send a mid-call SMS → a
+- [~] **SMS-METER-1: mid-call text meters.** _Direct-tool half PASSED 2026-07-06: a `send-sms` tool POST (intake bearer) to TEST_PHONE_A stamped a new `message_queue` `channel='sms_outbound'` row (ghl_account_id=BFD location, twilio_message_sid=SM449634…, processed). The in-call VOICE path (agent sends mid-call SMS) owed → Prompt 2._ After deploy, have a voice agent send a mid-call SMS → a
   `message_queue` `channel='sms_outbound'` row appears (ghl_account_id = location id or client uuid) and F13 usage
   counts it.
 

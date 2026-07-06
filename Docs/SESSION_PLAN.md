@@ -325,6 +325,15 @@ Status: `[ ]` not started · `[~]` in progress · `[x]` done. Effort is rough.
    are NOT live until Brendan runs `git push github main`** (auto-mode blocked the GitHub push; Railway
    builds from GitHub) → live rows in `TEST_LIST.md` "Onboarding-fix pass". Handoff
    `Operations/handoffs/2026-07-06-onboarding-fix.md`.
+3c. **Session Autonomous-test-pass (part 1) — DONE 2026-07-06.** Drove the tool-drivable half of the
+   post-deploy regression on the live v23 + Trigger 20260705.1 stack: **BOOK-2 (SMS)** exact-time booking,
+   **BOOK-3 (SMS)** Sydney slot window (no day-shift), **SMS-METER-1** direct-tool meter stamp all PASS;
+   **RLS-SHAPE-1** closed (policy qual role-gated, client JWT → 0 rows); **G3-6-SCHEMA-1** config gate
+   reconfirmed. The CANCEL-1 cancel/reschedule + all VOICE legs were DEFERRED to the supervised voice
+   session (TEST_PHONE_A holds a live confirmed appt; an unattended cancel misbind could destroy a real
+   one). Browser-UI re-checks could not run (harness Playwright agency session expired / refresh token
+   single-use). Shared-fn pass stays `[~]` until the voice half lands. Handoff
+   `Operations/handoffs/2026-07-06-autonomous-test-pass.md` (carries the Prompt-2 human voice prompt).
 4. **Brendan solo block (parallel, no Claude session):** DEPLOY-1 (pin Railway to `main`), inotify sysctl,
    Setter-1 prompt migration, Resend SMTP → F14 E2E, sms_llm rate + billing anchor/toggles, n8n Railway
    shutdown, Twilio alpha-sender-ID check, PROMPT_UPDATE_LIST items (PU-1/3/4/5/6/7).

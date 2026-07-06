@@ -3,6 +3,20 @@
 Items closed out of the active lists. Newest first. The active lists are in the repo root + `Docs/`
 (`BUG_LIST.md`, `FEATURE_ROADMAP.md`, `BRENDAN_TODO.md`, `TEST_LIST.md`, `DEFERRED.md`).
 
+## 2026-07-06 — Autonomous test pass (part 1): shared-fn SMS/tool regression + RLS-SHAPE-1
+
+Ran the tool-drivable half of the post-deploy regression on the live v23 + Trigger 20260705.1 stack (harness: signed inbound SMS, direct tool POST, Mgmt-API SQL), one DB assertion per step. The cancel/reschedule + voice legs were intentionally deferred to the supervised voice session (Prompt 2) because TEST_PHONE_A holds a live confirmed appointment and an unattended cancel misbind could destroy a real one.
+
+- **BOOK-2 (SMS) — PASS.** Booked "Tue 7 Jul 3:30pm" via `sms_inbound.mjs`; `bookings.appointment_time = 2026-07-07 05:30 UTC` = exactly 3:30pm Sydney, status confirmed, source sms. No false "unavailable", no shift. Test appt cleaned up by its exact GHL id (`YQZpHF8Z9HMYrNR1jKDV` cancelled + bookings row mirrored).
+- **BOOK-3 (SMS) — PASS.** `get-available-slots` returned the correct Sydney days (Jul 6 + Jul 7) with `+10:00` offsets, no UTC day-shift; the full book cycle logged `get-available-slots` + `book-appointments` in `tool_invocations` with zero errors/404.
+- **SMS-METER-1 (direct tool) — PASS.** `POST voice-booking-tools?tool=send-sms&clientId=BFD` (intake bearer) to TEST_PHONE_A → tool `sent:true` (sid `SM449634…`) and a new `message_queue` row `channel='sms_outbound'`, ghl_account_id = BFD location, twilio_message_sid = the sid, processed. (The meter row reflects a genuinely-sent SMS, so it is left in place — deleting it would corrupt metering.)
+- **RLS-SHAPE-1 — CLOSED.** `pg_policies` qual for `sms_delivery_events` agency SELECT leads with `(get_user_role(auth.uid()) = 'agency'::text) AND …` → client-role JWT reads 0 rows. Shape hardening proven at the policy level.
+- **G3-6-SCHEMA-1 — partly reconfirmed.** `analytics-v2-process` (service key) cleared its config gate for BFD; the fn code hardcodes `chat_history` (v19 live). Full analytics render (analyze-chat-history) needs a user JWT and is left to a browser run.
+
+Not moved out of BUG_LIST: CANCEL-1 / BOOK-2 / BOOK-3 / SMS-METER-1 stay `[~]` — the shared-fn rule requires BOTH the SMS/tool half (done here) AND the voice half (Prompt 2) before closing. CANCEL-1 has no passing leg yet (its cancel/reschedule half is the whole point and was deferred).
+
+Env note: the harness Playwright agency session (storageState) was gone and its refresh_token got consumed on a validity probe (GoTrue rotates refresh tokens single-use), so the browser-UI re-checks (SWEEP-1a/b/c UI, F9-1, PHONE-CLEAR-1 UI, G3-7 nav, ACCESS-1 + the onboarding-fix live rows) could not be driven this session; they need a fresh magic-link + ONE TOTP code and are on the human list.
+
 ## 2026-07-06 — Onboarding-fix pass: GOLIVE-1 closed (server-verified live); ONBOARD-1/2/3 + ACCESS-1 built
 
 The five onboarding-gate bugs from `Docs/ONBOARDING_GAP_REPORT_2026-07-06.md`, one commit each
