@@ -5,6 +5,24 @@ Testing actions live in `TEST_LIST.md`; first-paying-client onboarding actions l
 **prompt-content edits (agent wording) live in `PROMPT_UPDATE_LIST.md`** (kept separate so you can work
 prompt tweaks independently).
 
+## Combined build session 2026-07-07 (bugs + F15 + F16 + F17-p1 all DEPLOYED) — manual follow-ups
+
+- [ ] **Enable the new per-client features on the BFD dogfood client to demo them** (all default OFF). In the
+  agency view of the client → **Client Settings → "Calls & compliance"** card: turn on **Speed-to-lead auto-dial**
+  (F16b), **Missed-call text-back** (F16c), and (for compliance testing) **Call-recording disclosure** (F17). And
+  in the **"Client ROI reporting"** card turn on **Show the show-rate funnel / weekly report to the client** if you
+  want the client to see them. Then run the TEST_LIST "Combined build" behavioural checks.
+- [ ] **Provision the GHL appointment-status workflow → `bookings-webhook`** so the F15 show-rate funnel accrues
+  confirmed/showed/no-show. In GHL, add a Workflow on "Appointment Status Changed" (confirmed / showed / no-show /
+  cancelled) with a **Custom Webhook** POST to the `bookings-webhook` URL, and set the client's `ghl_webhook_secret`
+  + send it as the `x-wh-token` header (GHL native Webhook V2 is RSA and NOT supported — use the static token).
+- [ ] **After Resend SMTP lands (M1, below): the F15 weekly report email flips from stubbed to live automatically**
+  (the `weeklyClientReport` cron sends when `RESEND_API_KEY` is set + a recipient email is configured on the client's
+  "Client ROI reporting" card). No code change needed; just set `RESEND_API_KEY` on Trigger.dev prod + the recipient.
+- [ ] **Apply the prompt-content items** in the setter UI: **PU-6** (recording disclosure line, now wired to
+  `{{recording_disclosure}}`), **PU-10** (reschedule list-first), **PU-11** (live-transfer offer line). See
+  `PROMPT_UPDATE_LIST.md`.
+
 ## Onboarding-fix pass 2026-07-06 — one push to ship it
 
 - [ ] **Run `git push github main` from `/srv/bfd/Projects/bfd-setter`.** The five onboarding-fix

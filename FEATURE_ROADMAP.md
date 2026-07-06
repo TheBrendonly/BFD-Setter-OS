@@ -24,14 +24,14 @@ Features to build, in rough priority order. Reconciled 2026-06-25 with Brendan.
 > GHL's native AI Employee is US$97/mo unlimited, so the A$2,000 retainer must be justified by what
 > GHL-native cannot do. Full research + sources in the "Feature spec - 2026-07 market research" section below.
 
-- [ ] **F15 - Client ROI visibility pack: show-rate funnel + weekly report (PRE-first-client; the retention build).**
+- [x] **[DEPLOYED 2026-07-07 (combined build) → TEST_LIST]** **F15 - Client ROI visibility pack: show-rate funnel + weekly report (PRE-first-client; the retention build).**
   (a) Ingest GHL appointment-status changes (confirmed / showed / no-show / cancelled — GHL fires workflow
   triggers/webhooks) into the platform so every booking tracks booked -> confirmed -> held -> no-show, per setter
   and per lead source. (b) A Trigger.dev cron emails each client a weekly white-label report: calls made/answered,
   SMS conversations, appointments booked/confirmed/held, no-show rate, estimated pipeline value, top objections,
   plus 2-3 "what we improved" bullets (agency-editable). Directly attacks the #1 churn driver; the show-rate metric
   is what retainers live or die on. Email sending is gated on the Resend SMTP item in BRENDAN_TODO. Effort M.
-- [ ] **F16 - Never-miss-a-lead pack: speed-to-lead + missed-call text-back + live-transfer config (PRE-first-client; the demo build).**
+- [x] **[DEPLOYED 2026-07-07 (combined build, default-OFF flags) → TEST_LIST; summary-on-failed-transfer + PU-11 deferred]** **F16 - Never-miss-a-lead pack: speed-to-lead + missed-call text-back + live-transfer config (PRE-first-client; the demo build).**
   (a) Speed-to-lead: new GHL lead -> AI voice call within 60s (inside legal calling hours; SMS fallback outside
   hours / on no-answer) — sub-60s contact shows ~391% higher conversion and only ~7% of companies hit 5 minutes.
   (b) Missed-call text-back: inbound call unanswered/abandoned -> SMS within 60s from the same number into the
@@ -39,7 +39,7 @@ Features to build, in rough priority order. Reconciled 2026-06-25 with Brendan.
   config UI for Retell's native `transfer_call` tool (already passes through retell-proxy untouched) so a hot lead
   who asks for a human is transferred to the client's mobile with an SMS context summary fallback. Effort M total
   ((a)/(b) S-M each on existing plumbing, (c) S config UI + report-only prompt line).
-- [ ] **F17 - AU compliance pack (phase 1 PRE-first-client, phase 2 post).** Phase 1: verify + enforce
+- [~] **[PHASE 1 DEPLOYED 2026-07-07 (combined build) → TEST_LIST; phase 2 = post-first-client]** **F17 - AU compliance pack (phase 1 PRE-first-client, phase 2 post).** Phase 1: verify + enforce
   contact-hours windows for outbound VOICE and cadence SMS (Telemarketing Standard: weekdays 9am-8pm, Sat 9am-5pm,
   no Sun/public holidays — check existing `_shared/business-hours.ts` + F4 nudge gate coverage extends to voice
   dials); per-client call-recording disclosure toggle (NSW/WA/SA are all-party consent; the disclosure LINE itself

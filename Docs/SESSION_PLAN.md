@@ -345,14 +345,20 @@ Status: `[ ]` not started · `[~]` in progress · `[x]` done. Effort is rough.
    **CONTACTS-EDIT-DEAD-1**; **PU-9** (voice dead-air), **PU-10** (reschedule honesty). Handoff
    `Operations/handoffs/2026-07-06-voice-browser-session.md`. **Emitted F15.** Only F15 → F16 → the gated
    First-Client Milestone remain to v1 "100%".
-3e. **Combined build session (bugs + F15 + F16) — QUEUED 2026-07-06 (Brendan's call: one mega-session, not a
-   split relay).** Bundles the four open CODE bugs (HOURS-1 + folded FOLLOWUP-DURING-CALL-1, RESCHED-SMS-1,
-   CHATS-DM-1, CONTACTS-EDIT-DEAD-1) as Phase A, then F15 (Phase B) and F16 + F17-phase-1 (Phase C). HOURS-1
-   builds ONE shared business-hours module (extracted from `runEngagement.ts`); F17-phase-1 later extends it
-   to voice dials + the AU legal windows (chosen split). The ready-to-run prompt is in the
-   `Operations/handoffs/2026-07-06-*` handoff for this planning turn. A separate **non-build closeout** prompt
-   handles the report-only PU-* edits + Brendan action pack + stale-marker reconciliation. Pipeline:
-   `[✓] Voice + browser  [•] Combined build: bugs + F15 + F16 (next)  [ ] First-Client Milestone (gated)`.
+3e. **Combined build session (bugs + F15 + F16 + F17-p1) — DONE + DEPLOYED LIVE 2026-07-07 (Opus 4.8, plan ON,
+   Brendan GO: build all three F16 dial features + deploy everything).** All 5 open CODE bugs (Phase A: CHATS-DM-1,
+   HOURS-1 + folded FOLLOWUP-DURING-CALL-1, RESCHED-SMS-1, CONTACTS-EDIT-DEAD-1) + F15 (funnel + weekly report) +
+   F16 (speed-to-lead + missed-call text-back + live-transfer, default-OFF flags) + F17-p1 (AU calling-hours clamp
+   + recording-disclosure toggle) built, committed per item, tested (test:node 147 / test:edge 227 / build green),
+   and DEPLOYED: 4 migrations (Mgmt API), edge fns bookings-webhook v9 / get-show-rate-funnel v1 / get-weekly-report
+   v1 / make-retell-outbound-call v28 / retell-inbound-webhook v7 / retell-call-webhook v22, Trigger 20260706.1 (13
+   tasks), frontend pushed origin+github (`8950f69`..`7a0b0b4`). HOURS-1 built ONE shared `trigger/_shared/
+   businessHours.ts`; F17-p1 extended it with the AU legal clamp. Findings: live `bookings` is the phase7a schema
+   (types.ts stale); inbound voice is Retell-terminated so F16(c) is Retell-disposition-driven (not a Twilio
+   webhook). Deferred (noted): F15 top-objections + pipeline-value, F16(d) summary-on-failed-transfer + PU-11.
+   Handoff `Operations/handoffs/2026-07-07-combined-build-bugs-f15-f16.md`; live checks → TEST_LIST; manual steps
+   (dogfood-enable, GHL appt-status workflow, PU-6/10/11) → BRENDAN_TODO. Pipeline:
+   `[✓] Voice + browser  [✓] Combined build: bugs + F15 + F16 (DONE 2026-07-07)  [ ] First-Client Milestone (gated)`.
 4. **Brendan solo block (parallel, no Claude session):** DEPLOY-1 (pin Railway to `main`), inotify sysctl,
    Setter-1 prompt migration, Resend SMTP → F14 E2E, sms_llm rate + billing anchor/toggles, n8n Railway
    shutdown, Twilio alpha-sender-ID check, PROMPT_UPDATE_LIST items (PU-1/3/4/5/6/7).

@@ -14,6 +14,36 @@ When an item passes, move it to `Docs/archive/COMPLETED_LOG.md`. When it fails, 
 > **SMS + Voice — SHARED-FN PASS CLOSED:** **CANCEL-1** (SMS cancel bound real id + all fabricated ids refused; voice reschedule+cancel bound real id, no 404), **BOOK-2/BOOK-3** (SMS + voice exact-time bookings, no day-shift), **SMS-METER-1** (SMS direct-tool + voice in-call → message_queue sms_outbound row). **VOICE GATE** answered booking on v49+v23 (`call_c347226e…`, booked `yw7NyOE0…`, `source='voice_call'`, real slots, clean). `error_logs` empty for the window.
 > **NEW BUGS opened (BUG_LIST):** **RESCHED-SMS-1** (SMS reschedule tool-selection + a false "moved" confirmation; voice unaffected), **CHATS-DM-1** (`/chats` selects nonexistent `dm_executions.messages` → 400), **FOLLOWUP-DURING-CALL-1** (nudge SMS fired mid-call), **CONTACTS-EDIT-DEAD-1** (Contacts edit dialog is dead code). **PROMPT_UPDATE_LIST:** **PU-9** (voice dead-air fix), **PU-10** (reschedule list-first + no-false-confirm).
 
+## ⭐⭐⭐ COMBINED BUILD SESSION (bugs + F15 + F16 + F17-p1) — DEPLOYED LIVE 2026-07-06/07 — LIVE CHECKS OWED
+
+> All built + deployed (12 commits `8950f69`..`7a0b0b4`; 4 migrations applied; edge fns bookings-webhook v9 /
+> get-show-rate-funnel v1 / get-weekly-report v1 / make-retell-outbound-call v28 / retell-inbound-webhook v7 /
+> retell-call-webhook v22; Trigger 20260706.1 / 13 tasks; frontend pushed → Railway). test:node 147, test:edge 227.
+> Handoff `Operations/handoffs/2026-07-07-combined-build-bugs-f15-f16.md`. Every F16/F17 new behaviour is behind a
+> per-client flag defaulting OFF, so nothing dials/texts differently until a client is opted in.
+
+**Phase A bugs (behavioural):**
+- [ ] **CHATS-DM-1** — open `/chats`; no `dm_executions ... messages` 400; recent-outbound previews render.
+- [ ] **HOURS-1 (a)** — an out-of-hours setter follow-up / nudge DEFERS to the next opening (no midnight text).
+- [ ] **HOURS-1 (d)** — a brand-new lead enrolled OUT of hours gets the instant "first thing in the morning" SMS immediately; the call defers into hours.
+- [ ] **FOLLOWUP-DURING-CALL-1** — a follow-up/nudge is suppressed while the lead is on a live voice call.
+- [ ] **RESCHED-SMS-1** — over SMS the setter no longer false-confirms a reschedule/cancel (says it's checking / re-lists instead).
+- [ ] **CONTACTS-EDIT-DEAD-1** — select exactly one contact → the Edit button appears + the dialog saves (normalized_phone recomputed).
+
+**F15 ROI visibility:**
+- [ ] **F15 funnel** — after the GHL appointment-status workflow is provisioned (BRENDAN_TODO), flip one real booking confirmed→showed in GHL and watch the dashboard funnel row update (booked/held/no-show).
+- [ ] **F15 report** — on the dogfood client, generate a weekly report + view it via ReportSettingsCard "Preview latest report"; sections respect the toggles; email stubbed until Resend.
+- [ ] **F15 client-eye** — with the visibility toggles on, a client-role login sees only its own funnel/report (agency-only data never leaks).
+
+**F17-p1 compliance (Voice-gated):**
+- [ ] **AU hours clamp** — an AU cadence dial/SMS scheduled for outside 9-8 weekday / 9-5 Sat / Sunday / a public holiday DEFERS to the next legal opening.
+- [ ] **Recording disclosure** — enable the toggle + add the PU-6 line to the prompt → a live call opens with the disclosure; disabled → silent.
+
+**F16 never-miss-a-lead (Voice-gated; enable on dogfood first — BRENDAN_TODO):**
+- [ ] **F16(b) speed-to-lead** — with the flag on, a new GHL lead inside the legal window gets an AI call within ~60s; outside hours gets the instant SMS instead.
+- [ ] **F16(c) missed-call text-back** — with the flag on, hang up on an inbound call quickly → an SMS-back arrives within ~60s and enters the SMS booking flow; a second quick call within 15 min does NOT double-text.
+- [ ] **F16(d) live-transfer** — set a transfer number in the VoiceRetellSettings tools editor for a setter, add the PU-11 line to the prompt → a lead asking for a human is transferred to that number.
+
 ## ⭐ Onboarding-fix pass 2026-07-06 — ✅ ALL PASSED 2026-07-06 (voice + browser session) → COMPLETED_LOG. _(Was: BUILT on `main`, live AFTER `git push github main`; the push landed and Railway deployed.)_
 
 > Commits `9f5b959`..`bb6322a` (handoff `Operations/handoffs/2026-07-06-onboarding-fix.md`). GOLIVE-1's edge fn
