@@ -31,6 +31,13 @@ import { aiGenerateEngagementCopy } from "./_shared/aiGenerateEngagementCopy";
 import { normalizePhone } from "./_shared/phone";
 import { isPhoneOptedOut } from "./_shared/optout";
 import { normalizeLlmModel } from "./_shared/llmModel";
+import {
+  DEFAULT_QUIET_HOURS,
+  resolveLeadTimezone,
+  isWithinQuietHoursWindow,
+  parseQuietHours,
+} from "./_shared/businessHours";
+import { isVoiceCallActive } from "./_shared/voiceCallActive";
 
 const getMainSupabase = () =>
   createClient(
@@ -48,12 +55,6 @@ const TIER_INTENT = [
   "The lead replied to your last SMS / call about 24h ago but then went quiet on the most recent setter message. Send a SHORT, warm nudge that references what they last said. One sentence + a single low-friction question. Goal: re-open the conversation without restating the original ask.",
   "The lead replied a few days ago and then went silent. They might have lost interest or just got busy. Send ONE message that reframes — ask what the underlying goal or pain is, not whether they're 'still interested'. Avoid 'just checking in' and 'circling back'. Keep it human.",
 ];
-
-// Lead-local nudge window (3.10). A nudge only fires when it is between these
-// hours in the lead's client timezone, so a re-engagement SMS never lands in
-// the middle of the night regardless of the tenant's timezone.
-const NUDGE_LOCAL_START_HOUR = 9;  // 9am local
-const NUDGE_LOCAL_END_HOUR = 20;   // 8pm local (exclusive)
 
 export const nudgeColdReply = schedules.task({
   id: "nudge-cold-reply",
@@ -75,7 +76,7 @@ export const nudgeColdReply = schedules.task({
     const { data: candidates, error: queryErr } = await supabase
       .from("leads")
       .select(
-        "client_id, lead_id, phone, email, first_name, last_name, business_name, custom_fields, last_inbound_at, last_outbound_at, nudge_count, clients ( id, twilio_account_sid, twilio_auth_token, twilio_default_phone, retell_phone_1, openrouter_api_key, llm_model, supabase_url, supabase_service_key, timezone )",
+        "client_id, lead_id, phone, email, first_name, last_name, business_name, custom_fields, last_inbound_at, last_outbound_at, nudge_count, clients ( id, twilio_account_sid, twilio_auth_token, twilio_default_phone, retell_phone_1, openrouter_api_key, llm_model, supabase_url, supabase_service_key, timezone, cadence_quiet_hours )",
       )
       .eq("setter_stopped", false)
       .eq("tagged_silent_after_engagement", false)
@@ -151,6 +152,7 @@ export const nudgeColdReply = schedules.task({
         supabase_url: string | null;
         supabase_service_key: string | null;
         timezone: string | null;
+        cadence_quiet_hours: unknown;
       } | null;
 
       if (!cl?.openrouter_api_key || !cl.twilio_account_sid || !cl.twilio_auth_token) {
@@ -166,26 +168,28 @@ export const nudgeColdReply = schedules.task({
         continue;
       }
 
-      // 3.10 lead-local-hour gate. Skip if it is outside the nudge window in
-      // the client's timezone (a later hourly run picks the lead up once it is
-      // a sane local hour). Checked BEFORE AI generation so we never pay to
-      // generate copy we won't send.
-      const clientTz = cl.timezone || "Australia/Sydney";
-      const localHour = (() => {
-        try {
-          return parseInt(
-            new Intl.DateTimeFormat("en-US", {
-              timeZone: clientTz,
-              hour: "numeric",
-              hour12: false,
-            }).format(now),
-            10,
-          );
-        } catch {
-          return 12; // invalid tz, treat as mid-day so we don't block sends
-        }
-      })();
-      if (localHour < NUDGE_LOCAL_START_HOUR || localHour >= NUDGE_LOCAL_END_HOUR) {
+      // HOURS-1: business-hours gate. Uses the SAME source of truth as
+      // runEngagement / sendFollowup (the client's cadence_quiet_hours) instead
+      // of a hardcoded 9-8 window, resolved to the LEAD's timezone. Checked
+      // BEFORE AI generation so we never pay to generate copy we won't send. A
+      // later hourly run picks the lead up once it is inside the window.
+      const nudgeQuietHours = parseQuietHours(cl.cadence_quiet_hours) ?? DEFAULT_QUIET_HOURS;
+      const nudgeClientTz = cl.timezone || null;
+      const nudgeEffectiveQH =
+        nudgeClientTz && nudgeQuietHours === DEFAULT_QUIET_HOURS
+          ? { ...nudgeQuietHours, tz: nudgeClientTz }
+          : nudgeQuietHours;
+      const nudgeLeadTz = resolveLeadTimezone((lead.phone as string | null) ?? undefined, nudgeEffectiveQH.tz);
+      if (!isWithinQuietHoursWindow(now, nudgeEffectiveQH, nudgeLeadTz)) {
+        stats.skipped++;
+        continue;
+      }
+
+      // FOLLOWUP-DURING-CALL-1: don't nudge while the lead is on a live voice
+      // call (the agent is talking to them right now). Checked BEFORE AI
+      // generation so we never pay for copy we then suppress.
+      if (await isVoiceCallActive(supabase, { ghlContactId: lead.lead_id!, clientId: lead.client_id! })) {
+        console.log(`nudgeColdReply: voice call active for ${lead.lead_id} — skipping this run.`);
         stats.skipped++;
         continue;
       }

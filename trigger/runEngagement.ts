@@ -8,6 +8,13 @@ import { classifyCallOutcome } from "./_shared/classifyCallOutcome";
 import { normalizePhone } from "./_shared/phone";
 import { isPhoneOptedOut } from "./_shared/optout";
 import { normalizeLlmModel } from "./_shared/llmModel";
+import {
+  DEFAULT_QUIET_HOURS,
+  resolveLeadTimezone,
+  isWithinQuietHoursWindow,
+  getNextQuietHoursStart,
+  parseQuietHours,
+} from "./_shared/businessHours";
 
 const getMainSupabase = () =>
   createClient(
@@ -67,79 +74,23 @@ type EngagementNode =
   | { id: string; type: "drip"; batch_size: number; interval_seconds: number };
 
 // ── Phase 4b — Quiet hours ─────────────────────────────────────────────────
-// clients.cadence_quiet_hours jsonb shape (per Docs/CADENCE_DESIGN.md):
-//   { "start": "09:00", "end": "21:00", "tz": "Australia/Brisbane",
-//     "days": [1,2,3,4,5] }   // 1=Mon ... 7=Sun
-type QuietHoursConfig = {
-  start: string; // HH:MM
-  end: string;   // HH:MM
-  tz: string;    // IANA
-  days: number[]; // 1..7
-};
+// Quiet-hours / business-hours logic now lives in ./_shared/businessHours.ts
+// (HOURS-1) so runEngagement, sendFollowup and nudgeColdReply share ONE copy.
+// QuietHoursConfig, DEFAULT_QUIET_HOURS, resolveLeadTimezone,
+// isWithinQuietHoursWindow, getNextQuietHoursStart, parseQuietHours are imported
+// at the top of this file.
 
-const DEFAULT_QUIET_HOURS: QuietHoursConfig = {
-  start: "09:00",
-  end: "21:00",
-  tz: "Australia/Brisbane",
-  days: [1, 2, 3, 4, 5, 6, 7],
-};
-
-const PHONE_TZ_PREFIX_MAP: Record<string, string> = {
-  "+61": "Australia/Brisbane",
-  "+1":  "America/New_York",
-  "+44": "Europe/London",
-  "+64": "Pacific/Auckland",
-  "+353": "Europe/Dublin",
-  "+27": "Africa/Johannesburg",
-};
-
-function resolveLeadTimezone(phone: string | undefined, clientDefaultTz: string): string {
-  if (!phone) return clientDefaultTz;
-  // Sort prefixes by length descending so +353 wins over +1
-  const prefixes = Object.keys(PHONE_TZ_PREFIX_MAP).sort((a, b) => b.length - a.length);
-  for (const prefix of prefixes) {
-    if (phone.startsWith(prefix)) return PHONE_TZ_PREFIX_MAP[prefix];
-  }
-  return clientDefaultTz;
-}
-
-function isWithinQuietHoursWindow(now: Date, qh: QuietHoursConfig, tz: string): boolean {
-  const localStr = now.toLocaleString("en-US", { timeZone: tz });
-  const local = new Date(localStr);
-  // 1=Mon..7=Sun
-  const dayJs = local.getDay();
-  const day = dayJs === 0 ? 7 : dayJs;
-  if (!qh.days.includes(day)) return false;
-  const cur = local.toTimeString().slice(0, 5);
-  const overnight = qh.start > qh.end;
-  if (overnight) return cur >= qh.start || cur <= qh.end;
-  return cur >= qh.start && cur <= qh.end;
-}
-
-// Step forward in 5-minute increments to keep the loop cheap; max 14 days
-function getNextQuietHoursStart(now: Date, qh: QuietHoursConfig, tz: string): Date {
-  if (isWithinQuietHoursWindow(now, qh, tz)) return now;
-  let probe = new Date(now);
-  const stepMs = 5 * 60_000;
-  const maxIters = (14 * 24 * 60) / 5;
-  for (let i = 0; i < maxIters; i++) {
-    probe = new Date(probe.getTime() + stepMs);
-    if (isWithinQuietHoursWindow(probe, qh, tz)) return probe;
-  }
-  // 14d soft cap — return now to avoid forever-park
-  return now;
-}
-
-function parseQuietHours(raw: unknown): QuietHoursConfig | null {
-  if (!raw || typeof raw !== "object") return null;
-  const r = raw as Record<string, unknown>;
-  const start = typeof r.start === "string" ? r.start : null;
-  const end = typeof r.end === "string" ? r.end : null;
-  const tz = typeof r.tz === "string" ? r.tz : null;
-  const days = Array.isArray(r.days) ? r.days.filter((d): d is number => typeof d === "number" && d >= 1 && d <= 7) : null;
-  if (!start || !end || !tz || !days || days.length === 0) return null;
-  return { start, end, tz, days };
-}
+// HOURS-1 (d): new-lead first-touch confirmation SMS. For node 0 of a
+// is_new_leads_campaign workflow the acknowledgement text fires INSTANTLY
+// (bypassing the business-hours gate) using one of these two variants, chosen by
+// whether enrollment landed inside or outside the client's sending window. The
+// phone_call channel in that same node still defers into business hours. These
+// are code-side defaults Brendan can tune; {{first_name}} etc. interpolate if
+// present on the lead.
+const NEW_LEAD_FIRST_TOUCH_SMS_INHOURS =
+  "Thanks for reaching out! One of our team will give you a call shortly. Talk soon.";
+const NEW_LEAD_FIRST_TOUCH_SMS_OUTOFHOURS =
+  "Thanks for reaching out! Our team will give you a call first thing in the morning. Talk soon.";
 
 // Cadence v2 — workflow-level schedule gating. Shape mirrors ScheduleConfig
 // at the bottom of this file (0=Sun..6=Sat per Date.getDay()). The
@@ -975,8 +926,18 @@ export const runEngagement = task({
         // Groups SMS, WhatsApp, and phone call channels with per-channel delays.
         // Channels are executed in order; only enabled channels fire.
         } else if (node.type === "engage") {
+          // HOURS-1 (d): new-lead first-touch exception. For node 0 of a
+          // is_new_leads_campaign workflow the confirmation SMS fires INSTANTLY
+          // (its gate is skipped below and its copy is a fixed hour-aware
+          // variant); the phone_call and any other channel keep the normal gate,
+          // re-applied per-channel because the node-level gate is skipped here.
+          const isNewLeadFirstTouch = workflowRow?.is_new_leads_campaign === true && i === 0;
+          const withinHoursAtEnroll = isWithinQuietHoursWindow(new Date(), quietHours, leadTz);
+
           // Phase 4b — quiet hours gate (always-on per-client fallback).
-          await enforceQuietHoursBeforeSend(`engage node ${i}`);
+          if (!isNewLeadFirstTouch) {
+            await enforceQuietHoursBeforeSend(`engage node ${i}`);
+          }
           if (await isCancelled()) { await writeCadenceMetrics("cancelled"); return { status: "cancelled", node_index: i }; }
 
           // ── Schedule gate: wait until the next allowed send window ──────────
@@ -1037,6 +998,14 @@ export const runEngagement = task({
               // send/dial in the middle of the night. enforceQuietHoursBeforeSend
               // waits until the next allowed window when outside it.
               await enforceQuietHoursBeforeSend(`engage node ${i} channel ${ci} (${ch.type})`);
+            }
+
+            // HOURS-1 (d): the node-level gate was skipped for the new-lead
+            // first-touch node so its confirmation SMS can go out immediately.
+            // Re-apply the business-hours gate here for every OTHER channel
+            // (phone_call, whatsapp, email) so only the SMS is exempt.
+            if (isNewLeadFirstTouch && ch.type !== "sms") {
+              await enforceQuietHoursBeforeSend(`engage node ${i} channel ${ci} (${ch.type}) [new-lead first-touch]`);
             }
 
             if (await isCancelled()) {
@@ -1217,6 +1186,16 @@ export const runEngagement = task({
                 }
               }
             }
+            // HOURS-1 (d): for the new-lead first-touch node the confirmation
+            // SMS uses a fixed hour-aware variant (chosen by the in/out-of-hours
+            // state at enrollment), overriding the node's configured/AI copy so
+            // the lead always gets an instant, correct acknowledgement.
+            if (isNewLeadFirstTouch && ch.type === "sms") {
+              message = interpolate(
+                withinHoursAtEnroll ? NEW_LEAD_FIRST_TOUCH_SMS_INHOURS : NEW_LEAD_FIRST_TOUCH_SMS_OUTOFHOURS,
+              );
+            }
+
             const channelLabel = ch.type === "sms" ? "SMS" : ch.type === "whatsapp" ? "WhatsApp" : "email";
             await updateExecution({ stage_description: `Sending ${channelLabel}...` });
 

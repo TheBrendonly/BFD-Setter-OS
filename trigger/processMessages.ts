@@ -6,6 +6,12 @@ import { pushSmsToGhl } from "./_shared/ghl-conversations";
 import { claimSend, releaseSend } from "./_shared/sendClaim";
 import { normalizePhone } from "./_shared/phone";
 import { isPhoneOptedOut } from "./_shared/optout";
+import {
+  DEFAULT_QUIET_HOURS,
+  resolveLeadTimezone,
+  getNextQuietHoursStart,
+  parseQuietHours,
+} from "./_shared/businessHours";
 
 const getMainSupabase = () =>
   createClient(
@@ -96,7 +102,7 @@ export const processMessages = task({
       // Done BEFORE the debounce wait so the lead appears in the CRM immediately.
       const { data: client, error: clientError } = await supabase
         .from("clients")
-        .select("id, supabase_url, supabase_service_key, supabase_table_name, twilio_account_sid, twilio_auth_token, retell_phone_1, use_native_text_engine, ghl_api_key, ghl_location_id, ghl_conversation_provider_id")
+        .select("id, supabase_url, supabase_service_key, supabase_table_name, twilio_account_sid, twilio_auth_token, retell_phone_1, use_native_text_engine, ghl_api_key, ghl_location_id, ghl_conversation_provider_id, cadence_quiet_hours, timezone")
         .eq("ghl_location_id", ghl_account_id)
         .single();
 
@@ -517,7 +523,26 @@ export const processMessages = task({
         const followupMaxAttempts = (agentSettings?.followup_max_attempts as number | null) ?? 0;
 
         if (followupDelay > 0 && followupMaxAttempts > 0) {
-          const firesAt = new Date(Date.now() + followupDelay * 1000);
+          // HOURS-1: snap the first follow-up timer forward to the next business-
+          // hours opening so it never lands outside the client's sending window
+          // (an 8pm reply + 4h delay would otherwise fire at midnight).
+          // sendFollowup also re-gates at fire time as a belt-and-braces.
+          const fuQuietHours =
+            parseQuietHours((client as any).cadence_quiet_hours) ?? DEFAULT_QUIET_HOURS;
+          const fuClientTz =
+            typeof (client as any).timezone === "string" && (client as any).timezone
+              ? ((client as any).timezone as string)
+              : null;
+          const fuEffectiveQH =
+            fuClientTz && fuQuietHours === DEFAULT_QUIET_HOURS
+              ? { ...fuQuietHours, tz: fuClientTz }
+              : fuQuietHours;
+          const fuLeadTz = resolveLeadTimezone(contact_phone ?? undefined, fuEffectiveQH.tz);
+          const firesAt = getNextQuietHoursStart(
+            new Date(Date.now() + followupDelay * 1000),
+            fuEffectiveQH,
+            fuLeadTz,
+          );
 
           // Cancel any existing pending timer for this contact
           await supabase

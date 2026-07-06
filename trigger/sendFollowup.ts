@@ -4,6 +4,14 @@ import { sendTwilioSmsAndStamp } from "./_shared/sendTwilioSmsAndStamp";
 import { claimSend, releaseSend } from "./_shared/sendClaim";
 import { normalizePhone } from "./_shared/phone";
 import { isPhoneOptedOut } from "./_shared/optout";
+import {
+  DEFAULT_QUIET_HOURS,
+  resolveLeadTimezone,
+  isWithinQuietHoursWindow,
+  getNextQuietHoursStart,
+  parseQuietHours,
+} from "./_shared/businessHours";
+import { isVoiceCallActive } from "./_shared/voiceCallActive";
 import { normalizeLlmModel } from "./_shared/llmModel";
 import { resolveClientTimeZone, buildTimeAnchorBlock } from "./_shared/timeAnchor";
 import { prefetchAvailability, buildAvailabilityBlock } from "./_shared/prefetchSlots";
@@ -153,13 +161,58 @@ export const sendFollowup = task({
     // ── STEP 3: Fetch client config ───────────────────────────────────────────
     const { data: client } = await supabase
       .from("clients")
-      .select("openrouter_api_key, llm_model, supabase_url, supabase_service_key, twilio_account_sid, twilio_auth_token, retell_phone_1, twilio_default_phone, ghl_api_key, ghl_location_id, ghl_conversation_provider_id, intake_lead_secret, timezone")
+      .select("openrouter_api_key, llm_model, supabase_url, supabase_service_key, twilio_account_sid, twilio_auth_token, retell_phone_1, twilio_default_phone, ghl_api_key, ghl_location_id, ghl_conversation_provider_id, intake_lead_secret, timezone, cadence_quiet_hours")
       .eq("id", client_id)
       .single();
 
     if (!client?.openrouter_api_key) {
       await supabase.from("followup_timers").update({ status: "failed", updated_at: new Date().toISOString() }).eq("id", timer_id);
       throw new Error("Missing client openrouter_api_key");
+    }
+
+    // ── FOLLOWUP-DURING-CALL-1: suppress while a live voice call is in progress ─
+    // Don't fire a follow-up SMS while the agent is on a call with this lead.
+    // Hold until the call clears, bounded to ~15 min so a missed active_call_id
+    // clear can't hang the follow-up forever (mirrors processMessages' HOLD).
+    {
+      const holdDeadline = Date.now() + 15 * 60 * 1000;
+      while (Date.now() < holdDeadline) {
+        const onCall = await isVoiceCallActive(supabase, { ghlContactId: lead_id, ghlAccountId: ghl_account_id });
+        if (!onCall) break;
+        console.log(`Follow-up timer ${timer_id}: voice call active for ${lead_id} — holding until it ends...`);
+        await wait.until({ date: new Date(Date.now() + 20_000) });
+      }
+    }
+
+    // ── HOURS-1: business-hours re-gate at fire time ──────────────────────────
+    // The schedule-time snap (the first timer in processMessages, the next-in-
+    // sequence timer below) is primary; this defends a timer that still lands
+    // outside the window (config changed / stale snap). Same source of truth as
+    // runEngagement: the client's cadence_quiet_hours in the lead's timezone.
+    // Resolved once here and reused when scheduling the next timer (STEP 11).
+    const followupQuietHours =
+      parseQuietHours((client as any).cadence_quiet_hours) ?? DEFAULT_QUIET_HOURS;
+    const followupClientTz =
+      typeof (client as any).timezone === "string" && (client as any).timezone
+        ? ((client as any).timezone as string)
+        : null;
+    const effectiveQuietHours =
+      followupClientTz && followupQuietHours === DEFAULT_QUIET_HOURS
+        ? { ...followupQuietHours, tz: followupClientTz }
+        : followupQuietHours;
+    const followupLeadTz = resolveLeadTimezone(
+      (leadRow?.phone as string | null) ?? undefined,
+      effectiveQuietHours.tz,
+    );
+    {
+      const nowForGate = new Date();
+      if (!isWithinQuietHoursWindow(nowForGate, effectiveQuietHours, followupLeadTz)) {
+        const openAt = getNextQuietHoursStart(nowForGate, effectiveQuietHours, followupLeadTz);
+        console.log(
+          `Follow-up timer ${timer_id}: outside business hours — deferring until ${openAt.toISOString()} (${followupLeadTz}).`,
+        );
+        await wait.until({ date: openAt });
+      }
     }
 
     // ── STEP 4: Fetch agent settings ──────────────────────────────────────────
@@ -506,7 +559,10 @@ export const sendFollowup = task({
       if (followupDelay <= 0) {
         console.log(`No delay configured for follow-up #${nextIndex} — stopping sequence.`);
       } else {
-        const nextFiresAt = new Date(Date.now() + followupDelay * 1000);
+        // HOURS-1: snap the next-in-sequence timer forward to the next business-
+        // hours opening so it never lands outside the client's sending window.
+        const rawNextFiresAt = new Date(Date.now() + followupDelay * 1000);
+        const nextFiresAt = getNextQuietHoursStart(rawNextFiresAt, effectiveQuietHours, followupLeadTz);
 
         // Cancel any other pending timers for this contact (safety)
         await supabase
