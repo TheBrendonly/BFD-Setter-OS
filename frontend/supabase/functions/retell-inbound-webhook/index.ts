@@ -92,7 +92,7 @@ Deno.serve(async (req) => {
     // Resolve client by agent_id across all 10 slots (same pattern as retell-call-webhook).
     const { data: clients } = await supabase
       .from("clients")
-      .select("id, timezone, retell_webhook_secret")
+      .select("id, timezone, retell_webhook_secret, recording_disclosure_enabled")
       .or(
         `retell_inbound_agent_id.eq.${agentId},retell_outbound_agent_id.eq.${agentId},retell_outbound_followup_agent_id.eq.${agentId},retell_agent_id_4.eq.${agentId},retell_agent_id_5.eq.${agentId},retell_agent_id_6.eq.${agentId},retell_agent_id_7.eq.${agentId},retell_agent_id_8.eq.${agentId},retell_agent_id_9.eq.${agentId},retell_agent_id_10.eq.${agentId}`,
       );
@@ -152,6 +152,11 @@ Deno.serve(async (req) => {
     const dv: Record<string, string> = {
       current_time: currentTime,
       current_timezone: tz,
+      // F17: call-recording disclosure flag (spoken line is PU-6, prompt-side).
+      recording_disclosure:
+        (client as { recording_disclosure_enabled?: boolean }).recording_disclosure_enabled === true
+          ? "required"
+          : "not_required",
       ...leadVars(lead, fromNumber),
     };
 

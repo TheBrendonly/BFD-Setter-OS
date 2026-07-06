@@ -18,6 +18,7 @@ import { ClientPricingConfigEditor } from "@/components/ClientPricingConfigEdito
 import { ClientUsagePanel } from "@/components/ClientUsagePanel";
 import { ShowRateFunnelCard } from "@/components/ShowRateFunnelCard";
 import { ReportSettingsCard } from "@/components/ReportSettingsCard";
+import { ComplianceSettingsCard } from "@/components/ComplianceSettingsCard";
 import { useSubscription } from "@/hooks/useSubscription";
 import { UnsavedChangesDialog } from '@/components/UnsavedChangesDialog';
 import { ClientVoicemailCard } from '@/components/setters/ClientVoicemailCard';
@@ -484,6 +485,10 @@ export default function ClientSettings() {
               {/* F15 ROI reporting settings + weekly report preview. */}
               <div className="mt-4">
                 <ReportSettingsCard clientId={clientId} />
+              </div>
+              {/* F17 compliance: call-recording disclosure toggle. */}
+              <div className="mt-4">
+                <ComplianceSettingsCard clientId={clientId} />
               </div>
             </div>
           )}

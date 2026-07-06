@@ -539,7 +539,7 @@ Deno.serve(async (req) => {
     const { data: client, error: clientErr } = await supabase
       .from("clients")
       .select(
-        "retell_api_key, retell_inbound_agent_id, retell_outbound_agent_id, retell_outbound_followup_agent_id, retell_agent_id_4, retell_agent_id_5, retell_agent_id_6, retell_agent_id_7, retell_agent_id_8, retell_agent_id_9, retell_agent_id_10, retell_phone_1, retell_phone_2, retell_phone_3, ghl_location_id, ghl_api_key, ghl_calendar_id, timezone, voicemail_config, supabase_url, supabase_service_key",
+        "retell_api_key, retell_inbound_agent_id, retell_outbound_agent_id, retell_outbound_followup_agent_id, retell_agent_id_4, retell_agent_id_5, retell_agent_id_6, retell_agent_id_7, retell_agent_id_8, retell_agent_id_9, retell_agent_id_10, retell_phone_1, retell_phone_2, retell_phone_3, ghl_location_id, ghl_api_key, ghl_calendar_id, timezone, voicemail_config, supabase_url, supabase_service_key, recording_disclosure_enabled",
       )
       .eq("id", client_id)
       .single();
@@ -794,6 +794,13 @@ Deno.serve(async (req) => {
       utm_source: fields.utm_source || "",
       utm_medium: fields.utm_medium || "",
       utm_campaign: fields.utm_campaign || "",
+      // F17: per-client call-recording disclosure flag. The spoken LINE is PU-6
+      // (Brendan authors it in the prompt referencing {{recording_disclosure}});
+      // the engine only injects "required" / "not_required" so the prompt can
+      // conditionally open with the disclosure. Inert until the prompt references it.
+      recording_disclosure: (client as { recording_disclosure_enabled?: boolean }).recording_disclosure_enabled === true
+        ? "required"
+        : "not_required",
       custom_instructions:
         custom_instructions ||
         `Keep the conversation natural and human-like. Speak casually as if you're a real person, not a bot. Use filler words occasionally (like "yeah", "I mean", "for sure"). Keep responses short - 1 to 2 sentences max unless they ask for more detail. Mirror the prospect's energy and pace. If they sound busy, get to the point fast. If they're chatty, match that vibe. Never sound scripted or robotic.`,
