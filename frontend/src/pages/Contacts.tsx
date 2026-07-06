@@ -1459,6 +1459,12 @@ const Contacts = () => {
             <Download className="w-4 h-4 mr-1.5" />
             Export ({effectiveSelectedCountFinal.toLocaleString()})
           </Button>
+          {!allLeadsSelected && selectedContacts.size === 1 && (
+            <Button variant="outline" onClick={handleEditContact}>
+              <Pencil className="w-4 h-4 mr-1.5" />
+              Edit
+            </Button>
+          )}
           <Button variant="outline" onClick={() => { setBulkTagIds([]); setShowBulkTagDialog(true); }}>
             <Tags className="w-4 h-4 mr-1.5" />
             Assign Tags ({effectiveSelectedCountFinal.toLocaleString()})
