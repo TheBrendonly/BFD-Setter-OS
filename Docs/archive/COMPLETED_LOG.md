@@ -3,6 +3,35 @@
 Items closed out of the active lists. Newest first. The active lists are in the repo root + `Docs/`
 (`BUG_LIST.md`, `FEATURE_ROADMAP.md`, `BRENDAN_TODO.md`, `TEST_LIST.md`, `DEFERRED.md`).
 
+## 2026-07-07 — Session P2: deferred pull-forward build (F9 v2 + BOOK-TZ-1 + execution_cost_events)
+
+Brendan-driven triage over `DEFERRED.md`. The bulk stays gated (no paying client / no real usage data yet);
+Brendan greenlit three non-client-gated items, each built at MVP depth with TDD + verify-before-completion.
+Commits `db4205e` (cost ledger) + the F9 v2 and BOOK-TZ-1 commits after it. All deployed (edge fns +
+Trigger.dev Version 20260707.1).
+
+- **`execution_cost_events` ledger** — dedicated itemized per-execution cost table (voice/sms/llm), keyed by
+  `engagement_executions.id`, agency-only role-gated RLS (raw cost = BFD margin; mirrors `client_pricing_config`
+  trap), `UNIQUE(cost_kind, provider_ref)` for idempotent upserts. Real cost where available: voice
+  (`retell-call-webhook` v23 + `retell-call-analysis-webhook` v27, `call.cost`, execution_id bridged from the
+  Retell dynamic var), LLM (`runEngagement` end, real `ai_cost_cents`); estimated for SMS
+  (`sendTwilioSmsAndStamp`, num_segments × seed). Pure `buildCostEvent` + 9 unit tests. No downstream consumer
+  rewired (it just accrues — the prereq for 2.6/F8v2/3.9/4.1). Idempotency + schema + RLS proven via SQL;
+  live accrual → TEST_LIST COST-1..4.
+- **F9 v2 (poll + alerts)** — hourly `trigger/pollRetellDrift.ts` reads locked setters + per-client Retell key
+  from the DB, compares live get-agent/get-retell-llm vs the stored snapshot via pure `computeDriftState`
+  (11 tests), sets persisted `voice_setters.retell_drift_detected_at`/`retell_booking_tools_lost_at` flags →
+  error_logs + optional Slack + PromptManagement tile badges; cleared on pull/unlock (retell-proxy v50).
+  Gap (c) auto-hydrate-on-unlock explicitly deferred. Verified end-to-end via a controlled lock of Property
+  Coach (real live drift v17 vs synced v13): flag+error_logs written, idempotent, cleared on pull, restored.
+- **BOOK-TZ-1 (per-lead timezone display)** — `leads.timezone` captured from the GHL contact
+  (`buildLeadInsert`/`sync-ghl-contact` v28/`intake-lead` v16, IANA-validated); `leadTimezone.ts` helpers
+  (Intl, DST-aware) + 7 tests; VOICE `{{lead_timezone(_label)}}`+`{{business_timezone(_label)}}` dynamic vars
+  (`make-retell-outbound-call` v29, inert until the prompt uses them); TEXT additive lead-tz block in
+  `processSetterReply` (frozen availability/tool blocks untouched, byte-mirror still green). Booking code
+  untouched → booked time stays business-tz. Voice wording is report-only → PU-13. Dormant until a lead
+  carries a non-business GHL timezone.
+
 ## 2026-07-07 — Session P1 audit reconciliation: backlog items confirmed passed 2026-07-03/05/06 but never archived
 
 A full list-vs-live-state audit (git log, edge-fn versions, table/column existence, and the dated handoffs)

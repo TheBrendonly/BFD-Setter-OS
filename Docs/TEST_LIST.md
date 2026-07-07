@@ -14,6 +14,34 @@ When an item passes, move it to `Docs/archive/COMPLETED_LOG.md`. When it fails, 
 
 > **⭐⭐⭐ VOICE + BROWSER TEST SESSION — 2026-07-06, and the 2026-07-05 TEST SESSION before it — ALL PASSED → `COMPLETED_LOG.md`.** Full detail there + handoffs `Operations/handoffs/2026-07-06-voice-browser-session.md` + `2026-07-05-test-session.md`. Between the two, essentially every pre-existing bug/feature check passed (onboarding-fix cluster, the shared-fn pass, F8/F9-1/F11/UI-1/F13 core/PROMPT-LINT-1/MODEL-1/API-DEPR-1 core/PROMPT-AUTH-1 X-Ray, the B-2 outage leg, G3-7 nav, SWEEP-1a/b/c). What's below is either (a) the still-open behavioral checks for the 2026-07-07 combined build, or (b) a small residual set of finer-grained checks that genuinely haven't run yet.
 
+## Session P2 build (2026-07-07) — deferred pull-forward live-verify
+
+Code + unit tests + read-only data-path checks all done + deployed (see `COMPLETED_LOG` 2026-07-07 P2).
+These are the LIVE behavioral confirmations still owed (most are dormant until a real trigger exists):
+
+- [ ] **COST-1 — voice cost event accrues.** After a real answered outbound call completes, confirm an
+  `execution_cost_events` row: `cost_kind='voice'`, real `cost_usd` (= `call_history.cost`), non-null
+  `execution_id` (outbound), `is_estimated=false`. (Idempotency + table + RLS already proven via SQL.)
+- [ ] **COST-2 — SMS cost event accrues.** After a cadence outbound SMS send, confirm an `sms` row with
+  `quantity`=num_segments, `is_estimated=true`, `provider_ref`=twilio_sid, `execution_id` set for cadence sends.
+- [ ] **COST-3 — LLM cost event accrues.** After an engagement execution that uses AI, confirm one `llm` row
+  per execution with `execution_id` + non-zero real `cost_usd`.
+- [ ] **COST-4 — RLS.** Agency JWT can SELECT `execution_cost_events`; a client-role JWT canNOT (role-gate,
+  like `client_pricing_config`). (Policy mirrors the proven F8 trap; confirm with a throwaway client user.)
+- [ ] **F9V2-1 — first live scheduled drift poll.** Confirm the hourly `poll-retell-drift` Trigger.dev task
+  runs clean in prod (Version 20260707.1). With a genuinely-locked setter, confirm a real drift sets the tile
+  badge + an `error_logs` row (source `trigger.pollRetellDrift`) without opening PromptManagement. (Full data
+  path already verified 2026-07-07 via a controlled lock of Property Coach; this is the deployed-schedule
+  confirmation.) NOTE: a REAL drift exists right now — Property Coach's live agent is v17 vs synced v13 — but
+  it is UNLOCKED (demo persona), so it won't flag until locked.
+- [ ] **F9V2-2 — badge clears on pull.** After a drift is flagged, a Pull-from-Retell (or unlock) clears the
+  `Drifted · pull` / `Booking tools missing` badge (flags nulled). (Verified via replica; confirm in the UI.)
+- [ ] **BOOKTZ-1 — cross-tz lead hears both zones.** With a lead whose `leads.timezone` differs from the
+  business tz (e.g. set a dogfood lead to `Australia/Perth`), confirm: (a) the TEXT setter states times in both
+  zones while booking the business-tz time; (b) after applying PU-13, the VOICE setter does the same; (c) the
+  booked `bookings.appointment_time` is STILL the business-tz absolute instant (the no-leak assertion).
+  Dormant until a real interstate lead segment exists (the gate). Voice half needs PU-13 applied first.
+
 ## 🟠 MAIN-OUTBOUND-SHARED-1 — dedicated-agent restore (data fix 2026-07-07) — LIVE OUTBOUND CALL OWED
 
 > Fixed as a comprehensive data migration: the WHOLE "Main Outbound" setter (85 slot-keyed rows across

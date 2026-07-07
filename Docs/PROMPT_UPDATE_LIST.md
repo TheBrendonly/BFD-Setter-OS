@@ -170,6 +170,22 @@ can be worked independently.
   transfer" fallback was NOT built — the Retell failed-transfer signal needs live confirmation before shipping
   an auto-SMS from `retell-call-analysis-webhook`; logged for a later Voice session. Priority Medium.
 
+- [ ] **PU-13 — BOOK-TZ-1: state offered times in the lead's own timezone (voice; Main Outbound + Inbound).**
+  Code now captures the lead's timezone (`leads.timezone`, from the GHL contact) and, on outbound calls,
+  injects new Retell dynamic variables: `{{lead_timezone_label}}` (e.g. "Perth"), `{{lead_timezone}}` (the IANA
+  zone), `{{business_timezone_label}}` (e.g. "Sydney") and `{{business_timezone}}`. **These are inert until the
+  prompt references them** (same pattern as `{{recording_disclosure}}`). `{{lead_timezone_label}}` is EMPTY
+  when the lead is in the same/unknown zone, so a conditional reads cleanly. **What to add** (Prompt Management
+  → the setter → SETTER CORE, near the booking/offer rules): an instruction like *"Times on the calendar are in
+  {{business_timezone_label}} time and you must book exactly those times. If {{lead_timezone_label}} is set,
+  when you SAY a time to the lead, give it in both zones, e.g. 'Thursday 2pm {{business_timezone_label}} time,
+  which is around 12pm your time in {{lead_timezone_label}}.' Never change the time you book — only how you say
+  it."* The TEXT setter already gets this behaviour code-side (an additive lead-timezone block in
+  `processSetterReply`), so this PU is the VOICE half only. **Booking is unaffected** either way — the offered
+  and booked times stay business-tz; this only changes what the lead hears. Priority Low until a real
+  interstate lead segment exists (the gate that un-deferred BOOK-TZ-1). Source: Session P2 BOOK-TZ-1 build;
+  `Docs/DEFERRED.md` (BOOK-TZ-1), `leadTimezone.ts`.
+
 ## Superseded by code (kept for the record)
 
 - [~] **PU-2 — BOOK-1 text-setter anti-fabrication / booking rules (text) — now CODE-OWNED, do not add to the
