@@ -108,9 +108,10 @@ COMMIT;
 
 ## Owed to Brendan
 
-- **Live outbound call (Voice-gated → `TEST_LIST.md`):** `node scripts/test-harness/dial.mjs` (default target =
-  Main Outbound UUID). Confirm the Retell record shows `agent_id = agent_f45f4dd…`, the answered opener
-  personalizes + states purpose, booking works (B-3/B-5 survive).
+- **Live outbound call — ROUTING LEG DONE + PASSED 2026-07-07** (`call_e9aa23eac588ad1fc33eca2499b`): the dial
+  used `agent_id = agent_f45f4dd…` (not b2f6495) and passed `first_name="Brendan"` → the fix is live-confirmed
+  end-to-end. Rang out to voicemail (`voicemail_reached`), so the spoken opener + booking weren't exercised —
+  a standard no-regression tick for any future *answered* call, but the bug itself is proven resolved.
 - **Now SAFE to re-save (via the UI):** Main Outbound is now the **slot-10 tile** (labeled "Main Outbound").
   Re-Save it to reassert its prompt + VM-1/API-DEPR-2 presets onto `f45f4dd` (durable). Re-Save Inbound (slot 8)
   to scrub any Main-Outbound config the 07-01 save pushed onto `b2f6495`. The other four Garys re-save safely.

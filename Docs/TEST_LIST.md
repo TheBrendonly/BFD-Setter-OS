@@ -53,15 +53,17 @@ These are the LIVE behavioral confirmations still owed (most are dormant until a
 > `Voice-Setter-1`; from-number binding intact). Root cause + emergency rollback SQL:
 > `Operations/handoffs/2026-07-07-main-outbound-shared-1-fix.md`.
 
-- [ ] **MAIN-OUTBOUND-SHARED-1 live** — place one real outbound dial as Main Outbound
-  (`node scripts/test-harness/dial.mjs` — its default target IS Main Outbound, `b09624b5`). Confirm: (a) the
-  Retell call record shows `agent_id = agent_f45f4dd87a4072424f3c84b74c` (NOT `b2f6495`); (b) the answered
-  opener personalizes with the lead's first name and states the call's purpose ("…you put your hand up for
-  some info…"), i.e. the PU-3/PU-7 symptoms are gone; (c) booking still works end-to-end (B-3/B-5 survive).
-  **Then re-Save (report-only, Brendan):** re-Save the **Main Outbound tile (now slot 10)** to reassert its own
-  prompt + VM-1/API-DEPR-2 presets onto `f45f4dd`, and re-Save Inbound BFD Agent (slot 8) to scrub any
-  Main-Outbound config the 2026-07-01 save had pushed onto `b2f6495`. **⚠️ Do NOT create/save a setter on the
-  empty "Setter-1" tile** — saving slot 1 re-reads `retell_inbound_agent_id` (b2f6495) and would re-create the
+- [~] **MAIN-OUTBOUND-SHARED-1 live — ROUTING + PERSONALIZATION LEG PASSED 2026-07-07; answered-conversation
+  leg optional/owed.** Live dial 2026-07-07 (`call_e9aa23eac588ad1fc33eca2499b`, `node dial.mjs` as Main
+  Outbound `b09624b5`): **(a) PASS — the call used `agent_id = agent_f45f4dd87a4072424f3c84b74c` (NOT
+  `b2f6495`)**, confirming the fix end-to-end (UUID → `voice_setters.retell_agent_id` = f45f4dd →
+  `override_agent_id`); the `first_name` dynamic variable ("Brendan") was passed through, so the
+  `{{first_name}}` opener will resolve. Brendan let it ring out → `disconnection_reason = voicemail_reached`,
+  so **(b) the spoken opener + (c) booking were not exercised this run** — a standard no-regression tick to
+  confirm on any future *answered* call, but the actual bug (outbound running the inbound agent) is proven
+  resolved. Re-saves already done + verified this session (Main Outbound stayed on f45f4dd after a real Save &
+  Push; both agents picked up the API-DEPR-2 presets). **⚠️ Do NOT create/save a setter on the empty
+  "Setter-1" tile** — saving slot 1 re-reads `retell_inbound_agent_id` (b2f6495) and would re-create the
   collision (residual DEFERRED SLOT-MAP-1).
 
 ## ⭐⭐⭐ COMBINED BUILD SESSION (bugs + F15 + F16 + F17-p1) — DEPLOYED LIVE 2026-07-06/07 — LIVE CHECKS OWED
