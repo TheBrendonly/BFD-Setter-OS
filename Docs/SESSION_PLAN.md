@@ -391,13 +391,17 @@ Status: `[ ]` not started · `[~]` in progress · `[x]` done. Effort is rough.
    batch Save & Push of Main Outbound (slot 1) re-read that column and `dualWriteVoiceSetter` clobbered the
    row's `retell_agent_id`+`retell_llm_id`. Forensic: outbound dials used `agent_f45f4dd…` through 2026-06-24,
    flipped to `b2f6495` from 2026-07-01 04:15 (right after the row's `updated_at` 03:40:34); no code shipped
-   07-01. **Durable data fix (Option A):** moved Main Outbound to `legacy_slot=10` (→ `retell_agent_id_10`, the
-   only free mapped slot), set `retell_agent_id_10 = agent_f45f4dd87a4072424f3c84b74c`, restored the row to
-   `agent_f45f4dd…`/`llm_a73df8…`, moved the `voice-10` display label — so a future Save & Push re-reads slot
-   10 and won't re-clobber (a bare column restore would have re-broken on the next required re-save). Restoring
-   f45f4dd auto-resolved PU-3 + PU-7; PU-6 now open on it too. No code, no prompt content, no Retell writes
-   (the phone's `outbound_agents` was already `f45f4dd`). Residual design flaw → `DEFERRED.md` SLOT-MAP-1. Live
-   answered-call verify → `TEST_LIST.md`. Handoff `Operations/handoffs/2026-07-07-main-outbound-shared-1-fix.md`.
+   07-01. **Durable data fix (Option A, COMPREHENSIVE):** a voice setter spans 2 keying systems — the prompt/UI
+   tile keyed by the `slot_id` string across 6 tables (prompts/agent_settings/prompt_configurations/prompt_docs/
+   prompt_versions/setter_ai_reports) AND the `voice_setters` row keyed by `legacy_slot` — so the fix migrated
+   the WHOLE setter off the poisoned slot 1 to slot 10 in one txn (85 slot-keyed rows `Voice-Setter-1→10`,
+   `legacy_slot 1→10`, restored `agent_f45f4dd…`/`llm_a73df8…`, `clients.retell_agent_id_10=f45f4dd` for
+   durability, moved the label). A future Save & Push re-reads slot 10 and won't re-clobber. Cadence/node
+   routing is by `voice_setter_id` UUID (transparent to the rename), pre-flight audited. _(A first-cut moved
+   only the `voice_setters` row → decoupled the tile; Brendan caught it, fully reverted, redone comprehensively.)_
+   Restoring f45f4dd auto-resolved PU-3 + PU-7; PU-6 now open on it (scoped to Main Outbound only). No code, no
+   prompt content, no Retell writes. Residual code flaw + the empty "Setter-1" tile → `DEFERRED.md` SLOT-MAP-1.
+   Live answered-call verify → `TEST_LIST.md`. Handoff `Operations/handoffs/2026-07-07-main-outbound-shared-1-fix.md`.
    Pipeline: `[✓] P1 audit  [✓] MAIN-OUTBOUND-SHARED-1 fix  [ ] P2 (Brendan picks) or [ ] P3  [ ] First-Client Milestone (gated)`.
 4. **Brendan solo block (parallel, no Claude session):** Setter-1 prompt migration, Resend SMTP → F14 E2E,
    sms_llm rate + billing anchor/toggles, n8n Railway shutdown, PROMPT_UPDATE_LIST items (see the 2026-07-07

@@ -21,6 +21,13 @@ can be worked independently.
   slots", current-time handling, availability) are code-owned as of PROMPT-AUTH-1. Do **not** re-add
   booking/scheduling rules into a stored persona prompt — keep the stored prompt to persona, tone,
   qualification, and company facts. If a booking rule seems missing, it is a code item, not a prompt item.
+- **Agent-scope reminder (Brendan, 2026-07-07):** only **Main Outbound** and **Inbound BFD Agent** need
+  compliance-grade prompt polish (recording disclosure, telemarketing purpose statement, personalization,
+  placeholder guards) — they're the two agents used for the real business. **Gary - Crazy Gary**,
+  **Gary - Finance Strategist**, **Gary - Mortgage Broker**, and **Gary - Property Coach** are demo/example
+  personas showing prospects how differently-voiced agents can sound — leave their persona prompt content
+  as-is. They still need to work practically (booking mechanics, tool configs), just not compliance-polished.
+  Don't scope future compliance items into these four unless Brendan says one is on a real outbound campaign.
 
 ---
 
@@ -87,37 +94,26 @@ can be worked independently.
   literal begin_message text. Flag for Brendan: worth deciding whether inbound+outbound sharing one Retell
   agent is intentional going forward, or worth splitting.
 
-- [ ] **PU-6 — Call-recording disclosure line (voice; AU compliance). RE-CORRECTED 2026-07-07 after the
-  MAIN-OUTBOUND-SHARED-1 restore: now 4 distinct agents need it (Main Outbound's restored agent has no
-  disclosure).** NSW, WA and SA require ALL-PARTY consent to record calls, and Retell records calls. **Already
-  present:** Gary - Mortgage Broker, and the Inbound BFD Agent (`agent_b2f6495…` — *"…this call is being
-  recorded for quality…"* plus a full "Transparency: AI disclosure and recording consent" section, the
-  strongest of the set). **Still missing entirely** (no disclosure anywhere in begin_message or the prompt
-  body): **Gary - Crazy Gary**, **Gary - Finance Strategist**, **Gary - Property Coach**, and now **Main
-  Outbound** (`agent_f45f4dd…`, LLM `llm_a73df8…` — re-verified live 2026-07-07: no "recorded"/"recording"/
-  "quality" anywhere in its opener or general_prompt; the pre-restore shared agent HAD the disclosure, but the
-  dedicated Main Outbound agent it was restored to does not). Add a short disclosure near the top of each of
-  these four's opening (e.g. *"Just letting you know this call is recorded for quality."*) — continuing after
-  the announcement counts as implied consent. The
-  literal token `{{recording_disclosure}}` (the F17 per-client toggle's dynamic variable) is not referenced in
-  ANY of the checked prompts today — the engine injects it but nothing in any stored prompt consumes it,
-  confirming the toggle is currently a no-op until this wording lands somewhere. Source: 2026-07-04 market/
-  compliance research (recordinglaw.com, sprintlaw.com.au).
+- [ ] **PU-6 — Call-recording disclosure line (voice; AU compliance). NARROWED 2026-07-07: Brendan confirmed
+  only Main Outbound needs this now** (the other 3 non-core agents are demo personas, see the agent-scope
+  reminder above; Inbound BFD Agent already has it). NSW, WA and SA require ALL-PARTY consent to record calls,
+  and Retell records calls. **Only remaining agent:** **Main Outbound** (`agent_f45f4dd…`, LLM `llm_a73df8…` —
+  re-verified live 2026-07-07: no "recorded"/"recording"/"quality" anywhere in its opener or general_prompt;
+  the pre-restore shared agent HAD the disclosure, but the dedicated Main Outbound agent it was restored to
+  does not). Add a short disclosure near the top of its opening (e.g. *"Just letting you know this call is
+  recorded for quality."*) — continuing after the announcement counts as implied consent. The literal token
+  `{{recording_disclosure}}` (the F17 per-client toggle's dynamic variable) is not referenced in any checked
+  prompt today — the engine injects it but nothing in any stored prompt consumes it, confirming the toggle is
+  currently a no-op until this wording lands somewhere. Source: 2026-07-04 market/compliance research
+  (recordinglaw.com, sprintlaw.com.au). ~~Crazy Gary / Finance Strategist / Property Coach~~ — no action per
+  Brendan 2026-07-07 (demo personas, out of compliance scope).
 
-- [~] **PU-7 — Caller identification within ~30 seconds (voice, outbound; AU compliance check). RE-CORRECTED
-  2026-07-07 after the MAIN-OUTBOUND-SHARED-1 restore: Main Outbound is now clean-compliant; only Crazy Gary
-  remains.** The Telemarketing Standard requires outbound calls to state name, company, and purpose within ~30
-  seconds. **COMPLIANT** (persona + company + purpose all present in the first sentence or two): Gary -
-  Property Coach, Gary - Finance Strategist, Gary - Mortgage Broker, and now **Main Outbound** — the restored
-  dedicated agent `agent_f45f4dd…` opens *"Hey {{first_name}}, it's Gary, from Building Flow Digital - you put
-  your hand up for some info on our AI setter service…"*, which states persona + company + a clear outbound
-  purpose (the earlier "borderline, asks 'what can I help you with'" note was against the pre-restore shared
-  inbound agent and no longer applies). **⚠️ Gary - Crazy Gary** — opener = *"G'day {{first_name}}, it's Rusty Bumblethorpe here, your AI assistant,
-  and oh, do I have stories. What can I dazzle you with today?"* — names the persona + discloses AI but
-  states no company and no clear purpose. **Your action (only if Crazy Gary is used for genuine outbound
-  telemarketing, not just a demo/novelty persona):** add a company + brief purpose to its opener via Prompt
-  Management. If it's demo-only, no change needed — just confirm it's not on a live outbound campaign. Source:
-  2026-07-04 compliance research (waboom.ai).
+- [x] **PU-7 — Caller identification within ~30 seconds (voice, outbound; AU compliance check). CLOSED
+  2026-07-07 — Main Outbound is clean-compliant (its restored dedicated agent `agent_f45f4dd…` opens *"Hey
+  {{first_name}}, it's Gary, from Building Flow Digital - you put your hand up for some info on our AI setter
+  service…"*, stating persona + company + a clear outbound purpose). Crazy Gary's borderline opener (no
+  company/purpose stated) is explicitly out of scope per Brendan 2026-07-07 — it's a demo persona, not a real
+  outbound campaign; no action needed unless that changes.
 
 - [ ] **PU-5 — Stand up "Main Outbound V2" (voice).** A full new-prompt draft is ready:
   `Docs/archive/MAIN_OUTBOUND_V2_PROMPT_2026-06-16.md` (folds the Eddie/"Steven" structure into BFD V1: call-flow

@@ -20,15 +20,23 @@ Open bugs and behavior fixes. Reconciled 2026-06-25 with Brendan; full re-audit 
 > re-read that column and `dualWriteVoiceSetter` stamped `b2f6495`+its LLM onto the Main Outbound row
 > (forensic: outbound dials used `agent_f45f4dd…` through 2026-06-24, flipped to `b2f6495` from 2026-07-01
 > 04:15, right after the row's `updated_at` 03:40:34; no code shipped 07-01). **Durable data fix (Option A,
-> Brendan-approved):** moved "Main Outbound" to `legacy_slot = 10` (→ `clients.retell_agent_id_10`, the only
-> free mapped slot), set `retell_agent_id_10 = agent_f45f4dd87a4072424f3c84b74c`, restored the row's
-> `retell_agent_id`/`retell_llm_id` to `agent_f45f4dd…`/`llm_a73df8…`, moved the `voice-10` display label. A
-> future Save & Push of Main Outbound now re-reads `retell_agent_id_10` (= f45f4dd), so it will not re-clobber.
-> The phone's static `outbound_agents` was already `f45f4dd` (now consistent). No code, no prompt content, no
-> Retell writes. **Live answered-call verification is owed → `TEST_LIST.md`.** Full detail + rollback SQL:
-> `Operations/handoffs/2026-07-07-main-outbound-shared-1-fix.md`. A residual architectural follow-up (slot 1
-> doubling as a setter slot + the inbound resolver; no dedicated outbound slot in the map) is logged in
-> `Docs/DEFERRED.md` (retell-proxy code, frozen baseline).
+> Brendan-approved, comprehensive):** a voice setter's identity spans two keying systems — the prompt/UI tile
+> keyed by the `slot_id` string `"Voice-Setter-N"` across 6 tables (`prompts`, `agent_settings`,
+> `prompt_configurations`, `prompt_docs`, `prompt_versions`, `setter_ai_reports`) AND the `voice_setters` row
+> keyed by `legacy_slot`. So the fix migrated the WHOLE setter off the poisoned slot 1 to the free generic slot
+> 10 in one transaction: 85 slot-keyed rows `Voice-Setter-1 → Voice-Setter-10`, `voice_setters.legacy_slot 1→10`
+> + restored `retell_agent_id`/`retell_llm_id` to `agent_f45f4dd…`/`llm_a73df8…`, `clients.retell_agent_id_10 =
+> agent_f45f4dd…` (durability: a future slot-10 Save & Push re-reads this, no re-clobber), and moved the
+> `voice-10` display label. Pre-flight audit confirmed cadence dialing + node routing are by `voice_setter_id`
+> UUID (transparent to the slot rename) and slot 10 was empty; `retell_inbound_agent_id` (b2f6495, inbound
+> resolver) + the Inbound setter (slot 8) + the from-number binding were left untouched. No code, no prompt
+> content, no Retell writes. _(A first-cut fix moved only the `voice_setters` row and decoupled the tile —
+> caught by Brendan, fully reverted, redone comprehensively.)_ **Live answered-call verification is owed →
+> `TEST_LIST.md`.** Full detail + emergency rollback SQL:
+> `Operations/handoffs/2026-07-07-main-outbound-shared-1-fix.md`. Residual architectural follow-up (slot 1
+> doubling as a setter slot + the inbound resolver; no dedicated outbound slot; the empty "Setter-1" tile is
+> its visible face — do NOT create a setter on it) logged in `Docs/DEFERRED.md` SLOT-MAP-1 (retell-proxy code,
+> frozen baseline).
 
 Every CODE bug that had been logged is now either **shipped + live-verified** (→ `Docs/archive/COMPLETED_LOG.md`)
 or **shipped + deployed, awaiting Brendan's live behavioral pass** (→ `Docs/TEST_LIST.md` — nothing left needing

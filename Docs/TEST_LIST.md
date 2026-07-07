@@ -16,10 +16,13 @@ When an item passes, move it to `Docs/archive/COMPLETED_LOG.md`. When it fails, 
 
 ## 🟠 MAIN-OUTBOUND-SHARED-1 — dedicated-agent restore (data fix 2026-07-07) — LIVE OUTBOUND CALL OWED
 
-> Fixed as a data/binding change: "Main Outbound" restored to its own Retell agent `agent_f45f4dd…` (moved to
-> `legacy_slot=10` to break the slot-1/inbound-resolver collision that had clobbered it). DB read-back verified
-> this session (Main Outbound and Inbound now point at different agents; the durability column
-> `clients.retell_agent_id_10 = f45f4dd`). Root cause + rollback SQL:
+> Fixed as a comprehensive data migration: the WHOLE "Main Outbound" setter (85 slot-keyed rows across
+> `prompts`/`agent_settings`/`prompt_configurations`/`prompt_docs`/`prompt_versions` + the `voice_setters`
+> binding + the display label) was moved off the poisoned slot 1 to the free slot 10, and its agent restored to
+> `agent_f45f4dd…` (`clients.retell_agent_id_10` set for durability). In the UI it is now the **"Main Outbound"
+> tile at slot 10**; an EMPTY "Setter-1" tile also renders (the code always seeds slot 1) — leave it empty.
+> DB read-back verified this session (Main Outbound and Inbound now distinct agents; nothing left at
+> `Voice-Setter-1`; from-number binding intact). Root cause + emergency rollback SQL:
 > `Operations/handoffs/2026-07-07-main-outbound-shared-1-fix.md`.
 
 - [ ] **MAIN-OUTBOUND-SHARED-1 live** — place one real outbound dial as Main Outbound
@@ -27,9 +30,11 @@ When an item passes, move it to `Docs/archive/COMPLETED_LOG.md`. When it fails, 
   Retell call record shows `agent_id = agent_f45f4dd87a4072424f3c84b74c` (NOT `b2f6495`); (b) the answered
   opener personalizes with the lead's first name and states the call's purpose ("…you put your hand up for
   some info…"), i.e. the PU-3/PU-7 symptoms are gone; (c) booking still works end-to-end (B-3/B-5 survive).
-  **Then re-Save (report-only, Brendan):** re-Save Main Outbound (now slot 10) to reassert its own prompt +
-  VM-1/API-DEPR-2 presets onto `f45f4dd`, and re-Save Inbound BFD Agent (slot 8) to scrub any Main-Outbound
-  config the 2026-07-01 save had pushed onto `b2f6495`.
+  **Then re-Save (report-only, Brendan):** re-Save the **Main Outbound tile (now slot 10)** to reassert its own
+  prompt + VM-1/API-DEPR-2 presets onto `f45f4dd`, and re-Save Inbound BFD Agent (slot 8) to scrub any
+  Main-Outbound config the 2026-07-01 save had pushed onto `b2f6495`. **⚠️ Do NOT create/save a setter on the
+  empty "Setter-1" tile** — saving slot 1 re-reads `retell_inbound_agent_id` (b2f6495) and would re-create the
+  collision (residual DEFERRED SLOT-MAP-1).
 
 ## ⭐⭐⭐ COMBINED BUILD SESSION (bugs + F15 + F16 + F17-p1) — DEPLOYED LIVE 2026-07-06/07 — LIVE CHECKS OWED
 
