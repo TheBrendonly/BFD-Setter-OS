@@ -24,6 +24,9 @@ function makeSupabase(optoutRow: { phone: string } | null) {
   };
   const stampChain: any = {
     insert: async () => ({ error: null }),
+    // BOOK-TZ/cost: the execution_cost_events best-effort write upserts; give the
+    // fallthrough mock an upsert no-op so it resolves cleanly (was a harmless warn).
+    upsert: async () => ({ error: null }),
   };
   const leadsChain: any = {
     update: () => leadsChain,
