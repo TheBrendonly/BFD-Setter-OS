@@ -75,6 +75,29 @@ Deno.test("buildLeadInsert includes form_source only when provided (sync-ghl vs 
   assert(!("form_source" in withoutSource), "form_source must be absent when not passed");
 });
 
+Deno.test("buildLeadInsert: BOOK-TZ-1 timezone — valid IANA kept, junk/absent handled", () => {
+  // valid IANA stored
+  const valid = buildLeadInsert({
+    clientId: "c1", leadId: "l1", firstName: null, lastName: null,
+    phone: null, email: null, timezone: "Australia/Perth",
+  });
+  assertEquals(valid.timezone, "Australia/Perth");
+
+  // invalid label -> stored as null (never corrupt the column), but key present since passed
+  const junk = buildLeadInsert({
+    clientId: "c1", leadId: "l1", firstName: null, lastName: null,
+    phone: null, email: null, timezone: "AEST",
+  });
+  assertEquals(junk.timezone, null);
+
+  // not passed -> key absent (upsert must not null an existing value)
+  const absent = buildLeadInsert({
+    clientId: "c1", leadId: "l1", firstName: null, lastName: null,
+    phone: null, email: null,
+  });
+  assert(!("timezone" in absent), "timezone must be absent when not passed");
+});
+
 Deno.test("buildLeadInsert always includes the normalized_phone key (drop-guard)", () => {
   const row = buildLeadInsert({
     clientId: "c1", leadId: "l1", firstName: null, lastName: null,

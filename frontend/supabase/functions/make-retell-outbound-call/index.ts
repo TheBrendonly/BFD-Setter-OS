@@ -2,6 +2,7 @@ import { createClient } from "npm:@supabase/supabase-js@2.101.0";
 import { authorizeClientRequest, AssertAccessError } from "../_shared/authorize-client-request.ts";
 import { assertActiveSubscription } from "../_shared/assertActiveSubscription.ts";
 import { normalizePhone } from "../_shared/phone.ts";
+import { resolveLeadDisplayTimeZone, zoneShortLabel } from "../_shared/leadTimezone.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -763,6 +764,26 @@ Deno.serve(async (req) => {
 
     // 6. Build dynamic variables
     const fields = contact_fields || {};
+
+    // BOOK-TZ-1: resolve the lead's display timezone so the prompt can state offered
+    // times in the lead's zone. Booking is unaffected — offered/booked times stay
+    // business-tz; these are display-only vars, inert until the prompt references them
+    // (same pattern as recording_disclosure / PU-6). Empty when the lead has no distinct
+    // zone, so the prompt naturally omits the "your time" mention.
+    let leadTz: string | null = (fields.timezone as string | undefined) || null;
+    if (!leadTz && leadLookupId) {
+      try {
+        const { data: leadRow } = await supabase
+          .from("leads")
+          .select("timezone")
+          .eq("client_id", client_id)
+          .eq("lead_id", leadLookupId)
+          .maybeSingle();
+        leadTz = (leadRow?.timezone as string | null) ?? null;
+      } catch { /* non-fatal */ }
+    }
+    const leadDisplayZone = resolveLeadDisplayTimeZone(leadTz, tz);
+
     const nowTs = new Date();
     // Bug 2 — render current_time in the client's actual timezone, not ET.
     const currentTimeLocal = nowTs.toLocaleString("en-US", {
@@ -784,6 +805,14 @@ Deno.serve(async (req) => {
       treat_pickup_as_reply: treat_pickup_as_reply ? "true" : "false",
       current_time: currentTimeLocal,
       current_timezone: tz,
+      // BOOK-TZ-1: display-only. business_timezone_label is always set; lead_timezone*
+      // are non-empty ONLY when the lead is in a different, valid zone. The prompt (PU:
+      // report-only) references these to state offered times in both zones while still
+      // booking the business-tz time. Inert until the prompt uses them.
+      business_timezone: tz,
+      business_timezone_label: zoneShortLabel(tz),
+      lead_timezone: leadDisplayZone.isLeadZone ? leadDisplayZone.zone : "",
+      lead_timezone_label: leadDisplayZone.isLeadZone ? zoneShortLabel(leadDisplayZone.zone) : "",
       // Try Gary landing routing: surfaces agent_style + source_type +
       // utm_* to the Retell prompt so it can switch persona framing
       // ({{agent_style}}, {{source_type}}). Empty string when not a

@@ -23,6 +23,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.101.0";
 import { fetchActiveNewLeadsWorkflows, resolveWorkflow } from "../_shared/resolve-workflow.ts";
 import { normalizePhone } from "../_shared/phone.ts";
+import { isValidTimeZone } from "../_shared/leadTimezone.ts";
 import { resolveLeadByPhone } from "../_shared/leadResolve.ts";
 import { isPhoneOptedOut } from "../_shared/optout.ts";
 import { assertActiveSubscription } from "../_shared/assertActiveSubscription.ts";
@@ -408,21 +409,23 @@ Deno.serve(async (req) => {
       fallbackWorkflowId: (client.auto_engagement_workflow_id as string | null) ?? null,
     });
 
+    const leadRow: Record<string, unknown> = {
+      client_id: client.id,
+      lead_id: contactId,
+      first_name: firstName,
+      last_name: lastName,
+      phone,
+      normalized_phone: normalizedPhone,
+      email,
+      form_source: routed.matchedTag,
+    };
+    // BOOK-TZ-1: capture the lead timezone ONLY when the form provided a valid IANA zone.
+    // Omitted-when-absent so this upsert never nulls a value a GHL sync already captured.
+    const bodyTz = (body.timezone ?? body.time_zone ?? null) as string | null;
+    if (isValidTimeZone(bodyTz)) leadRow.timezone = bodyTz;
     await supabase
       .from("leads")
-      .upsert(
-        {
-          client_id: client.id,
-          lead_id: contactId,
-          first_name: firstName,
-          last_name: lastName,
-          phone,
-          normalized_phone: normalizedPhone,
-          email,
-          form_source: routed.matchedTag,
-        },
-        { onConflict: "client_id,lead_id" },
-      );
+      .upsert(leadRow, { onConflict: "client_id,lead_id" });
 
     // Dual-write to per-client external Supabase
     if (client.supabase_url && client.supabase_service_key) {

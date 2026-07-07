@@ -526,6 +526,8 @@ Deno.serve(async (req) => {
           phone,
           email: email || null,
           formSource: routed.matchedTag,
+          // BOOK-TZ-1: capture the GHL contact's timezone (IANA-validated in buildLeadInsert).
+          timezone: (contact.timezone ?? contact.time_zone ?? contact.timeZone ?? null) as string | null,
         }))
         .select("id")
         .single();

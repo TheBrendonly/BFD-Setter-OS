@@ -30,6 +30,7 @@ import { persistHumanTurn } from "./_shared/persistHumanTurn.ts";
 import { prefetchAvailability, buildAvailabilityBlock } from "./_shared/prefetchSlots.ts";
 import { makeVoiceBookingCallTool } from "./_shared/voiceBookingCallTool.ts";
 import { buildTimeAnchorBlock, resolveClientTimeZone } from "./_shared/timeAnchor.ts";
+import { resolveLeadDisplayTimeZone, zoneShortLabel } from "./_shared/leadTimezone.ts";
 import { mergeCanonicalSlots, validateBookingArgs, type CanonicalSlotMap } from "./_shared/slotBinding.ts";
 import { mergeEventIds, validateEventIdArgs, type EventIdSet } from "./_shared/eventIdBinding.ts";
 import { needsRescheduleHonestyRewrite } from "./_shared/rescheduleHonestyGuard.ts";
@@ -157,6 +158,24 @@ export const processSetterReply = task({
     // make the anchor and the slot map fall back to different zones (off-by-one day).
     const clientTimeZone = resolveClientTimeZone(client.timezone as string | null);
 
+    // BOOK-TZ-1: resolve the lead's display timezone (leads.timezone, platform db). When
+    // it differs from the business zone, an additive block below tells the setter to state
+    // times in BOTH zones. Booking is unaffected — the calendar + booked time stay
+    // business-tz. Best-effort; a lookup miss just falls back to business-tz behaviour.
+    let leadDisplayZone = { zone: clientTimeZone, isLeadZone: false };
+    try {
+      const { data: leadRow } = await supabase
+        .from("leads")
+        .select("timezone")
+        .eq("client_id", client.id)
+        .eq("lead_id", payload.Lead_ID)
+        .maybeSingle();
+      leadDisplayZone = resolveLeadDisplayTimeZone(
+        (leadRow?.timezone as string | null) ?? null,
+        clientTimeZone,
+      );
+    } catch { /* non-fatal */ }
+
     // ── STEP 2: Open client's external Supabase (where prompts + history live) ──
     let setterPrompt = "";
     let chatHistory: ChatHistoryRow[] = [];
@@ -187,9 +206,25 @@ export const processSetterReply = task({
     }
 
     // ── STEP 3: Build OpenAI-format message array ──
+    // BOOK-TZ-1: additive, code-owned block — only present when the lead is in a valid,
+    // different timezone. Does NOT modify the frozen availability / tool-usage blocks
+    // (booking stays business-tz); it only asks the setter to also state the lead's local
+    // time when it speaks a time.
+    const leadTimezoneBlock = leadDisplayZone.isLeadZone
+      ? `## Lead timezone (state times in BOTH zones)\n` +
+        `This lead's timezone is ${zoneShortLabel(leadDisplayZone.zone)} (${leadDisplayZone.zone}), ` +
+        `which differs from the business timezone ${zoneShortLabel(clientTimeZone)} (${clientTimeZone}). ` +
+        `The calendar, the times you offer, and the time you BOOK are all in the business timezone — book ` +
+        `exactly as listed and never convert a booking time. But whenever you SAY a time to the lead ` +
+        `(offering or confirming), give it in the business timezone AND the lead's local time, e.g. ` +
+        `"2pm ${zoneShortLabel(clientTimeZone)} time, which is 12pm your time". Work out the lead's local ` +
+        `time from the ${zoneShortLabel(leadDisplayZone.zone)} timezone.`
+      : "";
+
     const systemContent = [
       setterPrompt && setterPrompt.trim(),
       `## Lead Context\nName: ${payload.Name || "(unknown)"}\nEmail: ${payload.Email || "(none)"}\nPhone: ${payload.Phone || "(none)"}`,
+      leadTimezoneBlock,
       MULTI_MESSAGE_INSTRUCTION,
       // §3.12 — code-side tool-usage guidance (NOT a stored-prompt edit). Must
       // come after MULTI_MESSAGE_INSTRUCTION since it references that JSON shape.
