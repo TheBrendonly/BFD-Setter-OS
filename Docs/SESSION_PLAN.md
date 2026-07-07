@@ -382,6 +382,23 @@ Status: `[ ]` not started · `[~]` in progress · `[x]` done. Effort is rough.
    `BRENDAN_TODO` manual gate ordered by leverage. Full audit table + methodology in the dated handoff
    `Operations/handoffs/2026-07-07-p1-audit-reconciliation.md`. Pipeline:
    `[✓] Combined build  [✓] P1 audit + action pack (DONE 2026-07-07)  [ ] P2 (Brendan picks: DEFERRED.md review, or skip to P3)  [ ] P3 review+cleanup+research  [ ] First-Client Milestone (gated)`.
+3g. **Session MAIN-OUTBOUND-SHARED-1 fix — DONE 2026-07-07 (Opus 4.8, plan ON, Brendan approved Option A).**
+   Root-caused + fixed the one bug P1 had surfaced. "Main Outbound" had been running the Inbound agent
+   (`agent_b2f6495…`) on real outbound dials. **Root cause = a structural slot/column collision, not a code
+   regression:** Main Outbound sat on `voice_setters.legacy_slot=1`, and retell-proxy `SLOT_TO_AGENT_COLUMN[1]`
+   maps to `clients.retell_inbound_agent_id` (a legacy single-agent column; outbound slots 2/3 were retired in
+   P3a). Once the Inbound setter pointed `retell_inbound_agent_id` at `b2f6495` (~2026-06-26), the 2026-07-01
+   batch Save & Push of Main Outbound (slot 1) re-read that column and `dualWriteVoiceSetter` clobbered the
+   row's `retell_agent_id`+`retell_llm_id`. Forensic: outbound dials used `agent_f45f4dd…` through 2026-06-24,
+   flipped to `b2f6495` from 2026-07-01 04:15 (right after the row's `updated_at` 03:40:34); no code shipped
+   07-01. **Durable data fix (Option A):** moved Main Outbound to `legacy_slot=10` (→ `retell_agent_id_10`, the
+   only free mapped slot), set `retell_agent_id_10 = agent_f45f4dd87a4072424f3c84b74c`, restored the row to
+   `agent_f45f4dd…`/`llm_a73df8…`, moved the `voice-10` display label — so a future Save & Push re-reads slot
+   10 and won't re-clobber (a bare column restore would have re-broken on the next required re-save). Restoring
+   f45f4dd auto-resolved PU-3 + PU-7; PU-6 now open on it too. No code, no prompt content, no Retell writes
+   (the phone's `outbound_agents` was already `f45f4dd`). Residual design flaw → `DEFERRED.md` SLOT-MAP-1. Live
+   answered-call verify → `TEST_LIST.md`. Handoff `Operations/handoffs/2026-07-07-main-outbound-shared-1-fix.md`.
+   Pipeline: `[✓] P1 audit  [✓] MAIN-OUTBOUND-SHARED-1 fix  [ ] P2 (Brendan picks) or [ ] P3  [ ] First-Client Milestone (gated)`.
 4. **Brendan solo block (parallel, no Claude session):** Setter-1 prompt migration, Resend SMTP → F14 E2E,
    sms_llm rate + billing anchor/toggles, n8n Railway shutdown, PROMPT_UPDATE_LIST items (see the 2026-07-07
    action pack for the full ordered list with exact live wording + paste-ready changes).

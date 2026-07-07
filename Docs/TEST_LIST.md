@@ -14,6 +14,23 @@ When an item passes, move it to `Docs/archive/COMPLETED_LOG.md`. When it fails, 
 
 > **⭐⭐⭐ VOICE + BROWSER TEST SESSION — 2026-07-06, and the 2026-07-05 TEST SESSION before it — ALL PASSED → `COMPLETED_LOG.md`.** Full detail there + handoffs `Operations/handoffs/2026-07-06-voice-browser-session.md` + `2026-07-05-test-session.md`. Between the two, essentially every pre-existing bug/feature check passed (onboarding-fix cluster, the shared-fn pass, F8/F9-1/F11/UI-1/F13 core/PROMPT-LINT-1/MODEL-1/API-DEPR-1 core/PROMPT-AUTH-1 X-Ray, the B-2 outage leg, G3-7 nav, SWEEP-1a/b/c). What's below is either (a) the still-open behavioral checks for the 2026-07-07 combined build, or (b) a small residual set of finer-grained checks that genuinely haven't run yet.
 
+## 🟠 MAIN-OUTBOUND-SHARED-1 — dedicated-agent restore (data fix 2026-07-07) — LIVE OUTBOUND CALL OWED
+
+> Fixed as a data/binding change: "Main Outbound" restored to its own Retell agent `agent_f45f4dd…` (moved to
+> `legacy_slot=10` to break the slot-1/inbound-resolver collision that had clobbered it). DB read-back verified
+> this session (Main Outbound and Inbound now point at different agents; the durability column
+> `clients.retell_agent_id_10 = f45f4dd`). Root cause + rollback SQL:
+> `Operations/handoffs/2026-07-07-main-outbound-shared-1-fix.md`.
+
+- [ ] **MAIN-OUTBOUND-SHARED-1 live** — place one real outbound dial as Main Outbound
+  (`node scripts/test-harness/dial.mjs` — its default target IS Main Outbound, `b09624b5`). Confirm: (a) the
+  Retell call record shows `agent_id = agent_f45f4dd87a4072424f3c84b74c` (NOT `b2f6495`); (b) the answered
+  opener personalizes with the lead's first name and states the call's purpose ("…you put your hand up for
+  some info…"), i.e. the PU-3/PU-7 symptoms are gone; (c) booking still works end-to-end (B-3/B-5 survive).
+  **Then re-Save (report-only, Brendan):** re-Save Main Outbound (now slot 10) to reassert its own prompt +
+  VM-1/API-DEPR-2 presets onto `f45f4dd`, and re-Save Inbound BFD Agent (slot 8) to scrub any Main-Outbound
+  config the 2026-07-01 save had pushed onto `b2f6495`.
+
 ## ⭐⭐⭐ COMBINED BUILD SESSION (bugs + F15 + F16 + F17-p1) — DEPLOYED LIVE 2026-07-06/07 — LIVE CHECKS OWED
 
 > All built + deployed (12 commits `8950f69`..`7a0b0b4`; 4 migrations applied; edge fns bookings-webhook v9 /

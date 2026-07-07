@@ -59,8 +59,16 @@ can be worked independently.
   2026-06-16 finding (likely via the 2026-07-05 batch push). No further action needed. ~~Original: still read
   `[Your Property Coaching Company Name] = "Building Flow Property"` with an explicit config note.~~
 
-- [ ] **PU-3 — Personalize the outbound opener with `{{first_name}}` (voice, 6.8). STILL OPEN — corrected
-  2026-07-07 after an agent-identification error.** ⚠️ An earlier pass during this session misidentified
+- [x] **PU-3 — Personalize the outbound opener with `{{first_name}}` (voice, 6.8). RESOLVED 2026-07-07 by the
+  MAIN-OUTBOUND-SHARED-1 restore — move to `COMPLETED_LOG.md`.** The bug fix restored "Main Outbound" to its
+  own dedicated agent `agent_f45f4dd…`, whose live `begin_message` already reads *"Hey {{first_name}}, it's
+  Gary, from Building Flow Digital - you put your hand up for some info on our AI setter service. Got a quick
+  sec?"* — it personalizes AND states the call's purpose. The old "adding `{{first_name}}` would break inbound"
+  concern no longer applies: inbound is now a SEPARATE agent (`agent_b2f6495…`, slot 8) with its own name-free
+  opener, so the two directions can't collide. No Brendan action. Original (pre-restore) analysis kept below
+  for the record.
+
+  ~~STILL OPEN — corrected 2026-07-07 after an agent-identification error.~~ ⚠️ An earlier pass during this session misidentified
   "Main Outbound" as the Retell agent literally named `Voice-Setter-Test` (`agent_f45f4dd…`), based on which
   agent the phone number's static `outbound_agents` binding lists — which is exactly the trap this project's
   own `CLAUDE.md` warns against ("ignore the phone number attached to an agent in Retell"). Cross-checked
@@ -79,32 +87,32 @@ can be worked independently.
   literal begin_message text. Flag for Brendan: worth deciding whether inbound+outbound sharing one Retell
   agent is intentional going forward, or worth splitting.
 
-- [ ] **PU-6 — Call-recording disclosure line (voice; AU compliance). CORRECTED 2026-07-07 (same
-  agent-identification fix as PU-3): Main Outbound already has it (it's the same agent as Inbound), 3 of 6
-  distinct agents still need it.** NSW, WA and SA require ALL-PARTY consent to record calls, and Retell
-  records calls. **Already present:** Gary - Mortgage Broker, and the shared Main-Outbound/Inbound BFD Agent
-  (*"…this call is being recorded for quality…"* plus a full "Transparency: AI disclosure and recording
-  consent" prompt section — the strongest of the set). **Still missing entirely** (no disclosure anywhere in
-  begin_message or the prompt body): **Gary - Crazy Gary**, **Gary - Finance Strategist**, **Gary - Property
-  Coach**. Add a short disclosure near the top of each of these three's opening (e.g. *"Just letting you know
-  this call is recorded for quality."*) — continuing after the announcement counts as implied consent. The
+- [ ] **PU-6 — Call-recording disclosure line (voice; AU compliance). RE-CORRECTED 2026-07-07 after the
+  MAIN-OUTBOUND-SHARED-1 restore: now 4 distinct agents need it (Main Outbound's restored agent has no
+  disclosure).** NSW, WA and SA require ALL-PARTY consent to record calls, and Retell records calls. **Already
+  present:** Gary - Mortgage Broker, and the Inbound BFD Agent (`agent_b2f6495…` — *"…this call is being
+  recorded for quality…"* plus a full "Transparency: AI disclosure and recording consent" section, the
+  strongest of the set). **Still missing entirely** (no disclosure anywhere in begin_message or the prompt
+  body): **Gary - Crazy Gary**, **Gary - Finance Strategist**, **Gary - Property Coach**, and now **Main
+  Outbound** (`agent_f45f4dd…`, LLM `llm_a73df8…` — re-verified live 2026-07-07: no "recorded"/"recording"/
+  "quality" anywhere in its opener or general_prompt; the pre-restore shared agent HAD the disclosure, but the
+  dedicated Main Outbound agent it was restored to does not). Add a short disclosure near the top of each of
+  these four's opening (e.g. *"Just letting you know this call is recorded for quality."*) — continuing after
+  the announcement counts as implied consent. The
   literal token `{{recording_disclosure}}` (the F17 per-client toggle's dynamic variable) is not referenced in
   ANY of the checked prompts today — the engine injects it but nothing in any stored prompt consumes it,
   confirming the toggle is currently a no-op until this wording lands somewhere. Source: 2026-07-04 market/
   compliance research (recordinglaw.com, sprintlaw.com.au).
 
-- [~] **PU-7 — Caller identification within ~30 seconds (voice, outbound; AU compliance check). CORRECTED
-  2026-07-07: Main Outbound's own compliance is borderline, not clean-compliant as previously reported —
-  needs Brendan's read.** The Telemarketing Standard requires outbound calls to state name, company, and
-  purpose within ~30 seconds. **COMPLIANT** (persona + company + purpose all present in the first sentence or
-  two): Gary - Property Coach, Gary - Finance Strategist, Gary - Mortgage Broker (all re-confirmed
-  2026-07-07). **Main Outbound (the real one, `agent_b2f6495`, shared with Inbound) is borderline:** its
-  opener states persona ("Gary, Brendan's AI assistant") + company ("Building Flow Digital") + the recording
-  disclosure, but closes with *"What can I help you with?"* — a question that reads as inbound-style
-  (asking the caller their reason) rather than stating an outbound call's own purpose. **Your call:** if this
-  agent is used for genuine outbound telemarketing (not just inbound), consider whether it needs an
-  outbound-specific purpose line (this pairs with the PU-3 discussion above about splitting inbound/outbound).
-  **⚠️ Gary - Crazy Gary** — opener = *"G'day {{first_name}}, it's Rusty Bumblethorpe here, your AI assistant,
+- [~] **PU-7 — Caller identification within ~30 seconds (voice, outbound; AU compliance check). RE-CORRECTED
+  2026-07-07 after the MAIN-OUTBOUND-SHARED-1 restore: Main Outbound is now clean-compliant; only Crazy Gary
+  remains.** The Telemarketing Standard requires outbound calls to state name, company, and purpose within ~30
+  seconds. **COMPLIANT** (persona + company + purpose all present in the first sentence or two): Gary -
+  Property Coach, Gary - Finance Strategist, Gary - Mortgage Broker, and now **Main Outbound** — the restored
+  dedicated agent `agent_f45f4dd…` opens *"Hey {{first_name}}, it's Gary, from Building Flow Digital - you put
+  your hand up for some info on our AI setter service…"*, which states persona + company + a clear outbound
+  purpose (the earlier "borderline, asks 'what can I help you with'" note was against the pre-restore shared
+  inbound agent and no longer applies). **⚠️ Gary - Crazy Gary** — opener = *"G'day {{first_name}}, it's Rusty Bumblethorpe here, your AI assistant,
   and oh, do I have stories. What can I dazzle you with today?"* — names the persona + discloses AI but
   states no company and no clear purpose. **Your action (only if Crazy Gary is used for genuine outbound
   telemarketing, not just a demo/novelty persona):** add a company + brief purpose to its opener via Prompt
