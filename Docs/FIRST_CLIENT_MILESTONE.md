@@ -32,11 +32,18 @@ Scope (the DEFERRED first-client cluster + the research additions):
    (_shared/assertActiveSubscription.ts is shipped dormant); prove a delinquent client is blocked and an active
    one is not.
 2. Webhook signing secrets: provision the GHL/Retell/Unipile signing secrets; arm retell_webhook_secret (= the
-   Retell API key; one controlled live call, revert to NULL on any 403). See DEFERRED 6.6.
+   Retell API key; one controlled live call, revert to NULL on any 403). See DEFERRED 6.6. THEN, before enabling
+   F16(c) missed-call text-back, apply the F16C-SMS-1 fail-closed fix (BUG_LIST.md / Docs/SECURITY_REVIEW_2026-07-07.md):
+   the missed-call auto-send must require a verified Retell signature, else a spoofed call_ended webhook can send
+   SMS on the client's Twilio to an attacker-chosen number.
 3. AU SMS A2P / Messaging Service registration for +61481614530 (or confirm the regulatory bundle); confirm AU
-   handset delivery is reliable (the bare long code delivery was slow/unconfirmed).
+   handset delivery is reliable (the bare long code delivery was slow/unconfirmed). Note: plain Twilio numbers are
+   exempt from the ACMA Sender ID Register (live 1 July 2026); register an alpha sender ID only if the client wants
+   branded SMS.
 4. Onboard the client via scripts/onboard-client.mjs + the SOP: BYO Twilio creds, GHL location, calendars, setter
-   provisioning, F8/F13 rate card + billing anchor day + client-visibility toggles (see TEST_SESSION M4).
+   provisioning, F8/F13 rate card + billing anchor day + client-visibility toggles (see TEST_SESSION M4). Confirm
+   onboarding minted a FRESH agency for this client (RLS-UISTATE-1: two clients sharing one agency would cross-read
+   each other's chat_starred / dismissed_error_alerts UI-state).
 5. GHL reminder-workflow snapshot: provision the confirm / 24h reminder+confirm-link / 2h / reschedule / status
    branch stack on the client's GHL location (research verdict: orchestrate GHL, do not build a reminder engine),
    and wire its appointment-status changes into the F15 show-rate funnel.
@@ -59,6 +66,10 @@ Post-client queue (later, gated by real usage/data): F18 -> F19 -> F20 -> F12.
 
 - **M1 Resend SMTP** and **M2 Setter-1 prompt migration** from `Docs/TEST_SESSION.md` RUN 9 should be done (invite
   emails + a clean stored prompt matter at onboarding).
-- **F16 / F17 phase-1** (calling-hours enforcement + recording-disclosure toggle) should be built, since step 6 turns
-  them on for the client. If F16 hasn't run yet, either run it first or flag the compliance controls as manual.
+- **F16 / F17 phase-1** (speed-to-lead / missed-call text-back / live-transfer + calling-hours enforcement +
+  recording-disclosure toggle) are BUILT + DEPLOYED (2026-07-07 combined build), all default-OFF. Step 6 turns them
+  on for the client. CAVEAT: apply the **F16(c) fail-closed fix (F16C-SMS-1, P3 review 2026-07-07)** before enabling
+  missed-call text-back (folded into step 2 above); until then leave `missed_call_textback_enabled` OFF.
 - The **GHL reminder-workflow snapshot** (BRENDAN_TODO) is best built once, ahead of time, and reused per client.
+- **Watch (non-blocking):** AU Privacy Act second-tranche reform (automated-decision / AI-transparency disclosure)
+  is anticipated ~Dec 2026; no action at go-live, tracked in `Docs/DEFERRED.md`.

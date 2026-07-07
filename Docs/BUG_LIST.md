@@ -9,6 +9,77 @@ Open bugs and behavior fixes. Reconciled 2026-06-25 with Brendan; full re-audit 
 
 ---
 
+## P3 security review (2026-07-07) — new open items
+
+> Found by the Session P3 security/quality pass over the diff since Session 9 (`4a22b8b`). Full write-up,
+> fix-specs, and the "clean" clusters: `Docs/SECURITY_REVIEW_2026-07-07.md`. Nothing here is exploitable
+> on the CURRENT live setup (default-OFF features, 0 client-role users) — these are pre-first-client
+> hardening items; F16C-SMS-1 is gated into the milestone.
+
+- [ ] 🔴 **F16C-SMS-1 (High, DEFERRED to First-Client Milestone) — F16(c) missed-call text-back is a
+  forgeable unauthenticated outbound-SMS vector.** `retell-call-webhook/index.ts:152-217`: with
+  `missed_call_textback_enabled=true` and `retell_webhook_secret` unset (the default), the signature
+  block (`:128-143`) is skipped, so a forged `call_ended` POST (`direction:"inbound"`, short
+  `duration_ms`, attacker-chosen `from_number`) makes the client's Twilio text that number (SMS-pumping /
+  toll-fraud; mitigated by fixed body + 15-min dedupe, but numbers rotate). **Not exploitable today**
+  (default-OFF, 0 clients have the flag or the secret). Brendan chose report-only + defer: the fix needs
+  `retell_webhook_secret`, which the milestone arms (DEFERRED 6.6), so it is folded into
+  `Docs/FIRST_CLIENT_MILESTONE.md` step 6 as a HARD prerequisite before enabling F16(c). Fix-spec (thread
+  a `signatureVerified` bool through the verify block + extract a pure `shouldSendMissedCallTextback`
+  predicate + gate the send, `console.warn` never throw): `Docs/SECURITY_REVIEW_2026-07-07.md`.
+- [ ] 🟠 **QH-TZ-1 (Medium) — unvalidated `cadence_quiet_hours.tz` stalls a client's whole cadence.**
+  `trigger/_shared/businessHours.ts:81-90` `parseQuietHours` accepts `tz` as free text; a malformed zone
+  throws `RangeError` in `isWithinQuietHoursWindow` / the AU clamp on EVERY send attempt → that client's
+  cadence self-DoS (fail-closed, so NOT a compliance bypass). Cheap ~10-line hardening: validate with
+  `isValidTimeZone` (from `_shared/leadTimezone.ts`), fall back to `DEFAULT_QUIET_HOURS.tz` +
+  `console.warn`. Trigger-only (no edge twin); test in the existing `businessHours.test.ts`. Full
+  fix-spec: `Docs/SECURITY_REVIEW_2026-07-07.md`.
+- [ ] 🟡 **RLS-UISTATE-1 (Low, latent) — `chat_starred` / `dismissed_error_alerts` FOR ALL policies are
+  agency-scoped without the `get_user_role()='agency'` gate.** Correct only while "one agency per
+  top-level client" holds. **No exposure today** (live DB: 1 agency / 2 BFD-internal clients, 0
+  client-role users; tables hold only UI-state, no secret/cost data). Becomes relevant when a real
+  client-role user exists AND two real clients share an agency. Mitigation: the onboarding "fresh agency
+  per top-level client" step is now an explicit milestone check (`FIRST_CLIENT_MILESTONE.md`), OR add a
+  client-scope to the two policies as defense-in-depth.
+- [ ] 🟡 **FUNNEL-SCAN-1 (Low, perf) — `get-show-rate-funnel` scans up to ~100k bookings.**
+  `get-show-rate-funnel/index.ts:101` paginates to `100 * PAGE_SIZE` under the service role. Bounded and
+  fine for early clients; date-window / cap harder if a tenant ever grows large.
+- [ ] 🟡 **ROLE-RESOLVE-1 (Low, pre-existing) — `get_user_role` `LIMIT 1` with no `ORDER BY`.** A user
+  holding both an `agency` and a `client` role row resolves nondeterministically. Not introduced by any
+  recent diff; users hold one role in practice. Defense-in-depth: order deterministically / prefer the
+  more-privileged role.
+
+## 🟡 Low — open (code)
+
+- [ ] **PU-9-CODE (reclassified from PROMPT_UPDATE_LIST PU-9 on 2026-07-07) — dead-air / talk-while-waiting
+  latency is code-owned, not a dashboard edit (Voice-gated, retell-proxy).** On an answered booking call the
+  agent goes silent for a beat while a booking tool round-trips to GHL (~3-8s), but the spoken filler is capped
+  at "under 10-12 words" (~2s). The filler copy lives in a hardcoded `BOOKING_TOOL_MESSAGES` map
+  (`frontend/supabase/functions/retell-proxy/index.ts:1790`) applied via the bulk `refresh-booking-tool-messages`
+  action, and the normal Save & Push overwrites the agent's `general_tools` from stored config
+  (`index.ts:809`) — so a Retell-dashboard edit of the filler / `speak_after_execution` does NOT stick.
+  **Durable fix:** lengthen each GHL-hitting tool's copy in `BOOKING_TOOL_MESSAGES` to a multi-beat ~20-30 word
+  line + set `speak_after_execution: true` on book/cancel/update (and wherever the default booking tools are
+  first seeded), deploy retell-proxy (version bump + read-only Voice smoke), then run the bulk
+  `refresh-booking-tool-messages`. Deeper backend latency trim (cache/pre-warm availability in
+  `voice-booking-tools`, frozen) is a separate later item. Severity Low (UX polish, no correctness/data risk),
+  effort S. **After this session** (Voice-gated CODE session). The persona-side talk-track *bridges* remain a
+  normal prompt item on PROMPT_UPDATE_LIST PU-9.
+
+- [ ] **GETCALL-1 (found 2026-07-07, incidental — during the Retell MCP endpoint audit) — `retell-proxy`'s
+  `get-call` case hits a 404'd unversioned Retell endpoint, so the call-detail view is broken live.**
+  `frontend/supabase/functions/retell-proxy/index.ts:1449` calls `retellFetch(apiKey, "GET",
+  \`get-call/${params.callId}\`)` — no `v2/` prefix. **Live-tested 2026-07-07** with a real `call_id`:
+  unversioned `GET /get-call/{id}` → **404**, `GET /v2/get-call/{id}` → **200**. Wired to the UI:
+  `frontend/src/hooks/useRetellApi.ts:137` `getCall` → `frontend/src/components/retell/RetellCallLogsTab.tsx:54`
+  calls it when a user opens an individual call's detail, so that action 404s today. **Fix:** one-line
+  endpoint-prefix change (`get-call/${id}` → `v2/get-call/${id}`), same pattern as the 2026-06-05/06-09
+  list-endpoint migrations (this repo's list-* calls are already on v2/v3; `get-call` was missed). Touches
+  retell-proxy → needs a version bump + the standard read-only Voice smoke on deploy. Found incidentally while
+  auditing the SEPARATE global `retell` MCP server (see memory `reference_retell_mcp_endpoint_audit_2026_07_07`)
+  — this is this repo's own code, not that package. Severity Low (isolated read path, one UI action, no data
+  risk), effort XS. **After this session** (CODE session, not the prompt/manual action-pack walkthrough).
+
 ## 🟡 Low — open (code, frozen baseline)
 
 - [ ] **SLOT-MAP-1 (found 2026-07-07 via MAIN-OUTBOUND-SHARED-1) — slot 1 double-duties as both a setter slot

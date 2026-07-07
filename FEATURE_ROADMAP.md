@@ -51,14 +51,28 @@ Features to build, in rough priority order. Reconciled 2026-06-25 with Brendan.
   call confirming tomorrow's appointment; on "can't make it" offers open slots and REBOOKS in the same call; SMS
   fallback on no-answer. A 135k-appointment study showed ~50% relative no-show reduction from AI reminder calls;
   a whole product category in 2026; GHL workflows cannot do this. Reuses outbound-voice + booking-tools infra.
-  Effort M.
+  Effort M. **2026-07-07 refresh (build-ready, no change):** keep the call strictly transactional (confirm +
+  reschedule only, zero upsell) so it stays a non-telemarketing service call in AU (exempt from DNC-wash + the
+  telemarketing calling-hour clamp; the SMS no-answer fallback is exempt on the same basis). Must out-ROI GHL's
+  native reminder calling (shipped May 2026); the differentiator is visible held-meeting reporting + clean in-call
+  rebook. The ~50% figure is a peer-reviewed 135,393-appointment study (20.82% -> 10.25%).
 - [ ] **F19 - Call QA digest with sentiment/failure flagging (POST-first-client).** Weekly agency-facing queue of
   flagged calls/conversations (negative sentiment, booking-tool failure, abrupt hang-up) built on the post-call
   analysis + analyze-sms-conversation data already ingested — review the worst 5, not 200 transcripts. Call
-  quality is the #2 churn driver and why the first client is leaving Phonely. Effort S-M.
+  quality is the #2 churn driver and why the first client is leaving Phonely. Effort S-M. **2026-07-07 refresh
+  (build-ready, no change):** scope it as the CROSS-CLIENT, weekly, agency-pushed digest over the
+  `post_call_analysis_data` already ingested; do NOT rebuild per-call sentiment scoring (Retell's native AI QA
+  Analyst + Custom Dashboards cover that per-Retell-account) — F19's differentiator is aggregation across clients +
+  weekly push + no agency Retell login. Pre-build (~30 min): check whether Retell Conductor (shipped 2026-07-05)
+  exposes reusable eval data/API first.
 - [ ] **F20 - Booked-revenue attribution (POST-first-client, before the first renewal).** Tag held appointments
   with outcome + deal value from the GHL opportunity pipeline; report "AI-sourced pipeline: $X" per lead source
   per month. Turns the renewal conversation from "cost A$2,000" into "generated A$40k of pipeline". Effort M.
+  **2026-07-07 refresh (build-ready, no change):** read GHL v2 opportunity `monetaryValue` + `source` + `stage`
+  (endpoints still date-header versioned, no deprecation found). GHL's April-2026 native pipeline-revenue widget
+  reports stage/date totals but does NOT attribute to the AI source, so F20 stays a greenfield differentiator (incl.
+  vs GHL AI Employee). "No visible ROI" remains the #1 cancellation driver (June-2026 Trillet analysis), so F20
+  stays the top renewal-retention lever.
 
 > **Explicit DO-NOT-BUILD list (research-backed, solo-founder managed retainer):** an in-product reminder engine
 > (GHL workflows do confirmation SMS / trigger-link confirms / reschedule links natively — provision a canonical
@@ -251,6 +265,16 @@ DELIVERABLE:
 > saastr.com (prompt portability), cronical.ai + growleads.io (benchmarks), mybcat.com + getprosper.ai +
 > famulor.io (reminders), greetnow.com + digitalapplied.com (speed-to-lead), getaira.io (missed-call text-back),
 > acma.gov.au + donotcall.gov.au + waboom.ai + recordinglaw.com + sprintlaw.com.au (AU compliance).
+
+> **2026-07-07 refresh (P3 review).** A 3-day rescan found NO verified material change to F18/F19/F20
+> build-readiness; the prior research holds and all three remain build-ready. Only in-window moves: Retell
+> Conductor (2026-07-05, an enterprise eval/test/improve interface for production voice agents) and xAI's Grok
+> Voice Agent Builder (beta 2026-07-06), both no-code DIY-infra entrants and NEITHER a managed-service competitor;
+> both reinforce the "sell outcomes, not a self-serve builder" thesis. AU compliance stable (no AI-specific
+> voice-disclosure law in force; ACMA SMS Sender ID Register live 1 July 2026, plain Twilio numbers exempt). New
+> non-blocking watch: AU Privacy Act second-tranche reform (automated-decision / AI-transparency disclosure)
+> anticipated ~Dec 2026 (tracked in `Docs/DEFERRED.md`). Per-feature deltas are folded into the F18/F19/F20 lines
+> above. Citations by publisher/title; URL-level sources live in the 2026-07-04 pass.
 
 ## Hard constraints (apply to any feature touching these)
 

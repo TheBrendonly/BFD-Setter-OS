@@ -1,4 +1,4 @@
-import { Outlet, useParams, useNavigate, useLocation } from "react-router-dom";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { SubscriptionGatedOutlet } from "./SubscriptionGatedOutlet";
 
 import { BarChart3, BookOpen, Database, FileText, Layout, Wrench, Settings, User, Plus, ChevronDown, ChevronRight, Video, LogOut, Trash2, GripVertical, HelpCircle, Key, Phone, Bug, Presentation, Users, Home, AlertTriangle, Mic, CreditCard, Target, MessageSquare } from "@/components/icons";
@@ -37,7 +37,6 @@ const ScrollToTopOnRoute: React.FC<React.HTMLAttributes<HTMLDivElement> & { styl
   return <div ref={ref} {...props}>{children}</div>;
 };
 
-// Presentation-only mode is now controlled via the `presentation_only_mode` column in the clients table
 const menuItemsBeforeWebinar = [{
   title: "Knowledgebase",
   url: "/knowledge-base",
@@ -422,7 +421,7 @@ function ClientSidebar() {
       const {
         data,
         error
-      } = await supabase.from("clients_public").select("id, name, description, image_url, sort_order, presentation_only_mode").eq("is_system", false).order("sort_order");
+      } = await supabase.from("clients_public").select("id, name, description, image_url, sort_order").eq("is_system", false).order("sort_order");
       if (error) throw error;
       setClients(data || []);
     } catch (error) {
@@ -619,61 +618,9 @@ function ClientSidebar() {
       setDeleting(false);
     }
   };
-  // Check if this client has presentation-only mode enabled in the database
-  const isPresentationOnlyMode = (currentClient as any)?.presentation_only_mode === true;
-
-  // Auto-redirect to presentation agent if in presentation-only mode but on wrong route
-  useEffect(() => {
-    if (isPresentationOnlyMode && clientId) {
-      const isOnPresentationAgent = location.pathname.includes("/webinar-presentation-agent");
-      if (!isOnPresentationAgent) {
-        navigate(`/client/${clientId}/webinar-presentation-agent`, { replace: true });
-      }
-    }
-  }, [isPresentationOnlyMode, clientId, location.pathname, navigate]);
-
-  // Show loading state until we know if it's presentation-only mode
+  // Show loading state until clients are loaded
   if (isLoadingClients || !currentClient) {
     return <RetroLoader />;
-  }
-
-  // Full-page mode for Presentation Agent - no sidebar
-  if (isPresentationOnlyMode) {
-    const handleLogout = async () => {
-      try {
-        localStorage.removeItem('sb-awzlcmdomhtyqjabzvnn-auth-token');
-        await supabase.auth.signOut({ scope: 'global' });
-      } catch (e) {
-        console.log('Sign out cleanup:', e);
-      }
-      navigate('/auth', { replace: true });
-    };
-
-    return (
-      <div className="h-screen w-full overflow-hidden bg-background flex flex-col">
-        {/* Minimal header */}
-        <header className="flex items-center justify-between px-4 py-3 border-b border-border bg-background shrink-0">
-          <div className="flex items-center gap-3">
-            {currentClient?.image_url && (
-              <img src={currentClient.image_url} alt="Logo" className="h-8 object-contain" />
-            )}
-            <span className="text-sm font-medium text-foreground">{currentClient?.name || "Sub-Account"}</span>
-          </div>
-          <button
-            onClick={handleLogout}
-            className="flex items-center gap-2 px-3 py-1.5 text-sm text-destructive hover:bg-destructive/10 rounded-md transition-colors"
-          >
-            <LogOut className="h-4 w-4" />
-            <span>Sign Out</span>
-          </button>
-        </header>
-        
-        {/* Full-page content */}
-        <div className="flex-1 min-h-0 overflow-hidden">
-          <Outlet />
-        </div>
-      </div>
-    );
   }
 
   // Regular sidebar for all other users

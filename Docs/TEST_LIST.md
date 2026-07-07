@@ -14,6 +14,14 @@ When an item passes, move it to `Docs/archive/COMPLETED_LOG.md`. When it fails, 
 
 > **⭐⭐⭐ VOICE + BROWSER TEST SESSION — 2026-07-06, and the 2026-07-05 TEST SESSION before it — ALL PASSED → `COMPLETED_LOG.md`.** Full detail there + handoffs `Operations/handoffs/2026-07-06-voice-browser-session.md` + `2026-07-05-test-session.md`. Between the two, essentially every pre-existing bug/feature check passed (onboarding-fix cluster, the shared-fn pass, F8/F9-1/F11/UI-1/F13 core/PROMPT-LINT-1/MODEL-1/API-DEPR-1 core/PROMPT-AUTH-1 X-Ray, the B-2 outage leg, G3-7 nav, SWEEP-1a/b/c). What's below is either (a) the still-open behavioral checks for the 2026-07-07 combined build, or (b) a small residual set of finer-grained checks that genuinely haven't run yet.
 
+## Session P3 cleanup (2026-07-07) — live-verify
+
+- [ ] **P3-CLEANUP-1 — client dashboard/sidebar still loads after the ClientLayout dead-branch removal.**
+  P3 removed the dead `presentation_only_mode` redirect branch + the now-unused `Outlet` import / select field
+  from `ClientLayout.tsx` (0 clients had the flag live; the route target was already deleted in G3-8(b); tsc +
+  vite build green). Railway rebuilds on `git push github`. Smoke: open a client → dashboard + sidebar render
+  normally (no blank page, no console error). Low risk, quick confirm.
+
 ## Session P2 build (2026-07-07) — deferred pull-forward live-verify
 
 Code + unit tests + read-only data-path checks all done + deployed (see `COMPLETED_LOG` 2026-07-07 P2).

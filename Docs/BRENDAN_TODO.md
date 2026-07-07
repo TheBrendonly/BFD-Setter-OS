@@ -23,6 +23,14 @@ prompt tweaks independently).
   `{{recording_disclosure}}`), **PU-10** (reschedule list-first), **PU-11** (live-transfer offer line). See
   `PROMPT_UPDATE_LIST.md`.
 
+## P3 review (2026-07-07) — low-priority follow-up
+
+- [ ] **AU public-holiday list refresh (annual, before end of 2027).** `trigger/_shared/businessHours.ts`
+  `AU_PUBLIC_HOLIDAYS` is hard-coded for 2026 + 2027 only (flagged in-code "REVIEW ANNUALLY"). As 2028
+  approaches, the list silently permits telemarketing dials on 2028+ national public holidays. Ask Claude
+  to add the next year's AU national public holidays (a ~10-line code edit + a Trigger deploy). Low
+  urgency, harmless until 2028. From the P3 security review (`Docs/SECURITY_REVIEW_2026-07-07.md`).
+
 ## Onboarding-fix pass 2026-07-06 — one push to ship it
 
 - [x] **Run `git push github main` from `/srv/bfd/Projects/bfd-setter`.** DONE (confirmed 2026-07-07,

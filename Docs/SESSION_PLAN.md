@@ -38,9 +38,10 @@ this file + handoff, and emits the prompt for whatever comes after.
 BFD-setter continuation. Repo /srv/bfd/Projects/bfd-setter, branch main (git pull first).
 Supabase ref bjgrgbgykvjrsuwwruoh. Creds in ./.env (SUPABASE_PAT, TRIGGER_DEPLOY_PAT, BFD_RETELL_API_KEY).
 Live DB via Supabase Management API /database/query (NOT postgres MCP). Live Retell via api.retellai.com
-with BFD_RETELL_API_KEY. To know which agent serves a direction, read the PHONE-NUMBER binding
-(list-phone-numbers inbound_agent_id/outbound_agent_id) — never trust old memory. NEVER edit voice
-prompts (report-only: report location + change, Brendan applies in the BFD setter UI). Verify read-only
+with BFD_RETELL_API_KEY. To know which agent serves a direction, read `voice_setters.retell_agent_id`
+directly (never trust the phone-number static binding or a remembered agent id; MAIN-OUTBOUND-SHARED-1
+proved the phone binding unreliable). NEVER edit voice prompts (report-only: report location + change,
+Brendan applies in the BFD setter UI). Verify read-only
 before claiming done. Follow the Relay Protocol in Docs/SESSION_PLAN.md.
 READ FIRST: Docs/SESSION_PLAN.md + the latest Operations/handoffs/ doc + the list(s) for this session.
 ```
@@ -402,7 +403,30 @@ Status: `[ ]` not started · `[~]` in progress · `[x]` done. Effort is rough.
    Restoring f45f4dd auto-resolved PU-3 + PU-7; PU-6 now open on it (scoped to Main Outbound only). No code, no
    prompt content, no Retell writes. Residual code flaw + the empty "Setter-1" tile → `DEFERRED.md` SLOT-MAP-1.
    Live answered-call verify → `TEST_LIST.md`. Handoff `Operations/handoffs/2026-07-07-main-outbound-shared-1-fix.md`.
-   Pipeline: `[✓] P1 audit  [✓] MAIN-OUTBOUND-SHARED-1 fix  [ ] P2 (Brendan picks) or [ ] P3  [ ] First-Client Milestone (gated)`.
+   Pipeline: `[✓] P1 audit  [✓] MAIN-OUTBOUND-SHARED-1 fix  [✓] P2  [✓] P3  [ ] First-Client Milestone (gated)`.
+- [x] **Session P2 — deferred pull-forward build. DONE 2026-07-07 (Opus 4.8, plan ON, Brendan greenlit 3 items).**
+  Built + deployed 3 non-client-gated DEFERRED items, each TDD + verify-first: **execution_cost_events** per-execution
+  cost ledger (agency-only ROLE-GATED RLS, idempotent upserts, 4 best-effort write sites; prereq for 2.6/F8v2/3.9/4.1),
+  **F9 v2** scheduled Retell drift poll + booking-tools-lost alert (`trigger/pollRetellDrift.ts`, per-client keys,
+  read-only against Retell), **BOOK-TZ-1** per-lead timezone (display-only; booked time provably unchanged; PU-13
+  report-only). retell-call-webhook v23 / retell-call-analysis-webhook v27 / retell-proxy v50 /
+  make-retell-outbound-call v29 / sync-ghl-contact v28 / intake-lead v16; 3 migrations; Trigger 20260707.1 (14 tasks).
+  Handoff `Operations/handoffs/2026-07-07-p2-deferred-build.md`. → emitted **P3**.
+- [x] **Session P3 — review + cleanup + research. DONE 2026-07-07 (Opus 4.8, plan ON).** First full security/quality
+  review since 2026-06-05, over the diff since Session 9 (`4a22b8b`, ~120 files). **The shipped surface is sound** —
+  auth spine verified; all P2 subsystems + F15 RLS + onboarding gate + `clients_public` + PROMPT-AUTH-1 clean; no
+  IDOR / injection / secret-leak. Findings logged (none exploitable on the current live setup): **F16C-SMS-1** (High —
+  F16(c) missed-call text-back forgeable-SMS vector; Brendan chose report-only + DEFER, folded into the milestone
+  since the fix needs the webhook secret it arms), **QH-TZ-1** (Med — cadence self-DoS on a bad quiet-hours tz),
+  **RLS-UISTATE-1 / FUNNEL-SCAN-1 / ROLE-RESOLVE-1** (Low) → `BUG_LIST.md`; AU-holiday annual refresh →
+  `BRENDAN_TODO.md`. Full write-up `Docs/SECURITY_REVIEW_2026-07-07.md`. Cleanup: removed the dead `ClientLayout`
+  `presentation_only_mode` branch (0 clients had the flag; route target deleted in G3-8(b); tsc + build green) + fixed
+  this file's stale agent-identification guidance (read `voice_setters.retell_agent_id`, not the phone binding).
+  Research: a verified 3-day rescan found NO material change — F18/F19/F20 remain build-ready (deltas + a
+  Privacy-Act-tranche-2 watch folded into `FEATURE_ROADMAP.md` / `DEFERRED.md`). Milestone prereqs re-confirmed
+  airtight + the F16(c) fix added as a hard step. Handoff
+  `Operations/handoffs/2026-07-07-session-p3-review-cleanup-research.md`. → emits the **First-Client Milestone**
+  (gated). Pipeline: `[✓] P1  [✓] MAIN-OUTBOUND fix  [✓] P2  [✓] P3  [ ] First-Client Milestone (gated)`.
 4. **Brendan solo block (parallel, no Claude session):** Setter-1 prompt migration, Resend SMTP → F14 E2E,
    sms_llm rate + billing anchor/toggles, n8n Railway shutdown, PROMPT_UPDATE_LIST items (see the 2026-07-07
    action pack for the full ordered list with exact live wording + paste-ready changes).
@@ -414,15 +438,16 @@ Status: `[ ]` not started · `[~]` in progress · `[x]` done. Effort is rough.
    webhook signing secrets + arm `retell_webhook_secret` (6.6), AU A2P registration for `+61481614530`, GHL
    reminder-workflow snapshot at onboarding. After this, v1 is live + 100%.
 **API-DEPR-1/2 are DONE** (retell-proxy v49 live); Session 10 (G3-7) is DONE — vite 8 is live on `main`.
-**`BUG_LIST.md` is at 0 open items as of Session P1 (2026-07-07)** — nothing is blocking the First-Client
-Milestone on the CODE side; what remains is Brendan's live behavioral TEST_LIST pass (mostly the 2026-07-07
-combined-build checks) + the BRENDAN_TODO manual gates in the 2026-07-07 action pack.
+**`BUG_LIST.md`:** 0 pre-existing bugs block the milestone; the P3 review (2026-07-07) added new hardening items
+(F16C-SMS-1 High but DEFERRED-to-milestone, QH-TZ-1 Med, 3 Low) — none exploitable on the current live setup.
+Nothing blocks the First-Client Milestone on the CODE side; what remains is Brendan's live behavioral TEST_LIST
+pass (mostly the 2026-07-07 combined-build checks) + the BRENDAN_TODO manual gates in the 2026-07-07 action pack.
 
 **Ready-to-run prompts for the whole relay live in `Docs/TEST_SESSION.md` RUN 10** (T-fix → Session S → F15 → F16,
 each with a self-chaining ▶ PIPELINE footer) **and `Docs/FIRST_CLIENT_MILESTONE.md`** (the gated last step). Triggers:
 say "run test session" to start; say "I'm onboarding a client" to surface the milestone.
 **Functional 100% = Sessions 0-8 `[x]` + TEST_LIST green** (reached at the end of Session 7-finish); Sessions
 9-10 + P1 clear the last open BUG_LIST items + the doc/list backlog; the First-client milestone is the actual
-go-live. **P2 (Brendan picks) and P3 (review+cleanup+research)** are optional polish sessions between here and
-the milestone — see the emitted prompts in the 2026-07-07 P1 handoff. v2 = the lifecycle system + A/B +
+go-live. **P2 (deferred build) and P3 (review+cleanup+research) are DONE (2026-07-07)**; the only remaining step
+is the gated First-Client Milestone. v2 = the lifecycle system + A/B +
 analytics + HubSpot + F9 v2 + F8 v2 (`Docs/DEFERRED.md`), off the 100% path.

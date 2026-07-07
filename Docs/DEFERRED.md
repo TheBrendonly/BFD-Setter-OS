@@ -34,6 +34,11 @@ Things deliberately not being built now, each with the gate that would un-defer 
 
 ## Other
 
+- [ ] **AU Privacy Act second-tranche reform (automated-decision transparency / AI disclosure)** — anticipated
+  ~Dec 2026 (surfaced by the 2026-07-07 F18-F20 research refresh). No AI-specific voice-disclosure law is in force
+  as of mid-2026; this is a WATCH item, not a build. **Gate:** the reform lands + names an obligation touching
+  automated calls/SMS; revisit F17 phase-2 (consent audit trail) + the recording-disclosure wording if so.
+
 - [ ] **By-phone Spec 2 — N-row merge + UNIQUE(client_id, normalized_phone)** — collapse the existing duplicate `leads` rows that share a `normalized_phone` into one survivor (richest/most-recent), repoint child tables (engagement_executions / bookings / campaign_events / dm_executions / scheduled_callbacks / message_queue / active_trigger_runs) onto the survivor, add the UNIQUE constraint, and clean up the GHL-side dupes. Spec 1 (go-forward) is live; Session 5's resilient-inbound collision guard explicitly **defers** the rare concurrent-create case here. **Gate:** needs a dry-run on the live dup set first (was the ~10-row `+61405482446` case); low urgency while GHL allow-duplicate-contacts stays OFF. See `project_internal_by_phone_leads_spec1_2026_06_18`.
 
 - [x] **F9 v2 — Retell lock polish — poll + alerts BUILT 2026-07-07 (Session P2).** Shipped the **scheduled drift poll** (`trigger/pollRetellDrift.ts`, hourly) + **booking-tools-lost alert**: persisted `voice_setters.retell_drift_detected_at` / `retell_booking_tools_lost_at` flags set by the poll (read live get-agent/get-retell-llm vs the stored snapshot via the pure `computeDriftState`), surfaced as error_logs rows + optional Slack push + PromptManagement tile badges; cleared on pull/unlock. Verified end-to-end against a real drift (Property Coach live v17 vs synced v13). **Gap (c) auto-hydrate-BFD-on-unlock was explicitly deferred** (the manual Pull already covers it; snapshot-expand + unlock-flow rewrite not worth it yet) — reopen only if Brendan wants hands-off editor hydration on unlock. See `COMPLETED_LOG` 2026-07-07 P2 + `FEATURE_ROADMAP` "Feature spec - F9".
