@@ -1887,7 +1887,14 @@ Deno.serve(async (req) => {
         const supabaseAdmin = getSupabaseAdmin();
         const { data, error } = await supabaseAdmin
           .from("voice_setters")
-          .update({ is_retell_locked: locked, retell_locked_at: locked ? new Date().toISOString() : null })
+          .update({
+            is_retell_locked: locked,
+            retell_locked_at: locked ? new Date().toISOString() : null,
+            // F9 v2 — a manual lock-state change is a fresh baseline; clear any drift
+            // flags the poll had set (they only apply while locked + un-pulled).
+            retell_drift_detected_at: null,
+            retell_booking_tools_lost_at: null,
+          })
           .eq("client_id", clientId)
           .eq("legacy_slot", slotNumber)
           .select("id");
@@ -1971,7 +1978,15 @@ Deno.serve(async (req) => {
         };
         await supabaseAdmin
           .from("voice_setters")
-          .update({ retell_config_snapshot: snapshot, retell_synced_at: pulledAt, retell_synced_version: agent?.version ?? null })
+          .update({
+            retell_config_snapshot: snapshot,
+            retell_synced_at: pulledAt,
+            retell_synced_version: agent?.version ?? null,
+            // F9 v2 — a fresh pull re-syncs BFD to live Retell, so any drift the poll
+            // flagged is now resolved; clear both flags.
+            retell_drift_detected_at: null,
+            retell_booking_tools_lost_at: null,
+          })
           .eq("client_id", clientId)
           .eq("legacy_slot", slotNumber);
         result = { success: true, snapshot, version: agent?.version ?? null };

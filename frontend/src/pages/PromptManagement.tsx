@@ -5131,7 +5131,7 @@ const PromptManagement = () => {
   // setters so the tile can show "in sync" vs "drifted". Busy sets gate the
   // toggle/pull buttons; dialog slots drive the lock/unlock confirm dialogs.
   const [lockMap, setLockMap] = useState<
-    Record<number, { is_retell_locked: boolean; retell_agent_id: string | null; retell_synced_version: number | null }>
+    Record<number, { is_retell_locked: boolean; retell_agent_id: string | null; retell_synced_version: number | null; retell_drift_detected_at: string | null; retell_booking_tools_lost_at: string | null }>
   >({});
   const [liveVersionByAgent, setLiveVersionByAgent] = useState<Record<string, number>>({});
   const [lockBusySlots, setLockBusySlots] = useState<Set<number>>(new Set());
@@ -5194,7 +5194,7 @@ const PromptManagement = () => {
       const [settersRes, clientRes] = await Promise.all([
         (supabase as any)
           .from('voice_setters')
-          .select('legacy_slot, is_inbound, retell_agent_id, is_retell_locked, retell_synced_version')
+          .select('legacy_slot, is_inbound, retell_agent_id, is_retell_locked, retell_synced_version, retell_drift_detected_at, retell_booking_tools_lost_at')
           .eq('client_id', clientId),
         (supabase as any)
           .from('clients_public')
@@ -5204,7 +5204,7 @@ const PromptManagement = () => {
       ]);
       if (cancelled) return;
       const map: Record<number, { is_inbound: boolean; retell_agent_id: string | null }> = {};
-      const locks: Record<number, { is_retell_locked: boolean; retell_agent_id: string | null; retell_synced_version: number | null }> = {};
+      const locks: Record<number, { is_retell_locked: boolean; retell_agent_id: string | null; retell_synced_version: number | null; retell_drift_detected_at: string | null; retell_booking_tools_lost_at: string | null }> = {};
       for (const s of (settersRes?.data as any[]) || []) {
         if (s.legacy_slot == null) continue;
         map[s.legacy_slot] = {
@@ -5215,6 +5215,8 @@ const PromptManagement = () => {
           is_retell_locked: !!s.is_retell_locked,
           retell_agent_id: s.retell_agent_id ?? null,
           retell_synced_version: s.retell_synced_version ?? null,
+          retell_drift_detected_at: s.retell_drift_detected_at ?? null,
+          retell_booking_tools_lost_at: s.retell_booking_tools_lost_at ?? null,
         };
       }
       setInboundSlotMap(map);
@@ -8315,15 +8317,21 @@ const PromptManagement = () => {
                                 const lk = sn != null ? lockMap[sn] : undefined;
                                 if (!lk?.is_retell_locked) return null;
                                 const live = lk.retell_agent_id ? liveVersionByAgent[lk.retell_agent_id] : undefined;
+                                // F9 v2: the hourly poll persists drift/booking-tools-lost flags, so the
+                                // chip reflects drift even before the on-demand live check loads.
+                                const polledDrift = !!lk.retell_drift_detected_at;
                                 let sync: { variant: 'positive' | 'warning' | 'neutral'; label: string };
                                 if (lk.retell_synced_version == null) sync = { variant: 'neutral', label: 'Not pulled' };
-                                else if (typeof live === 'number' && live > lk.retell_synced_version) sync = { variant: 'warning', label: 'Drifted · pull' };
+                                else if ((typeof live === 'number' && live > lk.retell_synced_version) || polledDrift) sync = { variant: 'warning', label: 'Drifted · pull' };
                                 else if (typeof live === 'number') sync = { variant: 'positive', label: 'In sync' };
                                 else sync = { variant: 'neutral', label: 'Synced v' + lk.retell_synced_version };
                                 return (
                                   <>
                                     <StatusTag variant="warning">Retell-locked</StatusTag>
                                     <StatusTag variant={sync.variant}>{sync.label}</StatusTag>
+                                    {lk.retell_booking_tools_lost_at && (
+                                      <StatusTag variant="negative">Booking tools missing</StatusTag>
+                                    )}
                                   </>
                                 );
                               })()}
