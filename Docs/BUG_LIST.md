@@ -9,7 +9,25 @@ Open bugs and behavior fixes. Reconciled 2026-06-25 with Brendan; full re-audit 
 
 ---
 
-## Status: 0 open bugs (2026-07-07)
+## 🟡 Low — open (code, frozen baseline)
+
+- [ ] **SLOT-MAP-1 (found 2026-07-07 via MAIN-OUTBOUND-SHARED-1) — slot 1 double-duties as both a setter slot
+  and the inbound-agent resolver; the empty "Setter-1" voice tile is a live footgun.** In retell-proxy
+  `SLOT_TO_AGENT_COLUMN`, slot 1 maps to `clients.retell_inbound_agent_id` (a legacy single-agent column; the
+  real outbound slots 2/3 were retired in P3a 2026-06-17, so there is NO dedicated outbound slot). Because the
+  voice grid always force-renders a `Voice-Setter-1` tile even when slot 1 is empty, **creating or saving a
+  setter on that empty "Setter-1" tile re-reads `retell_inbound_agent_id` and stamps the inbound agent onto the
+  new setter** — i.e. it re-creates exactly the MAIN-OUTBOUND-SHARED-1 collision. MAIN-OUTBOUND-SHARED-1 was
+  worked around with data (Main Outbound moved off slot 1 to slot 10), but slot 1 itself remains poisoned.
+  **Interim mitigation:** leave the empty "Setter-1" tile alone (documented in `TEST_LIST.md` + the fix handoff).
+  **Proper fix (code, `retell-proxy` = frozen baseline, so gated):** give sync a real dedicated outbound slot,
+  OR guard `dualWriteVoiceSetter` so it never writes when a non-inbound setter's resolved `agentColumn` is
+  `retell_inbound_agent_id`, OR key the `voice_setters` row match on the setter UUID instead of `legacy_slot`.
+  Severity Low (data workaround holds; only bites a setter placed on slot 1). Effort S-M. Full design context +
+  the same three fix options: `Docs/DEFERRED.md` SLOT-MAP-1. Source:
+  `Operations/handoffs/2026-07-07-main-outbound-shared-1-fix.md`.
+
+## Status: MAIN-OUTBOUND-SHARED-1 fixed (data); 1 open item = SLOT-MAP-1 above (Low, code/frozen-baseline)
 
 > **MAIN-OUTBOUND-SHARED-1 — ROOT-CAUSED + FIXED (data) 2026-07-07.** Restored "Main Outbound" to its own
 > dedicated Retell agent. Root cause was a structural slot/column collision, not a code regression: "Main
