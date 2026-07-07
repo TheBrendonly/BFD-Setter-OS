@@ -3,6 +3,7 @@ import { createClient } from "npm:@supabase/supabase-js@2.101.0";
 // 5-min window). Shared across the 3 Retell webhooks. The stored secret value is
 // the Retell API key. Verify-if-present.
 import { verifyRetellSignature } from "../_shared/verify-webhook.ts";
+import { buildCostEvent } from "../_shared/costEvents.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -393,6 +394,37 @@ Deno.serve(async (req) => {
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };
+
+    // Session P2 — per-execution cost ledger (PLATFORM db via internalSupabase; the
+    // call_history push below goes to the client's EXTERNAL db). Voice cost is real
+    // (Retell). Idempotent via UNIQUE(cost_kind, provider_ref): this webhook and
+    // retell-call-analysis-webhook both fire for the same call_id and both upsert the
+    // same row. Best-effort — a cost-write failure must not affect the call sync.
+    try {
+      const voiceCostUsd = typeof record.cost === "number" ? record.cost : null;
+      const voiceCallId = typeof record.call_id === "string" ? record.call_id : null;
+      if (voiceCostUsd != null && voiceCostUsd > 0 && voiceCallId) {
+        const minutes = typeof durationMs === "number" && durationMs > 0
+          ? Math.round((durationMs / 60000) * 1000) / 1000
+          : null;
+        const costRow = buildCostEvent("voice", {
+          clientId: client.id,
+          executionId: (dynamicVars.execution_id as string | undefined) || null,
+          leadId: contactId,
+          providerRef: voiceCallId,
+          quantity: minutes,
+          unit: "minutes",
+          costUsd: voiceCostUsd,
+          isEstimated: false,
+        });
+        const { error: costErr } = await internalSupabase
+          .from("execution_cost_events")
+          .upsert(costRow, { onConflict: "cost_kind,provider_ref" });
+        if (costErr) console.warn(`execution_cost_events voice write failed (non-fatal): ${costErr.message}`);
+      }
+    } catch (costEx) {
+      console.warn(`execution_cost_events voice write threw (non-fatal): ${(costEx as Error).message}`);
+    }
 
     console.log(`📦 Pushing call ${record.call_id} to external call_history for client ${client.id}`);
 

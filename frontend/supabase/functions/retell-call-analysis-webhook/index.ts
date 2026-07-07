@@ -8,6 +8,7 @@ import { parseCallbackTime } from "../_shared/parseCallbackTime.ts";
 // 5-min window). Shared across the 3 Retell webhooks. Verify-if-present; the
 // stored secret value is the Retell API key.
 import { verifyRetellSignature } from "../_shared/verify-webhook.ts";
+import { buildCostEvent } from "../_shared/costEvents.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -464,6 +465,35 @@ Deno.serve(async (req) => {
       }
 
       console.log(`✅ Call ${record.call_id} stored successfully`);
+
+      // Session P2 — per-execution cost ledger (platform db). Voice cost is real (Retell).
+      // Idempotent via UNIQUE(cost_kind, provider_ref) shared with retell-call-webhook.
+      // Best-effort — never affects the 200 returned to Retell.
+      try {
+        const voiceCostUsd = typeof record.cost === "number" ? record.cost : null;
+        const voiceCallId = typeof record.call_id === "string" ? record.call_id : null;
+        if (voiceCostUsd != null && voiceCostUsd > 0 && voiceCallId) {
+          const costMinutes = typeof durationMs === "number" && durationMs > 0
+            ? Math.round((durationMs / 60000) * 1000) / 1000
+            : null;
+          const costRow = buildCostEvent("voice", {
+            clientId: clientId,
+            executionId: (dynamicVars.execution_id as string | undefined) || null,
+            leadId: contactId,
+            providerRef: voiceCallId,
+            quantity: costMinutes,
+            unit: "minutes",
+            costUsd: voiceCostUsd,
+            isEstimated: false,
+          });
+          const { error: costErr } = await supabase
+            .from("execution_cost_events")
+            .upsert(costRow, { onConflict: "cost_kind,provider_ref" });
+          if (costErr) console.warn(`execution_cost_events voice write failed (non-fatal): ${costErr.message}`);
+        }
+      } catch (costEx) {
+        console.warn(`execution_cost_events voice write threw (non-fatal): ${(costEx as Error).message}`);
+      }
 
       // ── GHL gap 1: Push call summary + sentiment + appointment_booked ──
       // Best-effort: never throws; failure only logs a console.warn.

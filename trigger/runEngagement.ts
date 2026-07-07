@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { placeOutboundCall } from "./placeOutboundCall";
 import { pushEmailToGhl } from "./_shared/ghl-conversations";
 import { sendTwilioSmsAndStamp } from "./_shared/sendTwilioSmsAndStamp";
+import { buildCostEvent } from "./_shared/costEvents";
 import { aiGenerateEngagementCopy } from "./_shared/aiGenerateEngagementCopy";
 import { classifyCallOutcome } from "./_shared/classifyCallOutcome";
 import { normalizePhone } from "./_shared/phone";
@@ -547,6 +548,29 @@ export const runEngagement = task({
             },
             { onConflict: "execution_id" },
           );
+
+        // Session P2 — LLM cost event (execution_cost_events). Real OpenRouter cost
+        // accumulated in metricsBuffer.ai_cost_cents during this run; one rolled-up
+        // llm row per execution (provider_ref = execution_id makes it idempotent).
+        // Best-effort; never blocks the run.
+        if (metricsBuffer.ai_cost_cents > 0) {
+          try {
+            const llmCostRow = buildCostEvent("llm", {
+              clientId: client_id,
+              executionId: execution_id,
+              workflowId: workflow_id,
+              leadId: lead_id,
+              providerRef: execution_id,
+              costUsd: metricsBuffer.ai_cost_cents / 100,
+              isEstimated: false,
+            });
+            await supabase
+              .from("execution_cost_events")
+              .upsert(llmCostRow, { onConflict: "cost_kind,provider_ref" });
+          } catch (llmCostErr) {
+            console.warn("execution_cost_events llm write failed (non-fatal):", (llmCostErr as Error).message);
+          }
+        }
 
         // Cadence v2 Day 7 — cost-ceiling alert. Fires only on completed
         // runs (the calculation is finalized here). 500c = $5/lead, well
@@ -1244,6 +1268,8 @@ export const runEngagement = task({
                 ghlConversationProviderId:
                   (client.ghl_conversation_provider_id as string | null) ?? null,
                 skipDispatch: isSystemClient,
+                executionId: execution_id,
+                workflowId: workflow_id,
               });
               if (!sendResult.ok) {
                 throw new Error(
@@ -1414,6 +1440,8 @@ export const runEngagement = task({
               ghlContactId: lead_id,
               ghlConversationProviderId:
                 (client.ghl_conversation_provider_id as string | null) ?? null,
+              executionId: execution_id,
+              workflowId: workflow_id,
             });
             if (!sendResult.ok) {
               throw new Error(

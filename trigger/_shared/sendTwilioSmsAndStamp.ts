@@ -1,6 +1,13 @@
 import { pushSmsToGhl } from "./ghl-conversations.ts";
 import { normalizePhone } from "./phone.ts";
 import { isPhoneOptedOut } from "./optout.ts";
+import { buildCostEvent } from "./costEvents.ts";
+
+// Seed per-segment SMS cost (USD). Mirrors the 1.4c/SMS seed weight used by the
+// cadence_metrics estimate in runEngagement.writeCadenceMetrics. is_estimated=true
+// on every SMS cost event flags that this is a rate-card figure, not a Twilio-invoiced
+// price — reconcile against real Twilio invoices (BRENDAN_TODO Tier-4) when data exists.
+const SMS_SEGMENT_COST_USD_SEED = 0.014;
 
 // ── Shared Twilio SMS sender + message_queue stamp + GHL mirror ───────────
 // Extracted from runEngagement.ts so processMessages/sendFollowup can reuse the
@@ -33,6 +40,10 @@ export async function sendTwilioSmsAndStamp(args: {
   // Synthetic-probe / system client: write the outbound message_queue row the hourly
   // canary asserts, but DO NOT call Twilio (no real SMS, no A2P burn, no spend).
   skipDispatch?: boolean;
+  // Session P2 — execution cost ledger. When the send is part of a cadence run these
+  // link the SMS cost event to its engagement_execution; ad-hoc sends leave them null.
+  executionId?: string | null;
+  workflowId?: string | null;
 }): Promise<{ ok: boolean; sid: string | null; errorCode?: number; errorMessage?: string }> {
   const supabaseUrl = process.env.SUPABASE_URL!;
 
@@ -104,11 +115,34 @@ export async function sendTwilioSmsAndStamp(args: {
   // failures as "Twilio SMS failed: ? unknown" (e.g. cost 10 min of guessing on
   // a 21610 carrier opt-out 2026-05-13). Keep the helper's external return shape
   // (errorCode / errorMessage) so callers stay unchanged.
-  const twilioJson = (await twilioRes.json().catch(() => ({}))) as { sid?: string; code?: number; message?: string };
+  const twilioJson = (await twilioRes.json().catch(() => ({}))) as { sid?: string; code?: number; message?: string; num_segments?: string };
   if (!twilioRes.ok) {
     return { ok: false, sid: null, errorCode: twilioJson.code, errorMessage: twilioJson.message };
   }
   if (twilioJson.sid) {
+    // Session P2 — SMS cost event (platform db). Cost is ESTIMATED (segments x seed
+    // rate); Twilio's create response carries num_segments but not a settled price.
+    // Best-effort + idempotent via UNIQUE(cost_kind, provider_ref=twilio_sid).
+    try {
+      const segments = Number.parseInt(twilioJson.num_segments ?? "1", 10) || 1;
+      const costRow = buildCostEvent("sms", {
+        clientId: args.clientId,
+        executionId: args.executionId ?? null,
+        workflowId: args.workflowId ?? null,
+        leadId: args.leadId,
+        providerRef: twilioJson.sid,
+        quantity: segments,
+        unit: "segments",
+        costUsd: segments * SMS_SEGMENT_COST_USD_SEED,
+        isEstimated: true,
+      });
+      const { error: costErr } = await args.supabase
+        .from("execution_cost_events")
+        .upsert(costRow, { onConflict: "cost_kind,provider_ref" });
+      if (costErr) console.warn("sendTwilioSmsAndStamp: execution_cost_events write failed (non-fatal)", costErr.message);
+    } catch (costEx) {
+      console.warn("sendTwilioSmsAndStamp: execution_cost_events write threw (non-fatal)", costEx);
+    }
     try {
       await args.supabase.from("message_queue").insert({
         lead_id: args.leadId,
