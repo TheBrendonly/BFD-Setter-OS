@@ -49,6 +49,87 @@ Open bugs and behavior fixes. Reconciled 2026-06-25 with Brendan; full re-audit 
   recent diff; users hold one role in practice. Defense-in-depth: order deterministically / prefer the
   more-privileged role.
 
+## Overnight deep-work pass (2026-07-08) — new open items
+
+> Found by the overnight discovery pass (4 parallel adversarial audits + product review). Full write-up,
+> refutations, fix-specs, and the two consolidated milestone gates: `Docs/SECURITY_REVIEW_2026-07-08.md`.
+> **Live enabling-state (verified):** `retell_webhook_secret`=NULL both clients, `ghl_webhook_secret`=SET
+> both, `missed_call_textback_enabled`=0, **0 client-role users**, 2 clients share 1 agency. So the RLS
+> cluster is **latent until the first client-role user is invited**, and the Retell-webhook cluster is
+> open only while `retell_webhook_secret` is NULL. Both collapse into two hard milestone gates (GATE A =
+> role-gate RLS before the first client user; GATE B = arm `retell_webhook_secret`) recommended for
+> `FIRST_CLIENT_MILESTONE.md` (that file + `BRENDAN_TODO.md` were mid-edit by a concurrent session, so the
+> overnight handoff routes GATE A/B + TRYGARY-DIAL-1 to Brendan to fold in — not edited this session).
+
+- [x] 🟠 **OPTOUT-FAILOPEN-1 (High, compliance) — FIXED (trigger) + STAGED (edge twin) 2026-07-08.**
+  `optout.ts` `isPhoneOptedOut` discarded the query `error` and returned `!!data`, so a transient
+  `lead_optouts` SELECT failure returned "not opted out" → a billable marketing SMS to a number that
+  texted STOP (AU Spam Act breach + spend) on the app's central opt-out gate. Fixed to fail CLOSED
+  (return `true` = skip send, + `console.warn`) with a TDD test. `trigger/_shared/optout.ts` deployed
+  via Trigger.dev this session; the byte-identical edge twin `frontend/supabase/functions/_shared/optout.ts`
+  is imported by the FROZEN `voice-booking-tools` (+ non-frozen edge fns) so its fix is committed but
+  STAGED — Brendan redeploys the edge consumers. Live re-check → `TEST_LIST.md`.
+- [ ] 🔴 **RLS-CLIENTS-1 (Critical, latent → GATE A) — base `clients` policies have no `get_user_role()='agency'`
+  gate, and `anon`/`authenticated` hold column SELECT/UPDATE/INSERT on the secret columns.** A client-role
+  user reads every sibling client's `supabase_service_key` (full-DB-compromise key), Twilio token, and the
+  BFD-bundled Retell/OpenRouter/GHL keys, and can `UPDATE subscription_status` / DELETE sibling rows. This is
+  the 2026-06-05 F7 re-severitied for imminent client-role users + shared BFD keys. `clients_public` protects
+  app code, not the base table. **Not exploitable today** (0 client-role users). High-blast-radius fix
+  (79+ reads) → dedicated session before the first client user, verified with a live client-role probe. Fix
+  approach + the whole GATE A cluster: `Docs/SECURITY_REVIEW_2026-07-08.md`.
+- [ ] 🟠 **RETELL-BOOKING-SMS-1 (High, exploitable today → GATE B) — forgeable booking-confirmation SMS.**
+  `retell-call-analysis-webhook/index.ts:643-732`: `retell_webhook_secret` NULL → unsigned; a forged
+  `call_analyzed` with `appointment_booked=true` + attacker `to_number` sends a Twilio SMS to the attacker's
+  number on the client's account. Sibling of F16C, different fn+sink. NOT fixed unattended (booking-confirm SMS
+  is an ACTIVE feature; fail-closing while the secret is NULL breaks it). Closed by arming `retell_webhook_secret`
+  + the F16C fail-closed guard at milestone 6.6.
+- [ ] 🟠 **[B] TRYGARY-DIAL-1 (High, exploitable today — needs Brendan's call) — `ghl-tag-webhook` try-gary branch
+  sends SMS pre-auth.** `ghl-tag-webhook/index.ts:531` returns `handleTryGaryLanding` before the
+  `ghl_webhook_secret` check (`:571`); it reads `phone` from the attacker body and enrolls → immediate Twilio SMS
+  (`delay_seconds:0`) to an attacker-chosen number on a live client's Twilio (5-min per-phone dedupe only →
+  rotatable = toll-fraud). Route is DEPRECATED + unreferenced by `frontend/src` but still a live endpoint. NOT
+  retired unattended (a GHL-side workflow may still post it). Brendan: confirm the GHL side is dead → delete the
+  branch, OR move it after the secret check, OR add `bump_rate_limit`. Routed to Brendan via the overnight handoff.
+- [ ] 🟡 **RETELL-CALLHIST-POISON-1 (Medium → GATE B) — forged `call_analyzed` injects attacker `call_history` +
+  `execution_cost_events` rows** (`retell-call-analysis-webhook/index.ts:400-491`; fresh `provider_ref=call_id`
+  defeats the idempotency guard) → poisons funnel/weekly-report/cost ledger. RISES to High once the ledger is
+  wired to billing. Closed by arming `retell_webhook_secret`.
+- [ ] 🟡 **RETELL-CALLBACK-DIAL-1 (Medium → GATE B) — forged payload schedules an outbound Retell voice call to
+  the attacker's number** (`retell-call-analysis-webhook/index.ts:355-395`; needs a valid `voice_setter_id` UUID
+  = capability barrier). Closed by arming `retell_webhook_secret`.
+- [ ] 🟠 **RLS-CREDENTIALS-1 (High, latent → GATE A) — `credentials.gohighlevel_api_key` readable by a client-role
+  user** (ungated agency policy; no browser read, so a role-gate is pure hardening).
+- [ ] 🟡 **RLS-TENANT-DISJUNCTION-1 (Medium, latent → GATE A) — client-writable tenant tables let a client-role user
+  read+write sibling clients' rows.** `client_custom_fields`, `lead_ai_columns`, `lead_tags`, `prompt_chat_threads`,
+  `prompt_docs`, `prompt_versions`, `setter_ai_reports` use `c.agency_id=p.agency_id OR c.id=p.client_id` — the
+  agency disjunct defeats own-client scope for client-role users. Split into agency + client-own policies.
+- [ ] 🟡 **RLS-GATE-SIBLING-1 (Medium, latent → GATE A) — `fetch-thread-previews` / `twilio-list-numbers` /
+  `supabase-project-usage` authorize via an RLS-gate (`clients.eq(id).single()`) not `resolveClientAccess`**, so a
+  client-role user passing a sibling `client_id` reads the sibling's Twilio numbers / thread previews / Supabase usage.
+- [ ] 🟡 **RLS-ORUSAGE-1 (Medium, latent → GATE A) — `openrouter_usage_cache.cached_data` (BFD margin/cost) readable
+  by a client-role user** (ungated agency policy). NOTE the table IS browser-read (`useTickerStats`/`useOpenRouterUsage`),
+  so the fix must role-branch (agency-only read), not merely add a gate — which is why it was NOT touched unattended.
+- [ ] 🟡 **INTAKE-RL-1 (Medium, design) — `intake-lead` has no `bump_rate_limit`** and its secret is designed to be
+  embedded in public client HTML; if published, an attacker reading the secret gets unbounded immediate SMS to
+  attacker numbers. Add `bump_rate_limit` (the `campaign-enroll-webhook` pattern).
+- [ ] 🟡 **BOOK-TZ-DISPLAY-1 (Medium) — the SMS setter tells the lead their local time via weak-model mental
+  arithmetic → wrong.** `trigger/processSetterReply.ts:213-222` instructs `gpt-4.1-nano` (temp 0) to compute the
+  lead-local time; the deterministic `formatSlotInZone` (`leadTimezone.ts:58`) exists but is dead code. Misleading
+  confirmation in the exact cross-tz case BOOK-TZ-1 exists for (e.g. "12pm your time" when Perth-local is 11am).
+  Non-frozen. Fix: pre-render each offered slot's lead-zone label with `formatSlotInZone`, drop the arithmetic
+  instruction. Wants a live cross-tz SMS test. Relates to BOOK-TZ-1 + the voice-side PU-13.
+- [ ] 🟡 **BOOK-CONFIRM-HONESTY-1 (Medium) — no honesty guard on failed NEW bookings.** `rescheduleHonestyGuard`
+  (`trigger/processSetterReply.ts:432`) covers reschedule/cancel only; a reply falsely claiming "you're booked" when
+  `book-appointments` hard-errored is caught by nothing → ghost booking. Non-frozen. Fix: extend the guard with
+  "claims booked but no successful `book-appointments` this turn" (mirror RESCHED-SMS-1). Over-fire risk → wants a
+  live forced-failure test.
+- [ ] 🟢 **RETELL-INBOUND-PII-1 (Low → GATE B) — forged `call_inbound` returns a lead's name/email** in
+  `dynamic_variables` (`retell-inbound-webhook/index.ts:52-164`; unsigned). Unauthenticated phone→identity oracle.
+  Closed by arming `retell_webhook_secret`.
+- [ ] 🟢 **RLS-UNIPILE-1 / RLS-AGENCIES-1 (Low, latent → GATE A) — client-role user can read a sibling's connected
+  LinkedIn/IG display name+id (`unipile_accounts`) / rename the shared agency (`agencies`).** No usable secret;
+  nuisance/identifier only. Fold into the GATE A role-gate sweep.
+
 ## 🟡 Low — open (code)
 
 - [ ] **PU-9-CODE (reclassified from PROMPT_UPDATE_LIST PU-9 on 2026-07-07) — dead-air / talk-while-waiting

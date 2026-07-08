@@ -83,6 +83,67 @@ Features to build, in rough priority order. Reconciled 2026-06-25 with Brendan.
 > cloning (gimmick for this ICP); own scheduling engine (GHL calendars do round-robin/multi-staff); per-appointment
 > performance pricing (creates volume-over-quality incentives — the quality retainer is the differentiation).
 
+## Candidate queue — 2026-07-08 product review (overnight deep-work pass; Brendan picks; not committed)
+
+> Source: the overnight product-review agent read the live booking-ingest, funnel, weekly-report, cost-ledger,
+> error-logging, and onboarding code and ranked robustness/observability gaps that would cause churn or support
+> load. Two of these (A1/A2) are also logged as reporting-CORRECTNESS items needing Brendan's semantic call —
+> see the notes. Framed by the managed-retainer moat (visible ROI is churn driver #1; call quality #2) and the
+> existing F18-F20 queue. Effort tags: S = quick win, M/L = bigger build. Nothing here is committed.
+
+- [ ] **F21 - Booking reconciliation guard (fixes the two ROI-report correctness gaps; quick win). Effort S.**
+  (a) Two live GHL booking-ingest endpoints key `bookings` on DIFFERENT columns — `bookings-webhook` on
+  `(client_id, ghl_appointment_id)` (writes `booking_status_events`, reconciles with voice-tool rows) and the
+  older `sync-ghl-booking` on `ghl_booking_id` (returns early on a dup WITHOUT updating status or writing
+  `booking_status_events`). If an operator wires the appointment workflow to `sync-ghl-booking`, voice-tool
+  bookings never dedupe → duplicate rows → the funnel double-counts booked and never sees held/no-show.
+  Deprecate/redirect `sync-ghl-booking` to `bookings-webhook` or key it on `ghl_appointment_id` + update status
+  on the dup path. (b) The funnel/weekly `booked` count includes `source="ghl_calendar"` (human-booked GHL
+  appointments) despite the funnel's own "setter-created only" contract, inflating the client's "AI booked"
+  headline → first reconciliation dispute. Scope the funnel/weekly `booked` to setter sources, or split
+  "AI-sourced" vs "all". **NOTE:** (b) is a reporting-semantics decision (does Brendan want AI-sourced-only or
+  all appointments in the ROI headline?) → also flagged in `BUG_LIST.md` sibling notes; confirm intent before
+  building. Evidence: `bookings-webhook/index.ts:207-261`, `sync-ghl-booking/index.ts:491-505`,
+  `get-show-rate-funnel/index.ts:13-17,143`, `_shared/bookingSource.ts:14`, `weeklyClientReport.ts:109,135`.
+- [ ] **F22 - Reporting-health assertion (stops the ROI metric silently dying; quick win). Effort S.**
+  `show_rate` stays `null` until an appointment reaches held/no-show, which only happens if the operator wired
+  the GHL appointment-status-change automation (GHL_SETUP flags it as fiddly). If missing, every booking sits
+  `confirmed` forever, `show_rate` is permanently null, and nothing detects it. Add a check that
+  `booking_status_events` has received >=1 non-`confirmed` transition per client, surfaced on the go-live
+  readiness checklist and flagged if absent for N days. Evidence: `_shared/showRateFunnel.ts:55-63`, GHL_SETUP.md:103.
+- [ ] **F23 - Proactive failure digest over `error_logs` (the core managed-service promise; quick-to-medium). Effort S-M.**
+  `error_logs` is written from ~8 functions (booking 502s, outbound-call failures, SMS failures, webhook 403s)
+  but is a passive table an agency opens manually (`ErrorLogs.tsx`); only `pollRetellDrift` has an optional Slack
+  push. A managed retainer's value is catching failures before the client does. Add a daily agency failure digest
+  (email/Slack) or threshold alert per client. Broader than F19 (operational, not call-quality). Evidence:
+  `ErrorLogs.tsx`, `make-retell-outbound-call:975`, `sync-ghl-booking:638`.
+- [ ] **F24 - Booked lead keeps getting nudged after a booking (robustness; medium). Effort S-M.**
+  In `voice-booking-tools/index.ts:561-618` (FROZEN — report-only) the `bookings` write AND the "end active
+  cadence on booking" are both inside `if (appointmentId)` and the bookings write is non-fatal. If GHL returns
+  200 with an unrecognized body (appointmentId null) or the row write fails, the appointment exists in GHL but
+  BFD never ends the cadence → the just-booked lead keeps getting follow-up SMS/calls. Derive the appointment id
+  defensively + end the cadence keyed on the contact even when the id is unavailable. (Frozen surface: bundle
+  with the next voice-gated session.)
+- [ ] **F25 - Funnel cohort-vs-event window mismatch makes low-volume show-rate noisy (reporting polish; medium). Effort M.**
+  The funnel counts bookings by `created_at` within the billing period, but held/no-show resolves later, so at
+  first-client (low) volume the weekly show-rate jumps around (a booking near period-end holds next period).
+  Report held/no-show by appointment DATE (event window) rather than booking-creation date, or clearly label it a
+  booking cohort. Evidence: `get-show-rate-funnel/index.ts:105-108`, `weeklyClientReport.ts:105`.
+
+**Committed/queued items this review reaffirms (already on the roadmap/DEFERRED — not new):**
+- **Minutes-pool burn-down + 80% overage alert + cost-vs-billed reconciliation over `execution_cost_events`** —
+  the P2 cost ledger has ZERO read surface and nothing reconciles it against the Retell/Twilio invoice; the
+  A$2,000 + 1,500-min pool model has no burn-down or alert, so overage/margin erosion is invisible until the
+  provider bill lands (bill-shock churn = the exact Phonely weakness the first client is leaving). This is the
+  first-client slice of the deferred **2.6 cost-per-booking dashboard / 3.9 cost-ceiling aggregates / F8 v2** →
+  see `DEFERRED.md` (a client-facing "pool remaining" + agency margin view). Effort M. **Recommend promoting to
+  a committed build soon after first client.**
+- **F20 booked-revenue attribution** (already build-ready) — top RENEWAL lever ("cost A$2,000 → sourced A$X pipeline").
+- **Onboarding self-serve** (already in ONBOARDING_GAP_REPORT / BRENDAN_TODO): external-Supabase provisioning
+  script + Twilio credential fields in `ApiCredentials.tsx` + a real go-live readiness-checklist surface. Still
+  ~5 manual out-of-app steps; the #1 blocker (external Supabase project + 5-table seed) has no provisioning script
+  and Twilio creds are SQL-only. Kills managed-service margin past client #1. Effort S each (script + UI fields); M (checklist).
+
 ## Build queue (committed)
 
 - [ ] **F12 - Voice-agent per-minute cost optimization (GATED: after the first paying client — NOT before a deal, per Brendan 2026-07-01).** Cut the setter's real per-minute cost without hurting booking performance / conversational quality. **Verified current cost = A$0.34/min all-in** (US$0.22/min, from live Retell billing across 23 recent gemini-3.0-flash calls, 2026-07-01; the earlier prompt-bloat that spiked calls to ~A$2/min is already fixed). Biggest levers: stop pre-injecting 30 days of calendar slots + full chat/call history into model context every turn (fetch slots on-demand via the existing `get-available-slots` tool; keep ~last 10 turns + a rolling summary); turn off `model_high_priority`; cheaper AU TTS than the ElevenLabs custom voice (~A$0.06/min line); cheaper post-call-analysis model than gpt-4.1; review `stt_mode=accurate`. Report-only on the Retell/prompt side (Brendan applies). A ready-to-run **cost-reduction council brief** + the full cost breakdown live in "Feature spec - F12" below. Target ~A$0.20/min. Effort M.
