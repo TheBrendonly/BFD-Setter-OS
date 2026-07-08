@@ -1446,7 +1446,9 @@ Deno.serve(async (req) => {
 
       case "get-call":
         if (!params.callId) throw new Error("callId is required");
-        result = await retellFetch(apiKey, "GET", `get-call/${params.callId}`);
+        // GETCALL-1: the unversioned /get-call is 404 (live-tested 2026-07-07); v2/get-call is 200.
+        // Same v2/v3 migration the list-* endpoints already did.
+        result = await retellFetch(apiKey, "GET", `v2/get-call/${params.callId}`);
         break;
 
       case "create-phone-call":
@@ -1787,18 +1789,26 @@ Deno.serve(async (req) => {
       // or any other agent settings. Used after we change the default Talk-While-
       // Waiting copy and want existing agents to pick it up.
       case "refresh-booking-tool-messages": {
+        // PU-9-CODE: the GHL booking round-trip takes ~3-8s but the old filler capped at
+        // "under 10-12 words" (~2s), leaving dead air. Ask for a longer TWO-BEAT filler
+        // (~20-30 words) so the agent keeps talking across the whole wait, and set
+        // speak_after_execution:true on the write tools (book/update/cancel) so the agent
+        // also confirms the result once the tool returns. Staged (frozen retell-proxy):
+        // Brendan deploys + runs the bulk refresh + a listen check to tune the wording.
         const BOOKING_TOOL_MESSAGES: Record<string, string> = {
           "get-available-slots":
-            'Based on what the user asked, say a brief natural phrase like "Let me check what I have open for you" or "One sec, pulling up the calendar". Keep it casual, under 10 words, never sound scripted.',
+            'Based on what the user asked, fill the wait with a natural two-beat line while the calendar loads, e.g. "Let me check what I have open for you, one sec... okay, just pulling those times up now." Keep it casual and unscripted, roughly 20-30 words, never sound robotic.',
           "book-appointments":
-            'Based on the slot the user just picked, say something natural like "Yep, great, let me finalize your booking on my side" or "Perfect, locking that in for you now". Confirm their choice casually, under 12 words.',
+            'Based on the slot the user just picked, cover the booking round-trip with a warm two-beat line, e.g. "Perfect, let me lock that in for you now... just confirming it on my side, give me one moment." Natural and reassuring, roughly 20-30 words, never robotic.',
           "get-contact-appointments":
-            'Based on what the user asked, say a brief natural phrase like "Yes, please bear with me while I check my system" or "Let me pull up your appointments real quick". Acknowledge naturally, under 12 words.',
+            'Based on what the user asked, fill the lookup wait with a natural two-beat line, e.g. "Sure, let me pull up your appointments real quick... one sec while my system loads them for me." Keep it casual, roughly 20-30 words.',
           "update-appointment":
-            'Based on what the user just asked, say a brief casual phrase confirming the change is in progress. Examples: "No worries, updating your booking now, just a few seconds" or "Got it, making that change for you". Keep it natural, under 12 words, never robotic.',
+            'Based on the change the user asked for, cover the update round-trip with a reassuring two-beat line, e.g. "No worries, updating your booking now... just making that change on my side, should be a few seconds." Natural, roughly 20-30 words, never robotic.',
           "cancel-appointments":
-            'Based on the user\'s cancellation request, say something brief like "Good, give me a second to process your cancellation" or "Understood, cancelling that for you now". Confirm naturally, under 12 words.',
+            'Based on the user\'s cancellation request, cover the wait with a calm two-beat line, e.g. "Understood, let me process that cancellation for you now... just taking care of it on my side, one moment." Natural, roughly 20-30 words.',
         };
+        // Write tools give a spoken confirmation AFTER the tool returns (not just filler during).
+        const SPEAK_AFTER_TOOLS = new Set(["book-appointments", "update-appointment", "cancel-appointments"]);
 
         const supabaseAdmin = getSupabaseAdmin();
         const lockIdx = await loadLockIndex(clientId); // F9 — skip locked slots
@@ -1836,6 +1846,7 @@ Deno.serve(async (req) => {
                   ...tool,
                   execution_message_description: BOOKING_TOOL_MESSAGES[name],
                   speak_during_execution: true,
+                  speak_after_execution: SPEAK_AFTER_TOOLS.has(name),
                 };
               }
               return tool;
