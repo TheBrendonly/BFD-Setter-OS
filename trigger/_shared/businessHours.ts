@@ -18,6 +18,8 @@
 //   { "start": "09:00", "end": "21:00", "tz": "Australia/Brisbane",
 //     "days": [1,2,3,4,5] }   // 1=Mon ... 7=Sun
 
+import { isValidTimeZone } from "./leadTimezone.ts";
+
 export type QuietHoursConfig = {
   start: string; // HH:MM
   end: string;   // HH:MM
@@ -86,7 +88,11 @@ export function parseQuietHours(raw: unknown): QuietHoursConfig | null {
   const tz = typeof r.tz === "string" ? r.tz : null;
   const days = Array.isArray(r.days) ? r.days.filter((d): d is number => typeof d === "number" && d >= 1 && d <= 7) : null;
   if (!start || !end || !tz || !days || days.length === 0) return null;
-  return { start, end, tz, days };
+  // QH-TZ-1: an invalid IANA `tz` throws RangeError in isWithinQuietHoursWindow / the AU clamp on every
+  // send, stalling the whole cadence. Fall back to the default zone instead of poisoning the config.
+  const safeTz = isValidTimeZone(tz) ? tz : DEFAULT_QUIET_HOURS.tz;
+  if (safeTz !== tz) console.warn(`parseQuietHours: invalid tz "${tz}", falling back to ${safeTz}`);
+  return { start, end, tz: safeTz, days };
 }
 
 // ── F17 phase 1: AU Telemarketing Standard calling-hours clamp ──────────────

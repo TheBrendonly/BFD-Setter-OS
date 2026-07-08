@@ -71,6 +71,18 @@ test("parseQuietHours: valid object parses, junk / missing / empty days -> null"
   assert.equal(parseQuietHours({ start: "08:00", end: "18:00", tz: BRIS, days: [] }), null);
 });
 
+test("QH-TZ-1: invalid tz string falls back to default, isWithinSendingWindow does not throw", () => {
+  const cfg = parseQuietHours({ start: "09:00", end: "21:00", tz: "Not/AZone", days: [1, 2, 3, 4, 5] });
+  assert.notEqual(cfg, null);
+  assert.equal(cfg!.tz, DEFAULT_QUIET_HOURS.tz);
+  assert.doesNotThrow(() => isWithinSendingWindow(MON_NOON, cfg!, cfg!.tz));
+});
+
+test("QH-TZ-1: valid tz is preserved", () => {
+  const cfg = parseQuietHours({ start: "09:00", end: "21:00", tz: "Australia/Perth", days: [1] });
+  assert.equal(cfg!.tz, "Australia/Perth");
+});
+
 test("DEFAULT_QUIET_HOURS is 09-21 all week Brisbane", () => {
   assert.equal(DEFAULT_QUIET_HOURS.start, "09:00");
   assert.equal(DEFAULT_QUIET_HOURS.end, "21:00");
