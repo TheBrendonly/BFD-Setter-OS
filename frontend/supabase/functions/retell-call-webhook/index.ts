@@ -4,6 +4,7 @@ import { createClient } from "npm:@supabase/supabase-js@2.101.0";
 // the Retell API key. Verify-if-present.
 import { verifyRetellSignature } from "../_shared/verify-webhook.ts";
 import { buildCostEvent } from "../_shared/costEvents.ts";
+import { shouldSendMissedCallTextback } from "./missedCallTextback.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -123,6 +124,10 @@ Deno.serve(async (req) => {
       }
     }
 
+    // F16C-SMS-1: "authenticated" == retell_webhook_secret armed AND the x-retell-signature HMAC
+    // verified below. The F16(c) auto-SMS fails closed on this; secret-unset stays false.
+    let signatureVerified = false;
+
     // Optional Retell signature verification. Inert until the client stamps
     // retell_webhook_secret AND Retell is configured to sign (onboarding BR3).
     if (client.retell_webhook_secret) {
@@ -140,6 +145,8 @@ Deno.serve(async (req) => {
           status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
+      // Reaching here means secret present + header present + HMAC valid (both failures 403'd above).
+      signatureVerified = true;
     }
 
     // ── F16(c) missed-call text-back ──────────────────────────────────────────
@@ -149,19 +156,31 @@ Deno.serve(async (req) => {
     // Retell, so there is NO Twilio voice webhook), so this is driven off the
     // Retell call disposition. Best-effort, never throws. Per-client opt-in
     // (default OFF). Fires once (call_ended only) and dedupes on the caller phone.
-    if (
-      payload.event === "call_ended" &&
-      (client as { missed_call_textback_enabled?: boolean }).missed_call_textback_enabled === true
-    ) {
+    const mctEnabled =
+      (client as { missed_call_textback_enabled?: boolean }).missed_call_textback_enabled === true;
+    if (payload.event === "call_ended" && mctEnabled) {
       try {
-        const dir = String(call.direction || call.call_type || "").toLowerCase();
-        const inbound = dir.includes("inbound");
         const durMs = call.duration_ms ?? call.call_duration_ms ?? null;
         const durSec = typeof durMs === "number" ? Math.round(durMs / 1000) : null;
         const fromNum = typeof call.from_number === "string" ? call.from_number : null;
-        // "Missed" = an inbound call that never really engaged (very short). A
-        // genuine booking conversation runs far longer than 20s.
-        const abandoned = inbound && !!fromNum && (durSec === null || durSec < 20);
+        // F16C-SMS-1: gate the send on shouldSendMissedCallTextback, which requires signatureVerified.
+        const mctInputs = {
+          event: payload.event,
+          enabled: mctEnabled,
+          direction: call.direction || call.call_type || null,
+          fromNumber: fromNum,
+          durationSec: durSec,
+        };
+        const mctSend = shouldSendMissedCallTextback({ ...mctInputs, signatureVerified });
+        if (!mctSend && !signatureVerified &&
+            shouldSendMissedCallTextback({ ...mctInputs, signatureVerified: true })) {
+          // This IS a missed inbound call that would trigger the text-back, but the webhook is
+          // unauthenticated (retell_webhook_secret unset, or Retell not signing). Fail closed, never
+          // throw — arm retell_webhook_secret + Retell signing (milestone 6.6) to enable.
+          console.warn(
+            `retell-call-webhook: F16(c) missed-call text-back SUPPRESSED for client ${client.id} — webhook unauthenticated (arm retell_webhook_secret)`,
+          );
+        }
         const cc = client as {
           twilio_account_sid?: string | null; twilio_auth_token?: string | null;
           twilio_default_phone?: string | null; retell_phone_1?: string | null;
@@ -170,7 +189,7 @@ Deno.serve(async (req) => {
         const twilioAuth = cc.twilio_auth_token;
         const fromSetter = cc.twilio_default_phone || cc.retell_phone_1 ||
           (typeof call.to_number === "string" ? call.to_number : null);
-        if (abandoned && twilioSid && twilioAuth && fromSetter) {
+        if (mctSend && twilioSid && twilioAuth && fromSetter) {
           // Dedupe: skip if we already texted this caller back in the last 15 min
           // (repeat abandons + the answered-elsewhere / already-in-conversation race).
           const since = new Date(Date.now() - 15 * 60 * 1000).toISOString();
