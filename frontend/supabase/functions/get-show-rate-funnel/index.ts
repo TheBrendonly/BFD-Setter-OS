@@ -98,7 +98,9 @@ Deno.serve(async (req) => {
     // Carry lead_id so we can attach each booking's lead source below.
     const rows: (FunnelBookingRow & { lead_id: string | null })[] = [];
     const leadIds = new Set<string>();
-    for (let from = 0; from < 100 * PAGE_SIZE; from += PAGE_SIZE) {
+    const SCAN_CAP = 100 * PAGE_SIZE;
+    let hitScanCap = false;
+    for (let from = 0; from < SCAN_CAP; from += PAGE_SIZE) {
       const { data: page, error: pageErr } = await supabase
         .from("bookings")
         .select("status, source, lead_id")
@@ -117,6 +119,15 @@ Deno.serve(async (req) => {
         if (leadId) leadIds.add(leadId);
       }
       if (!page || page.length < PAGE_SIZE) break;
+      // FUNNEL-SCAN-1: the loop is already period-bounded, but if a single billing period ever exceeds
+      // SCAN_CAP bookings the funnel would silently under-count. Surface it rather than truncate silently.
+      if (from + PAGE_SIZE >= SCAN_CAP) hitScanCap = true;
+    }
+    if (hitScanCap) {
+      console.warn(
+        `get-show-rate-funnel: FUNNEL-SCAN-1 hit the ${SCAN_CAP}-row scan cap for client ${client_id} ` +
+          `period ${period.label}; funnel may under-count — narrow the window / raise the cap.`,
+      );
     }
 
     // Resolve each booking's lead source (leads.lead_id is the GHL contact id,
