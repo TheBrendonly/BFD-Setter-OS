@@ -14,6 +14,30 @@ When an item passes, move it to `Docs/archive/COMPLETED_LOG.md`. When it fails, 
 
 > **⭐⭐⭐ VOICE + BROWSER TEST SESSION — 2026-07-06, and the 2026-07-05 TEST SESSION before it — ALL PASSED → `COMPLETED_LOG.md`.** Full detail there + handoffs `Operations/handoffs/2026-07-06-voice-browser-session.md` + `2026-07-05-test-session.md`. Between the two, essentially every pre-existing bug/feature check passed (onboarding-fix cluster, the shared-fn pass, F8/F9-1/F11/UI-1/F13 core/PROMPT-LINT-1/MODEL-1/API-DEPR-1 core/PROMPT-AUTH-1 X-Ray, the B-2 outage leg, G3-7 nav, SWEEP-1a/b/c). What's below is either (a) the still-open behavioral checks for the 2026-07-07 combined build, or (b) a small residual set of finer-grained checks that genuinely haven't run yet.
 
+## Overnight deep-work pass (2026-07-08) — live-verify
+
+> Tier A fixes deployed this session; server-side verified, these are the live behavioral confirmations owed.
+> Full context: `Operations/handoffs/2026-07-08-overnight-deep-work.md` + `Docs/SECURITY_REVIEW_2026-07-08.md`.
+
+- [ ] **RLS-UISTATE-1-LIVE — client-role user is scoped to its own client on chat_starred / dismissed_error_alerts.**
+  Migration applied + `pg_policies` verified (2 role-split policies per table). Live probe: create a throwaway
+  client-role user (admin `create-client-user`) bound to client A, password-grant to a client JWT, confirm: own-client
+  `chat_starred` insert → 201; sibling client B insert → 403/42501; cross-client select → `[]`. Then confirm the
+  live AGENCY user still stars/dismisses normally in the Chats UI (no lockout). Delete the throwaway user + rows.
+- [ ] **QH-TZ-1-LIVE — a client with a malformed `cadence_quiet_hours.tz` no longer stalls its cadence.**
+  Deployed Trigger.dev 20260708.1. Set a test client's `cadence_quiet_hours.tz` to junk, enqueue a cadence send,
+  confirm it falls back to the default window + logs the warn (no `RangeError`, cadence proceeds). Low risk.
+- [ ] **F16C-SMS-1-LIVE (gated on milestone 6.6) — missed-call text-back requires a verified signature.**
+  retell-call-webhook v24 deployed. Behavior-neutral until `retell_webhook_secret` is armed + Retell signing is
+  configured. When the milestone arms the secret: a forged unsigned `call_ended` produces the SUPPRESSED warn and NO
+  SMS; a real signed missed inbound call sends. Until then, confirm no regression (call_history / cost / sync still
+  work on live calls).
+- [ ] **OPTOUT-EDGE-STAGED — redeploy the 5 edge consumers of the fixed opt-out twin.** `trigger/_shared/optout.ts`
+  is live (20260708.1); the edge twin `frontend/supabase/functions/_shared/optout.ts` is fixed in code but its 5
+  consumers still run the old bundle: `deploy_single_fn.mjs` for `intake-lead`, `trigger-engagement`,
+  `receive-twilio-sms`, `stop-bot-webhook`, and (FROZEN, with the Voice smoke) `voice-booking-tools`. After each,
+  the opt-out lookup fails closed on a DB error.
+
 ## Session P3 cleanup (2026-07-07) — live-verify
 
 - [ ] **P3-CLEANUP-1 — client dashboard/sidebar still loads after the ClientLayout dead-branch removal.**

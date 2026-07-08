@@ -427,6 +427,23 @@ Status: `[ ]` not started · `[~]` in progress · `[x]` done. Effort is rough.
   airtight + the F16(c) fix added as a hard step. Handoff
   `Operations/handoffs/2026-07-07-session-p3-review-cleanup-research.md`. → emits the **First-Client Milestone**
   (gated). Pipeline: `[✓] P1  [✓] MAIN-OUTBOUND fix  [✓] P2  [✓] P3  [ ] First-Client Milestone (gated)`.
+- [x] **Overnight deep-work pass — DONE 2026-07-08 (Fable 5, plan OFF; report-first discovery + safe-queue fix).**
+  Second deep security/product hunt beyond the known list. **Discovery (report-first):** 16 new findings, headlined
+  by **RLS-CLIENTS-1** (Critical, latent — base `clients` policies ungated + `anon`/`authenticated` hold secret-column
+  grants, so a client-role user reads every sibling's `supabase_service_key`/Twilio/Retell keys), **TRYGARY-DIAL-1**
+  (High, exploitable today — `ghl-tag-webhook` try-gary branch sends SMS pre-auth), and the **Retell-webhook forgery
+  cluster** (RETELL-BOOKING-SMS-1 etc. — unsigned because `retell_webhook_secret` is NULL). These collapse into two
+  hard milestone gates (**GATE A** role-gate RLS before the first client-role user; **GATE B** arm
+  `retell_webhook_secret`). Full write-up `Docs/SECURITY_REVIEW_2026-07-08.md`; product/feature gaps (F21-F25) →
+  `FEATURE_ROADMAP.md`. **Fixed + DEPLOYED (Tier A, non-frozen):** ROLE-RESOLVE-1 + RLS-UISTATE-1 (migrations live),
+  QH-TZ-1 + OPTOUT-FAILOPEN-1 (Trigger.dev **20260708.1**), F16C-SMS-1 (**retell-call-webhook v24**), FUNNEL-SCAN-1
+  (**get-show-rate-funnel v2**). **Built + STAGED (Tier B, FROZEN, Brendan deploys):** GETCALL-1 + PU-9-CODE bundled
+  into **retell-proxy v50→v51** (NOT deployed). SLOT-MAP-1 evaluated + deferred to a dedicated session (frozen
+  inbound-routing, too subtle to fix blind). All changes adversarially refute-verified (6/6 cleared). Live behavioral
+  checks + the edge-optout redeploy → `TEST_LIST.md`; GATE A/B + TRYGARY-DIAL-1 routed to Brendan (BRENDAN_TODO +
+  FIRST_CLIENT_MILESTONE were mid-edit by a concurrent session, not touched). Handoff
+  `Operations/handoffs/2026-07-08-overnight-deep-work.md`. Pipeline: `[✓] P3  [✓] Overnight deep-work  [ ] Brendan
+  deploys staged retell-proxy bundle + triages GATE A/B + TRYGARY  [ ] First-Client Milestone (gated)`.
 4. **Brendan solo block (parallel, no Claude session):** Setter-1 prompt migration, Resend SMTP → F14 E2E,
    sms_llm rate + billing anchor/toggles, n8n Railway shutdown, PROMPT_UPDATE_LIST items (see the 2026-07-07
    action pack for the full ordered list with exact live wording + paste-ready changes).

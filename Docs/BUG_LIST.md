@@ -9,14 +9,20 @@ Open bugs and behavior fixes. Reconciled 2026-06-25 with Brendan; full re-audit 
 
 ---
 
-## P3 security review (2026-07-07) — new open items
+## P3 security review (2026-07-07) — RESOLVED 2026-07-08 (overnight deep-work pass)
 
-> Found by the Session P3 security/quality pass over the diff since Session 9 (`4a22b8b`). Full write-up,
-> fix-specs, and the "clean" clusters: `Docs/SECURITY_REVIEW_2026-07-07.md`. Nothing here is exploitable
-> on the CURRENT live setup (default-OFF features, 0 client-role users) — these are pre-first-client
-> hardening items; F16C-SMS-1 is gated into the milestone.
+> **ALL 5 P3 items resolved in the 2026-07-08 overnight pass.** F16C-SMS-1, QH-TZ-1, FUNNEL-SCAN-1 fixed +
+> deployed; ROLE-RESOLVE-1 + RLS-UISTATE-1 migrations applied live + verified. F16C-SMS-1, QH-TZ-1,
+> RLS-UISTATE-1 have live behavioral checks owed → `TEST_LIST.md`; ROLE-RESOLVE-1 + FUNNEL-SCAN-1 are
+> server-verified → `Docs/archive/COMPLETED_LOG.md`. Detail: the 2026-07-08 handoff. (Kept here marked `[x]`
+> for one reconciliation cycle; original P3 write-up in `Docs/SECURITY_REVIEW_2026-07-07.md`.)
 
-- [ ] 🔴 **F16C-SMS-1 (High, DEFERRED to First-Client Milestone) — F16(c) missed-call text-back is a
+- [x] 🔴 **F16C-SMS-1 — FIXED + DEPLOYED 2026-07-08 (retell-call-webhook v24) → TEST_LIST.** Threaded a
+  `signatureVerified` bool + a pure `shouldSendMissedCallTextback` predicate (`missedCallTextback.ts`, 9 TDD
+  cases) that requires a verified Retell signature; warn (never throw) when a genuine missed inbound call is
+  suppressed for lack of auth. Behavior-neutral today (default-OFF, no secret); couples F16(c) to milestone 6.6.
+  Original finding below. Live behavioral check once `retell_webhook_secret` is armed → TEST_LIST.
+- [x] 🔴 **F16C-SMS-1 (original P3 write-up) — F16(c) missed-call text-back is a
   forgeable unauthenticated outbound-SMS vector.** `retell-call-webhook/index.ts:152-217`: with
   `missed_call_textback_enabled=true` and `retell_webhook_secret` unset (the default), the signature
   block (`:128-143`) is skipped, so a forged `call_ended` POST (`direction:"inbound"`, short
@@ -27,24 +33,37 @@ Open bugs and behavior fixes. Reconciled 2026-06-25 with Brendan; full re-audit 
   `Docs/FIRST_CLIENT_MILESTONE.md` step 6 as a HARD prerequisite before enabling F16(c). Fix-spec (thread
   a `signatureVerified` bool through the verify block + extract a pure `shouldSendMissedCallTextback`
   predicate + gate the send, `console.warn` never throw): `Docs/SECURITY_REVIEW_2026-07-07.md`.
-- [ ] 🟠 **QH-TZ-1 (Medium) — unvalidated `cadence_quiet_hours.tz` stalls a client's whole cadence.**
+- [x] 🟠 **QH-TZ-1 — FIXED + DEPLOYED 2026-07-08 (Trigger.dev 20260708.1) → TEST_LIST.** `parseQuietHours` now
+  validates `tz` with `isValidTimeZone` and falls back to `DEFAULT_QUIET_HOURS.tz` + warn on an invalid string
+  (2 TDD cases). Trigger-only. Light live cadence check → TEST_LIST. Original finding below.
+- [x] 🟠 **QH-TZ-1 (original P3 write-up) — unvalidated `cadence_quiet_hours.tz` stalls a client's whole cadence.**
   `trigger/_shared/businessHours.ts:81-90` `parseQuietHours` accepts `tz` as free text; a malformed zone
   throws `RangeError` in `isWithinQuietHoursWindow` / the AU clamp on EVERY send attempt → that client's
   cadence self-DoS (fail-closed, so NOT a compliance bypass). Cheap ~10-line hardening: validate with
   `isValidTimeZone` (from `_shared/leadTimezone.ts`), fall back to `DEFAULT_QUIET_HOURS.tz` +
   `console.warn`. Trigger-only (no edge twin); test in the existing `businessHours.test.ts`. Full
   fix-spec: `Docs/SECURITY_REVIEW_2026-07-07.md`.
-- [ ] 🟡 **RLS-UISTATE-1 (Low, latent) — `chat_starred` / `dismissed_error_alerts` FOR ALL policies are
+- [x] 🟡 **RLS-UISTATE-1 — FIXED 2026-07-08 (migration applied live + verified) → TEST_LIST.** Role-split both
+  tables into an agency FOR ALL (gated `get_user_role='agency'`) + a client FOR ALL scoped to own client
+  (`client_id = get_user_client_id(auth.uid())`); `pg_policies` verified exactly 2 role-split policies per table.
+  Live cross-client behavioral probe (throwaway client user) owed → TEST_LIST. Original finding below.
+- [x] 🟡 **RLS-UISTATE-1 (original P3 write-up) — `chat_starred` / `dismissed_error_alerts` FOR ALL policies are
   agency-scoped without the `get_user_role()='agency'` gate.** Correct only while "one agency per
   top-level client" holds. **No exposure today** (live DB: 1 agency / 2 BFD-internal clients, 0
   client-role users; tables hold only UI-state, no secret/cost data). Becomes relevant when a real
   client-role user exists AND two real clients share an agency. Mitigation: the onboarding "fresh agency
   per top-level client" step is now an explicit milestone check (`FIRST_CLIENT_MILESTONE.md`), OR add a
   client-scope to the two policies as defense-in-depth.
-- [ ] 🟡 **FUNNEL-SCAN-1 (Low, perf) — `get-show-rate-funnel` scans up to ~100k bookings.**
+- [x] 🟡 **FUNNEL-SCAN-1 — FIXED + DEPLOYED 2026-07-08 (get-show-rate-funnel v2) → COMPLETED_LOG.** The scan is
+  already period-bounded; added a `console.warn` when the ~100k iteration cap is hit so truncation is observable
+  instead of silent (no query-shape change). Original finding below.
+- [x] 🟡 **FUNNEL-SCAN-1 (original P3 write-up) — `get-show-rate-funnel` scans up to ~100k bookings.**
   `get-show-rate-funnel/index.ts:101` paginates to `100 * PAGE_SIZE` under the service role. Bounded and
   fine for early clients; date-window / cap harder if a tenant ever grows large.
-- [ ] 🟡 **ROLE-RESOLVE-1 (Low, pre-existing) — `get_user_role` `LIMIT 1` with no `ORDER BY`.** A user
+- [x] 🟡 **ROLE-RESOLVE-1 — FIXED 2026-07-08 (migration applied live + verified) → COMPLETED_LOG.** Added
+  `ORDER BY CASE role WHEN 'agency' THEN 0 WHEN 'client' THEN 1 ELSE 2 END`; verified `pg_get_functiondef` +
+  a transactional dual-role probe returns `agency`. Original finding below.
+- [x] 🟡 **ROLE-RESOLVE-1 (original P3 write-up) — `get_user_role` `LIMIT 1` with no `ORDER BY`.** A user
   holding both an `agency` and a `client` role row resolves nondeterministically. Not introduced by any
   recent diff; users hold one role in practice. Defense-in-depth: order deterministically / prefer the
   more-privileged role.
@@ -132,7 +151,15 @@ Open bugs and behavior fixes. Reconciled 2026-06-25 with Brendan; full re-audit 
 
 ## 🟡 Low — open (code)
 
-- [ ] **PU-9-CODE (reclassified from PROMPT_UPDATE_LIST PU-9 on 2026-07-07) — dead-air / talk-while-waiting
+- [~] **PU-9-CODE — BUILT + STAGED 2026-07-08 (retell-proxy v50→v51, FROZEN, NOT deployed; Brendan deploys).**
+  Lengthened each `BOOKING_TOOL_MESSAGES` instruction to request a two-beat ~20-30 word filler and set
+  `speak_after_execution:true` on the write tools (book/update/cancel) so the agent confirms the result after
+  the tool returns. Bundled with GETCALL-1 into ONE retell-proxy version bump. Deploy checklist:
+  `deploy_single_fn.mjs retell-proxy` → read-only Voice smoke → bulk `refresh-booking-tool-messages` → an
+  answered-call listen check (tune the filler wording; note `speak_after_execution:false` is now explicit on the
+  2 read tools). Original detail below. (Non-frozen new-setter seed alignment in `retellVoiceAgentDefaults.ts`
+  is a separate optional follow-up.)
+- [~] **PU-9-CODE (original detail) — dead-air / talk-while-waiting
   latency is code-owned, not a dashboard edit (Voice-gated, retell-proxy).** On an answered booking call the
   agent goes silent for a beat while a booking tool round-trips to GHL (~3-8s), but the spoken filler is capped
   at "under 10-12 words" (~2s). The filler copy lives in a hardcoded `BOOKING_TOOL_MESSAGES` map
@@ -147,7 +174,10 @@ Open bugs and behavior fixes. Reconciled 2026-06-25 with Brendan; full re-audit 
   effort S. **After this session** (Voice-gated CODE session). The persona-side talk-track *bridges* remain a
   normal prompt item on PROMPT_UPDATE_LIST PU-9.
 
-- [ ] **GETCALL-1 (found 2026-07-07, incidental — during the Retell MCP endpoint audit) — `retell-proxy`'s
+- [~] **GETCALL-1 — BUILT + STAGED 2026-07-08 (retell-proxy v50→v51, FROZEN, NOT deployed; Brendan deploys).**
+  Changed `get-call/${id}` → `v2/get-call/${id}` (bundled with PU-9-CODE in ONE retell-proxy version bump; see
+  the PU-9-CODE deploy checklist above). Verified in the call-detail view after deploy. Original detail below.
+- [~] **GETCALL-1 (original detail) — `retell-proxy`'s
   `get-call` case hits a 404'd unversioned Retell endpoint, so the call-detail view is broken live.**
   `frontend/supabase/functions/retell-proxy/index.ts:1449` calls `retellFetch(apiKey, "GET",
   \`get-call/${params.callId}\`)` — no `v2/` prefix. **Live-tested 2026-07-07** with a real `call_id`:
