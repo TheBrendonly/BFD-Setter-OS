@@ -133,26 +133,9 @@ function readCustomField(
   return null;
 }
 
+// The Try-Gary tag prefix (`1prompt-try-gary-<style>`) still drives agent_style /
+// source_type derivation on the normal signed GHL tag path (extractComplianceFields).
 const TRY_GARY_TAG_PREFIX = "1prompt-try-gary-";
-
-// The new_leads_tag that marks the Try-Gary cadence. Set this as the form tag on
-// the Try-Gary campaign in the Workflows UI so the Try-Gary landing routes to it
-// deterministically (a client may now have several new-leads workflows).
-const TRY_GARY_WORKFLOW_TAG = "bfd_setter-try_gary";
-
-// Phase 1 try-gary landing page lives on BFD's marketing site → posts to BFD's
-// GHL location → custom-body webhook to this fn with source="try-gary-landing".
-// Hardcoded for Phase 1 because try-gary is BFD-only; promote to a
-// clients.try_gary_owner flag if a second client ever runs the same landing.
-const TRY_GARY_BFD_LOCATION_ID = "xo0XjmenBBJxJgSnAdyM";
-
-const TRY_GARY_VALID_STYLES = new Set([
-  "property-coach",
-  "mortgage-broker",
-  "finance-strategist",
-  "generic-demo",
-  "crazy-gary",
-]);
 
 type ComplianceFields = {
   agent_style: string | null;
@@ -350,160 +333,6 @@ async function enrollLeadInEngagement(args: {
   return execution.id as string;
 }
 
-// DEPRECATED (2026-05-31). Try-Gary now follows the canonical one-URL+tag
-// pattern: its GHL automation adds the `bfd_setter-try_gary` tag and posts to
-// the single ingress (sync-ghl-contact), which routes via the tagged cadence.
-// This direct `source: "try-gary-landing"` handler is retained for backward
-// compatibility only and no longer applies a per-persona voice-setter override
-// (the try_gary_persona_slots mechanism is retired). It still resolves the
-// `bfd_setter-try_gary` cadence and enrols the lead (agent_style + UTM ride
-// through as Retell dynamic_variables). New setups should NOT use this path.
-async function handleTryGaryLanding(
-  supabase: any,
-  body: any,
-): Promise<Response> {
-  const phone = typeof body.phone === "string" ? body.phone.trim() : "";
-  const firstName = typeof body.first_name === "string" ? body.first_name.trim() : "";
-  const ghlContactId = typeof body.ghl_contact_id === "string" ? body.ghl_contact_id.trim() : "";
-  const rawStyle = typeof body.agent_style === "string" ? body.agent_style.trim() : "";
-  const agentStyle = TRY_GARY_VALID_STYLES.has(rawStyle) ? rawStyle : "generic-demo";
-
-  if (!phone) return jsonResponse({ error: "phone is required" }, 400);
-  if (!ghlContactId) return jsonResponse({ error: "ghl_contact_id is required" }, 400);
-
-  // Look up BFD by hardcoded location id.
-  const { data: client, error: clientErr } = await supabase
-    .from("clients")
-    .select("id, ghl_location_id, ghl_api_key")
-    .eq("ghl_location_id", TRY_GARY_BFD_LOCATION_ID)
-    .maybeSingle();
-  if (clientErr || !client) {
-    console.warn("ghl-tag-webhook[try-gary]: BFD client not found", clientErr);
-    return jsonResponse({ error: "BFD client not found" }, 404);
-  }
-  const clientId = client.id as string;
-  const locationId = client.ghl_location_id as string;
-
-  // Phone-dedup guard (reuse the existing 5-min helper).
-  const phoneDuplicate = await isPhoneRecentDuplicate(
-    supabase,
-    clientId,
-    phone,
-    ghlContactId,
-  );
-
-  // Upsert leads row with compliance + UTM + agent_style.
-  // The compliance migration column is `consent_version`; the brief's payload
-  // calls it `consent_text_version`. Map at the edge so the rest of the
-  // pipeline sees the canonical column name.
-  const consentText = typeof body.consent_text === "string" ? body.consent_text : null;
-  const consentVersion = typeof body.consent_text_version === "string"
-    ? body.consent_text_version
-    : (typeof body.consent_version === "string" ? body.consent_version : null);
-  const consentTimestamp = typeof body.consent_timestamp === "string" ? body.consent_timestamp : null;
-
-  await supabase
-    .from("leads")
-    .upsert(
-      {
-        client_id: clientId,
-        lead_id: ghlContactId,
-        first_name: firstName || null,
-        phone: phone || null,
-        agent_style: agentStyle,
-        source_type: "try_gary_landing",
-        consent_text: consentText,
-        consent_version: consentVersion,
-        consent_timestamp: consentTimestamp,
-        utm_source: typeof body.utm_source === "string" ? body.utm_source : null,
-        utm_medium: typeof body.utm_medium === "string" ? body.utm_medium : null,
-        utm_campaign: typeof body.utm_campaign === "string" ? body.utm_campaign : null,
-        utm_content: typeof body.utm_content === "string" ? body.utm_content : null,
-        utm_term: typeof body.utm_term === "string" ? body.utm_term : null,
-      },
-      { onConflict: "client_id,lead_id" },
-    );
-
-  if (phoneDuplicate) {
-    return jsonResponse({
-      ok: true,
-      enrolled: null,
-      reason: "phone_recent_duplicate",
-      dedup_window_minutes: PHONE_DEDUP_WINDOW_MINUTES,
-      source: "try-gary-landing",
-      agent_style: agentStyle,
-    });
-  }
-
-  // Resolve the Try-Gary cadence. Prefer a new-leads workflow explicitly tagged
-  // TRY_GARY_WORKFLOW_TAG (deterministic now that a client may have several
-  // new-leads workflows); fall back to the single active new-leads workflow for
-  // backward compat when no Try-Gary cadence is tagged.
-  let { data: workflow, error: wfErr } = await supabase
-    .from("engagement_workflows")
-    .select("id, name")
-    .eq("client_id", clientId)
-    .eq("is_active", true)
-    .eq("is_new_leads_campaign", true)
-    .eq("new_leads_tag", TRY_GARY_WORKFLOW_TAG)
-    .limit(1)
-    .maybeSingle();
-  if (!workflow) {
-    ({ data: workflow, error: wfErr } = await supabase
-      .from("engagement_workflows")
-      .select("id, name")
-      .eq("client_id", clientId)
-      .eq("is_active", true)
-      .eq("is_new_leads_campaign", true)
-      .limit(1)
-      .maybeSingle());
-  }
-  if (wfErr || !workflow) {
-    console.warn("ghl-tag-webhook[try-gary]: no active new-leads workflow", wfErr);
-    return jsonResponse({ error: "no_active_new_leads_workflow" }, 404);
-  }
-
-  // Enrol — agent_style + utm_* ride in extraContactFields so they land as
-  // Retell dynamic_variables on the outbound call.
-  let executionId: string | null = null;
-  try {
-    executionId = await enrollLeadInEngagement({
-      supabase,
-      clientId,
-      workflowId: workflow.id,
-      ghlAccountId: locationId,
-      leadId: ghlContactId,
-      contactName: firstName || null,
-      contactPhone: phone,
-      contactEmail: null,
-      extraContactFields: {
-        agent_style: agentStyle,
-        first_name: firstName || undefined,
-        phone,
-        source_type: "try_gary_landing",
-        utm_source: typeof body.utm_source === "string" ? body.utm_source : undefined,
-        utm_medium: typeof body.utm_medium === "string" ? body.utm_medium : undefined,
-        utm_campaign: typeof body.utm_campaign === "string" ? body.utm_campaign : undefined,
-        // Persona-slot voice-setter override retired 2026-05-31: agent selection
-        // is now per-campaign (tag-per-campaign), not per-persona within one
-        // cadence. The cadence's own phone_call node decides the voice setter.
-      },
-    });
-  } catch (enrollErr) {
-    console.warn("ghl-tag-webhook[try-gary]: enrol failed", enrollErr);
-    return jsonResponse({ error: "enrolment_failed" }, 500);
-  }
-
-  return jsonResponse({
-    ok: true,
-    enrolled: executionId,
-    reason: executionId ? "enrolled" : "already_enrolled",
-    workflow_id: workflow.id,
-    source: "try-gary-landing",
-    agent_style: agentStyle,
-  });
-}
-
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   if (req.method !== "POST") return jsonResponse({ error: "Method Not Allowed" }, 405);
@@ -522,13 +351,6 @@ Deno.serve(async (req) => {
   }
   if (!body || typeof body !== "object") {
     return jsonResponse({ error: "Invalid JSON body" }, 400);
-  }
-
-  // Try Gary landing-page ingress (Phase 1). Custom flat-JSON body shape
-  // distinct from GHL Webhook V2's tag-update shape — discriminate on
-  // body.source and route to a dedicated handler.
-  if (body.source === "try-gary-landing") {
-    return await handleTryGaryLanding(supabase, body);
   }
 
   // GHL Webhook V2 payload variants:
