@@ -18,7 +18,7 @@
 //     --default-tz "Australia/Brisbane" \
 //     [--retell-api-key <key>] \
 //     [--openrouter-key <key>] \
-//     [--llm-model <model>]            (default openai/gpt-4.1-nano) \
+//     [--llm-model <model>]            (default google/gemini-2.5-flash) \
 //     [--subscription-status <status>] (default active) \
 //     [--source-workflow-id <uuid>]    (default BFD canonical default) \
 //     [--ghl-calendar-id <id>] [--ghl-assignee-id <id>] \
@@ -292,10 +292,12 @@ async function main() {
   });
   const retellApiKey = args["retell-api-key"] || null;
   const openrouterKey = args["openrouter-key"] || null;
-  // llm_model is nullable with no DB default; match the SOP default unless overridden.
+  // llm_model: canonical production text-engine model (2026-07-09 decision) is
+  // google/gemini-2.5-flash — matches the DB default + the live dogfood client's
+  // proven value. Override with --llm-model if a client needs something else.
   const llmModel = (typeof args["llm-model"] === "string" && args["llm-model"].trim())
     ? args["llm-model"].trim()
-    : "openai/gpt-4.1-nano";
+    : "google/gemini-2.5-flash";
   // CRITICAL: without subscription_status the DB default is 'free', which gates
   // the client OUT of every feature. Default to 'active' so the scaffold is usable.
   const subscriptionStatus = (typeof args["subscription-status"] === "string" && args["subscription-status"].trim())

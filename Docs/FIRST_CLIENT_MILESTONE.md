@@ -64,8 +64,15 @@ Post-client queue (later, gated by real usage/data): F18 -> F19 -> F20 -> F12.
 
 ## Prerequisites before running this (surface them if not yet done)
 
-- **M1 Resend SMTP** and **M2 Setter-1 prompt migration** from `Docs/TEST_SESSION.md` RUN 9 should be done (invite
-  emails + a clean stored prompt matter at onboarding).
+- **M1 Resend SMTP — do this as ONE OF THE FIRST steps at onboarding** (Brendan's explicit call 2026-07-07: no
+  product need until a client login exists, so deliberately deferred to here). **Provider = Resend** (already wired:
+  `RESEND_API_KEY` + the SMTP PATCH payload; free tier is $0 and covers this use for a long time — 3,000 emails/mo).
+  Steps: create a free Resend account → verify `buildingflowdigital.com` (DKIM/SPF DNS records) → API key → Claude
+  PATCHes Supabase Auth custom SMTP (`smtp_host/user/pass/sender`, all NULL as of 2026-07-07) + sets `RESEND_API_KEY`
+  on Trigger.dev prod + a report recipient. Unblocks F14 invite/reset emails + flips the F15 weekly report live.
+  Payload: `Operations/handoffs/2026-07-02-usage-billing-auth.md`.
+- **M2 Setter-1 prompt migration — DONE 2026-07-07** (Brendan applied via UI, Claude verified read-only: legacy blob
+  gone, lean template + PU-10 line in; prompt 68,750 → 53,720 chars). No longer a prerequisite.
 - **F16 / F17 phase-1** (speed-to-lead / missed-call text-back / live-transfer + calling-hours enforcement +
   recording-disclosure toggle) are BUILT + DEPLOYED (2026-07-07 combined build), all default-OFF. Step 6 turns them
   on for the client. CAVEAT: apply the **F16(c) fail-closed fix (F16C-SMS-1, P3 review 2026-07-07)** before enabling

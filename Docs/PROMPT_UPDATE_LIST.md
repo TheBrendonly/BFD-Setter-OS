@@ -94,19 +94,17 @@ can be worked independently.
   literal begin_message text. Flag for Brendan: worth deciding whether inbound+outbound sharing one Retell
   agent is intentional going forward, or worth splitting.
 
-- [ ] **PU-6 — Call-recording disclosure line (voice; AU compliance). NARROWED 2026-07-07: Brendan confirmed
-  only Main Outbound needs this now** (the other 3 non-core agents are demo personas, see the agent-scope
-  reminder above; Inbound BFD Agent already has it). NSW, WA and SA require ALL-PARTY consent to record calls,
-  and Retell records calls. **Only remaining agent:** **Main Outbound** (`agent_f45f4dd…`, LLM `llm_a73df8…` —
-  re-verified live 2026-07-07: no "recorded"/"recording"/"quality" anywhere in its opener or general_prompt;
-  the pre-restore shared agent HAD the disclosure, but the dedicated Main Outbound agent it was restored to
-  does not). Add a short disclosure near the top of its opening (e.g. *"Just letting you know this call is
-  recorded for quality."*) — continuing after the announcement counts as implied consent. The literal token
-  `{{recording_disclosure}}` (the F17 per-client toggle's dynamic variable) is not referenced in any checked
-  prompt today — the engine injects it but nothing in any stored prompt consumes it, confirming the toggle is
-  currently a no-op until this wording lands somewhere. Source: 2026-07-04 market/compliance research
-  (recordinglaw.com, sprintlaw.com.au). ~~Crazy Gary / Finance Strategist / Property Coach~~ — no action per
-  Brendan 2026-07-07 (demo personas, out of compliance scope).
+- [x] **PU-6 — Call-recording disclosure line (voice; AU compliance). APPLIED + VERIFIED LIVE 2026-07-07 —
+  move to `COMPLETED_LOG.md`.** Brendan added the disclosure as DIRECT TEXT in Main Outbound's begin_message
+  (the reliable place for a compliance line — said verbatim every call, matching how the Inbound agent already
+  carries its own). Verified read-only 2026-07-07: `agent_f45f4dd…` / LLM `llm_a73df8…` v24 begin_message now
+  reads *"Hey {{first_name}}, it's Gary from Building Flow Digital - you put your hand up for some info on our
+  AI setter service. Just so you know, this call's recorded for quality. Got a quick sec?"* Scope was narrowed
+  the same day: only Main Outbound needed it (Inbound already had it; Crazy Gary / Finance Strategist /
+  Property Coach are demo personas, out of compliance scope per Brendan — no action). Note: the literal token
+  `{{recording_disclosure}}` (F17 per-client toggle var) is still not referenced by any stored prompt — the
+  toggle stays a no-op, which is fine, the disclosure is now hardcoded in the begin_message instead. Source:
+  2026-07-04 market/compliance research (recordinglaw.com, sprintlaw.com.au).
 
 - [x] **PU-7 — Caller identification within ~30 seconds (voice, outbound; AU compliance check). CLOSED
   2026-07-07 — Main Outbound is clean-compliant (its restored dedicated agent `agent_f45f4dd…` opens *"Hey
@@ -122,8 +120,16 @@ can be worked independently.
   Outbound → rename V2 → paste → Save+Push → canary publish), then send Claude a `call_id` for read-only
   verification. **This supersedes the older standalone "booking guardrail" voice item** (V2 includes it).
 
-- [ ] **PU-12 — Inbound-unknown-caller robustness: never speak placeholders, de-outbound the opener (voice,
-  demo line first, worth mirroring in all setters). PART (1) CONFIRMED ALREADY DONE, PART (2) CONFIRMED STILL
+- [x] **PU-12 — Inbound-unknown-caller robustness: never speak placeholders. APPLIED + VERIFIED LIVE
+  2026-07-07 — move to `COMPLETED_LOG.md`.** Part (1) (name-free direction-neutral opener) was already done;
+  Part (2) (the "never speak a placeholder value" guard) is now applied by Brendan and verified read-only:
+  Inbound BFD Agent LLM `llm_9dd6af…` v14 SETTER CORE now contains, verbatim, *"If a lead detail (name,
+  business) is empty, unknown, or looks like a placeholder or a system value (for example 'SMS Lead'), never
+  say it aloud: speak without a name and ask naturally who's calling."* Both parts complete. Behavioral
+  confirmation (a real inbound call from an unknown number → no literal `{{first_name}}` / "SMS Lead" spoken)
+  is the standing B-5 / two-number check in `TEST_LIST.md`. Original detail below.
+
+  **PART (1) CONFIRMED ALREADY DONE, PART (2) CONFIRMED STILL
   NEEDED — 2026-07-07 (Session P1 live verification).** _(Renumbered 2026-07-07 from a duplicate "PU-8" id —
   this item is unrelated to the voicemail-placeholder PU-8 above; found in the same 2026-07-05 line-health
   check.)_ **Part (1), name-free direction-neutral opener, is DONE:** the Inbound BFD Agent's live
@@ -151,11 +157,28 @@ can be worked independently.
   booking backend is independently healthy (2026-07-05 read-only `get-available-slots` probe returned real
   Sydney slots). Source: 2026-07-05 Gary line health check (call records `call_7250ce...`, `call_c4922c...`).
 
-- [ ] **PU-9 — Kill the dead air while the voice agent looks up bookings (voice, config + tool wording).** Found 2026-07-06 (B1 answered call): the agent goes silent for a beat while a booking tool hits GHL. The anti-dead-air settings are ALREADY on and good — `ambient_sound: "call-center"`, `enable_backchannel: true` (freq 0.7), `model_high_priority: true`, and every booking tool has `speak_during_execution: true` with a filler. **Root cause:** each tool's `execution_message_description` caps the spoken filler at "under 10-12 words" (~2 sec of speech), but the GHL round-trip takes ~3-8 sec → silence after the short line (only partly masked by the ambient noise). `speak_after_execution: false` on book/cancel/update also adds a ~1.3 sec LLM delay after the result before the confirm. **Apply via the Retell dashboard / BFD setter UI (per voice setter):** (1) **lengthen** each GHL-hitting tool's `execution_message_description` to a multi-beat ~20-30 word line that keeps talking through the wait, e.g. book-appointments → *"Perfect, locking that in for you now… just syncing it across to Brendan's calendar, give me a couple of seconds."* (2) set **`speak_after_execution: true`** on book/cancel/update with a short canned confirm so the agent speaks the instant the tool returns. (3) **Talk-track bridges** to weave in while a tool runs: recap what they said (*"While that syncs, you mentioned 30-40 leads a week, solid base to build on"*), set the strategy-call value, micro social-proof, a prep question (*"While this loads, what's the one outcome you'd love from the call?"*), or confirm the invite email. **Backend note (deferred build, NOT a prompt item):** the deeper fix for slow lookups is trimming GHL latency in `voice-booking-tools` (frozen) — cache/pre-warm availability; logged for a later session. Live agent read confirmed on `agent_b2f6495…` / `llm_9dd6af77…`. Priority Medium.
+- [~] **PU-9 — Kill the dead air while the voice agent looks up bookings. RECLASSIFIED AS A CODE ITEM +
+  DEFERRED 2026-07-07 (Session P1 follow-up code trace).** ⚠️ This is NOT a durable dashboard/UI edit. Tracing
+  `retell-proxy`: the booking tools' `execution_message_description` + `speak_during_execution` are set from a
+  **hardcoded `BOOKING_TOOL_MESSAGES` map** (`retell-proxy/index.ts:1790`) via a bulk `refresh-booking-tool-messages`
+  action, and the normal **Save & Push overwrites** the agent's `general_tools` with the stored setter config
+  (`index.ts:809`) — so editing the filler copy or `speak_after_execution` directly in the Retell dashboard gets
+  reverted on the next Save & Push or the next bulk refresh. The live agents currently carry exactly the short
+  hardcoded defaults ("under 10-12 words"). **Durable fix = CODE (Voice-gated, retell-proxy):** lengthen each
+  GHL-hitting tool's copy in `BOOKING_TOOL_MESSAGES` to a multi-beat ~20-30 word line + set
+  `speak_after_execution: true` on book/cancel/update (and wherever the default booking tools are first seeded),
+  deploy retell-proxy (version bump + read-only Voice smoke), then run the bulk `refresh-booking-tool-messages`.
+  Logged for a future Voice-gated code session — NOT this prompt/manual action-pack. The talk-track *bridges*
+  (part 3 below) that ARE genuine persona wording (recap what the lead said while a tool runs, set the call
+  value, a prep question) can still be added to the Main Outbound / Inbound stored prompt as a normal prompt
+  item whenever desired — but the load-bearing latency fix is the code change. Original detail below. Found 2026-07-06 (B1 answered call): the agent goes silent for a beat while a booking tool hits GHL. The anti-dead-air settings are ALREADY on and good — `ambient_sound: "call-center"`, `enable_backchannel: true` (freq 0.7), `model_high_priority: true`, and every booking tool has `speak_during_execution: true` with a filler. **Root cause:** each tool's `execution_message_description` caps the spoken filler at "under 10-12 words" (~2 sec of speech), but the GHL round-trip takes ~3-8 sec → silence after the short line (only partly masked by the ambient noise). `speak_after_execution: false` on book/cancel/update also adds a ~1.3 sec LLM delay after the result before the confirm. **Apply via the Retell dashboard / BFD setter UI (per voice setter):** (1) **lengthen** each GHL-hitting tool's `execution_message_description` to a multi-beat ~20-30 word line that keeps talking through the wait, e.g. book-appointments → *"Perfect, locking that in for you now… just syncing it across to Brendan's calendar, give me a couple of seconds."* (2) set **`speak_after_execution: true`** on book/cancel/update with a short canned confirm so the agent speaks the instant the tool returns. (3) **Talk-track bridges** to weave in while a tool runs: recap what they said (*"While that syncs, you mentioned 30-40 leads a week, solid base to build on"*), set the strategy-call value, micro social-proof, a prep question (*"While this loads, what's the one outcome you'd love from the call?"*), or confirm the invite email. **Backend note (deferred build, NOT a prompt item):** the deeper fix for slow lookups is trimming GHL latency in `voice-booking-tools` (frozen) — cache/pre-warm availability; logged for a later session. Live agent read confirmed on `agent_b2f6495…` / `llm_9dd6af77…`. Priority Medium.
 
-- [ ] **PU-10 — Reschedule/cancel: list first, and never confirm without a real success (text; pairs with CODE fix RESCHED-SMS-1).** Found 2026-07-06 (SMS leg): on a reschedule the fast text model called `get-available-slots` instead of `get-contact-appointments` before `update-appointment` (so the eventId binding refused it), and once said *"I've moved your Friday call to 3pm, all set"* while calling no mutation tool — a false confirmation. Prompt half (report-only): in the text setter's reschedule/cancel guidance, be explicit that it must call **`get-contact-appointments`** (not get-available-slots) to load the real appointment before any change, and must **only confirm "moved / cancelled / done" after the tool actually returns success** — if the tool is refused or errors, say so and re-list, never claim it worked. The load-bearing half is the code guard (BUG_LIST RESCHED-SMS-1); this is the persona-side reinforcement. (Note the report-only boundary: this is honesty/flow wording, not a booking MECHANIC.) Priority Medium.
+- [x] **PU-10 — Reschedule/cancel: list first, and never confirm without a real success (text; pairs with CODE fix RESCHED-SMS-1). APPLIED + VERIFIED LIVE 2026-07-07 — move to `COMPLETED_LOG.md`.** Applied together with the Setter-1 content migration (Brendan drove the UI edit; the legacy 511-line booking blob was replaced with the lean `DEFAULT_BOOKING_PROMPT` template + this honesty line appended as the 4th rule). Verified read-only via `get-external-prompt` 2026-07-07: the text setter's stored prompt now contains *"When rescheduling or cancelling, always call get-contact-appointments first (not get-available-slots) to load the real appointment before making any change. Only say 'moved', 'cancelled', or 'done' after the tool actually returns success. If the tool is refused or errors, say so and re-check, never claim a change worked when it didn't."* Passes the save-external-prompt lint (no `{{}}` / day-policy / legacy-tool-name). The load-bearing half is the deployed code guard RESCHED-SMS-1; this is the persona reinforcement. Original detail: found 2026-07-06 (SMS leg): on a reschedule the fast text model called `get-available-slots` instead of `get-contact-appointments` before `update-appointment` (so the eventId binding refused it), and once said *"I've moved your Friday call to 3pm, all set"* while calling no mutation tool — a false confirmation. Prompt half (report-only): in the text setter's reschedule/cancel guidance, be explicit that it must call **`get-contact-appointments`** (not get-available-slots) to load the real appointment before any change, and must **only confirm "moved / cancelled / done" after the tool actually returns success** — if the tool is refused or errors, say so and re-list, never claim it worked. The load-bearing half is the code guard (BUG_LIST RESCHED-SMS-1); this is the persona-side reinforcement. (Note the report-only boundary: this is honesty/flow wording, not a booking MECHANIC.) Priority Medium.
 
-- [ ] **PU-11 — Live-transfer prompt line (voice; pairs with F16(d) live-transfer config). GAP IS BIGGER THAN
+- [ ] **PU-11 — Live-transfer prompt line (voice; pairs with F16(d) live-transfer config). DEFERRED by Brendan
+  2026-07-07** — it's the prompt half of the default-OFF F16(d) feature, not needed until he's actually fielding
+  transferred calls. **Decision recorded for when he does set it up: apply to BOTH Main Outbound + Inbound BFD
+  Agent** (the 4 demo personas stay untouched). Destination number TBD at setup time. GAP IS BIGGER THAN
   ORIGINALLY SCOPED — confirmed 2026-07-07 (Session P1 live verification): the tool itself doesn't exist on
   any agent yet, not just the prompt line.** Checked `general_tools` on all 6 canonical agents: **none of
   them have a `transfer_call` tool configured** (all 6 share the identical 8 tools — end_call,

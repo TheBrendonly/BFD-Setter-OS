@@ -12,10 +12,15 @@ prompt tweaks independently).
   (F16b), **Missed-call text-back** (F16c), and (for compliance testing) **Call-recording disclosure** (F17). And
   in the **"Client ROI reporting"** card turn on **Show the show-rate funnel / weekly report to the client** if you
   want the client to see them. Then run the TEST_LIST "Combined build" behavioural checks.
-- [ ] **Provision the GHL appointment-status workflow → `bookings-webhook`** so the F15 show-rate funnel accrues
-  confirmed/showed/no-show. In GHL, add a Workflow on "Appointment Status Changed" (confirmed / showed / no-show /
-  cancelled) with a **Custom Webhook** POST to the `bookings-webhook` URL, and set the client's `ghl_webhook_secret`
-  + send it as the `x-wh-token` header (GHL native Webhook V2 is RSA and NOT supported — use the static token).
+- [x] **Provision the GHL appointment-status workflow → `bookings-webhook` — DONE + VERIFIED END-TO-END 2026-07-07.**
+  Brendan built it in GHL as several per-status automations (one per status, since GHL exposed no status merge
+  variable so it was hardcoded per automation) with a **Custom Webhook** POST to the `bookings-webhook` URL + the
+  `x-wh-token: <ghl_webhook_secret>` header. Claude verified the full chain live: flipped a test appointment
+  (`zjLTA9X9nTCwKf24ZWZ6`) `cancelled→confirmed→cancelled` via the GHL API → both of Brendan's automations fired →
+  webhook auth passed → `bookings.status` updated each way → two `booking_status_events` rows logged (the F15 funnel
+  data). Appointment restored to its original `cancelled` state. Only residual = a visual glance at the funnel card
+  in the dashboard (test session). Per-client note: each real client's own GHL location needs its own copy of this
+  workflow at onboarding (fold into the First-Client Milestone GHL step).
 - [ ] **After Resend SMTP lands (M1, below): the F15 weekly report email flips from stubbed to live automatically**
   (the `weeklyClientReport` cron sends when `RESEND_API_KEY` is set + a recipient email is configured on the client's
   "Client ROI reporting" card). No code change needed; just set `RESEND_API_KEY` on Trigger.dev prod + the recipient.
@@ -98,24 +103,63 @@ un-automated prerequisites, roughly in order (most are code-fixable → see BUG_
   no-shows 38-40% and this is config, not code (research verdict: do NOT build a reminder engine in-product;
   GHL's appointment-status triggers + trigger links do it all). Pairs with F15's status sync-back. `[B]`
 
-- [ ] **Apply the Setter-1 prompt content migration (PROMPT-AUTH-1, report-only)** — the legacy 511-line
-  "# BOOKING FUNCTION" blob in the stored Text-setter prompt (the root cause of the Monday/wrong-date booking
-  bug) is now safe to remove: booking mechanics are code-owned as of PROMPT-AUTH-1. Steps are written out in
-  `Docs/investigations/prompt-migration-reports/e467dabc-57ee-416c-8831-83ecd9c7c925_Setter-1.report.md`
-  (generated read-only, never touches the DB): open Prompt Management → Setter-1 → SETTER CORE → enable
-  "Booking Function" → "View Prompt" → clear the legacy booking text (or click "Return to Default" for the new
-  minimal template) → Save/Deploy (now lints on save + snapshots to `prompt_versions`) → re-open "Verify Setter
-  Prompt" → "Load live stored prompt" to confirm it's lean. Unblocks 3 `TEST_LIST.md` PROMPT-AUTH-1 checks
-  (full-prompt visibility via the new X-Ray, no-leftover-artifacts, efficiency). `[B]`
-- [ ] **5.1 Setup-guide screenshot re-shoot** — review and refresh. Lock the canonical BFD Retell **folder name** first, then the screenshots/text in `SetupGuideDialog.tsx` can be re-shot (it still says create a folder named "1Prompt"). `[B]`
+- [x] **Apply the Setter-1 prompt content migration (PROMPT-AUTH-1, report-only) — DONE + VERIFIED LIVE
+  2026-07-07** (Brendan drove the UI edit during the action-pack session; Claude verified read-only via
+  `get-external-prompt`). The legacy 511-line "# BOOKING FUNCTION" blob was replaced with the lean
+  `DEFAULT_BOOKING_PROMPT` template + the PU-10 reschedule/cancel honesty line appended. Verified: stored
+  prompt 68,750 → 53,720 chars; no "Available days" / `{{ $now }}` / legacy tool names remain; the lean
+  BOOKING APPROACH + PU-10 line are present; passes the save-external-prompt lint. The stored-prompt half of
+  the 2 residual `TEST_LIST.md` PROMPT-AUTH-1 checks (no-leftover-artifacts, efficiency) is now satisfied by
+  this read; the runtime behavioral half (tool-calling + date accuracy hold on the fast model over a live
+  SMS) stays in `TEST_LIST.md` for the test session. `[B]`
+- [ ] **5.1 Setup-guide screenshot re-shoot** — folder name DECIDED 2026-07-09: **"BFD Setter"** (Brendan).
+  The screenshots/text in `SetupGuideDialog.tsx` still say "1Prompt"; re-shoot against a folder named
+  **"BFD Setter"** and rename `retell-1prompt-folder.png` → `retell-bfd-setter-folder.png`. Note this dialog is
+  largely OBSOLETE (it walks n8n workflow imports, which no longer apply under the native text engine) — fold it
+  into the branding-purge task below rather than just re-shooting. `[B]`
+
+- [ ] **BRANDING PURGE — remove all "1Prompt"/"1prompt"/n8n references from the bfd-setter product (SCOPED
+  2026-07-09; NOT a blind find/replace — do as a careful dedicated pass, ideally its own session).** Brendan's
+  directive: "anything to do with N8N or 1prompt, including any use of the name 1prompt, is deleted or removed"
+  (he KEEPS his separate n8n service for other things — this is ONLY the bfd-setter repo's dead/branding refs).
+  Mapped 2026-07-09; the surface is large and crosses risk classes, so it must be handled per-category, with
+  tsc + build + edge tests after:
+  - **Business decisions Brendan must make first:** `support@1prompt.com` → ? (support@buildingflowdigital.com?);
+    `app.1prompt.com` fallback domain → ? (app.buildingflowdigital.com?); the `skool.com/1prompt/...` classroom
+    link → ? (all in `SetupGuideDialog.tsx` ~L2067-2089). Canonical Retell folder name = **"BFD Setter"** (done).
+  - **SAFE-ish (UI branding strings):** ~10 `.tsx`/`.ts` under `frontend/src` (SetupGuideDialog, PromptManagement,
+    Templates, WhatToDo, retellVoiceAgentDefaults, defaultPromptTemplates + several `_archived/` webinar files that
+    can likely just be deleted). Inspect each — some "1prompt" hits may be functional identifiers, not branding.
+  - **NEEDS CARE (live edge functions — a "1prompt" in a URL/host/table name could be load-bearing):** ~12 fns
+    incl. `sync-ghl-contact`, `run-simulation`, `retell-proxy`, `voice-booking-tools`, `kb-ingest`, `intake-lead`,
+    `push-contact-to-ghl`, `ghl-tag-webhook`. Each needs reading before changing; deploy + Voice-gated smoke after.
+  - **DO NOT TOUCH:** 17 applied migration `.sql` files (immutable history); the 14 `frontend/public/**/*.json`
+    workflow/agent EXPORTS (reference artifacts — decide keep-as-history vs delete); archived docs.
+  - **INFRA (Brendan, coordinated):** the Railway PRODUCTION service is named `1prompt-os` — renaming it is a
+    deploy-config change that must be coordinated so prod deploys don't break (do NOT rename blindly).
+  - **The obsolete SetupGuideDialog n8n-import flow** is the biggest chunk — likely a rework/removal, not a rename.
+  Full categorized file list captured in the 2026-07-09 handoff. `[B]` + CODE. `[B]`
 - [ ] **B-4 field-access (now self-serve config, not a build input)** — B-4 shipped Session 3. The per-field "which workspace settings a client may see/edit in My Account" is a **per-sub-account** governance editor you already control: open a sub-account → **Sub-Account Config → "My Account Field Access"** and toggle Visible/Editable per field (brand voice, contact hours, voicemail, logo…). Default set is unchanged; tune it per client there. `[B]`
-- [ ] **Shut down the n8n Railway service** — the native text engine is fully canonical (the n8n code path was already removed; `processMessages.ts` now throws if `use_native_text_engine` is false). The n8n Railway service can be stopped/deleted. (F5 close-out; the unused `clients.text_engine_webhook` column is deferred, see DEFERRED.) `[B]`
+- [x] **Shut down the n8n Railway service — WON'T DO (Brendan 2026-07-09): he KEEPS the n8n service, uses it for
+  other (non-bfd-setter) things.** The bfd-setter product no longer depends on n8n (native text engine is canonical;
+  `processMessages.ts` throws if `use_native_text_engine` is false), so no bfd-setter concern — the service just
+  isn't ours to shut down. The IN-REPO dead n8n references (constants, the obsolete SetupGuideDialog n8n-import
+  flow, `clients.text_engine_webhook`) are folded into the BRANDING PURGE task above. `[B]`
 - [x] **Provision the F1 "BFD Conversation Link" GHL custom field (activates F1)** — DONE 2026-06-28 (Claude, via API, during Session 7). Created the TEXT field `BFD Conversation Link` (id `4tDL3asiRNrQD3MKyP2E`, `contact.bfd_conversation_link`) on location `xo0XjmenBBJxJgSnAdyM` and set `clients.ghl_conversation_link_field_id='4tDL3asiRNrQD3MKyP2E'` for client `e467dabc`. F1 is now active; the live deep-link test is in TEST_LIST. (Repo `.env` `BFD_GHL_PIT`/`BFD_GHL_LOCATION_ID` are stale — used the live `clients.ghl_api_key`.)
 
 ## From the 2026-07-02 usage/billing + auth build (F13/F14, branch `feature/usage-billing-auth`)
 
 - [x] **Review the branch + say GO for the supervised deploy** — DONE 2026-07-03: Brendan reviewed + GO'd; DEPLOYED LIVE (6 edge fns, Trigger 20260702.1, frontend, backfill; both trap proofs 9/9 + SQL hand-check exact match; results in the handoff). What remains below is yours.
-- [ ] **Resend SMTP (unlocks reliable invite + client-reset emails):** (1) create a free Resend account; (2) add + verify `buildingflowdigital.com` (Resend shows the DKIM/SPF DNS records to add); (3) create an API key and hand it to Claude — the SMTP config PATCH payload is in the handoff. Until this lands, invites/resets ride Supabase's built-in mailer, which is rate-limited to a few emails an hour and effectively team-members-only. `[B]`
+- [→] **Resend SMTP — DEFERRED to first-client onboarding (Brendan, 2026-07-07).** No product need until there is a
+  paying client's login to provision; it should be one of the FIRST setup steps when a client signs (moved to
+  `Docs/FIRST_CLIENT_MILESTONE.md` M1). **Provider decided: Resend** (already wired into the codebase — `RESEND_API_KEY`
+  + the SMTP PATCH payload; good free tier + deliverability; no reason to use anything else). **Cost: $0** on the free
+  tier (3,000 emails/mo, 100/day, 1 domain) — comfortably covers auth invites/resets + weekly reports even at many
+  clients; paid Pro (~$20/mo, 50k emails) only if volume ever grows. When a client signs: (1) create a free Resend
+  account; (2) add + verify `buildingflowdigital.com` (Resend shows the DKIM/SPF DNS records); (3) create an API key →
+  Claude PATCHes Supabase Auth custom SMTP (`smtp_host/user/pass/sender` — currently all NULL, confirmed 2026-07-07)
+  + sets `RESEND_API_KEY` on Trigger.dev prod. Unlocks reliable F14 invite/reset emails + flips the F15 weekly report
+  email from stubbed to live. Payload ready in `Operations/handoffs/2026-07-02-usage-billing-auth.md`. `[B]`
 - [ ] **Confirm the `sms_llm` seed rate** — the per-text sell rate is built from an admin-set "LLM cost per average outbound message", seeded at US$0.003/msg (enabled by default; it does NOT change any blended $/min). Sanity-check against real OpenRouter usage and tune it in the pricing panel. `[B]`
 - [ ] **Set per-client billing anchor day + client visibility toggles** — Sub-Account Config → Cost-to-Price Calculator: pick the billing anchor day (default the 1st) and flip on whichever of rate / minutes / texts / month-total each client may see. All four default OFF. `[B]`
 - [ ] **After SMTP lands: run the invite + self-reset E2E** — send an invite to a test address (lands on "Set Your Password", 12-char minimum), and run a client-role /forgot-password (now allowed). Items are in TEST_LIST. `[B]`
