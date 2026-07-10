@@ -442,7 +442,7 @@ export default function VoiceAISection({ section, isEditor, onUpdateProperty }: 
                 setVoiceConfig({ ...voiceConfig, webhookUrl: newUrl });
                 onUpdateProperty('webhookUrl', newUrl);
               }}
-              placeholder="https://your-n8n-webhook.com/webhook/..."
+              placeholder="https://your-webhook-host.com/webhook/..."
             />
             <p className="text-xs text-muted-foreground">
               When users request a call, their details will be sent to this webhook

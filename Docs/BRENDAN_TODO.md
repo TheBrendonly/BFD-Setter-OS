@@ -112,33 +112,39 @@ un-automated prerequisites, roughly in order (most are code-fixable → see BUG_
   the 2 residual `TEST_LIST.md` PROMPT-AUTH-1 checks (no-leftover-artifacts, efficiency) is now satisfied by
   this read; the runtime behavioral half (tool-calling + date accuracy hold on the fast model over a live
   SMS) stays in `TEST_LIST.md` for the test session. `[B]`
-- [ ] **5.1 Setup-guide screenshot re-shoot** — folder name DECIDED 2026-07-09: **"BFD Setter"** (Brendan).
-  The screenshots/text in `SetupGuideDialog.tsx` still say "1Prompt"; re-shoot against a folder named
-  **"BFD Setter"** and rename `retell-1prompt-folder.png` → `retell-bfd-setter-folder.png`. Note this dialog is
-  largely OBSOLETE (it walks n8n workflow imports, which no longer apply under the native text engine) — fold it
-  into the branding-purge task below rather than just re-shooting. `[B]`
+- [ ] **5.1 Setup-guide screenshot re-shoot (content only; the rest is DONE).** The asset was renamed to
+  `retell-bfd-setter-folder.png` and the step text now says "BFD Setter" (branding purge 2026-07-10), but the
+  PNG's CONTENT still shows the old folder name. Re-shoot against a Retell folder named **"BFD Setter"** and
+  drop the new screenshot onto that same filename. The obsolete n8n-import steps around it were deleted. `[B]`
 
-- [ ] **BRANDING PURGE — remove all "1Prompt"/"1prompt"/n8n references from the bfd-setter product (SCOPED
-  2026-07-09; NOT a blind find/replace — do as a careful dedicated pass, ideally its own session).** Brendan's
-  directive: "anything to do with N8N or 1prompt, including any use of the name 1prompt, is deleted or removed"
-  (he KEEPS his separate n8n service for other things — this is ONLY the bfd-setter repo's dead/branding refs).
-  Mapped 2026-07-09; the surface is large and crosses risk classes, so it must be handled per-category, with
-  tsc + build + edge tests after:
-  - **Business decisions Brendan must make first:** `support@1prompt.com` → ? (support@buildingflowdigital.com?);
-    `app.1prompt.com` fallback domain → ? (app.buildingflowdigital.com?); the `skool.com/1prompt/...` classroom
-    link → ? (all in `SetupGuideDialog.tsx` ~L2067-2089). Canonical Retell folder name = **"BFD Setter"** (done).
-  - **SAFE-ish (UI branding strings):** ~10 `.tsx`/`.ts` under `frontend/src` (SetupGuideDialog, PromptManagement,
-    Templates, WhatToDo, retellVoiceAgentDefaults, defaultPromptTemplates + several `_archived/` webinar files that
-    can likely just be deleted). Inspect each — some "1prompt" hits may be functional identifiers, not branding.
-  - **NEEDS CARE (live edge functions — a "1prompt" in a URL/host/table name could be load-bearing):** ~12 fns
-    incl. `sync-ghl-contact`, `run-simulation`, `retell-proxy`, `voice-booking-tools`, `kb-ingest`, `intake-lead`,
-    `push-contact-to-ghl`, `ghl-tag-webhook`. Each needs reading before changing; deploy + Voice-gated smoke after.
-  - **DO NOT TOUCH:** 17 applied migration `.sql` files (immutable history); the 14 `frontend/public/**/*.json`
-    workflow/agent EXPORTS (reference artifacts — decide keep-as-history vs delete); archived docs.
-  - **INFRA (Brendan, coordinated):** the Railway PRODUCTION service is named `1prompt-os` — renaming it is a
-    deploy-config change that must be coordinated so prod deploys don't break (do NOT rename blindly).
-  - **The obsolete SetupGuideDialog n8n-import flow** is the biggest chunk — likely a rework/removal, not a rename.
-  Full categorized file list captured in the 2026-07-09 handoff. `[B]` + CODE. `[B]`
+- [x] **BRANDING PURGE — DONE 2026-07-10 (dedicated session).** All 1Prompt/n8n branding removed from the
+  product surface: SetupGuideDialog lost its 5 n8n-era phases (workflows-import, n8n-setup, knowledgebase-setup,
+  voice-inbound-setup, voice-outbound-setup; ~2,000 lines + 112 orphaned screenshots), the GHL step was rewritten
+  to the BFD provisioning model (support@buildingflowdigital.com), all Skool/upstream-repo links removed, the 15
+  public n8n/agent JSON exports + template-download pages + WorkflowImports + archived webinar pages deleted,
+  PromptManagement demo defaults stripped of the fake-bio section and 1prompt sales links, DebugTextAIRep's n8n
+  steps rewritten to the native engine, 7 edge fns edited + deployed (OpenRouter headers, `bfd-simulation-` email
+  prefix, "Find Lead in BFD" labels, echo-guard fallback `bfd-setter` for NEW clients only, dual try-gary tag
+  prefix), README/RUNBOOK/SOP updated. Verified: tsc + build + all 253 tests green; 7 fns boot-smoked.
+  **Deliberate residuals** (legacy-value support, not branding): `retell-proxy` `LEGACY_N8N_HOST` rewrite guard
+  (defensive; revisit in the retell-proxy session), the live DB `ghl_last_synced_from_field_value='1prompt-os'`
+  rows + matching GHL workflow filters, the legacy `1prompt-try-gary-` tag prefix (accepted alongside the new
+  `bfd-try-gary-`), the probe lead identity `probe@1prompt.local`, migrations/archived docs, and the factual GHL
+  automation names in SOP/GHL_SETUP.md (they match your live GHL). Follow-ups → the 3 new `[B]` items below.
+- [ ] **Undeploy the dead `elevenlabs-manage-agent` edge fn (one API call, needs your go).** It was deleted
+  from the repo 2026-07-10 (only caller was the archived VoiceAISetter page; it embeds a legacy n8n URL) but
+  the permission gate blocked Claude deleting the LIVE deployed copy. Say "undeploy elevenlabs-manage-agent"
+  in a session and Claude will DELETE it via the Management API. `[B]`
+- [ ] **Optional GHL-side legacy renames (your GHL, your timing).** (a) The automations are still named
+  `Add Lead to 1Prompt OS` / `BFD bookings -> 1prompt (BOOKED/CANCELLED)` - renaming them in GHL is cosmetic
+  and safe (webhook URLs are what matter), then update SOP/GHL_SETUP.md to match. (b) New try-gary automations
+  should tag `bfd-try-gary-<style>`; once no contact/automation still carries `1prompt-try-gary-*`, tell Claude
+  to retire the legacy prefix from `ghl-tag-webhook`. (c) The Supabase storage files the old Source Files page
+  served (`Text_Engine_Setter.json`, `Appointment_Booking_Functions.json`, `Voice-Setter-1.json`) are now
+  unreferenced; delete from the storage bucket whenever. `[B]`
+- [ ] **Trigger.dev deploy rides along next session (cosmetic drift).** The syntheticProbe Slack alert text
+  ("1prompt-OS synthetic probe FAIL" -> "BFD-setter synthetic probe FAIL") is changed in the repo but the prod
+  Trigger deploy was permission-blocked; it ships automatically with the next Trigger.dev deploy. `[B]`
 - [ ] **B-4 field-access (now self-serve config, not a build input)** — B-4 shipped Session 3. The per-field "which workspace settings a client may see/edit in My Account" is a **per-sub-account** governance editor you already control: open a sub-account → **Sub-Account Config → "My Account Field Access"** and toggle Visible/Editable per field (brand voice, contact hours, voicemail, logo…). Default set is unchanged; tune it per client there. `[B]`
 - [x] **Shut down the n8n Railway service — WON'T DO (Brendan 2026-07-09): he KEEPS the n8n service, uses it for
   other (non-bfd-setter) things.** The bfd-setter product no longer depends on n8n (native text engine is canonical;

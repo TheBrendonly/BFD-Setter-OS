@@ -7,15 +7,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
   Building,
-  Webhook,
-  Phone,
   Database,
-  Code2,
   Download,
   Copy,
 } from '@/components/icons';
 import { getSourceFileUrl } from '@/lib/sourceFiles';
-import { GithubFileExplorer } from '@/components/source-files/GithubFileExplorer';
 
 // ──────────────────────────────────────────────────────────────────────────
 // Data
@@ -24,33 +20,9 @@ import { GithubFileExplorer } from '@/components/source-files/GithubFileExplorer
 const GHL_SNAPSHOT_URL =
   'https://affiliates.gohighlevel.com/?fp_ref=quimple-llc36&share=7UfWazhAvSbUPRuR36Jg';
 
-const N8N_FILES = [
-  {
-    id: 'text_engine_setter',
-    label: 'Text_Engine_Setter.json',
-    description:
-      'Main n8n workflow that powers the AI text setter — handles inbound replies, context gathering, and reply generation.',
-    storageKey: 'Text_Engine_Setter.json',
-  },
-  {
-    id: 'appointment_booking_functions',
-    label: 'Appointment_Booking_Functions.json',
-    description:
-      'n8n workflow used by the voice setter (Retell) to book and reschedule appointments through GoHighLevel.',
-    storageKey: 'Appointment_Booking_Functions.json',
-  },
-];
-
-const RETELL_FILES = [
-  {
-    id: 'voice_setter_1',
-    label: 'Voice-Setter-1.json',
-    description:
-      'Reference Retell agent configuration — the same template used by the voice sales rep.',
-    storageKey: 'Voice-Setter-1.json',
-  },
-];
-
+// n8n workflow + Retell agent-JSON download cards removed 2026-07-10
+// (branding purge): the native text engine and app-created Retell agents
+// made those import artifacts obsolete.
 const SUPABASE_FILES = [
   {
     id: 'internal_schema',
@@ -209,58 +181,6 @@ export default function Templates() {
             </CardContent>
           </Card>
 
-          {/* n8n Workflows */}
-          <Card id="n8n-workflows" className="material-surface scroll-mt-6">
-            <CardHeader>
-              <CardTitle className="text-lg flex items-center gap-2">
-                <Webhook className="w-5 h-5" />
-                n8n Workflows
-              </CardTitle>
-              <CardDescription>
-                Import these workflows into your n8n instance. Update the credentials and webhook URLs after import.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {N8N_FILES.map((f) => (
-                  <DownloadRow
-                    key={f.id}
-                    id={f.id}
-                    label={f.label}
-                    description={f.description}
-                    href={getSourceFileUrl(f.storageKey)}
-                  />
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Retell AI Files */}
-          <Card id="retell-files" className="material-surface scroll-mt-6">
-            <CardHeader>
-              <CardTitle className="text-lg flex items-center gap-2">
-                <Phone className="w-5 h-5" />
-                Retell AI Files
-              </CardTitle>
-              <CardDescription>
-                Reference Retell agent configuration. Import into your Retell dashboard, then plug in your own LLM, voice, and webhook URLs.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {RETELL_FILES.map((f) => (
-                  <DownloadRow
-                    key={f.id}
-                    id={f.id}
-                    label={f.label}
-                    description={f.description}
-                    href={getSourceFileUrl(f.storageKey)}
-                  />
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-
           {/* Supabase Schemas */}
           <Card id="supabase-schemas" className="material-surface scroll-mt-6">
             <CardHeader>
@@ -287,25 +207,6 @@ export default function Templates() {
             </CardContent>
           </Card>
 
-          {/* GitHub Source Code */}
-          <Card id="source-code" className="material-surface scroll-mt-6">
-            <CardHeader>
-              <CardTitle className="text-lg flex items-center gap-2">
-                <Code2 className="w-5 h-5" />
-                GitHub Source Code
-              </CardTitle>
-              <CardDescription>
-                Browse the upstream open-source repository (genokadzin/1prompt-os) that BFD-setter is forked from. Useful as a reference; BFD's own fork lives in a separate repo.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <GithubFileExplorer
-                owner="genokadzin"
-                repo="1prompt-os"
-                defaultPath="README.md"
-              />
-            </CardContent>
-          </Card>
         </div>
       </div>
     </div>

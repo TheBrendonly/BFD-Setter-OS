@@ -2,7 +2,7 @@
 //
 // Phase 5 of the master rebuild. Lets clients drop a JS snippet on their
 // website / Calendly thank-you / Typeform integration / Stripe success URL
-// to push a lead into 1prompt-OS without going through GHL Instant Forms.
+// to push a lead into BFD-setter without going through GHL Instant Forms.
 //
 // Auth: shared per-client secret in clients.intake_lead_secret. Required
 // header `Authorization: Bearer <secret>`. NOT a Supabase JWT — clients

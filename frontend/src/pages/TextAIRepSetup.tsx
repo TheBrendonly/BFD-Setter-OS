@@ -4,19 +4,22 @@ import { useParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
-import { ChevronRight, User, Database, FileUp, Wrench, MessageSquarePlus, Key, Settings, FolderOpen } from '@/components/icons';
+import { ChevronRight, User, Database, MessageSquarePlus, Key, Settings } from '@/components/icons';
 import { cn } from '@/lib/utils';
 import TextAIRepSetupGuide, { TEXT_AI_REP_PHASES, isPhaseComplete } from '@/components/setup-guide/TextAIRepSetupGuide';
 import { usePageHeader } from '@/contexts/PageHeaderContext';
 import { SetterDisplayNamesCard } from '@/components/setters/SetterDisplayNamesCard';
 import { ClientTimezoneCard } from '@/components/setters/ClientTimezoneCard';
 
-// Phase definitions for the cards grid (core setup phases only)
+// Phase definitions for the cards grid (core setup phases only).
+// The n8n-era phases (workflows-import, n8n-setup, knowledgebase-setup)
+// were removed 2026-07-10 in the branding purge; dialogPhase indexes
+// match TEXT_AI_REP_PHASE_IDS order.
 const TEXT_PHASES = [
   {
     id: 'account-creation',
     title: 'Accounts Setup',
-    description: 'Create accounts for Supabase, n8n, and HighLevel',
+    description: 'Create accounts for Supabase and HighLevel',
     icon: User,
     dialogPhase: 0,
     dialogStep: 0
@@ -30,27 +33,11 @@ const TEXT_PHASES = [
     dialogStep: 0
   },
   {
-    id: 'workflows-import',
-    title: 'Workflows Import',
-    description: 'Download and import n8n workflows',
-    icon: FileUp,
-    dialogPhase: 2,
-    dialogStep: 0
-  },
-  {
-    id: 'n8n-setup',
-    title: 'AI Rep Setup',
-    description: 'Configure your Text AI Rep workflow in n8n',
-    icon: Wrench,
-    dialogPhase: 3,
-    dialogStep: 0
-  },
-  {
     id: 'text-prompts-setup',
     title: 'Prompts Setup',
     description: 'Configure your Text AI agent prompts',
     icon: MessageSquarePlus,
-    dialogPhase: 4,
+    dialogPhase: 2,
     dialogStep: 0
   },
   {
@@ -58,7 +45,7 @@ const TEXT_PHASES = [
     title: 'HighLevel Credentials',
     description: 'Set up your GoHighLevel API credentials',
     icon: Key,
-    dialogPhase: 5,
+    dialogPhase: 3,
     dialogStep: 0
   },
   {
@@ -66,15 +53,7 @@ const TEXT_PHASES = [
     title: 'HighLevel Setup',
     description: 'Configure HighLevel workflows and webhooks',
     icon: Settings,
-    dialogPhase: 6,
-    dialogStep: 0
-  },
-  {
-    id: 'knowledgebase-setup',
-    title: 'Knowledgebase Setup',
-    description: 'Set up your knowledge base workflow',
-    icon: FolderOpen,
-    dialogPhase: 7,
+    dialogPhase: 4,
     dialogStep: 0
   }
 ];

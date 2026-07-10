@@ -19,7 +19,10 @@ import RetellCallLogsTab from '@/components/retell/RetellCallLogsTab';
 import { SetterDisplayNamesCard } from '@/components/setters/SetterDisplayNamesCard';
 import { ClientTimezoneCard } from '@/components/setters/ClientTimezoneCard';
 
-// Phase definitions for the cards grid
+// Phase definitions for the cards grid. The n8n-era wiring phases
+// (voice-inbound-setup, voice-outbound-setup) were removed 2026-07-10 in the
+// branding purge - the platform binds agents, webhooks, and numbers itself.
+// dialogPhase indexes match VOICE_AI_REP_PHASE_IDS order.
 const VOICE_PHASES = [
   {
     id: 'twilio-setup',
@@ -38,27 +41,11 @@ const VOICE_PHASES = [
     dialogStep: 0
   },
   {
-    id: 'voice-inbound-setup',
-    title: 'Inbound AI Rep Setup',
-    description: 'Configure your Inbound Voice AI Rep',
-    icon: Phone,
-    dialogPhase: 2,
-    dialogStep: 0
-  },
-  {
-    id: 'voice-outbound-setup',
-    title: 'Outbound AI Rep Setup',
-    description: 'Configure your Outbound Voice AI Rep',
-    icon: Phone,
-    dialogPhase: 3,
-    dialogStep: 0
-  },
-  {
     id: 'voice-prompts-setup',
     title: 'Prompts Setup',
     description: 'Configure your Voice AI agent prompts',
     icon: MessageSquarePlus,
-    dialogPhase: 4,
+    dialogPhase: 2,
     dialogStep: 0
   }
 ];

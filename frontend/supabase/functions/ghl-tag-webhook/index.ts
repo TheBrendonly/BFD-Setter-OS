@@ -133,9 +133,18 @@ function readCustomField(
   return null;
 }
 
-// The Try-Gary tag prefix (`1prompt-try-gary-<style>`) still drives agent_style /
-// source_type derivation on the normal signed GHL tag path (extractComplianceFields).
-const TRY_GARY_TAG_PREFIX = "1prompt-try-gary-";
+// Try-Gary tag prefixes drive agent_style / source_type derivation on the
+// normal signed GHL tag path (extractComplianceFields). New GHL automations
+// should tag `bfd-try-gary-<style>`; the legacy `1prompt-try-gary-<style>`
+// prefix is still accepted because existing GHL contacts/automations carry it
+// (branding purge 2026-07-10 - retire the legacy prefix once GHL is migrated).
+const TRY_GARY_TAG_PREFIXES = ["bfd-try-gary-", "1prompt-try-gary-"] as const;
+const matchTryGaryPrefix = (tag: string): string | null => {
+  for (const prefix of TRY_GARY_TAG_PREFIXES) {
+    if (tag.startsWith(prefix)) return prefix;
+  }
+  return null;
+};
 
 type ComplianceFields = {
   agent_style: string | null;
@@ -168,13 +177,14 @@ function extractComplianceFields(
 
   // Derive agent_style from the matched tag suffix if not explicitly set.
   let agent_style = pick("agent_style");
-  if (!agent_style && matchedTag && matchedTag.startsWith(TRY_GARY_TAG_PREFIX)) {
-    agent_style = matchedTag.slice(TRY_GARY_TAG_PREFIX.length) || null;
+  const tryGaryPrefix = matchedTag ? matchTryGaryPrefix(matchedTag) : null;
+  if (!agent_style && matchedTag && tryGaryPrefix) {
+    agent_style = matchedTag.slice(tryGaryPrefix.length) || null;
   }
 
   // source_type defaults to try_gary_landing only when we recognise the tag.
   let source_type = pick("source_type");
-  if (!source_type && matchedTag && matchedTag.startsWith(TRY_GARY_TAG_PREFIX)) {
+  if (!source_type && matchedTag && tryGaryPrefix) {
     source_type = "try_gary_landing";
   }
 

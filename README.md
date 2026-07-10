@@ -1,8 +1,8 @@
 # BFD-setter — Building Flow's AI Appointment Setter
 
-BFD-setter is Building Flow Digital's internal codebase for the **Building Flow** AI appointment-setter platform — an AI receptionist (Gary) that handles inbound lead conversations on behalf of businesses across SMS, Instagram DMs, and Facebook messages, using GoHighLevel, n8n, Supabase, and Trigger.dev.
+BFD-setter is Building Flow Digital's internal codebase for the **Building Flow** AI appointment-setter platform — an AI receptionist (Gary) that handles inbound lead conversations on behalf of businesses across SMS, Instagram DMs, and Facebook messages, using GoHighLevel, Supabase, and Trigger.dev.
 
-> Forked from upstream OSS [`genokadzin/1prompt-os`](https://github.com/genokadzin/1prompt-os) on 2026-04-14. BFD maintains a divergent fork; upstream attribution preserved.
+> Forked from an upstream OSS project on 2026-04-14 (see git history for lineage). BFD maintains a divergent fork; all upstream branding was removed in the 2026-07-10 branding purge.
 
 ---
 
@@ -10,13 +10,13 @@ BFD-setter is Building Flow Digital's internal codebase for the **Building Flow*
 
 A business connects their GoHighLevel sub-account. A lead messages them. The AI setter replies automatically — handling objections, booking appointments, following up — without the business touching anything.
 
-This is the complete platform source code: the React dashboard, all 70+ Supabase Edge Functions, the Trigger.dev background task engine, the database schemas, and the n8n workflow templates.
+This is the complete platform source code: the React dashboard, all 70+ Supabase Edge Functions, the Trigger.dev background task engine, and the database schemas.
 
 ---
 
 ## Architecture
 
-Five services. All must be connected and configured for the system to work.
+Four services. All must be connected and configured for the system to work.
 
 ```
 Lead sends message (SMS / Instagram / Facebook)
@@ -31,14 +31,9 @@ Supabase Edge Function  (frontend/supabase/functions/)
 Trigger.dev  (trigger/)
   - Waits out the debounce window
   - Groups messages from the same contact
-  - Sends grouped message to n8n
-  - Receives AI reply
-  - Forwards reply to GHL
-        ↓
-n8n  (frontend/public/workflows/)
-  - Runs the AI agent
-  - Reads setter prompt and chat history
-  - Returns structured reply
+  - Runs the native text engine (processSetterReply.ts):
+    reads setter prompt + chat history, generates the AI reply
+  - Sends the reply direct via Twilio (GHL mirrored)
         ↓
 GoHighLevel sends reply to lead
         ↓
@@ -48,12 +43,11 @@ Dashboard  (frontend/src/)
   - Analytics, contacts, campaigns
 ```
 
-> **Current state (2026-06):** the AI reply now runs on the **native text engine** (`trigger/processSetterReply.ts`, behind `use_native_text_engine`), and outbound SMS is sent **direct via Twilio** (GHL is mirrored, not the send path). **n8n is bypassed and slated for decommission** (FEATURE_ROADMAP F5); the n8n boxes above describe the original fork architecture and are kept for historical orientation only. See [Docs/ARCHITECTURE.md](./Docs/ARCHITECTURE.md) for the authoritative wiring.
+> **Current state (2026-07):** the AI reply runs on the **native text engine** (`trigger/processSetterReply.ts`; `use_native_text_engine` is mandatory), and outbound SMS is sent **direct via Twilio** (GHL is mirrored, not the send path). The upstream fork's n8n workflow layer was decommissioned and its last in-repo remnants were removed in the 2026-07-10 branding purge. See [Docs/ARCHITECTURE.md](./Docs/ARCHITECTURE.md) for the authoritative wiring.
 
 **Deployment topology** (hosts that run BFD-setter in production):
 
-- **Frontend dashboard** → Railway service `1prompt-os-production` (auto-deploys on `git push origin main`)
-- **n8n workflows** → Railway (separate service, being retired in Phase 10)
+- **Frontend dashboard** → Railway production service (renamed from the legacy upstream name 2026-07-10; auto-deploys on `git push origin main`)
 - **Edge functions + platform Postgres** → Supabase (`bjgrgbgykvjrsuwwruoh`)
 - **Background tasks** → Trigger.dev cloud (`proj_fdozaybvhgxnzopabtse`)
 
@@ -64,7 +58,7 @@ Lovable hosts nothing for BFD. Operational runbook: [`SOP/RUNBOOK.md`](./SOP/RUN
 ## What's In This Repo
 
 ```
-1prompt-os/                          ← directory name unchanged (forked-repo legacy)
+bfd-setter/
 │
 ├── frontend/                        ← React dashboard + all Edge Functions
 │   ├── src/
@@ -76,17 +70,10 @@ Lovable hosts nothing for BFD. Operational runbook: [`SOP/RUNBOOK.md`](./SOP/RUN
 │   ├── supabase/
 │   │   ├── functions/               ← 70+ Deno Edge Functions
 │   │   └── migrations/              ← 300+ SQL migrations (full schema history)
-│   └── public/
-│       ├── workflows/               ← n8n workflow JSON exports
-│       │   ├── text-engine/
-│       │   ├── voice-sales-rep/
-│       │   ├── ghl-booking/
-│       │   ├── knowledgebase-automation/
-│       │   └── database-reactivation/
-│       └── retell-agents/           ← Retell voice agent JSON templates
+│   └── public/                      ← static assets
 │
 ├── trigger/                         ← Trigger.dev background tasks (TypeScript)
-│   ├── processMessages.ts           ← core DM flow: debounce → n8n → GHL reply
+│   ├── processMessages.ts           ← core DM flow: debounce → native engine → GHL reply
 │   ├── runAiJob.ts                  ← AI generation: setter config, prompt editing
 │   ├── sendFollowup.ts              ← scheduled follow-up sequence
 │   ├── runEngagement.ts             ← engagement automation
@@ -106,15 +93,14 @@ Lovable hosts nothing for BFD. Operational runbook: [`SOP/RUNBOOK.md`](./SOP/RUN
 
 ## What You Need
 
-Before you start, you need accounts on all five services:
+Before you start, you need accounts on these services:
 
 | Service | Purpose |
 |---|---|
 | **GoHighLevel** | CRM — sends webhooks when leads message, receives AI replies |
 | **Supabase** | Platform database + Edge Functions (the webhook API layer) |
-| **Trigger.dev** | Runs the background tasks in `/trigger` |
-| **n8n** | Runs the AI agent (workflow JSONs in `frontend/public/workflows/`) |
-| **OpenRouter** | LLM API used by n8n and Trigger.dev for AI generation |
+| **Trigger.dev** | Runs the background tasks in `/trigger`, including the native text engine |
+| **OpenRouter** | LLM API used for AI generation |
 
 You also need a second Supabase project per client (for their leads, chat history, and prompts).
 
@@ -146,7 +132,7 @@ See [Docs/ARCHITECTURE.md](./Docs/ARCHITECTURE.md) for the system source of trut
 
 ## This Is Not a Tutorial
 
-This repo is BFD's internal codebase. It is not a step-by-step setup guide. It contains the complete source code, all Edge Functions, database schemas, workflow templates, and background tasks, but it does not walk you through how to configure each service, wire the webhooks, structure your GHL sub-account, or connect all five layers together.
+This repo is BFD's internal codebase. It is not a step-by-step setup guide. It contains the complete source code, all Edge Functions, database schemas, and background tasks, but it does not walk you through how to configure each service, wire the webhooks, structure your GHL sub-account, or connect all the layers together.
 
 BFD offers Building Flow as a done-for-you service: we deploy, debug, monitor, and tune Gary (the AI receptionist) on your real inbound. Contact Brendan at brendan@buildingflowdigital.com to scope a 7-day Building Flow Pilot.
 
@@ -154,4 +140,4 @@ BFD offers Building Flow as a done-for-you service: we deploy, debug, monitor, a
 
 ## License
 
-MIT — inherited from the upstream `genokadzin/1prompt-os` project. Free to use, modify, and deploy.
+MIT — inherited from the upstream open-source project this repo was forked from. Free to use, modify, and deploy.

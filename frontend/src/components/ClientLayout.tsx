@@ -111,9 +111,6 @@ const webinarSubItems = [{
 const textAIRepSubItems = [{
   title: "Configuration",
   url: "/text-ai-rep/configuration"
-}, {
-  title: "Templates",
-  url: "/text-ai-rep/templates"
 }];
 // Voice AI Rep hidden for now
 const voiceAIRepSubItems: typeof textAIRepSubItems = [];

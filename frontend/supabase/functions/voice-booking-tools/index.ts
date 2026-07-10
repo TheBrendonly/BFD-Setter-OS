@@ -526,7 +526,7 @@ async function toolBookAppointments(args: {
   }
   const bookEnd = addMinutesPreserveOffset(bookStart, 30);
 
-  // Body shape mirrors the canonical 1prompt-os n8n workflow's bookAppointment
+  // Body shape mirrors the original upstream n8n workflow's bookAppointment
   // node: meetingLocationType + ignoreDateRange + toNotify + ignoreFreeSlotValidation
   // are all required by GHL for predictable behaviour even though they have
   // documented defaults.
@@ -1153,7 +1153,7 @@ Deno.serve(async (req) => {
     let body: Record<string, unknown>;
     // Retell wraps custom-tool calls as { call: {...}, name: "<tool>", args: {...} }
     // when the tool's `args_at_root` setting is false (BFD's default and the
-    // canonical 1prompt-os pattern per the original n8n workflow). Unwrap so
+    // canonical upstream pattern per the original n8n workflow). Unwrap so
     // every handler can read params at the top level. ALSO inject the caller's
     // phone from the Retell call object so tools that need a contact lookup
     // can search GHL by phone (more reliable than spelled-out email for

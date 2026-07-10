@@ -2,28 +2,24 @@ import React from 'react';
 import SetupGuideDialog from '@/components/SetupGuideDialog';
 import { SETUP_PHASES } from '@/components/SetupGuideDialog';
 
-// Phase IDs for Text AI Rep (core setup phases only)
+// Phase IDs for Text AI Rep (core setup phases only). The n8n-era phases
+// (workflows-import, n8n-setup, knowledgebase-setup) were removed 2026-07-10
+// in the branding purge - the native text engine made them obsolete.
 export const TEXT_AI_REP_PHASE_IDS: (keyof typeof SETUP_PHASES)[] = [
   'account-creation',
   'supabase-setup',
-  'workflows-import',
-  'n8n-setup',
   'text-prompts-setup',
   'highlevel-credentials',
-  'highlevel-setup',
-  'knowledgebase-setup'
+  'highlevel-setup'
 ];
 
 // Step counts for each Text AI Rep phase
 export const TEXT_AI_REP_PHASES: Record<string, number> = {
   'account-creation': SETUP_PHASES['account-creation'],
   'supabase-setup': SETUP_PHASES['supabase-setup'],
-  'workflows-import': SETUP_PHASES['workflows-import'],
-  'n8n-setup': SETUP_PHASES['n8n-setup'],
   'text-prompts-setup': SETUP_PHASES['text-prompts-setup'],
   'highlevel-credentials': SETUP_PHASES['highlevel-credentials'],
-  'highlevel-setup': SETUP_PHASES['highlevel-setup'],
-  'knowledgebase-setup': SETUP_PHASES['knowledgebase-setup']
+  'highlevel-setup': SETUP_PHASES['highlevel-setup']
 };
 
 // Helper function to check if a phase is complete

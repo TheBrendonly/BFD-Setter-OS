@@ -11,15 +11,12 @@ import { useNavigate } from 'react-router-dom';
 const PHASE_NAMES: Record<string, string> = {
   'account-creation': 'Accounts Setup',
   'supabase-setup': 'Supabase Setup',
-  'workflows-import': 'Workflows Import',
-  'n8n-setup': 'Text AI Rep Setup',
   'text-prompts-setup': 'Text Prompts Setup',
   'highlevel-credentials': 'HighLevel Credentials',
   'highlevel-setup': 'HighLevel Setup',
   'twilio-setup': 'Twilio Setup',
-  'retell-setup': 'Voice AI Rep Setup',
-  'voice-prompts-setup': 'Voice Prompts Setup',
-  'knowledgebase-setup': 'Knowledgebase Setup'
+  'voice-accounts-setup': 'Voice AI Rep Setup',
+  'voice-prompts-setup': 'Voice Prompts Setup'
 };
 
 interface NurturingWizardState {

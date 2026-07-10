@@ -660,14 +660,13 @@ present? Sig 403 -> correct secret column for the provider?
 
 ## 12. In-app SetupGuide copy needing canonical BFD values (report-only)
 
-The in-app setup guide (`SetupGuideDialog.tsx`) still carries placeholder / legacy strings. These are
-**for Brendan to supply or confirm** (do not invent values, and do not edit prompt content):
+Mostly RESOLVED by the 2026-07-10 branding purge: the legacy domain/email/Skool strings were removed,
+the GHL step was rewritten to the BFD provisioning model, the Retell folder is "BFD Setter" (screenshot
+re-shoot still pending, BRENDAN_TODO 5.1), the agent-JSON template files were deleted (agents are
+app-created), and the echo-guard fallback slug is now `bfd-setter` for new clients. Still open for
+Brendan to confirm:
 
-- The `app.1prompt.com` domain reference -> the canonical BFD app domain.
-- The hardcoded Retell folder name "Building Flow" and the agent template filenames
-  (`Inbound_Voice_AI_Rep.json` / `Outbound_Voice_AI_Rep.json`) -> confirm canonical.
 - The GHL booking title placeholder ("e.g. Strategy call with Brendan") -> confirm canonical default.
-- The fallback client slug (legacy default `1prompt-os`) -> the BFD value.
 - The default `llm_model` shown -> the canonical value from section 11.
 - The Twilio phase copy is A2P / "GHL sends SMS" flavoured and vestigial -> reframe to BYO-Twilio,
   client carrier-of-record, Twilio-direct send (wording is Brendan's to finalise).

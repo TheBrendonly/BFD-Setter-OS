@@ -1,13 +1,13 @@
-// push-contact-to-ghl — push a 1prompt-OS contact edit back to GoHighLevel.
+// push-contact-to-ghl — push a BFD-setter contact edit back to GoHighLevel.
 //
-// 1prompt-OS keeps `bfd-platform.leads` as a working store, but GHL is
+// BFD-setter keeps `bfd-platform.leads` as a working store, but GHL is
 // canonical for contact identity. When a user edits a contact in the
-// 1prompt-OS UI we mirror the change back to GHL via Contacts API
+// BFD-setter UI we mirror the change back to GHL via Contacts API
 // (PUT /contacts/{id}). sync-ghl-contact handles the reverse direction.
 //
 // Echo-loop prevention: every push tags the GHL contact with
 // `customField.last_synced_from = <client-specific value>` (default
-// "1prompt-os" for BFD; per-client via clients.ghl_last_synced_from_field_value)
+// "bfd-setter" for new clients; per-client via clients.ghl_last_synced_from_field_value)
 // and bumps `leads.updated_at`. sync-ghl-contact reads the same column and
 // uses the timestamp to debounce incoming GHL updates that originated from
 // us. (Tag-based skip is also possible if BFD wires the custom field — the
@@ -118,7 +118,7 @@ Deno.serve(async (req) => {
       (clientRow.ghl_last_synced_from_field_id as string | null)
       ?? BFD_LEGACY_FALLBACK_FIELD_ID;
     const lastSyncedFromValue =
-      (clientRow.ghl_last_synced_from_field_value as string | null) ?? "1prompt-os";
+      (clientRow.ghl_last_synced_from_field_value as string | null) ?? "bfd-setter";
 
     // Build GHL Contacts API PUT body
     const body: Record<string, unknown> = {};

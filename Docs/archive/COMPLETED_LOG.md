@@ -3,6 +3,36 @@
 Items closed out of the active lists. Newest first. The active lists are in the repo root + `Docs/`
 (`BUG_LIST.md`, `FEATURE_ROADMAP.md`, `BRENDAN_TODO.md`, `TEST_LIST.md`, `DEFERRED.md`).
 
+## 2026-07-10 — BRANDING PURGE (dedicated session): all 1Prompt/n8n refs out of the product
+
+Brendan's directive ("anything to do with N8N or 1prompt... is deleted or removed") executed as the scoped
+per-category pass. Six decisions taken up front (GHL step → BFD provisioning model; remove all Skool/upstream-repo
+links; delete the 15 public JSON exports; Railway rename this session; excise the n8n phases from the setup guide;
+strip 1prompt refs from the PromptManagement demo defaults). Highlights:
+
+- **SetupGuideDialog**: deleted the 5 n8n-era phases (workflows-import, n8n-setup, knowledgebase-setup,
+  voice-inbound-setup, voice-outbound-setup) + the agent-JSON import steps (~2,000 lines), rewrote the GHL
+  account step to the BFD provisioning model (support@buildingflowdigital.com), removed 108 orphaned image
+  imports + 112 screenshot files, updated SETUP_PHASES/wrappers/wizards (stale completion ids are ignored).
+- **Deleted surfaces**: frontend/public/{workflows,retell-agents} (15 JSONs), WorkflowImports/TextAIRepTemplates/
+  VoiceAIRepTemplates pages (+routes → redirects, menu keys), 5 archived webinar pages + WebinarSetupGuideDialog,
+  dead WebhookConfig component, GithubFileExplorer + the upstream-repo card, scripts/native-vs-n8n-diff.mjs,
+  elevenlabs-manage-agent (repo; live undeploy pending Brendan's go).
+- **PromptManagement defaults** (approved one-time exception): deleted the 77-line fake-bio
+  "ABOUT EUGENE & 1PROMPT" section, 8× access.1prompt.com → `[your-checkout-link]`, 1× 1prompt Skool →
+  `[your-community-link]`, "n8n" dropped from 2 platform lists. Stored DB prompts untouched.
+- **Edge fns deployed** (7, all ACTIVE + boot-smoked): run-simulation v21, generate-simulation-personas v21,
+  generate-conversation-examples v19, format-metric-chart v19 (OpenRouter headers → buildingflowdigital.com,
+  `bfd-simulation-` emails), sync-ghl-contact v29 + push-contact-to-ghl v10 ("Find Lead in BFD" labels;
+  echo-guard fallback `bfd-setter` — safe: both live clients carry explicit `1prompt-os` values),
+  ghl-tag-webhook v14 (dual try-gary prefix, legacy still accepted). retell-proxy untouched (staged v50→v51
+  bundle stays gated on its own session).
+- **Docs**: README architecture rewritten to the native-engine reality; RUNBOOK/CLIENT_ONBOARDING_SOP/DEFERRED/
+  TEST_SESSION/SELF_HOSTING updated. Migrations, archives, handoffs, and the GHL_SETUP factual automation names
+  left as history.
+- **Verified**: tsc + production build green, all 253 tests pass, 7 fns boot-smoke 400 (no 500s).
+  Live checks → TEST_LIST PURGE-UI-1/2, PURGE-SIM-1, PURGE-SYNC-1, PURGE-TAG-1.
+
 ## 2026-07-07 — Session P2: deferred pull-forward build (F9 v2 + BOOK-TZ-1 + execution_cost_events)
 
 Brendan-driven triage over `DEFERRED.md`. The bulk stays gated (no paying client / no real usage data yet);

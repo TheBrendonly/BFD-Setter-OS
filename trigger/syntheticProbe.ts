@@ -36,7 +36,7 @@ async function postAlert(message: string, raw: Record<string, unknown>): Promise
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        text: `🚨 1prompt-OS synthetic probe FAIL: ${message}`,
+        text: `🚨 BFD-setter synthetic probe FAIL: ${message}`,
         attachments: [{ text: JSON.stringify(raw, null, 2).slice(0, 2000) }],
       }),
     });
@@ -99,6 +99,9 @@ export const syntheticProbe = schedules.task({
       first_name: "Probe",
       last_name: isoStamp,
       phone: testPhone,
+      // Legacy address kept on purpose (branding purge 2026-07-10): this email
+      // IS the live probe lead's identity in the DB - changing it would mint a
+      // second probe lead and orphan the history.
       email: "probe@1prompt.local",
       source: "synthetic-probe",
     };

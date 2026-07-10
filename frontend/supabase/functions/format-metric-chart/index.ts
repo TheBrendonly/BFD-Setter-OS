@@ -564,7 +564,7 @@ CRITICAL ACCURACY RULES:
         headers: {
           Authorization: `Bearer ${openrouterApiKey}`,
           "Content-Type": "application/json",
-          "HTTP-Referer": "https://1prompt.ai",
+          "HTTP-Referer": "https://buildingflowdigital.com",
         },
         body: JSON.stringify(aiRequestBody),
       },

@@ -332,7 +332,7 @@ Deno.serve(async (req) => {
       .single();
 
     if (clientErr || !clientRow) {
-      steps.push(makeStep("sync-find", "Find Lead in 1Prompt", "find", "failed",
+      steps.push(makeStep("sync-find", "Find Lead in BFD", "find", "failed",
         `No client found for GHL_Account_ID: ${ghlAccountId}`));
       return new Response(
         JSON.stringify({ error: "No client found for the provided GHL_Account_ID" }),
@@ -365,7 +365,7 @@ Deno.serve(async (req) => {
     const clientId = clientRow.id;
 
     if (!clientRow.sync_ghl_enabled) {
-      steps.push(makeStep("sync-find", "Find Lead in 1Prompt", "find", "completed", `Client: ${clientId}`));
+      steps.push(makeStep("sync-find", "Find Lead in BFD", "find", "completed", `Client: ${clientId}`));
       steps.push(makeStep("sync-disabled", "Sync Disabled", "condition", "failed", "Workflow is disabled for this client"));
       await logExecution(clientId, contactId, name || null, "disabled", "Sync is disabled for this client", steps);
       return new Response(
@@ -384,7 +384,9 @@ Deno.serve(async (req) => {
 
     // Echo-loop guard: when push-contact-to-ghl writes a contact upstream it
     // tags customField `last_synced_from = <clients.ghl_last_synced_from_field_value>`
-    // (default "1prompt-os" for BFD; per-client for others). GHL then fires
+    // (both live clients carry the legacy explicit value "1prompt-os"; new
+    // clients default to "bfd-setter" - keep the GHL workflow filter and this
+    // column in sync per client). GHL then fires
     // contact.update back here; if our leads.updated_at is fresh (< 60s) AND
     // the stamp value matches this client's expected value we KNOW the update
     // originated from us and skip. Without this guard every outbound edit
@@ -396,7 +398,7 @@ Deno.serve(async (req) => {
       if (Array.isArray(contact.custom_field)) candidates.push(...(contact.custom_field as unknown[]));
       const perClientFieldId = clientRow.ghl_last_synced_from_field_id as string | null;
       const expectedStampValue = (
-        (clientRow.ghl_last_synced_from_field_value as string | null) ?? "1prompt-os"
+        (clientRow.ghl_last_synced_from_field_value as string | null) ?? "bfd-setter"
       ).trim().toLowerCase();
       const isOurStamp = candidates.some((cf) => {
         if (!isRecord(cf)) return false;
@@ -424,7 +426,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    steps.push(makeStep("sync-find", "Find Lead in 1Prompt", "find", "completed",
+    steps.push(makeStep("sync-find", "Find Lead in BFD", "find", "completed",
       existingContact ? `Found: ${existingContact.id}` : "Not found"));
     steps.push(makeStep("sync-condition", "Does Lead Exist?", "condition", "completed",
       existingContact ? "Yes → Update" : "No → Create"));

@@ -136,8 +136,8 @@ Now generate 3 realistic conversation examples. Remember:
         headers: {
           Authorization: `Bearer ${openrouterApiKey}`,
           "Content-Type": "application/json",
-          "HTTP-Referer": "https://1prompt.ai",
-          "X-Title": "1Prompt AI Conversation Examples Generator",
+          "HTTP-Referer": "https://buildingflowdigital.com",
+          "X-Title": "BFD Setter Conversation Examples Generator",
         },
         body: JSON.stringify(aiRequestBody),
       },

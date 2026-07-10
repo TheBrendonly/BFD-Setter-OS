@@ -2,12 +2,12 @@ import React from 'react';
 import SetupGuideDialog from '@/components/SetupGuideDialog';
 import { SETUP_PHASES } from '@/components/SetupGuideDialog';
 
-// Phase IDs for Voice AI Rep (subset of the full phases)
+// Phase IDs for Voice AI Rep (subset of the full phases). The n8n-era wiring
+// phases (voice-inbound-setup, voice-outbound-setup) were removed 2026-07-10
+// in the branding purge - the platform binds agents, webhooks, and numbers.
 export const VOICE_AI_REP_PHASE_IDS: (keyof typeof SETUP_PHASES)[] = [
   'twilio-setup',
   'voice-accounts-setup',
-  'voice-inbound-setup',
-  'voice-outbound-setup',
   'voice-prompts-setup'
 ];
 
@@ -15,8 +15,6 @@ export const VOICE_AI_REP_PHASE_IDS: (keyof typeof SETUP_PHASES)[] = [
 export const VOICE_AI_REP_PHASES: Record<string, number> = {
   'twilio-setup': SETUP_PHASES['twilio-setup'],
   'voice-accounts-setup': SETUP_PHASES['voice-accounts-setup'],
-  'voice-inbound-setup': SETUP_PHASES['voice-inbound-setup'],
-  'voice-outbound-setup': SETUP_PHASES['voice-outbound-setup'],
   'voice-prompts-setup': SETUP_PHASES['voice-prompts-setup']
 };
 

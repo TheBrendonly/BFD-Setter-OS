@@ -287,7 +287,7 @@ Deno.serve(async (req) => {
         const webhookUrl = new URL(webhookBaseUrl);
 
         // Use dummy contact info from persona
-        const dummyEmail = persona.dummy_email || `1prompt-simulation-${persona.name.toLowerCase().replace(/\s+/g, '')}-${Math.random().toString(36).substring(2, 8)}@gmail.com`;
+        const dummyEmail = persona.dummy_email || `bfd-simulation-${persona.name.toLowerCase().replace(/\s+/g, '')}-${Math.random().toString(36).substring(2, 8)}@gmail.com`;
         const dummyPhone = persona.dummy_phone || `+1555${String(persona.age || 30).padStart(3, "0")}${String(messageOrder).padStart(4, "0")}`;
 
         // Set all data as query parameters to match n8n webhook format
@@ -769,8 +769,8 @@ ${bookingInstructions}`;
     headers: {
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
-      "HTTP-Referer": "https://1prompt.ai",
-      "X-Title": "1Prompt Simulation Run",
+      "HTTP-Referer": "https://buildingflowdigital.com",
+      "X-Title": "BFD Setter Simulation Run",
     },
     body: JSON.stringify({
       model: "google/gemini-2.5-flash",
@@ -848,8 +848,8 @@ RULES:
     headers: {
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
-      "HTTP-Referer": "https://1prompt.ai",
-      "X-Title": "1Prompt Simulation Run",
+      "HTTP-Referer": "https://buildingflowdigital.com",
+      "X-Title": "BFD Setter Simulation Run",
     },
     body: JSON.stringify({
       model: "google/gemini-2.5-flash",
@@ -905,8 +905,8 @@ RULES:
     headers: {
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
-      "HTTP-Referer": "https://1prompt.ai",
-      "X-Title": "1Prompt Simulation Run",
+      "HTTP-Referer": "https://buildingflowdigital.com",
+      "X-Title": "BFD Setter Simulation Run",
     },
     body: JSON.stringify({
       model: "google/gemini-2.5-flash",

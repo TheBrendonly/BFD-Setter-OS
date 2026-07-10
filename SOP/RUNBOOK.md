@@ -143,7 +143,7 @@ WHERE client_id = '<client-uuid>' AND phone = '+61400000000';
    ```sql
    UPDATE clients
    SET ghl_last_synced_from_field_id    = '<the-field-id>',
-       ghl_last_synced_from_field_value = '<distinctive-slug>'   -- e.g. 'acme-co'; defaults to '1prompt-os'
+       ghl_last_synced_from_field_value = '<distinctive-slug>'   -- e.g. 'acme-co'; new clients default to 'bfd-setter' (legacy rows carry '1prompt-os')
    WHERE id = '<client-uuid>';
    ```
 3. No redeploy needed since N1 (2026-05-19) — `push-contact-to-ghl` and `sync-ghl-contact` both read these columns at request time.

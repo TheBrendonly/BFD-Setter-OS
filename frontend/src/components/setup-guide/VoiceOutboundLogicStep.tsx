@@ -7,10 +7,6 @@ import { cn } from '@/lib/utils';
 import { Progress } from '@/components/ui/progress';
 // Images
 import ghlOutboundCallTrigger from '@/assets/setup-guide/ghl-outbound-call-trigger.png';
-import n8nOutboundRouting from '@/assets/setup-guide/n8n-outbound-routing.png';
-import n8nOutboundPromptRouting from '@/assets/setup-guide/n8n-outbound-prompt-routing.png';
-import n8nOutboundAgentNumber from '@/assets/setup-guide/n8n-outbound-agent-number.png';
-import n8nOutboundWorkflowOverview from '@/assets/setup-guide/n8n-outbound-workflow-overview.png';
 
 import { QuizNavigationState } from './quizNavigationState';
 
@@ -223,7 +219,7 @@ export default function VoiceOutboundLogicStep({ clientId, onNavigationChange }:
         <div className="flex gap-2">
           <AlertTriangle className="h-5 w-5 text-yellow-600 dark:text-yellow-400 flex-shrink-0" />
           <p className="text-yellow-700 dark:text-yellow-300">
-            <strong>Note:</strong> If you don't understand this after reading, please send us a message on Skool or WhatsApp saying: "I still do not understand outbound voice logic. Can you please explain?" - and we will help you!
+            <strong>Note:</strong> If you don't understand this after reading, email us at support@buildingflowdigital.com saying: "I still do not understand outbound voice logic. Can you please explain?" - and we will help you!
           </p>
         </div>
       </div>
@@ -300,7 +296,7 @@ export default function VoiceOutboundLogicStep({ clientId, onNavigationChange }:
 
       <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-4">
         <p className="text-sm text-green-900 dark:text-green-200">
-          <strong>This is why we use n8n:</strong> The n8n workflow gathers all this information and makes the API call to Retell. The workflow runs BEFORE the call is made, not during.
+          <strong>This is what the platform does for you:</strong> it gathers all this information and makes the API call to Retell. That happens BEFORE the call is made, not during.
         </p>
       </div>
 
@@ -311,7 +307,7 @@ export default function VoiceOutboundLogicStep({ clientId, onNavigationChange }:
       <CardHeader className="p-0 pb-2">
         <CardTitle className="text-lg">Triggering the Outbound Call</CardTitle>
         <CardDescription>
-          How HighLevel tells n8n to make a call
+          How HighLevel tells the platform to make a call
         </CardDescription>
       </CardHeader>
 
@@ -323,15 +319,15 @@ export default function VoiceOutboundLogicStep({ clientId, onNavigationChange }:
         <p className="text-sm text-blue-900 dark:text-blue-200 font-medium">The Flow:</p>
         <ol className="text-sm text-blue-900 dark:text-blue-200 space-y-2 list-decimal list-inside">
           <li>User signs up for webinar (HighLevel workflow triggers)</li>
-          <li>HighLevel calls your n8n workflow with this data:
+          <li>HighLevel calls the platform's outbound webhook with this data:
             <ul className="ml-6 mt-1 space-y-1">
               <li>• <strong>Phone number:</strong> User's phone</li>
               <li>• <strong>Name:</strong> User's first name</li>
               <li>• <strong>Agent number:</strong> Which prompt to use (e.g., "2")</li>
             </ul>
           </li>
-          <li>n8n gets the prompts from Supabase</li>
-          <li>n8n makes the API call to Retell</li>
+          <li>The platform gets the prompts from Supabase</li>
+          <li>The platform makes the API call to Retell</li>
           <li>Retell calls the user with everything ready!</li>
         </ol>
       </div>
@@ -403,8 +399,6 @@ export default function VoiceOutboundLogicStep({ clientId, onNavigationChange }:
         </p>
       </div>
 
-      <GuideImage src={n8nOutboundAgentNumber} alt="n8n workflow showing the agent number parameter being used" />
-
     </div>,
 
     // Step 5: The Routing System
@@ -417,20 +411,20 @@ export default function VoiceOutboundLogicStep({ clientId, onNavigationChange }:
       </CardHeader>
 
       <p className="text-sm text-muted-foreground">
-        Here's the powerful part: You use the <strong>same n8n workflow</strong> for all outbound calls. The <strong>agent_number</strong> tells it which prompt to use!
+        Here's the powerful part: You use the <strong>same outbound webhook</strong> for all outbound calls. The <strong>agent_number</strong> tells it which prompt to use!
       </p>
 
       <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4 space-y-3">
         <p className="text-sm text-blue-900 dark:text-blue-200 font-medium">Example Scenario:</p>
         <div className="space-y-2 text-sm text-blue-900 dark:text-blue-200">
-          <p>• <strong>Webinar signup workflow:</strong> Triggers n8n with agent_number = 2</p>
-          <p>• <strong>After webinar workflow:</strong> Triggers n8n with agent_number = 3</p>
-          <p>• <strong>Database reactivation workflow:</strong> Triggers n8n with agent_number = 4</p>
+          <p>• <strong>Webinar signup workflow:</strong> Triggers the platform with agent_number = 2</p>
+          <p>• <strong>After webinar workflow:</strong> Triggers the platform with agent_number = 3</p>
+          <p>• <strong>Database reactivation workflow:</strong> Triggers the platform with agent_number = 4</p>
         </div>
       </div>
 
       <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-4 space-y-3">
-        <p className="text-sm text-green-900 dark:text-green-200 font-medium">What n8n does:</p>
+        <p className="text-sm text-green-900 dark:text-green-200 font-medium">What the platform does:</p>
         <ol className="text-sm text-green-900 dark:text-green-200 space-y-1 list-decimal list-inside">
           <li>Receives the agent_number from HighLevel</li>
           <li>Gets ALL prompts from Supabase</li>
@@ -444,10 +438,6 @@ export default function VoiceOutboundLogicStep({ clientId, onNavigationChange }:
           <strong>The Beauty:</strong> You only have ONE Retell outbound agent template, but it can behave like many different agents! Just change the prompt in Prompt Management and pass the right agent_number.
         </p>
       </div>
-
-      <GuideImage src={n8nOutboundRouting} alt="n8n workflow showing the routing logic for different agent numbers" />
-      
-      <GuideImage src={n8nOutboundPromptRouting} alt="n8n workflow showing how different prompts are routed based on agent number" />
 
     </div>,
 
@@ -467,9 +457,9 @@ export default function VoiceOutboundLogicStep({ clientId, onNavigationChange }:
       <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4 space-y-3">
         <p className="text-sm text-blue-900 dark:text-blue-200 font-medium">Scenario: User signs up for webinar</p>
         <ol className="text-sm text-blue-900 dark:text-blue-200 space-y-1 list-decimal list-inside">
-          <li>HighLevel triggers the "Make Outbound Call" n8n workflow</li>
+          <li>HighLevel triggers the "Make Outbound Call" webhook</li>
           <li>Passes: phone="+1234567890", name="John", agent_number=2</li>
-          <li>n8n fetches Prompt-2 (Webinar Nurturing Agent) from Supabase</li>
+          <li>The platform fetches Prompt-2 (Webinar Nurturing Agent) from Supabase</li>
           <li>Retell calls John with the nurturing script</li>
         </ol>
       </div>
@@ -477,9 +467,9 @@ export default function VoiceOutboundLogicStep({ clientId, onNavigationChange }:
       <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-4 space-y-3">
         <p className="text-sm text-green-900 dark:text-green-200 font-medium">Later: Webinar ends, we want to follow up</p>
         <ol className="text-sm text-green-900 dark:text-green-200 space-y-1 list-decimal list-inside">
-          <li>HighLevel triggers the SAME n8n workflow</li>
+          <li>HighLevel triggers the SAME webhook</li>
           <li>This time passes: phone="+1234567890", name="John", agent_number=3</li>
-          <li>n8n fetches Prompt-3 (After Webinar Agent) from Supabase</li>
+          <li>The platform fetches Prompt-3 (After Webinar Agent) from Supabase</li>
           <li>Retell calls John with the after-webinar script</li>
         </ol>
       </div>
@@ -489,8 +479,6 @@ export default function VoiceOutboundLogicStep({ clientId, onNavigationChange }:
           <strong>Same workflow, same Retell template, different prompts!</strong> This is the power of the agent number routing system.
         </p>
       </div>
-
-      <GuideImage src={n8nOutboundWorkflowOverview} alt="Complete n8n outbound workflow overview showing the full routing flow" />
 
     </div>,
 

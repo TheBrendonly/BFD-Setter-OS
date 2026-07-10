@@ -24,11 +24,7 @@ import executionHistoryDetails from '@/assets/debug-text-ai/execution-history-de
 import addToWaitReply from '@/assets/debug-guide/add-to-wait-reply.png';
 import executionHistoryStatuses from '@/assets/debug-guide/execution-history-statuses.png';
 import generateReplyEnrollment from '@/assets/debug-guide/generate-reply-enrollment.png';
-import generateReplyN8nNode from '@/assets/debug-guide/generate-reply-n8n-node.png';
-import n8nNewExecution from '@/assets/debug-guide/n8n-new-execution.png';
-import n8nExecutionSuccess from '@/assets/debug-guide/n8n-execution-success.png';
-import n8nWebhookPayload from '@/assets/debug-guide/n8n-webhook-payload.png';
-import n8nRespondWebhook from '@/assets/debug-guide/n8n-respond-webhook.png';
+import generateReplyNode from '@/assets/debug-guide/generate-reply-node.png';
 import saveReplyEnrollment from '@/assets/debug-guide/save-reply-enrollment.png';
 import saveReplyExecution from '@/assets/debug-guide/save-reply-execution.png';
 import sendReplyEnrollment from '@/assets/debug-guide/send-reply-enrollment.png';
@@ -42,7 +38,6 @@ import setCredentialsPublished from '@/assets/debug-guide/set-credentials-publis
 import setCredentialsEnrollment from '@/assets/debug-guide/set-credentials-enrollment.png';
 import setCredentialsBuilder from '@/assets/debug-guide/set-credentials-builder.png';
 import setCredentialsApiSuccess from '@/assets/debug-guide/set-credentials-api-success.png';
-import skoolPost from '@/assets/debug-text-ai/skool-post.png';
 
 // Lazy loading image component with click-to-zoom
 import { ZoomableImage } from '@/components/ui/zoomable-image';
@@ -148,11 +143,9 @@ const DebugTextAIRep = () => {
           
           <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-4">
             <p className="text-sm">
-              <strong>Why this guide matters:</strong> This guide helps you identify <strong>exactly where the problem is</strong>. Instead of messaging us on Skool saying "my AI rep is not replying," you'll be able to pinpoint the exact step that's failing. This makes it much faster for us to help you fix it!
+              <strong>Why this guide matters:</strong> This guide helps you identify <strong>exactly where the problem is</strong>. Instead of emailing us saying "my AI rep is not replying," you'll be able to pinpoint the exact step that's failing. This makes it much faster for us to help you fix it!
             </p>
           </div>
-
-          <GuideImage src={skoolPost} alt="Post on Skool for help" />
 
           <p className="text-sm">
             When a lead sends a DM to any of your connected channels, the Text AI Rep workflow processes that message through several steps. If any step fails, the AI won't reply. Let's go through each step to find where the issue is.
@@ -337,14 +330,14 @@ const DebugTextAIRep = () => {
     {
       id: 'generate-reply',
       title: 'Step 4: Check Generate Reply Workflow',
-      description: 'Verify the message was sent to n8n for processing',
+      description: 'Verify the message was handed to the text engine',
       icon: Send,
       content: (
         <div className="space-y-4">
           <CardHeader className="p-0 pb-4">
             <CardTitle className="text-lg">Check Generate Reply Workflow</CardTitle>
             <CardDescription>
-              This workflow sends your message to n8n for AI processing
+              This workflow hands your message to the platform's text engine
             </CardDescription>
           </CardHeader>
 
@@ -355,72 +348,62 @@ const DebugTextAIRep = () => {
           <GuideImage src={generateReplyEnrollment} alt="Generate Reply enrollment history" />
 
           <p className="text-sm">
-            The most important step here is the <strong>"#1 Generate Reply in n8n"</strong> node. Check the execution history and look for this step. It should show <strong>status 200</strong> for success.
+            The most important step here is the <strong>"#1 Generate Reply"</strong> webhook node (older snapshots may still label it "in n8n"). Check the execution history and look for this step. It should show <strong>status 200</strong> for success.
           </p>
 
-          <GuideImage src={generateReplyN8nNode} alt="Generate Reply n8n node execution" />
+          <GuideImage src={generateReplyNode} alt="Generate Reply webhook node execution" />
 
           <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4">
             <p className="text-sm">
-              <strong>If you see status 200:</strong> The message was successfully sent to n8n. Move to the next step.
+              <strong>If you see status 200:</strong> The message was successfully handed to the text engine. Move to the next step.
             </p>
           </div>
 
           <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4">
             <p className="text-sm">
-              <strong>If you see an error:</strong> Take a screenshot of the error message and post it on Skool so we can help you fix it.
+              <strong>If you see an error:</strong> Take a screenshot of the error message and email it to support@buildingflowdigital.com so we can help you fix it.
             </p>
           </div>
         </div>
       )
     },
     {
-      id: 'n8n-engine',
-      title: 'Step 5: Check n8n Text Engine',
-      description: 'Verify the reply was generated in n8n',
+      id: 'text-engine',
+      title: 'Step 5: Check the Text Engine',
+      description: 'Verify the reply was generated by the platform',
       icon: Cpu,
       content: (
         <div className="space-y-4">
           <CardHeader className="p-0 pb-4">
-            <CardTitle className="text-lg">Check n8n Text Engine</CardTitle>
+            <CardTitle className="text-lg">Check the Text Engine</CardTitle>
             <CardDescription>
               This is where your AI reply is actually generated
             </CardDescription>
           </CardHeader>
 
           <p className="text-sm">
-            Open your <strong>n8n Text Engine</strong>. If you just sent a test DM, you should see a new execution being processed or recently completed.
+            The platform's native text engine generates the reply - there is nothing external to open. If you just sent a test DM, wait 20-60 seconds (the engine batches rapid messages before replying).
           </p>
-
-          <GuideImage src={n8nNewExecution} alt="n8n new execution in progress" />
 
           <p className="text-sm">
-            Wait 20-50 seconds for the execution to complete. You should see a <strong>successful execution</strong> (green checkmark).
+            Then open this client's <strong>Chats</strong> page in the dashboard. You should see your inbound message and, shortly after, the AI reply in the same conversation.
           </p>
-
-          <GuideImage src={n8nExecutionSuccess} alt="n8n successful execution" />
-
-          <p className="text-sm">
-            Click on the execution and then click on the <strong>opt-in webhook</strong> node. You'll see the payload that was received. The <code className="bg-muted px-1 py-0.5 rounded">payload</code> field should match the message you sent.
-          </p>
-
-          <GuideImage src={n8nWebhookPayload} alt="n8n webhook payload" />
 
           <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-4">
             <p className="text-sm">
-              <strong>If the payload doesn't match your sent message:</strong> There's an issue with the Receive & Process DMs workflow not correctly grouping and processing the messages.
+              <strong>If the inbound message never appears:</strong> The message did not reach the platform - re-check the Generate Reply workflow in the previous step.
             </p>
           </div>
 
-          <p className="text-sm">
-            Finally, scroll to the end of the workflow and verify that the <strong>"Respond to Webhook"</strong> node is green and active.
-          </p>
-
-          <GuideImage src={n8nRespondWebhook} alt="n8n respond to webhook node" />
+          <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-4">
+            <p className="text-sm">
+              <strong>If the message appears but no reply is generated:</strong> Check the <strong>Logs</strong> page for a failed run, and verify the client's text model and credentials are configured.
+            </p>
+          </div>
 
           <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4">
             <p className="text-sm">
-              <strong>If everything is green:</strong> The reply was successfully generated and sent back to HighLevel. Move to the next step.
+              <strong>If the reply appears:</strong> The engine is working and the reply was sent back to HighLevel. Move to the next step.
             </p>
           </div>
         </div>
@@ -592,7 +575,7 @@ const DebugTextAIRep = () => {
       content: (
         <div className="space-y-4">
           <CardHeader className="p-0 pb-4">
-            <CardTitle className="text-lg">Getting Help on Skool</CardTitle>
+            <CardTitle className="text-lg">Getting Help</CardTitle>
             <CardDescription>
               How to effectively report your issue for fast support
             </CardDescription>
@@ -607,7 +590,7 @@ const DebugTextAIRep = () => {
           </p>
 
           <div className="bg-muted/50 rounded-lg p-4 text-sm space-y-2">
-            <p><strong>When posting on Skool for help:</strong></p>
+            <p><strong>When emailing support@buildingflowdigital.com for help:</strong></p>
             <ol className="list-decimal list-inside space-y-1 ml-2">
               <li>Take a <strong>screenshot</strong> of the specific error or problem</li>
               <li>Mention which <strong>workflow</strong> and which <strong>step</strong> has the issue</li>
@@ -616,12 +599,10 @@ const DebugTextAIRep = () => {
             </ol>
           </div>
 
-          <GuideImage src={skoolPost} alt="Post on Skool for help" />
-
           <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4">
             <p className="text-sm">
               <strong>Example of a good support message:</strong><br/><br/>
-              "I'm having an issue in the Generate Reply workflow. The '#1 Generate Reply in n8n' step shows an error with status 500. Here's the screenshot. I sent a test message 'hello' to my WhatsApp number."
+              "I'm having an issue in the Generate Reply workflow. The '#1 Generate Reply' step shows an error with status 500. Here's the screenshot. I sent a test message 'hello' to my WhatsApp number."
             </p>
           </div>
 

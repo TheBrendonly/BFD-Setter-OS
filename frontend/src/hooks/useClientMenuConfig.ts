@@ -41,14 +41,9 @@ export const DEFAULT_MENU_ITEMS: MenuItemConfig[] = [
   { key: 'engagement', label: 'Engagement', visible: false, position: 14, type: 'item', icon: '◈' },
   { key: 'leads-files', label: 'Lead Files', visible: true, position: 15, type: 'item', icon: '▣' },
   { key: 'logs', label: 'Logs', visible: true, position: 16, type: 'item', icon: '⚡' },
-  // TEMPLATES section + 2 items hidden — Source Files (P26 "Source Files" in
-  // BACKEND section) already covers Retell + n8n + Supabase template downloads
-  // as a unified reference library. Voice/Text AI Rep Templates pages remain
-  // accessible via direct URL (/voice-ai-rep/templates, /text-ai-rep/templates)
-  // for now; consider merging their content into Source Files later (D-future).
-  { key: 'section-templates', label: 'TEMPLATES', visible: false, position: 17, locked: true, type: 'section-label' },
-  { key: 'voice-rep-templates', label: 'Voice AI Rep Templates', visible: false, position: 18, type: 'item', icon: '♫' },
-  { key: 'text-rep-templates', label: 'Text AI Rep Templates', visible: false, position: 19, type: 'item', icon: '░' },
+  // TEMPLATES section removed 2026-07-10 (branding purge): the template-download
+  // pages served legacy n8n workflow / agent-JSON exports that the native text
+  // engine made obsolete. Stale saved-config keys render nothing (no route).
   { key: 'section-debug', label: 'BACKEND', visible: true, position: 20, locked: true, type: 'section-label' },
   { key: 'openrouter-usage', label: 'OpenRouter Usage', visible: true, position: 21, type: 'item', icon: '□' },
   { key: 'supabase-usage', label: 'Supabase Usage', visible: true, position: 22, type: 'item', icon: '⛁' },
@@ -79,8 +74,6 @@ export const MENU_ROUTE_MAP: Record<string, string> = {
   'email': '/email',
   'engagement': '/workflows/engagement',
   'demo-pages': '/demo-pages',
-  'voice-rep-templates': '/voice-ai-rep/templates',
-  'text-rep-templates': '/text-ai-rep/templates',
 };
 
 export function useClientMenuConfig(clientId: string | undefined) {

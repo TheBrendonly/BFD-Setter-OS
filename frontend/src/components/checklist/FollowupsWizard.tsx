@@ -563,7 +563,7 @@ export default function FollowupsWizard({ clientId, onComplete, onReset }: Follo
               <p className="font-medium">How to set the agent number:</p>
               <ol className="text-sm space-y-2 text-muted-foreground list-decimal list-inside">
                 <li>Open the <strong>2hr Reminder Caller</strong> workflow</li>
-                <li>Find the <strong>"#1 Make Outbound Call (n8n)"</strong> action</li>
+                <li>Find the <strong>"#1 Make Outbound Call"</strong> webhook action (older snapshots may still label it "(n8n)")</li>
                 <li>Look at <strong>Query Parameters</strong></li>
                 <li>Set <strong>agent_number</strong> to the correct prompt number</li>
                 <li>This should match the prompt in your Prompt Management (e.g., 3)</li>

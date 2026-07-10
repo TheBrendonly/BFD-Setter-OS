@@ -253,8 +253,9 @@ month-total) each client may see (default all OFF). Nothing is required for 100%
 - **PU-4** Property Coach real company name (removes the `[placeholder]`), **PU-3** `{{first_name}}` outbound opener
   (guard against empty on inbound), **PU-1** name the business timezone on booking, **PU-5** stand up Main Outbound V2.
 
-**M6 — Setup-guide screenshots (low priority).** `5.1` — lock the canonical BFD Retell folder name, then re-shoot the
-`SetupGuideDialog.tsx` screenshots (it still says folder "1Prompt").
+**M6 — Setup-guide screenshots (low priority).** `5.1` — folder name decided ("BFD Setter", 2026-07-09); the asset
+was renamed to `retell-bfd-setter-folder.png` in the 2026-07-10 branding purge but its CONTENT still shows the old
+folder name - re-shoot against a Retell folder named "BFD Setter" and drop the new screenshot onto that filename.
 
 **M7 — FIRST-CLIENT-GATED (do NOT do until a contract signs; the milestone session covers these).** Stripe live +
 `ENFORCE_SUBSCRIPTION_GATE=true`, provision webhook signing secrets + arm `retell_webhook_secret` (6.6), AU SMS A2P /

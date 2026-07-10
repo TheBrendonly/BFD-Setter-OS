@@ -137,7 +137,7 @@ export default function PropertiesPanel({
                 type="url"
                 value={props.webhookUrl || ''}
                 onChange={(e) => onUpdateProperty(selectedSection.id, 'webhookUrl', e.target.value)}
-                placeholder="https://your-n8n-webhook.com/webhook/..."
+                placeholder="https://your-webhook-host.com/webhook/..."
               />
               <p className="text-xs text-muted-foreground mt-1">
                 When users request a call, their details (name, email, phone) will be sent to this webhook

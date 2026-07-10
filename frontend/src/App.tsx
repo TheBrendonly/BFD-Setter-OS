@@ -45,16 +45,13 @@ const CampaignCreate = lazyRetry(() => import("./pages/CampaignCreate"));
 const CampaignDetail = lazyRetry(() => import("./pages/CampaignDetail"));
 const Settings = lazyRetry(() => import("./pages/Settings"));
 const ApiCredentials = lazyRetry(() => import("./pages/ApiCredentials"));
-const WorkflowImports = lazyRetry(() => import("./pages/WorkflowImports"));
 const TextAIRepSetup = lazyRetry(() => import("./pages/TextAIRepSetup"));
-const TextAIRepTemplates = lazyRetry(() => import("./pages/TextAIRepTemplates"));
 const DeployAIReps = lazyRetry(() => import("./pages/DeployAIReps"));
 const DebugAIReps = lazyRetry(() => import("./pages/DebugAIReps"));
 const DebugInjectLead = lazyRetry(() => import("./pages/DebugInjectLead"));
 const DebugTextAIRep = lazyRetry(() => import("./pages/DebugTextAIRep"));
 const DebugVoiceAIRep = lazyRetry(() => import("./pages/DebugVoiceAIRep"));
 const VoiceAIRepSetup = lazyRetry(() => import("./pages/VoiceAIRepSetup"));
-const VoiceAIRepTemplates = lazyRetry(() => import("./pages/VoiceAIRepTemplates"));
 const WhatToDo = lazyRetry(() => import("./pages/WhatToDo"));
 // Webinar pages + legacy VoiceAISetter archived to frontend/src/pages/_archived/
 // on 2026-05-18 (Brendan confirmed Webinar product dormant; VoiceAISetter explicitly
@@ -266,14 +263,16 @@ const App = () => {
               {/* Legacy alias — kept so existing bookmarks + the previously-shipped
                   AI REP CONFIG button target still resolve. Renamed 2026-05-18. */}
               <Route path="text-ai-rep/configuration" element={<Navigate to="../setup" replace />} />
-              <Route path="text-ai-rep/templates" element={<TextAIRepTemplates />} />
+              {/* n8n template-download pages removed 2026-07-10 (branding purge;
+                  native text engine made the n8n workflow imports obsolete). */}
+              <Route path="text-ai-rep/templates" element={<Navigate to="../setup" replace />} />
               <Route path="voice-ai-rep" element={<Navigate to="setup" replace />} />
               <Route path="voice-ai-rep/setup" element={<VoiceAIRepSetup />} />
               <Route path="voice-ai-rep/configuration" element={<Navigate to="../setup" replace />} />
-              <Route path="voice-ai-rep/templates" element={<VoiceAIRepTemplates />} />
+              <Route path="voice-ai-rep/templates" element={<Navigate to="../setup" replace />} />
               <Route path="api" element={<TextAIRepSetup />} />
               <Route path="api/configuration" element={<TextAIRepSetup />} />
-              <Route path="api/workflow-imports" element={<TextAIRepTemplates />} />
+              <Route path="api/workflow-imports" element={<Navigate to="../text-ai-rep/setup" replace />} />
               <Route path="api/credentials" element={<AgencyRoute><ApiCredentials /></AgencyRoute>} />
               {/* Webinar routes archived 2026-05-18 (product dormant per Brendan).
                   Pages moved to frontend/src/pages/_archived/. To revive: restore

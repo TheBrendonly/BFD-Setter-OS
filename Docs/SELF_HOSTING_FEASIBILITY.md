@@ -92,7 +92,7 @@ six capabilities.
 
 | Component | Host | Deploy method |
 |---|---|---|
-| Frontend (React/Vite) | Railway (`1prompt-os-production`) | auto-deploy on `git push main` |
+| Frontend (React/Vite) | Railway production service (renamed from the legacy upstream name 2026-07-10) | auto-deploy on `git push main` |
 | 84 Edge Functions | Supabase cloud | `scripts/deploy_with_shared.mjs` (Management API) |
 | 10 Trigger.dev tasks | Trigger.dev cloud | `npx trigger.dev deploy --env prod` |
 | Postgres ×2 | Supabase cloud | migrations via Management API / CLI |

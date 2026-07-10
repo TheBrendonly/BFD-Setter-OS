@@ -25,72 +25,23 @@ import retellCreateAccount from '@/assets/setup-guide/retell-create-account.png'
 import supabaseTablesCreated from '@/assets/setup-guide/supabase-tables-created.png';
 import supabaseMicroPlan from '@/assets/setup-guide/supabase-micro-plan.png';
 import supabaseSqlEditor from '@/assets/setup-guide/supabase-sql-editor.png';
-import skoolSnapshotLink from '@/assets/setup-guide/skool-snapshot-link.png';
-import ghlImportSnapshot from '@/assets/setup-guide/ghl-import-snapshot.png';
-import skoolWorkflowsDownload from '@/assets/setup-guide/skool-workflows-download.png';
-import n8nImportWorkflow from '@/assets/setup-guide/n8n-import-workflow.png';
-import skoolWorkflowFolders from '@/assets/setup-guide/skool-workflow-folders.png';
-import n8nCreateFolder from '@/assets/setup-guide/n8n-create-folder.png';
-import skoolRetellTemplates from '@/assets/setup-guide/skool-retell-templates.png';
-import retellImportAgent from '@/assets/setup-guide/retell-import-agent.png';
 import supabaseProjectUrl from '@/assets/setup-guide/supabase-project-url.png';
 import supabaseServiceKey from '@/assets/setup-guide/supabase-service-key.png';
 import openrouterApiKeys from '@/assets/setup-guide/openrouter-api-keys.png';
 import openaiApiKeys from '@/assets/setup-guide/openai-api-keys.png';
-import ghlApiKey from '@/assets/setup-guide/ghl-api-key.png';
 import ghlAssigneeId from '@/assets/setup-guide/ghl-assignee-id.png';
 import ghlCalendarId from '@/assets/setup-guide/ghl-calendar-id.png';
 import ghlLocationId from '@/assets/setup-guide/ghl-location-id.png';
-import ghlVerifyWorkflow from '@/assets/setup-guide/ghl-verify-workflow.png';
 import retellApiKeys from '@/assets/setup-guide/retell-api-keys.png';
-import retellAgentsList from '@/assets/setup-guide/retell-agents-list.png';
-import retellAgentId from '@/assets/setup-guide/retell-agent-id.png';
 import retellPromptsStructure from '@/assets/setup-guide/retell-prompts-structure.png';
 import retellPhoneNumbers from '@/assets/setup-guide/retell-phone-numbers.png';
 // N8N Setup phase images
-import n8nOpenWorkflow from '@/assets/setup-guide/n8n-open-workflow.png';
-import n8nWorkflowOverview from '@/assets/setup-guide/n8n-workflow-overview.png';
-import n8nNotesColors from '@/assets/setup-guide/n8n-notes-colors.png';
-import n8nFirstRedNote from '@/assets/setup-guide/n8n-first-red-note.png';
-import n8nSupabaseCredentials from '@/assets/setup-guide/n8n-supabase-credentials.png';
-import n8nSupabaseConnection from '@/assets/setup-guide/n8n-supabase-connection.png';
-import n8nGetPrompts from '@/assets/setup-guide/n8n-get-prompts.png';
-import n8nConversationHistory from '@/assets/setup-guide/n8n-conversation-history.png';
-import n8nPostgresNewCredential from '@/assets/setup-guide/n8n-postgres-new-credential.png';
-import supabaseProjectsList from '@/assets/setup-guide/supabase-projects-list.png';
-import supabaseConnectButton from '@/assets/setup-guide/supabase-connect-button.png';
-import supabaseSessionPooler from '@/assets/setup-guide/supabase-session-pooler.png';
-import n8nPostgresForm from '@/assets/setup-guide/n8n-postgres-form.png';
-import supabaseSessionPoolerParams from '@/assets/setup-guide/supabase-session-pooler-params.png';
-import n8nPostgresFilled from '@/assets/setup-guide/n8n-postgres-filled.png';
-import n8nPostgresPassword from '@/assets/setup-guide/n8n-postgres-password.png';
-import supabaseDatabaseSettings from '@/assets/setup-guide/supabase-database-settings.png';
-import supabaseSessionPoolerPort from '@/assets/setup-guide/supabase-session-pooler-port.png';
-import n8nPostgresPort from '@/assets/setup-guide/n8n-postgres-port.png';
-import n8nPostgresSave from '@/assets/setup-guide/n8n-postgres-save.png';
 // New phase images
-import n8nFollowupHistoryNode from '@/assets/setup-guide/n8n-followup-history-node.png';
-import n8nFollowupHistoryConnection from '@/assets/setup-guide/n8n-followup-history-connection.png';
-import n8nLlmModelNode from '@/assets/setup-guide/n8n-llm-model-node.png';
-import n8nOpenrouterConnection from '@/assets/setup-guide/n8n-openrouter-connection.png';
-import n8nEmbeddingsOpenaiNode from '@/assets/setup-guide/n8n-embeddings-openai-node.png';
-import n8nOpenaiConnection from '@/assets/setup-guide/n8n-openai-connection.png';
-import n8nMultipleLlmNodes from '@/assets/setup-guide/n8n-multiple-llm-nodes.png';
-import n8nKnowledgebaseNode from '@/assets/setup-guide/n8n-knowledgebase-node.png';
-import n8nKnowledgebaseConnection from '@/assets/setup-guide/n8n-knowledgebase-connection.png';
 // Appointment Name step images
-import n8nBookAppointmentNode from '@/assets/setup-guide/n8n-book-appointment-node.png';
-import n8nBookAppointmentJson from '@/assets/setup-guide/n8n-book-appointment-json.png';
-import n8nBookAppointmentTitle from '@/assets/setup-guide/n8n-book-appointment-title.png';
 // HighLevel Setup phase images
 import ghlWorkflowsList from '@/assets/setup-guide/ghl-workflows-list.png';
 import ghlReceiveProcessDms from '@/assets/setup-guide/ghl-receive-process-dms.png';
-import ghlPublishSave from '@/assets/setup-guide/ghl-publish-save.png';
 import ghlGenerateReplyList from '@/assets/setup-guide/ghl-generate-reply-list.png';
-import ghlGetApiCredentialsNodeV2 from '@/assets/setup-guide/ghl-get-api-credentials-node-v2.png';
-import ghlUrlSectionV2 from '@/assets/setup-guide/ghl-url-section-v2.png';
-import ghlHeadersSectionV2 from '@/assets/setup-guide/ghl-headers-section-v2.png';
-import ghlPublishSaveV2 from '@/assets/setup-guide/ghl-publish-save-v2.png';
 // Note: ghlSendReplyWorkflow removed - now using ghlSendReplyList instead
 // Update Lead Details images
 import ghlUpdateLeadDetailsList from '@/assets/setup-guide/ghl-update-lead-details-list.png';
@@ -108,12 +59,6 @@ import ghlLeadScoreSelectRequest from '@/assets/setup-guide/ghl-lead-score-selec
 import ghlLeadScoreSaveTrigger from '@/assets/setup-guide/ghl-lead-score-save-trigger.png';
 import ghlLeadScorePublishSave from '@/assets/setup-guide/ghl-lead-score-publish-save.png';
 // Update Lead Pipeline Stage images
-import ghlPipelineStageList from '@/assets/setup-guide/ghl-pipeline-stage-list.png';
-import ghlPipelineStageTrigger from '@/assets/setup-guide/ghl-pipeline-stage-trigger.png';
-import ghlPipelineStageWebhook from '@/assets/setup-guide/ghl-pipeline-stage-webhook.png';
-import ghlPipelineStageFetch from '@/assets/setup-guide/ghl-pipeline-stage-fetch.png';
-import ghlPipelineStageSelect from '@/assets/setup-guide/ghl-pipeline-stage-select.png';
-import ghlPipelineStageSave from '@/assets/setup-guide/ghl-pipeline-stage-save.png';
 // Transfer to Human images
 import ghlTransferHumanList from '@/assets/setup-guide/ghl-transfer-human-list.png';
 import ghlTransferHumanTrigger from '@/assets/setup-guide/ghl-transfer-human-trigger.png';
@@ -143,71 +88,16 @@ import ghlSendFollowupsList from '@/assets/setup-guide/ghl-send-followups-list.p
 import ghlSendFollowupsWorkflow from '@/assets/setup-guide/ghl-send-followups-workflow.png';
 import ghlSendFollowupsTimes from '@/assets/setup-guide/ghl-send-followups-times.png';
 // Retell Setup phase images
-import retellInboundAgentList from '@/assets/setup-guide/retell-inbound-agent-list.png';
-// TODO 2026-05-20 (D27 follow-up): PNG file rename pending Brendan's Retell
-// screenshot session. Once the new "Building Flow" folder PNGs are captured,
-// rename retell-1prompt-folder.png → retell-building-flow-folder.png and update
-// this import + path. Text references throughout this file already say
-// "Building Flow" per phase-night-n3-setup-guide-text-rebrand.
-import retellBuildingFlowFolder from '@/assets/setup-guide/retell-1prompt-folder.png';
-import retellInboundAgentClick from '@/assets/setup-guide/retell-inbound-agent-click.png';
-import retellInboundAgentIdCopy from '@/assets/setup-guide/retell-inbound-agent-id-copy.png';
-import retellOutboundAgentClick from '@/assets/setup-guide/retell-outbound-agent-click.png';
-import retellOutboundAgentIdCopy from '@/assets/setup-guide/retell-outbound-agent-id-copy.png';
-import n8nMakeOutboundCallList from '@/assets/setup-guide/n8n-make-outbound-call-list.png';
-import n8nMakeOutboundCallWorkflow from '@/assets/setup-guide/n8n-make-outbound-call-workflow.png';
-import n8nMakeOutboundCallWebhook from '@/assets/setup-guide/n8n-make-outbound-call-webhook.png';
-import n8nMakeOutboundCallProductionUrl from '@/assets/setup-guide/n8n-make-outbound-call-production-url.png';
-import ghlCallFinishedWorkflow from '@/assets/setup-guide/ghl-call-finished-workflow.png';
-import ghlCallReceivedTrigger from '@/assets/setup-guide/ghl-call-received-trigger.png';
-import ghlCallReceivedWebhookUrl from '@/assets/setup-guide/ghl-call-received-webhook-url.png';
-import ghlCallReceivedFetchRequests from '@/assets/setup-guide/ghl-call-received-fetch-requests.png';
-import ghlCallReceivedSelectPayload from '@/assets/setup-guide/ghl-call-received-select-payload.png';
-import ghlCallReceivedPayloadSelected from '@/assets/setup-guide/ghl-call-received-payload-selected.png';
-import ghlCallReceivedSavePublish from '@/assets/setup-guide/ghl-call-received-save-publish.png';
-import retellInboundWebhookSettings from '@/assets/setup-guide/retell-inbound-webhook-settings.png';
+// TODO (BRENDAN_TODO 5.1): the PNG content still shows the old folder name;
+// re-shoot against a Retell folder named "BFD Setter" (decided 2026-07-09) and
+// drop the new screenshot onto this same filename.
+import retellBfdSetterFolder from '@/assets/setup-guide/retell-bfd-setter-folder.png';
 // Get Lead Details workflow images
-import n8nGetLeadDetailsList from '@/assets/setup-guide/n8n-get-lead-details-list.png';
-import n8nGetLeadDetailsWorkflow from '@/assets/setup-guide/n8n-get-lead-details-workflow.png';
-import n8nGetLeadDetailsSupabase from '@/assets/setup-guide/n8n-get-lead-details-supabase.png';
-import n8nGetLeadDetailsWebhook from '@/assets/setup-guide/n8n-get-lead-details-webhook.png';
-import n8nGetLeadDetailsProductionUrl from '@/assets/setup-guide/n8n-get-lead-details-production-url.png';
-import n8nGetLeadDetailsSave from '@/assets/setup-guide/n8n-get-lead-details-save.png';
-import retellPhoneNumbersWebhook from '@/assets/setup-guide/retell-phone-numbers-webhook.png';
 // Booking Workflow images
-import n8nBookAppointmentList from '@/assets/setup-guide/n8n-book-appointment-list.png';
-import n8nBookAppointmentWorkflow from '@/assets/setup-guide/n8n-book-appointment-workflow.png';
-import n8nBookAppointmentCredentials from '@/assets/setup-guide/n8n-book-appointment-credentials.png';
-import n8nBookAppointmentModule from '@/assets/setup-guide/n8n-book-appointment-module.png';
-import n8nBookAppointmentActivate from '@/assets/setup-guide/n8n-book-appointment-activate.png';
 // Booking Functions images
-import retellFunctionsList from '@/assets/setup-guide/retell-functions-list.png';
-import n8nBookingWebhookNode from '@/assets/setup-guide/n8n-booking-webhook-node.png';
-import n8nBookingWebhookUrl from '@/assets/setup-guide/n8n-booking-webhook-url.png';
-import retellFunctionApiEndpoint from '@/assets/setup-guide/retell-function-api-endpoint.png';
-import retellFunctionUpdate from '@/assets/setup-guide/retell-function-update.png';
-import retellFunctionsBook from '@/assets/setup-guide/retell-functions-book.png';
-import retellBookAppointmentsEndpoint from '@/assets/setup-guide/retell-book-appointments-endpoint.png';
-import retellRemainingFunctions from '@/assets/setup-guide/retell-remaining-functions.png';
-import retellPublishDialog from '@/assets/setup-guide/retell-publish-dialog.png';
 // Prompt system explanation images
-import n8nAgentBotPersona from '@/assets/setup-guide/n8n-agent-bot-persona.png';
-import n8nAgentPrompt1 from '@/assets/setup-guide/n8n-agent-prompt-1.png';
-import n8nAgentPromptNumber from '@/assets/setup-guide/n8n-agent-prompt-number.png';
 // Multi Agent Logic images
-import ghlEngagementAgentNumber from '@/assets/setup-guide/ghl-engagement-agent-number.png';
-import ghlRollupAgentNumber from '@/assets/setup-guide/ghl-rollup-agent-number.png';
-import n8nMultiAgentRouting from '@/assets/setup-guide/n8n-multi-agent-routing.png';
 // Knowledgebase Setup images
-import n8nKbWorkflowList from '@/assets/setup-guide/n8n-kb-workflow-list.png';
-import n8nKbWorkflowOverview from '@/assets/setup-guide/n8n-kb-workflow-overview.png';
-import n8nKbSupabaseNodesHighlight from '@/assets/setup-guide/n8n-kb-supabase-nodes-highlight.png';
-import n8nKbSupabaseConnection from '@/assets/setup-guide/n8n-kb-supabase-connection.png';
-import n8nKbEmbeddingsHighlight from '@/assets/setup-guide/n8n-kb-embeddings-highlight.png';
-import n8nKbEmbeddingsOpenai from '@/assets/setup-guide/n8n-kb-embeddings-openai.png';
-import n8nKbWebhookHighlight from '@/assets/setup-guide/n8n-kb-webhook-highlight.png';
-import n8nKbWebhookUrl from '@/assets/setup-guide/n8n-kb-webhook-url.png';
-import n8nKbSaveButton from '@/assets/setup-guide/n8n-kb-save-button.png';
 // Twilio Setup images
 import ghlPhoneSystemAddNumber from '@/assets/setup-guide/ghl-phone-system-add-number.png';
 import twilioActiveNumbers from '@/assets/setup-guide/twilio-active-numbers.png';
@@ -266,20 +156,19 @@ import demoTestForm from '@/assets/setup-guide/demo-test-form.png';
 import demoTestConfirmation from '@/assets/setup-guide/demo-test-confirmation.png';
 // Phase definitions with step counts for tracking completion
 // Each phase ID maps to the number of steps in that phase
+// 2026-07-10 branding purge: the n8n-era phases (workflows-import, n8n-setup,
+// knowledgebase-setup, voice-inbound-setup, voice-outbound-setup) were removed -
+// the native text engine + app-managed Retell agents made them obsolete. Stale
+// `<phase>-<n>` completion ids for removed phases are simply ignored.
 export const SETUP_PHASES = {
   'account-creation': 5,  // 4 original + 1 API key step (OpenAI + OpenRouter combined) - Twilio moved to twilio-setup
   'supabase-setup': 7,  // 5 original steps + 2 connection steps (Project URL + Service Key) - includes Create Account
-  'workflows-import': 3,  // Download, Import, Organize workflows
-  'n8n-setup': 12,  // Text AI Rep Setup: 12 setup steps starting from Open Workflow
   'text-prompts-setup': 7,  // Understand Prompts + Bot Persona + 3 Text Engine prompts + 2 Booking prompts
   'highlevel-credentials': 4,  // API Key, Assignee ID, Location ID, Calendar ID
   'highlevel-setup': 10,  // 10 steps: Connect Channel + 9 workflow steps
   'twilio-setup': 6,  // Create Account, Understand Phone Numbers, Buy Number, Connect to GHL, A2P Brand, A2P Campaign
-  'voice-accounts-setup': 6,  // Create Account, Download Templates, Import Agents, Verify Folders, API Key, Phone Numbers
-  'voice-inbound-setup': 8,  // Inbound Agent ID, Get Lead Details, Inbound Webhook, Call Finished, Retell Webhook Settings, Booking Workflow, Booking Functions, Publish Agent
-  'voice-outbound-setup': 5,  // Outbound Agent ID, Outbound Booking Functions, Make Outbound Call, Outbound Webhook, Activate Workflow
+  'voice-accounts-setup': 4,  // Create Account, Verify Folders, API Key, Phone Numbers
   'voice-prompts-setup': 6,  // Understand Prompts + Outbound Logic + Persona (0) + Main Agent (1,2) + Booking (5)
-  'knowledgebase-setup': 5,  // 5 steps: Open Workflow, Supabase Nodes, Embeddings, Webhook, Publish
   'live-chat-setup': 8,  // 8 steps: Navigate, Create Widget, Style, Chat Window, Contact Form, Messaging, Save, Get Code & Auto-Connection
   'whatsapp-setup': 8,  // 8 steps: Understand Logic, Subscribe, Get Phone Number, Add to WhatsApp, Configure Number, Verify Status, Enable Workflow Trigger, Test
   'sms-setup': 5,  // 5 steps: Understand A2P, Phone Number Options, Verify A2P Complete, Enable SMS Trigger, Test SMS
@@ -308,35 +197,64 @@ export const areAllPhasesComplete = (completedSteps: string[]): boolean => {
 
 // All images to preload
 const ALL_IMAGES = [
-  supabaseNewProject, supabaseMicroPlan, supabaseSqlEditor, skoolSnapshotLink,
-  ghlImportSnapshot, skoolWorkflowsDownload, n8nImportWorkflow, skoolWorkflowFolders,
-  n8nCreateFolder, skoolRetellTemplates, retellImportAgent, supabaseProjectUrl,
-  supabaseServiceKey, openrouterApiKeys, openaiApiKeys, ghlApiKey, ghlAssigneeId,
-  ghlCalendarId, ghlLocationId, ghlVerifyWorkflow, retellApiKeys, retellAgentsList,
-  retellAgentId, retellPhoneNumbers, n8nOpenWorkflow, n8nWorkflowOverview, n8nNotesColors,
-  n8nFirstRedNote, n8nSupabaseCredentials, n8nSupabaseConnection, n8nGetPrompts,
-  n8nConversationHistory, n8nPostgresNewCredential, supabaseProjectsList, supabaseConnectButton,
-  supabaseSessionPooler, n8nPostgresForm, supabaseSessionPoolerParams, n8nPostgresFilled,
-  n8nPostgresPassword, supabaseDatabaseSettings, supabaseSessionPoolerPort, n8nPostgresPort,
-  n8nPostgresSave, n8nFollowupHistoryNode, n8nFollowupHistoryConnection, n8nLlmModelNode,
-  n8nOpenrouterConnection, n8nEmbeddingsOpenaiNode, n8nOpenaiConnection, n8nMultipleLlmNodes, n8nKnowledgebaseNode,
-  n8nKnowledgebaseConnection, n8nBookAppointmentNode, n8nBookAppointmentJson, n8nBookAppointmentTitle,
+  supabaseNewProject,
+  supabaseMicroPlan,
+  supabaseSqlEditor,
+  supabaseProjectUrl,
+  supabaseServiceKey,
+  openrouterApiKeys,
+  openaiApiKeys,
+  ghlAssigneeId,
+  ghlCalendarId,
+  ghlLocationId,
+  retellApiKeys,
+  retellPhoneNumbers,
   // HighLevel Setup phase images
-  ghlWorkflowsList, ghlReceiveProcessDms, ghlPublishSave, ghlGenerateReplyList,
-  ghlGetApiCredentialsNodeV2, ghlUrlSectionV2, ghlHeadersSectionV2, ghlPublishSaveV2,
-  ghlUpdateLeadDetailsList, ghlUpdatePipelineTrigger, ghlUpdatePipelineWebhook,
-  ghlFetchSampleRequests, ghlSelectRequest, ghlSaveWorkflow,
-  ghlUpdateLeadScoreList, ghlUpdateLeadScoreTrigger, ghlUpdateLeadScoreWebhook,
-  ghlLeadScoreFetchRequests, ghlLeadScoreSelectRequest, ghlLeadScoreSaveTrigger, ghlLeadScorePublishSave,
-  ghlPipelineStageList, ghlPipelineStageTrigger, ghlPipelineStageWebhook,
-  ghlPipelineStageFetch, ghlPipelineStageSelect, ghlPipelineStageSave,
-  ghlTransferHumanList, ghlTransferHumanTrigger, ghlTransferHumanWebhook,
-  ghlTransferHumanFetch, ghlTransferHumanSelect, ghlTransferHumanSave, ghlTransferHumanPublish,
-  ghlSetCredentialsList, ghlSetCredentialsFields, ghlSetCredentialsSave,
-  ghlSaveReplyList, ghlSaveReplyTrigger, ghlSaveReplyWebhook, ghlSaveReplyFetchRequests, ghlSaveReplySelectRequest, ghlSaveReplyPublish, ghlGenerateReplySave,
-  ghlSendReplyList, ghlSendReplyFollowupTimes, ghlSendReplyPublish, ghlSendFollowupsList, ghlSendFollowupsWorkflow, ghlSendFollowupsTimes,
+  ghlWorkflowsList,
+  ghlReceiveProcessDms,
+  ghlGenerateReplyList,
+  ghlUpdateLeadDetailsList,
+  ghlUpdatePipelineTrigger,
+  ghlUpdatePipelineWebhook,
+  ghlFetchSampleRequests,
+  ghlSelectRequest,
+  ghlSaveWorkflow,
+  ghlUpdateLeadScoreList,
+  ghlUpdateLeadScoreTrigger,
+  ghlUpdateLeadScoreWebhook,
+  ghlLeadScoreFetchRequests,
+  ghlLeadScoreSelectRequest,
+  ghlLeadScoreSaveTrigger,
+  ghlLeadScorePublishSave,
+  ghlTransferHumanList,
+  ghlTransferHumanTrigger,
+  ghlTransferHumanWebhook,
+  ghlTransferHumanFetch,
+  ghlTransferHumanSelect,
+  ghlTransferHumanSave,
+  ghlTransferHumanPublish,
+  ghlSetCredentialsList,
+  ghlSetCredentialsFields,
+  ghlSetCredentialsSave,
+  ghlSaveReplyList,
+  ghlSaveReplyTrigger,
+  ghlSaveReplyWebhook,
+  ghlSaveReplyFetchRequests,
+  ghlSaveReplySelectRequest,
+  ghlSaveReplyPublish,
+  ghlGenerateReplySave,
+  ghlSendReplyList,
+  ghlSendReplyFollowupTimes,
+  ghlSendReplyPublish,
+  ghlSendFollowupsList,
+  ghlSendFollowupsWorkflow,
+  ghlSendFollowupsTimes,
   // Twilio Setup images
-  ghlPhoneSystemAddNumber, twilioActiveNumbers, twilioA2pMessaging, twilioA2pRegistration, twilioCampaignRegistration
+  ghlPhoneSystemAddNumber,
+  twilioActiveNumbers,
+  twilioA2pMessaging,
+  twilioA2pRegistration,
+  twilioCampaignRegistration
 ];
 
 // Screenshot placeholders - add actual images to src/assets/setup-guide/ when available
@@ -1719,7 +1637,7 @@ const [loading, setLoading] = useState(false);
 
       // Fetch Supabase configuration for the client (account-specific).
       // G3-6: the service key is never read into the browser or forwarded in the
-      // webhook payload (this n8n prompt-sync webhook is being decommissioned).
+      // webhook payload (this legacy prompt-sync webhook is being decommissioned).
       const { data: clientData } = await supabase
         .from('clients_public')
         .select('supabase_url, supabase_table_name')
@@ -2050,54 +1968,40 @@ const [loading, setLoading] = useState(false);
       description: 'Set up your GoHighLevel account for CRM functionality',
       content: (
         <div className="space-y-4">
-          <p className="font-medium">You have 2 options for your HighLevel account:</p>
-          
+          <p className="font-medium">Building Flow Digital provisions your GoHighLevel location for you as part of onboarding.</p>
+
           <div className="bg-muted/50 rounded-lg p-4 space-y-4">
             <div className="space-y-3">
               <div className="flex items-start gap-2">
                 <CheckCircle2 className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
                 <div>
-                  <p className="font-medium">Option 1: Get our HighLevel account</p>
-                  <p className="text-muted-foreground">(Recommended for simplicity)</p>
+                  <p className="font-medium">What we set up for you</p>
                   <ul className="list-disc list-inside ml-2 mt-2 text-sm text-muted-foreground space-y-1">
-                    <li>We act as your provider - you get all the same features</li>
-                    <li>No separate payment required for HighLevel</li>
-                    <li>Add your own logo and custom CSS to brand it however you want</li>
-                    <li>All workflows, pipelines, and dashboards are loaded automatically</li>
-                    <li>The only difference: uses app.1prompt.com domain (no custom domain)</li>
+                    <li>A dedicated GoHighLevel location for your business</li>
+                    <li>The workflows, pipelines, custom fields, and dashboards the AI setters need</li>
+                    <li>The integration credentials that connect GoHighLevel to this platform</li>
                   </ul>
                   <div className="mt-3 p-3 bg-primary/10 rounded-lg">
-                    <p className="text-sm">To open a HighLevel account with us, send an email to:</p>
-                    <a 
-                      href="mailto:support@1prompt.com" 
+                    <p className="text-sm">Questions about your GoHighLevel setup? Email us at:</p>
+                    <a
+                      href="mailto:support@buildingflowdigital.com"
                       className="text-primary hover:underline font-medium"
                     >
-                      support@1prompt.com
+                      support@buildingflowdigital.com
                     </a>
                   </div>
                 </div>
               </div>
-              
+
               <div className="flex items-start gap-2 pt-2 border-t border-border/50">
                 <CheckCircle2 className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
                 <div>
-                  <p className="font-medium">Option 2: Use your own HighLevel account</p>
-                  <p className="text-muted-foreground">If you already have one or want to get your own</p>
+                  <p className="font-medium">Already have your own HighLevel account?</p>
+                  <p className="text-muted-foreground">We can install our snapshot into it instead</p>
                   <ul className="list-disc list-inside ml-2 mt-2 text-sm text-muted-foreground space-y-1">
-                    <li>If you don't have an account yet, you can get the basic plan</li>
-                    <li>Go to the <a 
-                      href="https://www.skool.com/1prompt/classroom/359c291b?md=829b6d49c6ee44d19354a48bd8b434b9" 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="text-primary hover:underline inline-flex items-center gap-1"
-                    >
-                      Resources page on Skool
-                      <ExternalLink className="h-3 w-3" />
-                    </a></li>
-                    <li>Find the recent <strong>Building Flow Version</strong> snapshot</li>
-                    <li>Copy the snapshot link</li>
+                    <li>Tell us during onboarding and we'll send you the snapshot install link</li>
                     <li>Open the link in the browser where you're logged into HighLevel</li>
-                    <li>The snapshot will load all workflows, pipelines, and dashboards to your account</li>
+                    <li>The snapshot loads all workflows, pipelines, and dashboards into your account</li>
                   </ul>
                 </div>
               </div>
@@ -2106,7 +2010,7 @@ const [loading, setLoading] = useState(false);
 
           <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4">
             <p>
-              <strong>Summary:</strong> With our HighLevel, everything is loaded automatically. With your own account, you'll need to import the snapshot from Skool Resources.
+              <strong>Summary:</strong> Either way, GoHighLevel is set up with you during onboarding; you don't need to build anything in it yourself.
             </p>
           </div>
         </div>
@@ -2728,803 +2632,6 @@ const [loading, setLoading] = useState(false);
         }
       ]
     },
-    {
-      id: 'workflows-import',
-      title: 'Workflows Import',
-      description: 'Download, import, and organize your n8n workflows',
-      steps: [
-        {
-          id: 'download-workflows',
-          title: 'Download Workflow Templates',
-          description: 'Download all n8n workflow files directly',
-          content: (
-            <div className="space-y-6">
-              {/* n8n Templates Section */}
-              <div className="space-y-2">
-                <h4 className="text-base font-semibold">n8n Templates</h4>
-                <p className="text-sm text-muted-foreground">Download all n8n workflows</p>
-              </div>
-              
-              {/* Visual folder structure */}
-              <div className="bg-card border border-border rounded-lg overflow-hidden">
-                {/* Text Engine Folder */}
-                <div className="border-b border-border">
-                  <div className="flex items-center gap-3 px-4 py-3 bg-muted/30">
-                    <svg className="h-5 w-5 text-amber-500" fill="currentColor" viewBox="0 0 20 20">
-                      <path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" />
-                    </svg>
-                    <span className="font-medium">Text Engine</span>
-                    <span className="text-xs text-muted-foreground ml-auto">1 Workflow</span>
-                  </div>
-                  <div className="px-4 py-2 pl-12 bg-background flex items-center justify-between">
-                    <span className="text-sm text-muted-foreground">Text_Engine.json</span>
-                    <a 
-                      href="/workflows/text-engine/Text_Engine.json" 
-                      download="Text_Engine.json"
-                      className="text-xs text-primary hover:underline flex items-center gap-1"
-                    >
-                      <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                      </svg>
-                      Download
-                    </a>
-                  </div>
-                </div>
-
-                {/* Voice Sales Rep Folder */}
-                <div className="border-b border-border">
-                  <div className="flex items-center gap-3 px-4 py-3 bg-muted/30">
-                    <svg className="h-5 w-5 text-amber-500" fill="currentColor" viewBox="0 0 20 20">
-                      <path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" />
-                    </svg>
-                    <span className="font-medium">Voice Sales Rep</span>
-                    <span className="text-xs text-muted-foreground ml-auto">3 Workflows</span>
-                  </div>
-                  <div className="divide-y divide-border/50">
-                    <div className="px-4 py-2 pl-12 bg-background flex items-center justify-between">
-                      <span className="text-sm text-muted-foreground">Get_Lead_Details.json</span>
-                      <a 
-                        href="/workflows/voice-sales-rep/Get_Lead_Details.json" 
-                        download="Get_Lead_Details.json"
-                        className="text-xs text-primary hover:underline flex items-center gap-1"
-                      >
-                        <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                        </svg>
-                        Download
-                      </a>
-                    </div>
-                    <div className="px-4 py-2 pl-12 bg-background flex items-center justify-between">
-                      <span className="text-sm text-muted-foreground">Make_Outbound_Call.json</span>
-                      <a 
-                        href="/workflows/voice-sales-rep/Make_Outbound_Call.json" 
-                        download="Make_Outbound_Call.json"
-                        className="text-xs text-primary hover:underline flex items-center gap-1"
-                      >
-                        <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                        </svg>
-                        Download
-                      </a>
-                    </div>
-                    <div className="px-4 py-2 pl-12 bg-background flex items-center justify-between">
-                      <span className="text-sm text-muted-foreground">Appointment_Booking_Functions.json</span>
-                      <a 
-                        href="/workflows/voice-sales-rep/Appointment_Booking_Functions.json" 
-                        download="Appointment_Booking_Functions.json"
-                        className="text-xs text-primary hover:underline flex items-center gap-1"
-                      >
-                        <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                        </svg>
-                        Download
-                      </a>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Knowledgebase Automation Folder */}
-                <div className="border-b border-border">
-                  <div className="flex items-center gap-3 px-4 py-3 bg-muted/30">
-                    <svg className="h-5 w-5 text-amber-500" fill="currentColor" viewBox="0 0 20 20">
-                      <path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" />
-                    </svg>
-                    <span className="font-medium">Knowledgebase Automation</span>
-                    <span className="text-xs text-muted-foreground ml-auto">1 Workflow</span>
-                  </div>
-                  <div className="px-4 py-2 pl-12 bg-background flex items-center justify-between">
-                    <span className="text-sm text-muted-foreground">Update_Knowledgebase.json</span>
-                    <a 
-                      href="/workflows/knowledgebase-automation/Update_Knowledgebase.json" 
-                      download="Update_Knowledgebase.json"
-                      className="text-xs text-primary hover:underline flex items-center gap-1"
-                    >
-                      <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                      </svg>
-                      Download
-                    </a>
-                  </div>
-                </div>
-
-                {/* Database Reactivation Folder */}
-                <div>
-                  <div className="flex items-center gap-3 px-4 py-3 bg-muted/30">
-                    <svg className="h-5 w-5 text-amber-500" fill="currentColor" viewBox="0 0 20 20">
-                      <path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" />
-                    </svg>
-                    <span className="font-medium">Database Reactivation</span>
-                    <span className="text-xs text-muted-foreground ml-auto">1 Workflow</span>
-                  </div>
-                  <div className="px-4 py-2 pl-12 bg-background flex items-center justify-between">
-                    <span className="text-sm text-muted-foreground">Launch_Campaign.json</span>
-                    <a 
-                      href="/workflows/database-reactivation/Launch_Campaign.json" 
-                      download="Launch_Campaign.json"
-                      className="text-xs text-primary hover:underline flex items-center gap-1"
-                    >
-                      <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                      </svg>
-                      Download
-                    </a>
-                  </div>
-                </div>
-              </div>
-
-            </div>
-          )
-        },
-        {
-          id: 'import-workflows',
-          title: 'Import Workflows to n8n',
-          description: 'Create folders and import workflows into n8n',
-          content: (
-            <div className="space-y-4">
-              <p>First, create the folder structure in n8n, then import each workflow into its folder:</p>
-
-              <div className="bg-muted/50 rounded-lg p-4 space-y-3">
-                <p className="font-medium">Step 1: Create Folders in n8n</p>
-                <ol className="list-decimal list-inside space-y-2 ml-2">
-                  <li>In n8n, go to <strong>Workflows</strong> → <strong>Personal</strong></li>
-                  <li>Click <strong>"Create folder in 'Personal'"</strong> or the folder icon</li>
-                  <li>Create the following folders with these exact names:
-                    <ul className="list-disc list-inside ml-6 mt-2 space-y-1 text-sm">
-                      <li><strong>Text Engine</strong></li>
-                      <li><strong>Voice Sales Rep</strong></li>
-                      <li><strong>Knowledgebase Automation</strong></li>
-                      <li><strong>Database Reactivation</strong></li>
-                    </ul>
-                  </li>
-                </ol>
-              </div>
-
-              <SmoothImage src={n8nCreateFolder} alt="n8n Create folder in Personal" />
-
-              <div className="bg-muted/50 rounded-lg p-4 space-y-3">
-                <p className="font-medium">Step 2: Import Workflows</p>
-                <ol className="list-decimal list-inside space-y-2 ml-2">
-                  <li>Navigate into the folder you want to import to (e.g., <strong>Text Engine</strong>)</li>
-                  <li>Click <strong>"Create workflow"</strong></li>
-                  <li>Click the menu icon (⋯) in the top right corner</li>
-                  <li>Select <strong>"Import from File..."</strong></li>
-                  <li>Choose the matching workflow file (e.g., <strong>Text_Engine.json</strong>)</li>
-                  <li>Click <strong>"Save"</strong> to save the imported workflow</li>
-                </ol>
-              </div>
-
-              <SmoothImage src={n8nImportWorkflow} alt="n8n Import from File menu option" />
-
-              <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-4">
-                <p>
-                  <strong>Important:</strong> Make sure each workflow goes into the correct folder. Reference the folder structure from Step 1.
-                </p>
-              </div>
-            </div>
-          )
-        },
-        {
-          id: 'organize-folders',
-          title: 'Verify Folder Structure',
-          description: 'Confirm all workflows are organized correctly',
-          content: (
-            <div className="space-y-4">
-              <p>Verify your n8n folder structure matches this layout:</p>
-
-              {/* Expected folder structure visual - matches download section styling */}
-              <div className="bg-card border border-border rounded-lg overflow-hidden">
-                {/* Text Engine Folder */}
-                <div className="border-b border-border">
-                  <div className="flex items-center gap-3 px-4 py-3 bg-muted/30">
-                    <svg className="h-5 w-5 text-amber-500" fill="currentColor" viewBox="0 0 20 20">
-                      <path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" />
-                    </svg>
-                    <span className="font-medium">Text Engine</span>
-                    <span className="text-xs text-muted-foreground ml-auto">1 Workflow</span>
-                  </div>
-                  <div className="px-4 py-2 pl-12 bg-background">
-                    <span className="text-sm text-muted-foreground">Text Engine</span>
-                  </div>
-                </div>
-
-                {/* Voice Sales Rep Folder */}
-                <div className="border-b border-border">
-                  <div className="flex items-center gap-3 px-4 py-3 bg-muted/30">
-                    <svg className="h-5 w-5 text-amber-500" fill="currentColor" viewBox="0 0 20 20">
-                      <path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" />
-                    </svg>
-                    <span className="font-medium">Voice Sales Rep</span>
-                    <span className="text-xs text-muted-foreground ml-auto">3 Workflows</span>
-                  </div>
-                  <div className="divide-y divide-border/50">
-                    <div className="px-4 py-2 pl-12 bg-background">
-                      <span className="text-sm text-muted-foreground">Get Lead Details</span>
-                    </div>
-                    <div className="px-4 py-2 pl-12 bg-background">
-                      <span className="text-sm text-muted-foreground">Make Retell Outbound Call</span>
-                    </div>
-                    <div className="px-4 py-2 pl-12 bg-background">
-                      <span className="text-sm text-muted-foreground">Appointment Booking Functions</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Knowledgebase Automation Folder */}
-                <div className="border-b border-border">
-                  <div className="flex items-center gap-3 px-4 py-3 bg-muted/30">
-                    <svg className="h-5 w-5 text-amber-500" fill="currentColor" viewBox="0 0 20 20">
-                      <path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" />
-                    </svg>
-                    <span className="font-medium">Knowledgebase Automation</span>
-                    <span className="text-xs text-muted-foreground ml-auto">1 Workflow</span>
-                  </div>
-                  <div className="px-4 py-2 pl-12 bg-background">
-                    <span className="text-sm text-muted-foreground">Update Knowledgebase</span>
-                  </div>
-                </div>
-
-                {/* Database Reactivation Folder */}
-                <div>
-                  <div className="flex items-center gap-3 px-4 py-3 bg-muted/30">
-                    <svg className="h-5 w-5 text-amber-500" fill="currentColor" viewBox="0 0 20 20">
-                      <path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" />
-                    </svg>
-                    <span className="font-medium">Database Reactivation</span>
-                    <span className="text-xs text-muted-foreground ml-auto">1 Workflow</span>
-                  </div>
-                  <div className="px-4 py-2 pl-12 bg-background">
-                    <span className="text-sm text-muted-foreground">Launch Campaign</span>
-                  </div>
-                </div>
-              </div>
-
-              <p className="text-sm text-muted-foreground">Your n8n folders should look like this:</p>
-              <SmoothImage src="/images/n8n-folder-structure.png" alt="n8n folder structure example" />
-
-              <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-4">
-                <p>
-                  <strong>Success!</strong> Your n8n workflows are now imported and organized. Continue to configure them in the next steps.
-                </p>
-              </div>
-            </div>
-          )
-        }
-      ]
-    },
-    {
-      id: 'n8n-setup',
-      title: 'AI Rep Setup',
-      description: 'Configure your Text AI Rep workflow in n8n',
-      steps: [
-        {
-          id: 'open-workflow',
-          title: 'Open the Workflow',
-          description: 'Open the Text Engine workflow you uploaded',
-          content: (
-            <div className="space-y-4">
-              <p className="text-muted-foreground">Open the workflow that you uploaded in the previous steps.</p>
-
-              <div className="bg-muted/50 rounded-lg p-4 space-y-3">
-                <p className="font-medium">Steps:</p>
-                <ol className="list-decimal list-inside space-y-2 ml-2">
-                  <li>Go to your n8n account</li>
-                  <li>Navigate to the folder where you imported the workflow</li>
-                  <li>Click on the <strong>Text Engine</strong> workflow to open it</li>
-                </ol>
-              </div>
-
-              <SmoothImage src={n8nOpenWorkflow} alt="n8n open workflow" />
-              
-              <p className="text-muted-foreground">The full workflow will appear showing all the nodes and connections.</p>
-              
-              <SmoothImage src={n8nWorkflowOverview} alt="n8n workflow overview" />
-            </div>
-          )
-        },
-        {
-          id: 'understanding-notes',
-          title: 'Understanding Notes',
-          description: 'Learn about the color-coded notes system',
-          content: (
-            <div className="space-y-4">
-              <p className="text-muted-foreground">Before editing the workflow, understand the color-coded notes system used in all n8n workflows.</p>
-
-              <div className="grid gap-4">
-                <div className="bg-[#7f1d1d] border border-[#991b1b] rounded-lg p-4">
-                  <h4 className="font-bold text-white uppercase mb-2">RED NOTES</h4>
-                  <p className="text-white">
-                    THEY MEAN THAT YOU <strong>MUST</strong> CHANGE CREDENTIALS / PROMPT / DETAILS TO MAKE THE ENGINE WORK.
-                  </p>
-                  <p className="text-white mt-2">
-                    CLICK ON EACH RED NOTE IN THIS WORKFLOW ONE-BY-ONE AND FOLLOW INSTRUCTIONS.
-                  </p>
-                </div>
-                
-                <div className="bg-[#1e3a5f] border border-[#1e4976] rounded-lg p-4">
-                  <h4 className="font-bold text-white uppercase mb-2">BLUE NOTES</h4>
-                  <p className="text-white">
-                    THEY MEAN THAT YOU <strong>MIGHT WANT TO</strong> CHANGE PROMPT / DETAILS TO BETTER FIT YOUR OWN WORKFLOW.
-                  </p>
-                  <p className="text-white mt-2">
-                    BUT IT'S NOT A REQUIREMENT, SO YOU CAN KEEP THEM AS IS.
-                  </p>
-                </div>
-                
-                <div className="bg-[#374151] border border-[#4b5563] rounded-lg p-4">
-                  <h4 className="font-bold text-white uppercase mb-2">GREY NOTES</h4>
-                  <p className="text-white">
-                    THESE ARE THE NODES YOU SHOULD NOT TOUCH - THEY ARE BUILT IN A WAY TO MAKE YOUR ENGINE WORK.
-                  </p>
-                  <p className="text-white mt-2">
-                    YOU CAN CHANGE THEM, BUT MAKE SURE THAT YOU KNOW WHAT YOU'RE DOING.
-                  </p>
-                </div>
-              </div>
-
-              <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-4">
-                <p>
-                  <strong>In Simple Words:</strong> The very first thing you must do is go through all the RED notes and put your own credentials - then the engine will be ready to go.
-                </p>
-              </div>
-
-              
-            </div>
-          )
-        },
-        {
-          id: 'connect-supabase-api',
-          title: 'Connect Supabase (API)',
-          description: 'Connect Supabase API to n8n',
-          content: (
-            <div className="space-y-4">
-              <p className="text-muted-foreground">Now let's edit the first red note - connecting Supabase API to n8n.</p>
-
-              <div className="bg-muted/50 rounded-lg p-4 space-y-3">
-                <p className="font-medium">Steps:</p>
-                <ol className="list-decimal list-inside space-y-2 ml-2">
-                  <li>Click on the <strong>first red note</strong> (Get API Credentials)</li>
-                  <li>Click on <strong>"Credential to connect with"</strong> dropdown</li>
-                  <li>Click <strong>"+ Create new credential"</strong></li>
-                </ol>
-              </div>
-
-              <SmoothImage src={n8nFirstRedNote} alt="n8n first red note" />
-
-              <p className="text-muted-foreground">The credentials window will popup. Here you need to enter:</p>
-
-              {/* Show saved values from Supabase Connection phase */}
-              <div className="space-y-4">
-                <p className="font-medium">Your Supabase credentials (from Supabase Connection phase):</p>
-                
-                <PulsatingCredentialField
-                  label="Host (Supabase Project URL)"
-                  value={supabaseConfig.supabase_url}
-                  onCopy={() => {
-                    navigator.clipboard.writeText(supabaseConfig.supabase_url);
-                    toast({ title: "Copied", description: "URL copied to clipboard" });
-                  }}
-                />
-                
-                <PulsatingCredentialField
-                  label="Service Role Secret"
-                  value={supabaseConfig.supabase_service_key}
-                  isPassword
-                  onCopy={() => {
-                    navigator.clipboard.writeText(supabaseConfig.supabase_service_key);
-                    toast({ title: "Copied", description: "Service key copied to clipboard" });
-                  }}
-                />
-              </div>
-
-              <SmoothImage src={n8nSupabaseCredentials} alt="n8n Supabase credentials popup" />
-
-              <p className="text-muted-foreground">Paste the Host and Service Role Secret, then click <strong>Save</strong>.</p>
-
-              <SmoothImage src={n8nSupabaseConnection} alt="n8n Supabase connection success" />
-
-              <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-4">
-                <p>
-                  <strong>Connection Done!</strong> You should see "Connection tested successfully". Exit the node.
-                </p>
-              </div>
-            </div>
-          )
-        },
-        {
-          id: 'get-prompts-node',
-          title: 'Get Prompts Node',
-          description: 'Select the Supabase connection you just made',
-          content: (
-            <div className="space-y-4">
-              <p className="text-muted-foreground">Open the next red note (Get Prompts) and select the connection you just created.</p>
-
-              <div className="bg-muted/50 rounded-lg p-4 space-y-3">
-                <p className="font-medium">Steps:</p>
-                <ol className="list-decimal list-inside space-y-2 ml-2">
-                  <li>Click on the <strong>Get Prompts</strong> node (next red note)</li>
-                  <li>Click on <strong>"Credential to connect with"</strong> dropdown</li>
-                  <li>Select the <strong>Supabase connection</strong> you just created</li>
-                  <li>That's it! You don't need to create a new connection - just reuse the one you made</li>
-                </ol>
-              </div>
-
-              <SmoothImage src={n8nGetPrompts} alt="n8n Get Prompts node" />
-
-              <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-4">
-                <p>
-                  <strong>Note:</strong> You only need to create a connection once. For all other Supabase nodes, just select the existing connection from the dropdown.
-                </p>
-              </div>
-            </div>
-          )
-        },
-        {
-          id: 'conversation-history',
-          title: 'Conversation History (Postgres)',
-          description: 'Connect Postgres for chat memory',
-          content: (
-            <div className="space-y-4">
-              <p className="text-muted-foreground">Now we need to connect the Conversation History node which uses Postgres (Supabase Memory).</p>
-
-              <SmoothImage src={n8nConversationHistory} alt="n8n Conversation History node" />
-
-              <div className="bg-muted/50 rounded-lg p-4 space-y-3">
-                <p className="font-medium">Step 1: Open the node and create new credentials</p>
-                <ol className="list-decimal list-inside space-y-2 ml-2">
-                  <li>Click on the <strong>Supabase Memory</strong> node (Conversation History)</li>
-                  <li>Click on <strong>"Credential to connect with"</strong> dropdown</li>
-                  <li>Click <strong>"+ Create new credential"</strong></li>
-                </ol>
-              </div>
-
-              <SmoothImage src={n8nPostgresNewCredential} alt="n8n Postgres new credential" />
-
-              <div className="bg-muted/50 rounded-lg p-4 space-y-3">
-                <p className="font-medium">Step 2: Get your Postgres connection details from Supabase</p>
-                <ol className="list-decimal list-inside space-y-2 ml-2">
-                  <li>Go to your Supabase project that you created</li>
-                </ol>
-              </div>
-
-              <SmoothImage src={supabaseProjectsList} alt="Supabase projects list" />
-
-              <div className="bg-muted/50 rounded-lg p-4 space-y-3">
-                <ol className="list-decimal list-inside space-y-2 ml-2" start={2}>
-                  <li>Click the <strong>Connect</strong> button at the top</li>
-                </ol>
-              </div>
-
-              <SmoothImage src={supabaseConnectButton} alt="Supabase Connect button" />
-
-              <div className="bg-muted/50 rounded-lg p-4 space-y-3">
-                <ol className="list-decimal list-inside space-y-2 ml-2" start={3}>
-                  <li>Scroll down to the <strong>Session pooler</strong> section</li>
-                  <li>Click <strong>"View parameters"</strong></li>
-                  <li>Copy the <strong>host</strong> value</li>
-                </ol>
-              </div>
-
-              <SmoothImage src={supabaseSessionPooler} alt="Supabase Session pooler section" />
-
-              <div className="bg-muted/50 rounded-lg p-4 space-y-3">
-                <p className="font-medium">Step 3: Fill in the n8n Postgres form</p>
-                <ol className="list-decimal list-inside space-y-2 ml-2">
-                  <li>Paste the <strong>Host</strong> from Session pooler into n8n</li>
-                </ol>
-              </div>
-
-              <SmoothImage src={n8nPostgresForm} alt="n8n Postgres form" />
-
-              <div className="bg-muted/50 rounded-lg p-4 space-y-3">
-                <ol className="list-decimal list-inside space-y-2 ml-2" start={2}>
-                  <li>Copy <strong>database</strong> and <strong>user</strong> from Supabase Session pooler</li>
-                </ol>
-              </div>
-
-              <SmoothImage src={supabaseSessionPoolerParams} alt="Supabase Session pooler parameters" />
-
-              <div className="bg-muted/50 rounded-lg p-4 space-y-3">
-                <ol className="list-decimal list-inside space-y-2 ml-2" start={3}>
-                  <li>Paste <strong>Database</strong> and <strong>User</strong> into the n8n form</li>
-                </ol>
-              </div>
-
-              <SmoothImage src={n8nPostgresFilled} alt="n8n Postgres form filled" />
-
-              <div className="bg-muted/50 rounded-lg p-4 space-y-3">
-                <ol className="list-decimal list-inside space-y-2 ml-2" start={4}>
-                  <li>In the <strong>Password</strong> field, enter the password you created when setting up the Supabase project</li>
-                </ol>
-              </div>
-
-              <SmoothImage src={n8nPostgresPassword} alt="n8n Postgres password field" />
-
-              <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-4">
-                <p>
-                  <strong>Forgot your password?</strong> If you don't remember your database password or it doesn't work:
-                </p>
-                <ol className="list-decimal list-inside space-y-2 ml-2 mt-2">
-                  <li>In Supabase, go to <strong>Database</strong> tab (on the left)</li>
-                  <li>Click <strong>Settings</strong></li>
-                  <li>Find <strong>Database password</strong> section</li>
-                  <li>Click <strong>Reset database password</strong></li>
-                </ol>
-              </div>
-
-              <SmoothImage src={supabaseDatabaseSettings} alt="Supabase Database Settings" />
-
-              <div className="bg-muted/50 rounded-lg p-4 space-y-3">
-                <ol className="list-decimal list-inside space-y-2 ml-2" start={5}>
-                  <li>Copy the <strong>port</strong> from Supabase Session pooler (usually 5432)</li>
-                </ol>
-              </div>
-
-              <SmoothImage src={supabaseSessionPoolerPort} alt="Supabase Session pooler port" />
-
-              <div className="bg-muted/50 rounded-lg p-4 space-y-3">
-                <ol className="list-decimal list-inside space-y-2 ml-2" start={6}>
-                  <li>Paste the <strong>Port</strong> (5432) into the n8n form</li>
-                </ol>
-              </div>
-
-              <SmoothImage src={n8nPostgresPort} alt="n8n Postgres port field" />
-
-              <div className="bg-muted/50 rounded-lg p-4 space-y-3">
-                <ol className="list-decimal list-inside space-y-2 ml-2" start={7}>
-                  <li>Click <strong>Save</strong> to save the connection</li>
-                </ol>
-              </div>
-
-              <SmoothImage src={n8nPostgresSave} alt="n8n Postgres save button" />
-
-              <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-4">
-                <p>
-                  <strong>Done!</strong> Your Postgres connection for chat memory is now configured. The Conversation History node will use this to store chat sessions.
-                </p>
-              </div>
-            </div>
-          )
-        },
-        {
-          id: 'followup-history-postgres',
-          title: 'Followup History (Postgres)',
-          description: 'Connect Postgres for the Followup workflow',
-          content: (
-            <div className="space-y-4">
-              <p className="text-muted-foreground">In the Create Followups section, find the <strong>Postgres Chat Memory</strong> node and connect it using the same Postgres connection you created in the previous step.</p>
-
-              <SmoothImage src={n8nFollowupHistoryNode} alt="n8n Followup History node location" />
-
-              <div className="bg-muted/50 rounded-lg p-4 space-y-3">
-                <p className="font-medium">Steps:</p>
-                <ol className="list-decimal list-inside space-y-2 ml-2">
-                  <li>Click on the <strong>Postgres Chat Memory</strong> node in the "Create Followups" section</li>
-                  <li>Click on <strong>"Credential to connect with"</strong> dropdown</li>
-                  <li>Select the <strong>same Postgres connection</strong> you created in the previous step (Conversation History)</li>
-                  <li>Click <strong>Save</strong> - you don't need to create a new connection!</li>
-                </ol>
-              </div>
-
-              <SmoothImage src={n8nFollowupHistoryConnection} alt="n8n Followup History connection selection" />
-
-              <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-4">
-                <p>
-                  <strong>Important:</strong> You already created the Postgres connection in the previous step. Just select the same connection from the dropdown - no need to create a new one.
-                </p>
-              </div>
-
-              <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-4">
-                <p>
-                  <strong>Done!</strong> The Followup History Postgres connection is now configured using your existing credentials.
-                </p>
-              </div>
-            </div>
-          )
-        },
-        {
-          id: 'setup-llm-openrouter',
-          title: 'Setup LLM (OpenRouter)',
-          description: 'Add OpenRouter API key for the LLM Model',
-          content: (
-            <div className="space-y-4">
-              <p className="text-muted-foreground">Now we need to connect the LLM Model node using OpenRouter.</p>
-
-              <SmoothImage src={n8nLlmModelNode} alt="n8n LLM Model node location" />
-
-              <div className="bg-muted/50 rounded-lg p-4 space-y-3">
-                <p className="font-medium">Steps:</p>
-                <ol className="list-decimal list-inside space-y-2 ml-2">
-                  <li>Click on the <strong>OpenRouter Chat Model</strong> node (in the LLM Model section)</li>
-                  <li>Click on <strong>"Credential to connect with"</strong> dropdown</li>
-                  <li>Click <strong>"+ Create new credential"</strong></li>
-                </ol>
-              </div>
-
-              <p className="text-muted-foreground">Copy your OpenRouter API key and paste it into the connection form:</p>
-
-              {/* Pulsating credential field */}
-              <PulsatingCredentialField
-                label="OpenRouter API Key (from LLM Connection phase)"
-                value={llmConfig.openrouter_api_key}
-                isPassword={true}
-                onCopy={() => {
-                  navigator.clipboard.writeText(llmConfig.openrouter_api_key);
-                  toast({ title: "Copied", description: "OpenRouter API key copied to clipboard" });
-                }}
-              />
-
-              <SmoothImage src={n8nOpenrouterConnection} alt="n8n OpenRouter connection form" />
-
-              <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-4">
-                <p>
-                  <strong>Done!</strong> Your OpenRouter LLM connection is now configured. The AI agent will use this for generating responses.
-                </p>
-              </div>
-
-              <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-4">
-                <p>
-                  <strong>Important:</strong> There are multiple LLM Model nodes in the workflow that look exactly the same - all highlighted in red. You don't need to create new credentials for each one. Simply click on each LLM node and select the OpenRouter connection you just created from the dropdown. That's it!
-                </p>
-              </div>
-
-              <SmoothImage src={n8nMultipleLlmNodes} alt="Multiple LLM nodes highlighted in the workflow" />
-            </div>
-          )
-        },
-        {
-          id: 'knowledgebase-embeddings',
-          title: 'Knowledgebase - Embeddings OpenAI',
-          description: 'Add OpenAI API key for embeddings',
-          content: (
-            <div className="space-y-4">
-              <p className="text-muted-foreground">First, we need to connect the <strong>Embeddings OpenAI</strong> node which is used for creating vector embeddings of your knowledge base.</p>
-
-              <SmoothImage src={n8nEmbeddingsOpenaiNode} alt="n8n Embeddings OpenAI node location" />
-
-              <div className="bg-muted/50 rounded-lg p-4 space-y-3">
-                <p className="font-medium">Steps:</p>
-                <ol className="list-decimal list-inside space-y-2 ml-2">
-                  <li>Click on the <strong>Embeddings OpenAI</strong> node (in the Supabase Knowledgebase section)</li>
-                  <li>Click on <strong>"Credential to connect with"</strong> dropdown</li>
-                  <li>Click <strong>"+ Create new credential"</strong></li>
-                </ol>
-              </div>
-
-              <p className="text-muted-foreground">Copy your OpenAI API key and paste it into the connection form:</p>
-
-              {/* Pulsating credential field */}
-              <PulsatingCredentialField
-                label="OpenAI API Key (from LLM Connection phase)"
-                value={llmConfig.openai_api_key}
-                isPassword={true}
-                onCopy={() => {
-                  navigator.clipboard.writeText(llmConfig.openai_api_key);
-                  toast({ title: "Copied", description: "OpenAI API key copied to clipboard" });
-                }}
-              />
-
-              <SmoothImage src={n8nOpenaiConnection} alt="n8n OpenAI connection form" />
-
-              <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-4">
-                <p>
-                  <strong>Connection Done!</strong> You should see "Connection tested successfully". Click Save and exit the node.
-                </p>
-              </div>
-            </div>
-          )
-        },
-        {
-          id: 'knowledgebase-tool',
-          title: 'Knowledgebase - Tool Connection',
-          description: 'Select the Supabase connection for the knowledgebase',
-          content: (
-            <div className="space-y-4">
-              <p className="text-muted-foreground">Now connect the <strong>Knowledgebase tool</strong> node using the <strong>same Supabase connection</strong> you created earlier.</p>
-
-              <SmoothImage src={n8nKnowledgebaseNode} alt="n8n Knowledgebase tool node location" />
-
-              <div className="bg-muted/50 rounded-lg p-4 space-y-3">
-                <p className="font-medium">Steps:</p>
-                <ol className="list-decimal list-inside space-y-2 ml-2">
-                  <li>Click on the <strong>Knowledgebase tool</strong> node (in the Supabase Knowledgebase section)</li>
-                  <li>Click on <strong>"Credential to connect with"</strong> dropdown</li>
-                  <li>Select the <strong>same Supabase connection</strong> you created earlier in this phase</li>
-                  <li>That's it! Just reuse the existing connection - no need to create a new one</li>
-                </ol>
-              </div>
-
-              <SmoothImage src={n8nKnowledgebaseConnection} alt="n8n Knowledgebase tool connection selection" />
-
-              <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-4">
-                <p>
-                  <strong>Note:</strong> This uses the same Supabase connection you created earlier for the API nodes. Just select it from the dropdown.
-                </p>
-              </div>
-
-              <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-4">
-                <p>
-                  <strong>Almost done!</strong> One more step - configure your appointment name.
-                </p>
-              </div>
-            </div>
-          )
-        },
-        {
-          id: 'appointment-name',
-          title: 'Appointment Name',
-          description: 'Set the appointment title that leads will see',
-          content: (
-            <div className="space-y-4">
-              <p className="text-muted-foreground">Configure the <strong>appointment title</strong> that your leads will see in their calendar when they book.</p>
-
-              <SmoothImage src={n8nBookAppointmentNode} alt="n8n bookAppointment1 node location" />
-
-              <div className="bg-muted/50 rounded-lg p-4 space-y-3">
-                <p className="font-medium">Steps:</p>
-                <ol className="list-decimal list-inside space-y-2 ml-2">
-                  <li>Click on the <strong>bookAppointment1</strong> node (in the "Booking Functions Connected with HighLevel Calendar" section)</li>
-                  <li>Scroll down to find the <strong>JSON</strong> field</li>
-                </ol>
-              </div>
-
-              <SmoothImage src={n8nBookAppointmentJson} alt="n8n bookAppointment JSON field" />
-
-              <div className="bg-muted/50 rounded-lg p-4 space-y-3">
-                <p className="font-medium">Find and change the title:</p>
-                <ol className="list-decimal list-inside space-y-2 ml-2">
-                  <li>Click on the JSON field to open the expression editor</li>
-                  <li>Find the <code className="bg-muted px-1 py-0.5 rounded">"title"</code> field in the JSON</li>
-                  <li>Change the value to your desired appointment title</li>
-                  <li>Example: <code className="bg-muted px-1 py-0.5 rounded">"title": "Strategy Call with Your Company"</code></li>
-                </ol>
-              </div>
-
-              <SmoothImage src={n8nBookAppointmentTitle} alt="n8n bookAppointment title field highlighted" />
-
-              <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-4">
-                <p>
-                  <strong>Important:</strong> This is the title your leads will see in their calendar invitation. Make it clear and professional!
-                </p>
-              </div>
-            </div>
-          )
-        },
-        {
-          id: 'save-text-engine',
-          title: 'Text Engine',
-          description: 'Native text engine — no extra setup needed',
-          content: (
-            <div className="space-y-4">
-              <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-4">
-                <p>
-                  <strong>Native text engine active.</strong> The platform's built-in AI generates setter replies — no n8n workflow connection required. Click <strong>Done</strong> to continue.
-                </p>
-              </div>
-            </div>
-          )
-        }
-      ]
-    },
     // Text Prompts Setup Phase - MOVED HERE (after Text AI Rep Setup)
     {
       id: 'text-prompts-setup',
@@ -3541,32 +2648,13 @@ const [loading, setLoading] = useState(false);
                 Before we set up your prompts, let's understand how they work in our system. This will save you a lot of time!
               </p>
 
-              <div className="bg-muted/50 rounded-lg p-4 space-y-4">
-                <h4 className="font-semibold text-lg">The Traditional Way (Complicated)</h4>
-                <p className="text-sm text-muted-foreground">
-                  Usually when you want to update an AI agent's behavior, you need to:
-                </p>
-                <ol className="list-decimal list-inside space-y-1 text-sm text-muted-foreground ml-2">
-                  <li>Go to n8n and find the correct workflow</li>
-                  <li>Locate the node where the prompt is set</li>
-                  <li>Copy the prompt to ChatGPT</li>
-                  <li>Ask it to modify certain details</li>
-                  <li>Copy the modified prompt back</li>
-                  <li>Update it in n8n and save</li>
-                </ol>
-                <p className="text-sm text-muted-foreground italic">That's a lot of steps for a simple text change!</p>
-              </div>
-
               <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-4 space-y-4">
-                <h4 className="font-semibold text-lg text-green-900 dark:text-green-100">Our Way (Simple)</h4>
-                <p className="text-sm text-green-900 dark:text-green-200">
-                  We've streamlined everything. Here's how it works:
-                </p>
+                <h4 className="font-semibold text-lg text-green-900 dark:text-green-100">How prompts flow</h4>
                 <div className="flex flex-col gap-3 text-sm">
                   <div className="flex items-center gap-3">
                     <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center font-bold text-primary">1</div>
                     <span className="text-green-900 dark:text-green-200">
-                      <strong>You update prompts here</strong> - in our system's Prompt Management tab
+                      <strong>You update prompts here</strong> - in the Prompt Management tab
                     </span>
                   </div>
                   <div className="flex items-center gap-3">
@@ -3578,7 +2666,7 @@ const [loading, setLoading] = useState(false);
                   <div className="flex items-center gap-3">
                     <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center font-bold text-primary">3</div>
                     <span className="text-green-900 dark:text-green-200">
-                      <strong>n8n fetches from Supabase</strong> - it automatically gets the latest prompts
+                      <strong>The text engine reads them live</strong> - every reply your Text AI Rep generates uses the latest saved prompts
                     </span>
                   </div>
                 </div>
@@ -3587,16 +2675,7 @@ const [loading, setLoading] = useState(false);
               <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4">
                 <h4 className="font-semibold mb-2 text-blue-900 dark:text-blue-100">Why This Matters</h4>
                 <p className="text-sm text-blue-900 dark:text-blue-200">
-                  You no longer need to touch n8n to update prompts. Just come to our system, make your changes, and your Text AI agents will automatically use the updated prompts. That's it!
-                </p>
-              </div>
-
-              <SmoothImage src={n8nAgentBotPersona} alt="n8n agent showing prompts coming from Supabase" />
-
-              <div className="bg-muted/50 rounded-lg p-4">
-                <p className="text-sm text-muted-foreground">
-                  <strong>Notice:</strong> In the screenshot above, you can see the agent's System Message uses variables like <code className="bg-background px-1.5 py-0.5 rounded text-xs font-mono">{'{{ $("Set_Prompts").item.json.Prompt_0 }}'}</code>. 
-                  These are pulling directly from your Supabase Prompts table, which syncs from this system!
+                  There is nothing to redeploy or re-wire. Just come to our system, make your changes, and your Text AI agents will automatically use the updated prompts. That's it!
                 </p>
               </div>
             </div>
@@ -5849,119 +4928,25 @@ const [loading, setLoading] = useState(false);
           )
         },
         {
-          id: 'download-retell-templates',
-          title: 'Download Agent Templates',
-          description: 'Download all Retell AI agent templates directly',
-          content: (
-            <div className="space-y-4">
-              <p>Download all agent templates below:</p>
-              
-              {/* Visual folder structure - matching n8n workflow download style */}
-              <div className="bg-card border border-border rounded-lg overflow-hidden">
-                {/* Building Flow Folder */}
-                <div>
-                  <div className="flex items-center gap-3 px-4 py-3 bg-muted/30">
-                    <svg className="h-5 w-5 text-amber-500" fill="currentColor" viewBox="0 0 20 20">
-                      <path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" />
-                    </svg>
-                    <span className="font-medium">Building Flow</span>
-                    <span className="text-xs text-muted-foreground ml-auto">2 Agents</span>
-                  </div>
-                  <div className="divide-y divide-border/50">
-                    <div className="px-4 py-2 pl-12 bg-background flex items-center justify-between">
-                      <span className="text-sm text-muted-foreground">Inbound_Voice_AI_Rep.json</span>
-                      <a 
-                        href="/retell-agents/Inbound_Agent.json" 
-                        download="Inbound_Voice_AI_Rep.json"
-                        className="text-xs text-primary hover:underline flex items-center gap-1"
-                      >
-                        <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                        </svg>
-                        Download
-                      </a>
-                    </div>
-                    <div className="px-4 py-2 pl-12 bg-background flex items-center justify-between">
-                      <span className="text-sm text-muted-foreground">Outbound_Voice_AI_Rep.json</span>
-                      <a 
-                        href="/retell-agents/Outbound_Agent.json" 
-                        download="Outbound_Voice_AI_Rep.json"
-                        className="text-xs text-primary hover:underline flex items-center gap-1"
-                      >
-                        <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                        </svg>
-                        Download
-                      </a>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4">
-                <p>
-                  <strong>Tip:</strong> Download both agent files and save them to a folder on your computer. You'll import these into Retell AI in the next step.
-                </p>
-              </div>
-            </div>
-          )
-        },
-        {
-          id: 'import-retell-agents',
-          title: 'Import Agents to Retell AI',
-          description: 'Create folder and import agents into Retell AI',
-          content: (
-            <div className="space-y-4">
-              <p>First, create a folder in Retell AI, then import each agent into it:</p>
-
-              <div className="bg-muted/50 rounded-lg p-4 space-y-3">
-                <p className="font-medium">Step 1: Create Folder in Retell AI</p>
-                <ol className="list-decimal list-inside space-y-2 ml-2">
-                  <li>In your Retell AI account, click on <strong>"Agents"</strong> in the left sidebar</li>
-                  <li>Click the <strong>"+"</strong> button next to "FOLDERS"</li>
-                  <li>Create a folder named: <strong>Building Flow</strong></li>
-                  <li>Click on the folder to open it</li>
-                </ol>
-              </div>
-
-              <div className="bg-muted/50 rounded-lg p-4 space-y-3">
-                <p className="font-medium">Step 2: Import Agents</p>
-                <ol className="list-decimal list-inside space-y-2 ml-2">
-                  <li>While inside the <strong>Building Flow</strong> folder, click <strong>"Import"</strong> in the top right</li>
-                  <li>Select <strong>Inbound_Voice_AI_Rep.json</strong> and click <strong>"Save"</strong></li>
-                  <li>Click <strong>"Import"</strong> again and select <strong>Outbound_Voice_AI_Rep.json</strong></li>
-                  <li>Both agents should now appear in your folder</li>
-                </ol>
-              </div>
-
-              <SmoothImage src={retellImportAgent} alt="Retell AI Import button and upload dialog" />
-
-              <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-4">
-                <p>
-                  <strong>Important:</strong> Make sure to import both the Outbound Voice AI Rep and Inbound Voice AI Rep agents - they serve different purposes in your automation system.
-                </p>
-              </div>
-            </div>
-          )
-        },
-        {
           id: 'organize-retell-folders',
           title: 'Verify Folder Structure',
-          description: 'Confirm all agents are organized correctly',
+          description: 'Confirm your agents are organized correctly',
           content: (
             <div className="space-y-4">
-              <p>Verify your Retell AI folder structure matches this layout:</p>
+              <p>
+                Your voice agents are created and managed by this platform - you never import them by hand.
+                In the Retell AI dashboard they are kept together in a <strong>BFD Setter</strong> folder:
+              </p>
 
-              {/* Expected folder structure visual - matching download section styling */}
+              {/* Expected folder structure visual */}
               <div className="bg-card border border-border rounded-lg overflow-hidden">
-                {/* Building Flow Folder */}
                 <div>
                   <div className="flex items-center gap-3 px-4 py-3 bg-muted/30">
                     <svg className="h-5 w-5 text-amber-500" fill="currentColor" viewBox="0 0 20 20">
                       <path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" />
                     </svg>
-                    <span className="font-medium">Building Flow</span>
-                    <span className="text-xs text-muted-foreground ml-auto">2 Agents</span>
+                    <span className="font-medium">BFD Setter</span>
+                    <span className="text-xs text-muted-foreground ml-auto">Your Agents</span>
                   </div>
                   <div className="divide-y divide-border/50">
                     <div className="px-4 py-2 pl-12 bg-background">
@@ -5975,11 +4960,11 @@ const [loading, setLoading] = useState(false);
               </div>
 
               <p className="text-sm text-muted-foreground">Your Retell AI folders should look like this:</p>
-              <SmoothImage src={retellBuildingFlowFolder} alt="Retell AI Building Flow folder structure" />
+              <SmoothImage src={retellBfdSetterFolder} alt="Retell AI BFD Setter folder structure" />
 
               <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-4">
                 <p>
-                  <strong>Success!</strong> Your Retell AI agents are now imported and organized. Continue to configure them in the next steps.
+                  <strong>Success!</strong> Your Retell AI agents are organized. Continue to configure them in the next steps.
                 </p>
               </div>
             </div>
@@ -6223,855 +5208,6 @@ const [loading, setLoading] = useState(false);
               <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-4">
                 <p>
                   <strong>Success!</strong> With all Retell credentials configured, your voice AI system is now fully connected.
-                </p>
-              </div>
-            </div>
-          )
-        }
-      ]
-    },
-    // Voice Inbound Setup Phase
-    {
-      id: 'voice-inbound-setup',
-      title: 'Inbound AI Rep Setup',
-      description: 'Configure your Inbound Voice AI Rep',
-      steps: [
-        {
-          id: 'retell-inbound-agent-id',
-          title: 'Inbound Agent ID',
-          description: 'Get your Inbound Agent ID from Retell AI',
-          content: (
-            <div className="space-y-4">
-              {/* FIELD AT TOP */}
-              <div className={cn(
-                "space-y-2 p-4 rounded-lg border-2 relative",
-                savedRetellConfig.retell_inbound_agent_id 
-                  ? "border-green-500 bg-green-500/10" 
-                  : "animate-pulse-red border-red-500/50 bg-red-500/5"
-              )}>
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="setup-retell-inbound-agent-id" className="text-sm font-medium">
-                    Inbound Agent ID
-                  </Label>
-                  {savedRetellConfig.retell_inbound_agent_id && (
-                    <Badge className="bg-green-500 hover:bg-green-600 text-white">
-                      Configured
-                    </Badge>
-                  )}
-                </div>
-                <Input
-                  id="setup-retell-inbound-agent-id"
-                  value={retellConfig.retell_inbound_agent_id}
-                  onChange={(e) => setRetellConfig(prev => ({ ...prev, retell_inbound_agent_id: e.target.value }))}
-                  placeholder="Enter your Inbound Agent ID"
-                  className="font-mono text-sm"
-                />
-                <div className="flex gap-2 pt-2">
-                  <Button
-                    onClick={() => saveRetellField('retell_inbound_agent_id', retellConfig.retell_inbound_agent_id)}
-                    disabled={loading || !retellConfig.retell_inbound_agent_id}
-                    size="sm"
-                    className={savedFields.has('retell_inbound_agent_id') ? 'bg-green-600 hover:bg-green-700' : ''}
-                  >
-                    {loading ? (
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current" />
-                    ) : savedFields.has('retell_inbound_agent_id') ? (
-                      'Configured'
-                    ) : (
-                      'Save'
-                    )}
-                  </Button>
-                </div>
-              </div>
-
-              {/* DESCRIPTION BELOW */}
-              <div className="bg-muted/50 rounded-lg p-4 space-y-3">
-                <p className="font-medium">How to find your Inbound Agent ID:</p>
-                <ol className="list-decimal list-inside space-y-2 ml-2">
-                  <li>Go to <strong>Agents</strong> in your Retell AI dashboard</li>
-                  <li>Open the <strong>Building Flow</strong> folder</li>
-                  <li>Click on your <strong>Inbound Voice AI Rep</strong> agent</li>
-                  <li>Copy the <strong>Agent ID</strong> from the top left (shown under the agent name)</li>
-                </ol>
-              </div>
-
-              <SmoothImage src={retellInboundAgentClick} alt="Click on Inbound Voice AI Rep in Building Flow folder" />
-
-              <SmoothImage src={retellInboundAgentIdCopy} alt="Copy Inbound Agent ID from top left" />
-
-              <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4">
-                <p>
-                  <strong>Note:</strong> The Inbound Voice AI Rep handles incoming calls to your system.
-                </p>
-              </div>
-            </div>
-          )
-        },
-        {
-          id: 'get-lead-details-workflow',
-          title: 'Get Lead Details Workflow',
-          description: 'Configure the Get Lead Details workflow in n8n',
-          content: (
-            <div className="space-y-4">
-              <p className="text-muted-foreground">Configure the n8n Get Lead Details workflow for voice agent data.</p>
-
-              <div className="bg-muted/50 rounded-lg p-4 space-y-3">
-                <p className="font-medium">Step 1: Open the workflow</p>
-                <ol className="list-decimal list-inside space-y-2 ml-2">
-                  <li>Go to your <strong>n8n dashboard</strong></li>
-                  <li>Open the <strong>Get Lead Details</strong> workflow</li>
-                </ol>
-              </div>
-
-              <SmoothImage src={n8nGetLeadDetailsList} alt="n8n workflows list with Get Lead Details" />
-
-              <div className="bg-muted/50 rounded-lg p-4 space-y-3">
-                <p className="font-medium">Step 2: Configure Supabase connections</p>
-                <ol className="list-decimal list-inside space-y-2 ml-2">
-                  <li>Click on the <strong>Supabase nodes</strong> (Get API Credentials and Get Prompts)</li>
-                </ol>
-              </div>
-
-              <SmoothImage src={n8nGetLeadDetailsWorkflow} alt="Click on Supabase nodes" />
-
-              <div className="bg-muted/50 rounded-lg p-4 space-y-3">
-                <ol className="list-decimal list-inside space-y-2 ml-2" start={2}>
-                  <li>Choose the <strong>same connection</strong> you already have - you don't need to create a new one</li>
-                </ol>
-              </div>
-
-              <SmoothImage src={n8nGetLeadDetailsSupabase} alt="Select existing Supabase connection" />
-
-              <div className="bg-muted/50 rounded-lg p-4 space-y-3">
-                <p className="font-medium">Step 3: Save and activate the workflow</p>
-                <ol className="list-decimal list-inside space-y-2 ml-2">
-                  <li>Toggle the <strong>Active</strong> switch to ON in the top right</li>
-                  <li>Click <strong>Save</strong></li>
-                </ol>
-              </div>
-
-              <SmoothImage src={n8nGetLeadDetailsSave} alt="Activate and save the workflow" />
-
-              <div className="bg-muted/50 rounded-lg p-4 space-y-3">
-                <p className="font-medium">Step 4: Copy the production webhook URL</p>
-                <ol className="list-decimal list-inside space-y-2 ml-2">
-                  <li>Click on the <strong>Webhook</strong> node (first node)</li>
-                </ol>
-              </div>
-
-              <SmoothImage src={n8nGetLeadDetailsWebhook} alt="Click on Webhook node" />
-
-              <div className="bg-muted/50 rounded-lg p-4 space-y-3">
-                <ol className="list-decimal list-inside space-y-2 ml-2" start={2}>
-                  <li>Click on <strong>Production URL</strong> tab</li>
-                  <li>Copy the webhook URL - you'll need it in the next step</li>
-                </ol>
-              </div>
-
-              <SmoothImage src={n8nGetLeadDetailsProductionUrl} alt="Copy Production URL" />
-
-              <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-4">
-                <p>
-                  <strong>Success!</strong> The Get Lead Details workflow is configured. Keep the webhook URL copied - you'll paste it into Retell in the next step.
-                </p>
-              </div>
-            </div>
-          )
-        },
-        {
-          id: 'retell-inbound-webhook',
-          title: 'Retell Inbound Webhook',
-          description: 'Configure the inbound webhook for each phone number',
-          content: (
-            <div className="space-y-4">
-              <p className="text-muted-foreground">Configure the inbound webhook in Retell for each of your phone numbers.</p>
-
-              <div className="bg-muted/50 rounded-lg p-4 space-y-3">
-                <p className="font-medium">Step 1: Go to Phone Numbers</p>
-                <ol className="list-decimal list-inside space-y-2 ml-2">
-                  <li>In Retell, click on <strong>Phone Numbers</strong> in the left sidebar</li>
-                  <li>Select your <strong>main phone number</strong> (or the first one if you have multiple)</li>
-                </ol>
-              </div>
-
-              <div className="bg-muted/50 rounded-lg p-4 space-y-3">
-                <p className="font-medium">Step 2: Configure the inbound webhook</p>
-                <ol className="list-decimal list-inside space-y-2 ml-2">
-                  <li>Check the <strong>"Add an inbound webhook"</strong> checkbox</li>
-                  <li>Paste the n8n webhook URL you copied from the previous step</li>
-                  <li>The settings will be <strong>automatically saved</strong></li>
-                </ol>
-              </div>
-
-              <SmoothImage src={retellPhoneNumbersWebhook} alt="Retell Phone Numbers with inbound webhook configured" />
-
-              <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-4">
-                <p>
-                  <strong>Important:</strong> If you have <strong>multiple phone numbers</strong>, you MUST repeat this process for <strong>each and every number</strong>. Each phone number needs to have the inbound webhook configured.
-                </p>
-              </div>
-
-              <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-4">
-                <p>
-                  <strong>Success!</strong> The inbound webhook is now configured. When someone calls your Retell number, the workflow will fetch the lead details automatically.
-                </p>
-              </div>
-            </div>
-          )
-        },
-        {
-          id: 'call-finished-webhook',
-          title: 'Call Finished Webhook',
-          description: 'Configure the Call Finished workflow webhook in HighLevel',
-          content: (
-            <div className="space-y-4">
-              <p className="text-muted-foreground">Go to HighLevel and configure the Call Finished workflow webhook trigger.</p>
-
-              <div className="bg-muted/50 rounded-lg p-4 space-y-3">
-                <p className="font-medium">Step 1: Open the Call Finished workflow</p>
-                <ol className="list-decimal list-inside space-y-2 ml-2">
-                  <li>Go to <strong>Automation → Workflows</strong></li>
-                  <li>Find and click on <strong>Call Finished</strong> workflow</li>
-                </ol>
-              </div>
-
-              <SmoothImage src={ghlCallFinishedWorkflow} alt="HighLevel workflows list with Call Finished" />
-
-              <div className="bg-muted/50 rounded-lg p-4 space-y-3">
-                <p className="font-medium">Step 2: Click on the Trigger</p>
-                <ol className="list-decimal list-inside space-y-2 ml-2">
-                  <li>Click on the <strong>Trigger - Inbound Webhook</strong> node at the top of the workflow</li>
-                </ol>
-              </div>
-
-              <SmoothImage src={ghlCallReceivedTrigger} alt="Click on Trigger Inbound Webhook node" />
-
-              <div className="bg-muted/50 rounded-lg p-4 space-y-3">
-                <p className="font-medium">Step 3: Copy the webhook URL and paste it below</p>
-                <ol className="list-decimal list-inside space-y-2 ml-2">
-                  <li>In the panel that opens, find the <strong>URL (POST/GET/PUT)</strong> field</li>
-                  <li>Copy that webhook URL</li>
-                  <li>Paste it in the field below and click <strong>Send Test Payload</strong></li>
-                </ol>
-              </div>
-
-              <SmoothImage src={ghlCallReceivedWebhookUrl} alt="Copy webhook URL from trigger" />
-
-              {/* Webhook URL Input Field */}
-              <div className={cn(
-                "space-y-2 p-4 rounded-lg border-2 relative",
-                callReceivedWebhookSent
-                  ? "border-green-500 bg-green-500/10"
-                  : "animate-pulse-red border-red-500/50 bg-red-500/5"
-              )}>
-                <div className="flex items-center justify-between">
-                  <Label className="text-sm font-medium">Call Finished Webhook URL</Label>
-                  {callReceivedWebhookSent && (
-                    <Badge className="bg-green-500 hover:bg-green-600 text-white">
-                      Payload Sent
-                    </Badge>
-                  )}
-                </div>
-                <Input
-                  type="text"
-                  value={callReceivedWebhookUrl}
-                  onChange={(e) => setCallReceivedWebhookUrl(e.target.value)}
-                  placeholder="Paste the webhook URL here"
-                  className="font-mono text-sm"
-                />
-                <div className="flex gap-2 pt-2">
-                  <Button
-                    onClick={() => sendCallReceivedTestPayload(callReceivedWebhookUrl)}
-                    disabled={sendingCallReceivedPayload || !callReceivedWebhookUrl.trim()}
-                    size="sm"
-                    className={callReceivedWebhookSent ? "bg-green-500 hover:bg-green-600" : ""}
-                  >
-                    {sendingCallReceivedPayload ? (
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current" />
-                    ) : callReceivedWebhookSent ? (
-                      'Resend Test Payload'
-                    ) : (
-                      'Send Test Payload'
-                    )}
-                  </Button>
-                </div>
-              </div>
-
-              <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4">
-                <p>
-                  <strong>Important:</strong> The test payload was sent to activate the webhook. Now you need to fetch and select this request in HighLevel to complete the setup.
-                </p>
-              </div>
-
-              <div className="bg-muted/50 rounded-lg p-4 space-y-3">
-                <p className="font-medium">Step 4: Fetch the test request</p>
-                <ol className="list-decimal list-inside space-y-2 ml-2">
-                  <li>Go back to the HighLevel workflow trigger panel</li>
-                  <li>Click the <strong>"Fetch Sample Requests"</strong> button</li>
-                </ol>
-              </div>
-
-              <SmoothImage src={ghlCallReceivedFetchRequests} alt="Click Fetch Sample Requests button" />
-
-              <div className="bg-muted/50 rounded-lg p-4 space-y-3">
-                <p className="font-medium">Step 5: Select the test request</p>
-                <ol className="list-decimal list-inside space-y-2 ml-2">
-                  <li>A dropdown will appear with available requests</li>
-                  <li>Select the request that just appeared (the test request we sent)</li>
-                </ol>
-              </div>
-
-              <SmoothImage src={ghlCallReceivedSelectPayload} alt="Select test request from dropdown" />
-
-              <div className="bg-muted/50 rounded-lg p-4 space-y-3">
-                <p className="font-medium">Step 6: Confirm the test request</p>
-                <ol className="list-decimal list-inside space-y-2 ml-2">
-                  <li>Click <strong>"Save Trigger"</strong> button to confirm the selection</li>
-                </ol>
-              </div>
-
-              <SmoothImage src={ghlCallReceivedPayloadSelected} alt="Test payload selected" />
-
-              <div className="bg-muted/50 rounded-lg p-4 space-y-3">
-                <p className="font-medium">Step 7: Publish and save the workflow</p>
-                <ol className="list-decimal list-inside space-y-2 ml-2">
-                  <li>Toggle the <strong>Publish</strong> switch to ON</li>
-                  <li>Click the <strong>Save</strong> button in the top right corner</li>
-                </ol>
-              </div>
-
-              <SmoothImage src={ghlCallReceivedSavePublish} alt="Publish and save the workflow" />
-
-              <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-4">
-                <p>
-                  <strong>Success!</strong> The Call Finished workflow is now configured. Continue to the next step to connect this webhook to Retell.
-                </p>
-              </div>
-            </div>
-          )
-        },
-        {
-          id: 'retell-webhook-settings',
-          title: 'Retell Webhook Settings',
-          description: 'Configure the Retell inbound agent webhook settings',
-          content: (
-            <div className="space-y-4">
-              <p className="text-muted-foreground">Now go to Retell and configure the inbound agent webhook settings with the HighLevel webhook URL you just set up.</p>
-
-              <div className="bg-muted/50 rounded-lg p-4 space-y-3">
-                <p className="font-medium">Step 1: Open a Retell Agent</p>
-                <ol className="list-decimal list-inside space-y-2 ml-2">
-                  <li>Go to your <strong>Retell AI dashboard</strong></li>
-                  <li>Navigate to <strong>Agents</strong> and open the <strong>Building Flow</strong> folder</li>
-                  <li>Click on either <strong>Outbound Voice AI Rep</strong> or <strong>Inbound Voice AI Rep</strong></li>
-                </ol>
-              </div>
-
-              <SmoothImage src={retellOutboundAgentClick} alt="Open Outbound Voice AI Rep agent" />
-
-              <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-4">
-                <p>
-                  <strong>Important:</strong> You need to configure the webhook settings for <strong>BOTH</strong> agents (Inbound Voice AI Rep and Outbound Voice AI Rep). After a call is finished, the system needs to send the call details to HighLevel - this applies to both inbound and outbound calls.
-                </p>
-              </div>
-
-              <div className="bg-muted/50 rounded-lg p-4 space-y-3">
-                <p className="font-medium">Step 2: Configure Webhook Settings</p>
-                <ol className="list-decimal list-inside space-y-2 ml-2">
-                  <li>Scroll down to <strong>Webhook Settings</strong> section</li>
-                  <li>Find the <strong>Agent Level Webhook URL</strong> field</li>
-                  <li>Copy the webhook URL below and paste it into Retell</li>
-                </ol>
-              </div>
-
-              {/* Show the webhook URL to copy */}
-              {callReceivedWebhookUrl ? (
-                <PulsatingCredentialField
-                  label="HighLevel Call Finished Webhook URL"
-                  value={callReceivedWebhookUrl}
-                  onCopy={() => {
-                    navigator.clipboard.writeText(callReceivedWebhookUrl);
-                    toast({ title: "Copied", description: "Webhook URL copied to clipboard" });
-                  }}
-                />
-              ) : (
-                <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-4">
-                  <p>
-                    <strong>Note:</strong> You need to complete the previous step first to get the webhook URL.
-                  </p>
-                </div>
-              )}
-
-              <SmoothImage src={retellInboundWebhookSettings} alt="Retell Webhook Settings section" />
-
-              <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4">
-                <p>
-                  <strong>Note:</strong> After pasting the webhook URL, make sure to save your changes in Retell.
-                </p>
-              </div>
-            </div>
-          )
-        },
-        {
-          id: 'booking-workflow',
-          title: 'Booking Workflow',
-          description: 'Configure the Appointment Booking Functions workflow in n8n',
-          content: (
-            <div className="space-y-4">
-              <p className="text-muted-foreground">Configure the n8n Appointment Booking Functions workflow.</p>
-
-              <div className="bg-muted/50 rounded-lg p-4 space-y-3">
-                <p className="font-medium">Step 1: Open the workflow</p>
-                <ol className="list-decimal list-inside space-y-2 ml-2">
-                  <li>Go to your <strong>n8n dashboard</strong></li>
-                  <li>Open the <strong>Appointment Booking Functions</strong> workflow</li>
-                </ol>
-              </div>
-
-              <SmoothImage src={n8nBookAppointmentList} alt="n8n workflows list with Appointment Booking Functions" />
-
-              <div className="bg-muted/50 rounded-lg p-4 space-y-3">
-                <p className="font-medium">Step 2: Configure API Credentials</p>
-                <ol className="list-decimal list-inside space-y-2 ml-2">
-                  <li>Click on the <strong>Get API Credentials</strong> module</li>
-                </ol>
-              </div>
-
-              <SmoothImage src={n8nBookAppointmentWorkflow} alt="Click on Get API Credentials module" />
-
-              <div className="bg-muted/50 rounded-lg p-4 space-y-3">
-                <ol className="list-decimal list-inside space-y-2 ml-2" start={2}>
-                  <li>Choose the <strong>same connection</strong> that you already have after setting up the Text Engine and Supabase (you don't need to create a new one)</li>
-                </ol>
-              </div>
-
-              <SmoothImage src={n8nBookAppointmentCredentials} alt="Select existing Supabase connection" />
-
-              <div className="bg-muted/50 rounded-lg p-4 space-y-3">
-                <p className="font-medium">Step 3: Configure Appointment Title</p>
-                <ol className="list-decimal list-inside space-y-2 ml-2">
-                  <li>Click on the <strong>bookAppointment</strong> module</li>
-                </ol>
-              </div>
-
-              <SmoothImage src={n8nBookAppointmentModule} alt="Click on bookAppointment module" />
-
-              <div className="bg-muted/50 rounded-lg p-4 space-y-3">
-                <ol className="list-decimal list-inside space-y-2 ml-2" start={2}>
-                  <li>Scroll down to the <strong>JSON</strong> section and click to open it</li>
-                </ol>
-              </div>
-
-              <SmoothImage src={n8nBookAppointmentJson} alt="Open JSON section" />
-
-              <div className="bg-muted/50 rounded-lg p-4 space-y-3">
-                <ol className="list-decimal list-inside space-y-2 ml-2" start={3}>
-                  <li>Find the <strong>"title"</strong> field and change the name to how you want the lead to see the appointment in their calendar</li>
-                </ol>
-              </div>
-
-              <SmoothImage src={n8nBookAppointmentTitle} alt="Change the appointment title" />
-
-              <div className="bg-muted/50 rounded-lg p-4 space-y-3">
-                <p className="font-medium">Step 4: Activate and save the workflow</p>
-                <ol className="list-decimal list-inside space-y-2 ml-2">
-                  <li>Toggle the <strong>Active</strong> switch to ON in the top right</li>
-                  <li>Click <strong>Save</strong></li>
-                </ol>
-              </div>
-
-              <SmoothImage src={n8nBookAppointmentActivate} alt="Activate and save the workflow" />
-
-              <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-4">
-                <p>
-                  <strong>Success!</strong> The Appointment Booking Functions workflow is now configured. Continue to the next step to connect it to Retell.
-                </p>
-              </div>
-            </div>
-          )
-        },
-        {
-          id: 'booking-functions',
-          title: 'Booking Functions',
-          description: 'Connect the n8n webhook to all Retell functions',
-          content: (
-            <div className="space-y-4">
-              <p className="text-muted-foreground">Get the n8n webhook URL and configure all Retell agent functions.</p>
-
-              <div className="bg-muted/50 rounded-lg p-4 space-y-3">
-                <p className="font-medium">Step 1: Get the n8n Production Webhook URL</p>
-                <ol className="list-decimal list-inside space-y-2 ml-2">
-                  <li>In the n8n <strong>Appointment Booking Functions</strong> workflow, click on the <strong>Webhook1</strong> node (first node)</li>
-                </ol>
-              </div>
-
-              <SmoothImage src={n8nBookingWebhookNode} alt="Click on Webhook1 node" />
-
-              <div className="bg-muted/50 rounded-lg p-4 space-y-3">
-                <ol className="list-decimal list-inside space-y-2 ml-2" start={2}>
-                  <li>Click on <strong>Production URL</strong> tab and copy the webhook URL</li>
-                </ol>
-              </div>
-
-              <SmoothImage src={n8nBookingWebhookUrl} alt="Copy Production URL" />
-
-              <div className="bg-muted/50 rounded-lg p-4 space-y-3">
-                <p className="font-medium">Step 2: Open Retell Agent Functions</p>
-                <ol className="list-decimal list-inside space-y-2 ml-2">
-                  <li>Go to your <strong>Retell AI dashboard</strong></li>
-                  <li>Open the <strong>Inbound Agent</strong></li>
-                  <li>Find the <strong>Functions</strong> tab on the right panel</li>
-                  <li>Click on <strong>create-contact</strong> function to open it</li>
-                </ol>
-              </div>
-
-              <SmoothImage src={retellFunctionsList} alt="Retell Functions tab with create-contact" />
-
-              <div className="bg-muted/50 rounded-lg p-4 space-y-3">
-                <p className="font-medium">Step 3: Paste the webhook URL</p>
-                <ol className="list-decimal list-inside space-y-2 ml-2">
-                  <li>In the function settings, find the <strong>API Endpoint</strong> field and paste the n8n webhook URL</li>
-                </ol>
-              </div>
-
-              <SmoothImage src={retellFunctionApiEndpoint} alt="Paste webhook URL in API Endpoint" />
-
-              <div className="bg-muted/50 rounded-lg p-4 space-y-3">
-                <ol className="list-decimal list-inside space-y-2 ml-2" start={2}>
-                  <li>Click <strong>Update</strong> at the bottom</li>
-                </ol>
-              </div>
-
-              <SmoothImage src={retellFunctionUpdate} alt="Click Update button" />
-
-              <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-4">
-                <p>
-                  <strong>Important:</strong> You need to do the <strong>SAME EXACT THING</strong> for ALL the following functions. Yes, all functions use the <strong>SAME n8n webhook URL</strong> from the Appointment Booking Functions workflow. You need to replace it manually one by one:
-                </p>
-              </div>
-
-              <div className="bg-muted/50 rounded-lg p-4 space-y-3">
-                <p className="font-medium">Repeat for these functions:</p>
-                <ol className="list-decimal list-inside space-y-2 ml-2">
-                  <li><strong>get-available-slots</strong></li>
-                  <li><strong>book-appointments</strong></li>
-                  <li><strong>cancel-appointments</strong></li>
-                  <li><strong>get-contact-appointments</strong></li>
-                  <li><strong>get_contact</strong></li>
-                  <li><strong>update-appointment</strong></li>
-                  <li><strong>create-contact</strong> (already done)</li>
-                </ol>
-              </div>
-
-              <SmoothImage src={retellFunctionsBook} alt="Click on book-appointments function" />
-
-              <SmoothImage src={retellBookAppointmentsEndpoint} alt="Same webhook URL in book-appointments" />
-
-              <SmoothImage src={retellRemainingFunctions} alt="All remaining functions to configure" />
-
-              <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-4">
-                <p>
-                  <strong>Success!</strong> All functions are now configured with the n8n webhook URL. Continue to the next step to publish your agent.
-                </p>
-              </div>
-            </div>
-          )
-        },
-        {
-          id: 'publish-agent',
-          title: 'Publish Agent',
-          description: 'Publish the Retell agent with your phone number',
-          content: (
-            <div className="space-y-4">
-              <p className="text-muted-foreground">Publish your Retell inbound agent and connect it to your phone number.</p>
-
-              <div className="bg-muted/50 rounded-lg p-4 space-y-3">
-                <p className="font-medium">Publish the agent:</p>
-                <ol className="list-decimal list-inside space-y-2 ml-2">
-                  <li>Click the <strong>Publish</strong> button in the top right corner of Retell</li>
-                  <li>In the publish dialog, check <strong>Inbound phone number</strong></li>
-                  <li>Select the phone number that you added to your Retell account</li>
-                  <li>Click <strong>Publish</strong></li>
-                </ol>
-              </div>
-
-              <SmoothImage src={retellPublishDialog} alt="Publish dialog with phone number selection" />
-
-              <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-4">
-                <p>
-                  <strong>Congratulations!</strong> Your Retell voice agent is now fully configured and published. It will answer calls on your inbound phone number and can book appointments, manage contacts, and more!
-                </p>
-              </div>
-
-              <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4">
-                <p>
-                  <strong>Test it out:</strong> Try calling your inbound phone number to test the voice agent. The agent should be able to help callers book appointments and will sync all data with HighLevel.
-                </p>
-              </div>
-            </div>
-          )
-        }
-      ]
-    },
-    // Voice Outbound Setup Phase
-    {
-      id: 'voice-outbound-setup',
-      title: 'Outbound AI Rep Setup',
-      description: 'Configure your Outbound Voice AI Rep',
-      steps: [
-        {
-          id: 'retell-outbound-agent-id',
-          title: 'Outbound Agent ID',
-          description: 'Get your Outbound Agent ID from Retell AI',
-          content: (
-            <div className="space-y-4">
-              {/* FIELD AT TOP */}
-              <div className={cn(
-                "space-y-2 p-4 rounded-lg border-2 relative",
-                savedRetellConfig.retell_outbound_agent_id 
-                  ? "border-green-500 bg-green-500/10" 
-                  : "animate-pulse-red border-red-500/50 bg-red-500/5"
-              )}>
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="setup-retell-outbound-agent-id" className="text-sm font-medium">
-                    Outbound Agent ID
-                  </Label>
-                  {savedRetellConfig.retell_outbound_agent_id && (
-                    <Badge className="bg-green-500 hover:bg-green-600 text-white">
-                      Configured
-                    </Badge>
-                  )}
-                </div>
-                <Input
-                  id="setup-retell-outbound-agent-id"
-                  value={retellConfig.retell_outbound_agent_id}
-                  onChange={(e) => setRetellConfig(prev => ({ ...prev, retell_outbound_agent_id: e.target.value }))}
-                  placeholder="Enter your Outbound Agent ID"
-                  className="font-mono text-sm"
-                />
-                <div className="flex gap-2 pt-2">
-                  <Button
-                    onClick={() => saveRetellField('retell_outbound_agent_id', retellConfig.retell_outbound_agent_id)}
-                    disabled={loading || !retellConfig.retell_outbound_agent_id}
-                    size="sm"
-                    className={savedFields.has('retell_outbound_agent_id') ? 'bg-green-600 hover:bg-green-700' : ''}
-                  >
-                    {loading ? (
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current" />
-                    ) : savedFields.has('retell_outbound_agent_id') ? (
-                      'Configured'
-                    ) : (
-                      'Save'
-                    )}
-                  </Button>
-                </div>
-              </div>
-
-              {/* DESCRIPTION BELOW */}
-              <div className="bg-muted/50 rounded-lg p-4 space-y-3">
-                <p className="font-medium">How to find your Outbound Agent ID:</p>
-                <ol className="list-decimal list-inside space-y-2 ml-2">
-                  <li>Go to <strong>Agents</strong> in your Retell AI dashboard</li>
-                  <li>Open the <strong>Building Flow</strong> folder</li>
-                  <li>Click on your <strong>Outbound Voice AI Rep</strong> agent</li>
-                  <li>Copy the <strong>Agent ID</strong> from the top left (shown under the agent name)</li>
-                </ol>
-              </div>
-
-              <SmoothImage src={retellOutboundAgentClick} alt="Click on Outbound Voice AI Rep in Building Flow folder" />
-
-              <SmoothImage src={retellOutboundAgentIdCopy} alt="Copy Outbound Agent ID from top left" />
-
-              <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4">
-                <p>
-                  <strong>Note:</strong> The Outbound Voice AI Rep is used for making outgoing calls from your system.
-                </p>
-              </div>
-            </div>
-          )
-        },
-        {
-          id: 'outbound-booking-functions',
-          title: 'Booking Functions',
-          description: 'Connect the n8n webhook to all Retell Outbound agent functions',
-          content: (
-            <div className="space-y-4">
-              <p className="text-muted-foreground">Configure all Retell Outbound agent functions with the same n8n webhook URL you used for the Inbound agent.</p>
-
-              <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-4">
-                <p>
-                  <strong>Important:</strong> You need to repeat the same process you did for the Inbound agent. The Outbound agent also needs all the booking functions configured with the <strong>same n8n webhook URL</strong> from the Appointment Booking Functions workflow.
-                </p>
-              </div>
-
-              <div className="bg-muted/50 rounded-lg p-4 space-y-3">
-                <p className="font-medium">Step 1: Open Retell Outbound Agent Functions</p>
-                <ol className="list-decimal list-inside space-y-2 ml-2">
-                  <li>Go to your <strong>Retell AI dashboard</strong></li>
-                  <li>Open the <strong>Outbound Voice AI Rep</strong> agent</li>
-                  <li>Find the <strong>Functions</strong> tab on the right panel</li>
-                </ol>
-              </div>
-
-              <SmoothImage src={retellOutboundAgentClick} alt="Open Outbound Voice AI Rep agent" />
-
-              <div className="bg-muted/50 rounded-lg p-4 space-y-3">
-                <p className="font-medium">Step 2: Configure each function</p>
-                <p className="text-sm text-muted-foreground mb-2">For each function, paste the same n8n webhook URL from the Appointment Booking Functions workflow:</p>
-                <ol className="list-decimal list-inside space-y-2 ml-2">
-                  <li><strong>create-contact</strong></li>
-                  <li><strong>get-available-slots</strong></li>
-                  <li><strong>book-appointments</strong></li>
-                  <li><strong>cancel-appointments</strong></li>
-                  <li><strong>get-contact-appointments</strong></li>
-                  <li><strong>get_contact</strong></li>
-                  <li><strong>update-appointment</strong></li>
-                </ol>
-              </div>
-
-              <SmoothImage src={retellFunctionsList} alt="Retell Functions tab" />
-
-              <SmoothImage src={retellFunctionApiEndpoint} alt="Paste webhook URL in API Endpoint" />
-
-              <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-4">
-                <p>
-                  <strong>Success!</strong> All Outbound agent functions are now configured. Continue to the next step to set up the Make Outbound Call workflow.
-                </p>
-              </div>
-            </div>
-          )
-        },
-        {
-          id: 'make-outbound-call-workflow',
-          title: 'Make Outbound Call Workflow',
-          description: 'Configure the Make Outbound Call workflow in n8n',
-          content: (
-            <div className="space-y-4">
-              <p className="text-muted-foreground">Configure the n8n Make Outbound Call workflow for outbound voice calls.</p>
-
-              <div className="bg-muted/50 rounded-lg p-4 space-y-3">
-                <p className="font-medium">Step 1: Open the workflow</p>
-                <ol className="list-decimal list-inside space-y-2 ml-2">
-                  <li>Go to your <strong>n8n dashboard</strong></li>
-                  <li>Navigate to <strong>Voice Sales Rep</strong> folder</li>
-                  <li>Open the <strong>Make Outbound Call</strong> workflow</li>
-                </ol>
-              </div>
-
-              <SmoothImage src={n8nMakeOutboundCallList} alt="n8n workflows list with Make Outbound Call" />
-
-              <div className="bg-muted/50 rounded-lg p-4 space-y-3">
-                <p className="font-medium">Step 2: Configure Supabase connections</p>
-                <ol className="list-decimal list-inside space-y-2 ml-2">
-                  <li>Click on the <strong>red Supabase nodes</strong> (Get_Retell_Prompts and Get_API_Credentials)</li>
-                  <li>Choose the <strong>same connection</strong> you already have - you don't need to create a new one</li>
-                </ol>
-              </div>
-
-              <SmoothImage src={n8nMakeOutboundCallWorkflow} alt="Make Outbound Call workflow with red Supabase nodes highlighted" />
-
-              <div className="bg-muted/50 rounded-lg p-4 space-y-3">
-                <p className="font-medium">Step 3: Get the production webhook URL</p>
-                <ol className="list-decimal list-inside space-y-2 ml-2">
-                  <li>Click on the <strong>Webhook</strong> node (first node)</li>
-                  <li>Click on <strong>Production URL</strong> tab</li>
-                  <li>Copy the webhook URL - you'll need it in the next step</li>
-                </ol>
-              </div>
-
-              <SmoothImage src={n8nMakeOutboundCallWebhook} alt="Click on Webhook node" />
-
-              <SmoothImage src={n8nMakeOutboundCallProductionUrl} alt="Copy Production URL from webhook" />
-
-              <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-4">
-                <p>
-                  <strong>Success!</strong> Keep the webhook URL copied - you'll paste it in the Credentials page in the next step.
-                </p>
-              </div>
-            </div>
-          )
-        },
-        {
-          id: 'outbound-caller-webhook',
-          title: 'Outbound Caller Webhook',
-          description: 'Paste the webhook URL to save it',
-          content: (
-            <div className="space-y-4">
-              <p className="text-muted-foreground">Paste the webhook URL you copied from the Make Outbound Call workflow.</p>
-
-              {/* FIELD AT TOP */}
-              <div className={cn(
-                "space-y-2 p-4 rounded-lg border-2 relative",
-                outboundCallerWebhook1Saved
-                  ? "border-green-500 bg-green-500/10"
-                  : "animate-pulse-red border-red-500/50 bg-red-500/5"
-              )}>
-                <div className="flex items-center justify-between">
-                  <Label className="text-sm font-medium">Outbound Caller Webhook</Label>
-                  {outboundCallerWebhook1Saved && (
-                    <Badge className="bg-green-500 hover:bg-green-600 text-white">
-                      Configured
-                    </Badge>
-                  )}
-                </div>
-                <Input
-                  type="text"
-                  value={outboundCallerWebhook1}
-                  onChange={(e) => setOutboundCallerWebhook1(e.target.value)}
-                  placeholder="Paste the Production URL here"
-                  className="font-mono text-sm"
-                />
-                <div className="flex gap-2 pt-2">
-                  <Button
-                    onClick={() => saveOutboundCallerWebhook(outboundCallerWebhook1)}
-                    disabled={savingWebhook || !outboundCallerWebhook1.trim()}
-                    size="sm"
-                  >
-                    {savingWebhook ? (
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current" />
-                    ) : (
-                      'Save'
-                    )}
-                  </Button>
-                </div>
-              </div>
-
-              <div className="bg-muted/50 rounded-lg p-4 space-y-3">
-                <p className="font-medium">Steps:</p>
-                <ol className="list-decimal list-inside space-y-2 ml-2 mt-2">
-                  <li>Paste the n8n production webhook URL you copied in the previous step</li>
-                  <li>Click <strong>Save</strong></li>
-                </ol>
-              </div>
-
-              <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-4">
-                <p>
-                  <strong>Success!</strong> Once saved, the Make Outbound Call workflow will be connected and your Voice AI Rep can make outbound calls.
-                </p>
-              </div>
-            </div>
-          )
-        },
-        {
-          id: 'activate-outbound-workflow',
-          title: 'Activate Workflow',
-          description: 'Activate the Make Outbound Call workflow',
-          content: (
-            <div className="space-y-4">
-              <p className="text-muted-foreground">Activate the Make Outbound Call workflow in n8n.</p>
-
-              <div className="bg-muted/50 rounded-lg p-4 space-y-3">
-                <p className="font-medium">Activate the workflow:</p>
-                <ol className="list-decimal list-inside space-y-2 ml-2">
-                  <li>Go back to the <strong>Make Outbound Call</strong> workflow in n8n</li>
-                  <li>Toggle the <strong>Active</strong> switch to ON in the top right</li>
-                  <li>Click <strong>Save</strong></li>
-                </ol>
-              </div>
-
-              <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-4">
-                <p>
-                  <strong>Congratulations!</strong> Your Outbound Voice AI Rep setup is complete. You can now make outbound calls with your AI agent.
                 </p>
               </div>
             </div>
@@ -7576,204 +5712,6 @@ const [loading, setLoading] = useState(false);
         }
       ]
     },
-    // Knowledgebase Setup Phase
-    {
-      id: 'knowledgebase-setup',
-      title: 'Knowledgebase Setup',
-      description: 'Configure the knowledgebase workflow for AI memory',
-      steps: [
-        // Step 1: Open Workflow
-        {
-          id: 'open-workflow',
-          title: 'Open Workflow',
-          description: 'Navigate to the Update Knowledgebase workflow in n8n',
-          content: (
-            <div className="space-y-4">
-              <p>Navigate to your n8n instance and find the <strong>Update Knowledgebase</strong> workflow:</p>
-              
-              <div className="bg-muted/50 rounded-lg p-4 space-y-3">
-                <p className="font-medium">Steps:</p>
-                <ol className="list-decimal list-inside space-y-2 ml-2">
-                  <li>Go to your n8n instance</li>
-                  <li>Navigate to the <strong>Knowledgebase Automation</strong> folder</li>
-                  <li>Click on <strong>Update Knowledgebase</strong> workflow</li>
-                </ol>
-              </div>
-
-              <SmoothImage src={n8nKbWorkflowList} alt="n8n Knowledgebase Workflow in list" />
-
-              <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4">
-                <p>
-                  <strong>Note:</strong> This workflow handles adding, updating, and deleting documents from your AI knowledgebase.
-                </p>
-              </div>
-            </div>
-          )
-        },
-        // Step 2: Connect Supabase Nodes
-        {
-          id: 'connect-supabase-nodes',
-          title: 'Connect Supabase Nodes',
-          description: 'Select your existing Supabase connection for all Supabase nodes',
-          content: (
-            <div className="space-y-4">
-              <p className="text-muted-foreground">Click on each Supabase node and select the connection you already set up previously. <strong>No need to create a new one!</strong></p>
-
-              <div className="bg-muted/50 rounded-lg p-4 space-y-3">
-                <p className="font-medium">Supabase nodes to configure:</p>
-                <p className="text-sm text-muted-foreground">There are 3 Supabase nodes in this workflow (highlighted in red circles):</p>
-              </div>
-
-              <SmoothImage src={n8nKbSupabaseNodesHighlight} alt="Supabase nodes highlighted in workflow" />
-
-              <div className="bg-muted/50 rounded-lg p-4 space-y-3">
-                <p className="font-medium">For each Supabase node:</p>
-                <ol className="list-decimal list-inside space-y-2 ml-2">
-                  <li>Click on the node to open it</li>
-                  <li>In <strong>"Credential to connect with"</strong> dropdown</li>
-                  <li>Select your existing Supabase connection (the one you set up in the n8n Setup phase)</li>
-                  <li>Repeat for all 3 Supabase nodes: <strong>Delete a row1</strong>, <strong>Delete a row</strong>, and <strong>Knowledgebase_Upload</strong></li>
-                </ol>
-              </div>
-
-              <SmoothImage src={n8nKbSupabaseConnection} alt="Selecting Supabase connection in node" />
-
-              <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-4">
-                <p>
-                  <strong>Tip:</strong> Use the same Supabase connection for all 3 nodes. You already created this connection in the n8n Setup phase - no need to create a new one!
-                </p>
-              </div>
-            </div>
-          )
-        },
-        // Step 3: Connect Embeddings Node
-        {
-          id: 'connect-embeddings',
-          title: 'Connect Embeddings Node',
-          description: 'Select your existing OpenAI connection for the Embeddings node',
-          content: (
-            <div className="space-y-4">
-              <p className="text-muted-foreground">Click on the <strong>Embeddings OpenAI</strong> node and select the same OpenAI account you already set up.</p>
-
-              <SmoothImage src={n8nKbEmbeddingsHighlight} alt="Embeddings OpenAI node highlighted" />
-
-              <div className="bg-muted/50 rounded-lg p-4 space-y-3">
-                <p className="font-medium">Steps:</p>
-                <ol className="list-decimal list-inside space-y-2 ml-2">
-                  <li>Click on the <strong>Embeddings OpenAI1</strong> node</li>
-                  <li>In <strong>"Credential to connect with"</strong> dropdown</li>
-                  <li>Select your existing <strong>OpenAI account</strong> (the one you set up in the Account Creation phase)</li>
-                </ol>
-              </div>
-
-              <SmoothImage src={n8nKbEmbeddingsOpenai} alt="Selecting OpenAI connection in Embeddings node" />
-
-              <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-4">
-                <p>
-                  <strong>Tip:</strong> This is the same OpenAI connection you already set up in the Account Creation phase - just select it from the dropdown, no need to create a new one!
-                </p>
-              </div>
-            </div>
-          )
-        },
-        // Step 4: Setup Webhook
-        {
-          id: 'setup-webhook',
-          title: 'Setup Webhook',
-          description: 'Copy the webhook URL and save it',
-          content: (
-            <div className="space-y-4">
-              <p className="text-sm text-muted-foreground">Paste the Knowledgebase webhook URL from n8n below.</p>
-
-              {/* Webhook URL Input Field - Interactive - AT TOP */}
-              <div className={cn(
-                "space-y-2 p-4 rounded-lg border-2 relative",
-                knowledgebaseWebhookSaved
-                  ? "border-green-500 bg-green-500/10"
-                  : "animate-pulse-red border-red-500/50 bg-red-500/5"
-              )}>
-                <div className="flex items-center justify-between">
-                  <Label className="text-sm font-medium">Knowledgebase Webhook URL</Label>
-                  {knowledgebaseWebhookSaved && (
-                    <Badge className="bg-green-500 hover:bg-green-600 text-white">
-                      Configured
-                    </Badge>
-                  )}
-                </div>
-                <Input
-                  type="text"
-                  value={knowledgebaseWebhook}
-                  onChange={(e) => setKnowledgebaseWebhook(e.target.value)}
-                  placeholder="Paste the Production URL here"
-                  className="font-mono text-sm"
-                />
-                <div className="flex gap-2 pt-2">
-                  <Button
-                    onClick={saveKnowledgebaseWebhook}
-                    disabled={savingWebhook || !knowledgebaseWebhook.trim()}
-                    size="sm"
-                  >
-                    {savingWebhook ? (
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current" />
-                    ) : (
-                      'Save'
-                    )}
-                  </Button>
-                </div>
-              </div>
-
-              <div className="bg-muted/50 rounded-lg p-4 space-y-3">
-                <p className="font-medium">Step 1: Click on the Webhook node</p>
-                <ol className="list-decimal list-inside space-y-2 ml-2">
-                  <li>In the Update Knowledgebase workflow</li>
-                  <li>Click on the <strong>Webhook</strong> node</li>
-                </ol>
-              </div>
-
-              <SmoothImage src={n8nKbWebhookHighlight} alt="Webhook node highlighted" />
-
-              <div className="bg-muted/50 rounded-lg p-4 space-y-3">
-                <p className="font-medium">Step 2: Copy the Production URL</p>
-                <ol className="list-decimal list-inside space-y-2 ml-2">
-                  <li>Click on <strong>"Production URL"</strong> tab</li>
-                  <li>Copy the URL shown</li>
-                  <li>Paste it in the field above and click <strong>Save</strong></li>
-                </ol>
-              </div>
-
-              <SmoothImage src={n8nKbWebhookUrl} alt="Webhook Production URL" />
-            </div>
-          )
-        },
-        // Step 5: Publish
-        {
-          id: 'publish',
-          title: 'Save & Publish',
-          description: 'Activate and save the workflow',
-          content: (
-            <div className="space-y-4">
-              <p className="text-muted-foreground">Activate and save the workflow to make it ready for use.</p>
-
-              <div className="bg-muted/50 rounded-lg p-4 space-y-3">
-                <p className="font-medium">Steps:</p>
-                <ol className="list-decimal list-inside space-y-2 ml-2">
-                  <li>Make sure the <strong>Active</strong> toggle is ON in the top right corner</li>
-                  <li>Click <strong>Save</strong> button</li>
-                </ol>
-              </div>
-
-              <SmoothImage src={n8nKbSaveButton} alt="Save button in n8n" />
-
-              <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-4">
-                <p>
-                  <strong>Done!</strong> Your Knowledgebase workflow is now configured and ready to use. You can now add documents from the Knowledge Base page in this dashboard.
-                </p>
-              </div>
-            </div>
-          )
-        }
-      ]
-    },
     // Live Chat Setup Phase
     {
       id: 'live-chat-setup',
@@ -8022,7 +5960,7 @@ const [loading, setLoading] = useState(false);
               <div className="bg-muted/50 rounded-lg p-4 space-y-3">
                 <p className="font-medium">How it Works:</p>
                 <p className="text-sm">If you remember, you already set up the <strong>Receive & Process DMs</strong> workflow in HighLevel. If you go to this workflow, you will see <strong>Live Chat</strong> as a channel trigger.</p>
-                <p className="text-sm mt-2">It basically means that whenever someone sends a DM to the Live Chat widget that you just created - it will trigger this HighLevel workflow - and then all other workflows will be triggered, the reply will be sent to n8n, it will generate the response and send it back to the user inside the live chat.</p>
+                <p className="text-sm mt-2">It basically means that whenever someone sends a DM to the Live Chat widget that you just created - it will trigger this HighLevel workflow - and then all other workflows will be triggered, the message is handed to the AI engine, which generates the response and sends it back to the user inside the live chat.</p>
               </div>
 
               <SmoothImage src={ghlReceiveDmsLiveChat} alt="Receive & Process DMs workflow with Live Chat trigger" />
@@ -8308,7 +6246,7 @@ const [loading, setLoading] = useState(false);
               <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4">
                 <p className="font-medium">How It Works:</p>
                 <p className="text-sm mt-2">
-                  Whenever someone sends a DM to your WhatsApp number, this workflow is triggered. The message goes through the same process - n8n generates the AI response and sends it back to the user inside WhatsApp.
+                  Whenever someone sends a DM to your WhatsApp number, this workflow is triggered. The message goes through the same process - the AI engine generates the response and sends it back to the user inside WhatsApp.
                 </p>
               </div>
 
@@ -8363,7 +6301,7 @@ const [loading, setLoading] = useState(false);
                 <p className="font-medium">Troubleshooting:</p>
                 <ul className="list-disc list-inside space-y-1 ml-2 text-sm mt-2">
                   <li>Make sure all your workflows are <strong>published</strong> in HighLevel</li>
-                  <li>Verify n8n workflows are <strong>active</strong></li>
+                  <li>Verify your AI Rep is <strong>enabled</strong> in this dashboard</li>
                   <li>Check that the WhatsApp number status is <strong>&quot;Connected&quot;</strong></li>
                 </ul>
               </div>
@@ -8539,7 +6477,7 @@ const [loading, setLoading] = useState(false);
               <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4">
                 <p className="font-medium">How It Works:</p>
                 <p className="text-sm mt-2">
-                  Whenever someone sends an SMS text to your phone number, this workflow is triggered. The message goes through the same process - n8n generates the AI response and sends it back to the user via SMS.
+                  Whenever someone sends an SMS text to your phone number, this workflow is triggered. The message goes through the same process - the AI engine generates the response and sends it back to the user via SMS.
                 </p>
               </div>
 
@@ -8594,7 +6532,7 @@ const [loading, setLoading] = useState(false);
                 <p className="font-medium">Troubleshooting:</p>
                 <ul className="list-disc list-inside space-y-1 ml-2 text-sm mt-2">
                   <li>Make sure all your workflows are <strong>published</strong> in HighLevel</li>
-                  <li>Verify n8n workflows are <strong>active</strong></li>
+                  <li>Verify your AI Rep is <strong>enabled</strong> in this dashboard</li>
                   <li>Check that <strong>A2P verification is complete</strong> (for US/Canada numbers)</li>
                   <li>If texts aren&apos;t being delivered, A2P is likely the issue</li>
                 </ul>
@@ -8781,7 +6719,7 @@ const [loading, setLoading] = useState(false);
                 <ul className="list-disc list-inside space-y-2 ml-2 text-sm mt-2">
                   <li>When someone DMs your Instagram account → <strong>Instagram trigger</strong> fires</li>
                   <li>When someone messages your Facebook Business Page via Messenger → <strong>Facebook Messenger trigger</strong> fires</li>
-                  <li>Both go through the same workflow - n8n generates the AI response and sends it back</li>
+                  <li>Both go through the same workflow - the AI engine generates the response and sends it back</li>
                 </ul>
               </div>
 
@@ -8837,7 +6775,7 @@ const [loading, setLoading] = useState(false);
                 <p className="font-medium">Troubleshooting:</p>
                 <ul className="list-disc list-inside space-y-1 ml-2 text-sm mt-2">
                   <li>Make sure all your workflows are <strong>published</strong> in HighLevel</li>
-                  <li>Verify n8n workflows are <strong>active</strong></li>
+                  <li>Verify your AI Rep is <strong>enabled</strong> in this dashboard</li>
                   <li>Confirm your Instagram is a <strong>Professional account</strong></li>
                   <li>Make sure your Instagram is <strong>connected to a Facebook Business Page</strong></li>
                   <li>Remember: Personal Facebook Messenger DMs will <strong>NOT</strong> be automated</li>
@@ -8864,8 +6802,6 @@ const [loading, setLoading] = useState(false);
             const TEXT_AI_REP_PREREQ_PHASES = [
               'account-creation',
               'supabase-setup',
-              'workflows-import',
-              'n8n-setup',
               'text-prompts-setup',
               'highlevel-credentials',
               'highlevel-setup'
@@ -8874,8 +6810,6 @@ const [loading, setLoading] = useState(false);
             const PHASE_DISPLAY_NAMES: Record<string, string> = {
               'account-creation': 'Accounts Setup',
               'supabase-setup': 'Supabase Setup',
-              'workflows-import': 'Workflows Import',
-              'n8n-setup': 'Text AI Rep Setup',
               'text-prompts-setup': 'Text Prompts Setup',
               'highlevel-credentials': 'HighLevel Credentials',
               'highlevel-setup': 'HighLevel Setup'
@@ -9027,14 +6961,12 @@ const [loading, setLoading] = useState(false);
             const VOICE_AI_REP_PREREQ_PHASES = [
               'twilio-setup',
               'voice-accounts-setup',
-              'voice-inbound-setup',
               'voice-prompts-setup'
             ] as const;
-            
+
             const PHASE_DISPLAY_NAMES: Record<string, string> = {
               'twilio-setup': 'Twilio Setup',
               'voice-accounts-setup': 'Accounts Setup',
-              'voice-inbound-setup': 'Inbound AI Rep Setup',
               'voice-prompts-setup': 'Voice Prompts Setup'
             };
             
@@ -9203,14 +7135,14 @@ const [loading, setLoading] = useState(false);
                 <ul className="list-disc list-inside space-y-2 ml-2 text-sm mt-2">
                   <li><strong>Inbound Call Agent:</strong> Should show your Inbound Voice AI Rep agent name</li>
                   <li><strong>Add an inbound webhook:</strong> Should be checked/enabled</li>
-                  <li><strong>Webhook URL:</strong> Should contain your n8n webhook URL</li>
+                  <li><strong>Webhook URL:</strong> Should contain the platform's booking-tools webhook URL (set automatically when the setter is saved)</li>
                 </ul>
               </div>
 
               <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-4">
                 <p className="font-medium">If Not Configured:</p>
                 <p className="text-sm mt-1">
-                  If you haven&apos;t set up the inbound agent or webhook yet, please complete the <strong>Voice AI Rep Configuration &gt; Inbound AI Rep Setup</strong> phase first.
+                  If you haven&apos;t set up the inbound agent yet, flag a voice setter as <strong>Inbound</strong> in this dashboard - the phone number and webhook bind automatically when you save.
                 </p>
               </div>
             </div>
@@ -9358,7 +7290,7 @@ const [loading, setLoading] = useState(false);
                     <li>If the call doesn&apos;t connect, verify the phone number in Retell</li>
                     <li>If the AI doesn&apos;t respond properly, check your voice prompts</li>
                     <li>Ensure the inbound webhook is correctly configured in Retell</li>
-                    <li>Make sure your n8n workflows are active and published</li>
+                    <li>Make sure your voice setter is saved and pushed from this dashboard</li>
                   </ul>
                 </div>
               </div>
@@ -9383,8 +7315,6 @@ const [loading, setLoading] = useState(false);
             const TEXT_AI_REP_PREREQ_PHASES = [
               'account-creation',
               'supabase-setup',
-              'workflows-import',
-              'n8n-setup',
               'text-prompts-setup',
               'highlevel-credentials',
               'highlevel-setup'
@@ -9393,8 +7323,6 @@ const [loading, setLoading] = useState(false);
             const PHASE_DISPLAY_NAMES: Record<string, string> = {
               'account-creation': 'Accounts Setup',
               'supabase-setup': 'Supabase Setup',
-              'workflows-import': 'Workflows Import',
-              'n8n-setup': 'Text AI Rep Setup',
               'text-prompts-setup': 'Text Prompts Setup',
               'highlevel-credentials': 'HighLevel Credentials',
               'highlevel-setup': 'HighLevel Setup'
@@ -9542,18 +7470,16 @@ const [loading, setLoading] = useState(false);
           title: 'Complete Voice AI Rep Setup',
           description: 'Complete the Voice AI Rep outbound setup before configuring the demo',
           content: (() => {
-            // Phase IDs for Voice AI Rep prerequisite (outbound only, no inbound)
+            // Phase IDs for Voice AI Rep prerequisite
             const VOICE_AI_REP_PREREQ_PHASES = [
               'twilio-setup',
               'voice-accounts-setup',
-              'voice-outbound-setup',
               'voice-prompts-setup'
             ] as const;
-            
+
             const PHASE_DISPLAY_NAMES: Record<string, string> = {
               'twilio-setup': 'Twilio Setup',
               'voice-accounts-setup': 'Accounts Setup',
-              'voice-outbound-setup': 'Outbound AI Rep Setup',
               'voice-prompts-setup': 'Voice Prompts Setup'
             };
             
@@ -10044,7 +7970,7 @@ const [loading, setLoading] = useState(false);
               <div className="bg-muted/50 rounded-lg p-4 space-y-3">
                 <p className="font-medium">Steps:</p>
                 <ol className="list-decimal list-inside space-y-2 ml-2">
-                  <li>In the Engagement workflow, find the <strong>&quot;#4 Make Outbound Call (n8n)&quot;</strong> action</li>
+                  <li>In the Engagement workflow, find the <strong>&quot;#4 Make Outbound Call&quot;</strong> webhook action (older snapshots may still label it &quot;(n8n)&quot;)</li>
                   <li>Click on it to open the settings</li>
                   <li>Look at the <strong>Query Parameters</strong> section</li>
                 </ol>
@@ -10053,7 +7979,7 @@ const [loading, setLoading] = useState(false);
               <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4">
                 <p className="font-medium">About the Webhook URL:</p>
                 <p className="text-sm mt-1">
-                  You don&apos;t need to change the webhook URL here. This URL triggers n8n which then makes the outbound call via Retell AI. This was already configured in the <strong>Voice AI Rep Setup → Outbound AI Rep Setup</strong>.
+                  You don&apos;t need to change the webhook URL here. This URL triggers the platform, which makes the outbound call via Retell AI using the setter chosen for the campaign.
                 </p>
               </div>
 
@@ -10421,8 +8347,6 @@ const [loading, setLoading] = useState(false);
       'retell-setup-4': retellConfig.retell_inbound_agent_id,
       'retell-setup-5': retellConfig.retell_outbound_agent_id,
       'retell-setup-6': retellConfig.retell_phone_1,
-      // Knowledgebase (step 0: Open Workflow, step 1: Connect Supabase, step 2: Connect Embeddings, step 3: Setup Webhook)
-      'knowledgebase-setup-3': knowledgebaseWebhook,
       // Text Prompts
       'text-prompts-setup-1': botPersonaPrompt.content,
       'text-prompts-setup-2': prompt1.content,
@@ -10507,7 +8431,6 @@ const [loading, setLoading] = useState(false);
       'highlevel-credentials-0', 'highlevel-credentials-1', 'highlevel-credentials-2', 'highlevel-credentials-3',
       'highlevel-setup-7', 'highlevel-setup-8', 'highlevel-setup-9', 'highlevel-setup-10',
       'retell-setup-3', 'retell-setup-4', 'retell-setup-5', 'retell-setup-6',
-      'knowledgebase-setup-2',
       'text-prompts-setup-1', 'text-prompts-setup-2', 'text-prompts-setup-3', 'text-prompts-setup-4',
       'voice-prompts-setup-2', 'voice-prompts-setup-3', 'voice-prompts-setup-4', 'voice-prompts-setup-5'
     ];

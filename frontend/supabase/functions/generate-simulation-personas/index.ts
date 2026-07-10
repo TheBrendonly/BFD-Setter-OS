@@ -184,8 +184,8 @@ Return ONLY a JSON array of ${numPersonas} persona objects. No markdown fences, 
         headers: {
           Authorization: `Bearer ${openrouterApiKey}`,
           "Content-Type": "application/json",
-          "HTTP-Referer": "https://1prompt.ai",
-          "X-Title": "1Prompt Simulation Personas Generator",
+          "HTTP-Referer": "https://buildingflowdigital.com",
+          "X-Title": "BFD Setter Simulation Personas Generator",
         },
         body: JSON.stringify(llmRequestBody),
       },
@@ -293,7 +293,7 @@ Return ONLY a JSON array of ${numPersonas} persona objects. No markdown fences, 
       const randomStr = Math.random().toString(36).substring(2, 10);
       const firstName = p.name.split(' ')[0] || 'Test';
       const lastName = p.name.split(' ').slice(1).join('') || 'User';
-      const dummyEmail = `1prompt-simulation-${firstName.toLowerCase()}${lastName.toLowerCase()}-${randomStr}@gmail.com`;
+      const dummyEmail = `bfd-simulation-${firstName.toLowerCase()}${lastName.toLowerCase()}-${randomStr}@gmail.com`;
       const dummyPhone = `+1555${String(Math.floor(Math.random() * 9000000) + 1000000)}`;
 
       const goalWithBooking = isBooking

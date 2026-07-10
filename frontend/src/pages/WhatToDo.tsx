@@ -1,7 +1,7 @@
 import React from 'react';
 import { usePageHeader } from '@/contexts/PageHeaderContext';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Settings, MessageSquare, Mic, Rocket, Bug, BookOpen, ChevronRight, Play, ClipboardCheck, GraduationCap, ExternalLink, CheckCircle2 } from '@/components/icons';
+import { Settings, MessageSquare, Mic, Rocket, Bug, BookOpen, ChevronRight, Play, ClipboardCheck, ExternalLink, CheckCircle2 } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { useWhatToDoAcknowledged } from '@/hooks/useWhatToDoAcknowledged';
@@ -19,20 +19,13 @@ interface OnboardingStep {
   warning?: string;
 }
 
+// The upstream "technical course" Skool step was removed 2026-07-10 (branding
+// purge). Stale 'technical-course' completion flags in DB are ignored (steps
+// are tracked by id).
 const onboardingSteps: OnboardingStep[] = [
   {
-    id: 'technical-course',
-    step: 1,
-    title: 'Complete Technical Course (upstream)',
-    description: 'Walk through the upstream 1prompt-os technical course on Skool to understand how the underlying system works before configuring BFD-setter.',
-    icon: GraduationCap,
-    externalUrl: 'https://www.skool.com/1prompt/classroom/174df031?md=9a229dd14bb947c1bdd263fb2d38afa4',
-    buttonText: 'Go to Course',
-    warning: 'You must complete this step first. Even though this dashboard contains the most up-to-date version of the system, you still need to understand how everything works. If you are already proficient in n8n and GoHighLevel, we still recommend going through the course.',
-  },
-  {
     id: 'text-ai-config',
-    step: 2,
+    step: 1,
     title: 'Text AI Rep Configuration',
     description: 'Go to AI Reps Setup → Configuration and complete all the steps to enable your Text AI Rep',
     icon: Settings,
@@ -42,7 +35,7 @@ const onboardingSteps: OnboardingStep[] = [
   },
   {
     id: 'text-prompts',
-    step: 3,
+    step: 2,
     title: 'Text AI Rep Prompts',
     description: 'Go to Prompt Management → Text AI Rep and setup your bot persona and the main agent prompts',
     icon: MessageSquare,
@@ -51,7 +44,7 @@ const onboardingSteps: OnboardingStep[] = [
   },
   {
     id: 'voice-ai-config',
-    step: 4,
+    step: 3,
     title: 'Voice AI Rep Configuration',
     description: 'Go to AI Reps Setup → Configuration and complete all the steps to enable your Voice AI Rep',
     icon: Settings,
@@ -60,7 +53,7 @@ const onboardingSteps: OnboardingStep[] = [
   },
   {
     id: 'voice-prompts',
-    step: 5,
+    step: 4,
     title: 'Voice AI Rep Prompts',
     description: 'Go to Prompt Management → Voice AI Rep and setup all the prompts for voice conversations',
     icon: Mic,
@@ -69,7 +62,7 @@ const onboardingSteps: OnboardingStep[] = [
   },
   {
     id: 'deploy-ai-reps',
-    step: 6,
+    step: 5,
     title: 'Deploy AI Reps',
     description: 'Go to Deploy AI Reps and follow the steps to deploy your AI Representatives to different channels',
     icon: Rocket,
@@ -78,7 +71,7 @@ const onboardingSteps: OnboardingStep[] = [
   },
   {
     id: 'debug-ai-reps',
-    step: 7,
+    step: 6,
     title: 'Debug AI Reps',
     description: 'When something is not working, use this step-by-step guide to identify and fix issues with your AI Representatives',
     icon: Bug,
@@ -87,7 +80,7 @@ const onboardingSteps: OnboardingStep[] = [
   },
   {
     id: 'knowledge-base',
-    step: 8,
+    step: 7,
     title: 'Knowledge Base',
     description: 'Once everything is functioning, add more documents to your Knowledge Base to improve your AI Representatives',
     icon: BookOpen,

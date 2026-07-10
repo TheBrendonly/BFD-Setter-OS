@@ -6,7 +6,7 @@
 //
 // Auth: per-client shared secret in clients.intake_lead_secret (reused —
 // same model as voice-booking-tools and intake-lead). This is only called
-// from the 1prompt-OS UI (KB upload) plus future setter prompts; not
+// from the BFD-setter UI (KB upload) plus future setter prompts; not
 // internet-public, so the bearer requirement is acceptable.
 //
 // Body:

@@ -14,6 +14,28 @@ When an item passes, move it to `Docs/archive/COMPLETED_LOG.md`. When it fails, 
 
 > **⭐⭐⭐ VOICE + BROWSER TEST SESSION — 2026-07-06, and the 2026-07-05 TEST SESSION before it — ALL PASSED → `COMPLETED_LOG.md`.** Full detail there + handoffs `Operations/handoffs/2026-07-06-voice-browser-session.md` + `2026-07-05-test-session.md`. Between the two, essentially every pre-existing bug/feature check passed (onboarding-fix cluster, the shared-fn pass, F8/F9-1/F11/UI-1/F13 core/PROMPT-LINT-1/MODEL-1/API-DEPR-1 core/PROMPT-AUTH-1 X-Ray, the B-2 outage leg, G3-7 nav, SWEEP-1a/b/c). What's below is either (a) the still-open behavioral checks for the 2026-07-07 combined build, or (b) a small residual set of finer-grained checks that genuinely haven't run yet.
 
+## Branding purge (2026-07-10) — live-verify
+
+> Frontend restructure + 7 edge fns redeployed (all boot-smoked 400, tsc/build/253 tests green). Full context:
+> `Operations/handoffs/2026-07-10-branding-purge.md`. These are the browser/behavioral confirmations owed.
+
+- [ ] **PURGE-UI-1 — setup-guide surface renders after the 5-phase excision.** In the agency browser: open
+  Text Setter → Configuration (5 phase cards, no n8n/Workflows-Import/Knowledgebase cards; each card opens the
+  right dialog phase), Voice → Configuration (3 cards: Twilio / Accounts / Prompts), Deploy AI Reps guide, and
+  the WhatToDo checklist (7 steps, no Skool card; wizard progress bars sane, no NaN/0-of-0). Check the browser
+  console for errors while flipping through dialog phases.
+- [ ] **PURGE-UI-2 — removed routes redirect, not 404/crash.** Hit `/client/<id>/text-ai-rep/templates`,
+  `/voice-ai-rep/templates`, `/api/workflow-imports` directly → each lands on the setup page. Source Files page
+  shows only GHL snapshot + Supabase schemas cards.
+- [ ] **PURGE-SIM-1 — simulator still runs end-to-end** (run-simulation v21 + generate-simulation-personas v21):
+  generate personas, run a short simulation; new dummy leads are `bfd-simulation-*@gmail.com`; OpenRouter calls
+  succeed with the new attribution headers.
+- [ ] **PURGE-SYNC-1 — GHL contact echo-guard roundtrip unchanged** (sync-ghl-contact v29 + push-contact-to-ghl
+  v10): edit a lead field in the BFD UI → lands in GHL; the echo webhook back is SKIPPED (sync log shows the
+  echo-guard skip, steps now labeled "Find Lead in BFD"); a real GHL-side edit still syncs in.
+- [ ] **PURGE-TAG-1 — try-gary tag still routes** (ghl-tag-webhook v14): apply a legacy `1prompt-try-gary-<style>`
+  tag to a test contact → agent_style/source_type derive as before; a `bfd-try-gary-<style>` tag behaves identically.
+
 ## Overnight deep-work pass (2026-07-08) — live-verify
 
 > Tier A fixes deployed this session; server-side verified, these are the live behavioral confirmations owed.

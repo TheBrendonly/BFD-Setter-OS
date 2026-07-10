@@ -40,9 +40,10 @@ export const DEFAULT_RETELL_POST_CALL_ANALYSIS_DATA = [
 ] as const;
 
 // Sentinel URL value for the 5 booking tools below. retell-proxy/sync-voice-setter
-// rewrites this placeholder (or any legacy n8n-1prompt.99players.com URL) to the
-// platform's own voice-booking-tools edge fn with per-tenant clientId + Bearer
-// auth at push time. Keep both strings in sync if either changes.
+// rewrites this placeholder (or any URL on the legacy n8n host - see
+// LEGACY_N8N_HOST in retell-proxy) to the platform's own voice-booking-tools
+// edge fn with per-tenant clientId + Bearer auth at push time. Keep both
+// strings in sync if either changes.
 export const BFD_VOICE_BOOKING_TOOLS_PLACEHOLDER = "__BFD_VOICE_BOOKING_TOOLS__";
 
 export const DEFAULT_RETELL_GENERAL_TOOLS = [
