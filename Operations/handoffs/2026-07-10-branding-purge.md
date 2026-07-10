@@ -48,10 +48,17 @@ tsc clean, production build clean, **253/253 tests pass** (node + frontend + den
 boot-smoke returned 4xx (no boot failures). Live browser checks owed -> `Docs/TEST_LIST.md` PURGE-UI-1/2,
 PURGE-SIM-1, PURGE-SYNC-1, PURGE-TAG-1.
 
-### Railway rename
-Brendan renamed the production service off `1prompt-os` this session; the push of this session's commit
-doubles as the post-rename deploy verification (grep the live JS for a purge marker, per DEPLOY-1 memory:
-verify by content, not entry hash).
+### Infra renames - DONE + VERIFIED LIVE (this session)
+- Railway prod service: `1prompt-os` -> **`BFD-Setter-OS`** (Brendan, in the dashboard).
+- GitHub repo: `TheBrendonly/1prompt-os` -> **`TheBrendonly/BFD-Setter-OS`** (Claude, `gh repo rename`).
+- Forgejo repo: `bfd/1prompt-os` -> **`bfd/BFD-Setter-OS`** (Claude, Forgejo API). Both hosts keep
+  redirects from the old names; this clone's remotes were updated. **Laptop clone remotes still point at
+  the old URLs** - they keep working via redirect, update `~/bfd-os/Projects/<dir>` remotes when convenient.
+- Post-rename deploy VERIFIED: pushed `4f560ef` -> Railway auto-built off the renamed GitHub repo, new
+  entry bundle `index-l1upHDYq.js` went live; all 176 live JS chunks grep CLEAN for "1prompt"; the new GHL
+  step copy ("provisions your GoHighLevel location") is present in the live SetupGuideDialog chunk; the old
+  public `/workflows/*.json` + `/retell-agents/*.json` paths now return the SPA shell, not JSON.
+- `System/docs/sync-topology.md` updated with the new repo names.
 
 ## NEXT SESSION (paste this prompt)
 
