@@ -456,6 +456,21 @@ Status: `[ ]` not started · `[~]` in progress · `[x]` done. Effort is rough.
   config, client-data-gated verifications, post-client build queue). GATE A/B fold into `FIRST_CLIENT_MILESTONE.md`
   was skipped (file was mid-edit); the milestone still references them. Pipeline: `[✓] Overnight deep-work
   [✓] Supervised deploy + reconciliation (2026-07-11)  [ ] First-Client Milestone (gated → Docs/FIRST_CLIENT_TASKS.md)`.
+- [x] **Combined session: bundle cleanup + autonomous test session + GATE A review — DONE 2026-07-11 evening (Fable 5, Brendan present).**
+  Verified the already-live v51 bundle (get-call 200, PU-9 fillers present, 0 agents mutated); **infra cleanup**:
+  elevenlabs-manage-agent live undeploy (verified gone), removed the dead `LEGACY_N8N_HOST` guard → **retell-proxy
+  v52** (0 n8n URLs across all stores + 50 live LLMs; `43a89c6`), Trigger.dev 20260711.1. **Autonomous test session:**
+  ~20 legs PASS (RLS-UISTATE-1-LIVE + agency no-lockout, COST-1/COST-4, MAIN-OUTBOUND answered leg + API-DEPR-2(b),
+  PURGE-SYNC-1 + SYNC-LOG-1, QH-TZ-1-LIVE, B-2 CSV + outage, GETCALL-1, G3-6 Tier-3 + G3-6-SCHEMA-1, INB-1,
+  CONTACTS-EDIT-DEAD-1, F13/F15 client-eye, P3-CLEANUP-1, PURGE-UI-1). **2 fixes:** `043e62d` (dead Converteai
+  preloads + PURGE-UI-2 broken redirects) + **B2-CSV-NORM-1** (process-lead-file v18, CSV normalized_phone from raw
+  value). **2 new findings:** SCHED-1 (hourly crons never registered in prod — the uptime probe + F9 drift poll had
+  been silent since inception; registered both imperatively, first fire confirmed) + B2-REPOINT-1 (Low). **GATE A
+  DEFERRED** (Brendan's call): review found the ff355d4 draft breaks client UI-state writes to base `clients` — needs
+  client_own policies; finding recorded on `GATE_A_RLS_DRAFT_2026-07-08.md`; GATE A/B stay in `FIRST_CLIENT_TASKS.md`.
+  Handoff `Operations/handoffs/2026-07-11-combined-bundle-test-gatea.md`. Pipeline: `[✓] Supervised deploy
+  [✓] Combined bundle+test+GATE-A-review (2026-07-11)  [ ] dedicated GATE A + residual behavioral legs
+  [ ] First-Client Milestone (gated)`.
 4. **Brendan solo block (parallel, no Claude session):** Setter-1 prompt migration, Resend SMTP → F14 E2E,
    sms_llm rate + billing anchor/toggles, n8n Railway shutdown, PROMPT_UPDATE_LIST items (see the 2026-07-07
    action pack for the full ordered list with exact live wording + paste-ready changes).

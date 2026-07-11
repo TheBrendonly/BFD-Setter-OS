@@ -4,6 +4,41 @@ Items closed out of the active lists. Newest first. The active lists are in the 
 (`BUG_LIST.md`, `FEATURE_ROADMAP.md`, `BRENDAN_TODO.md`, `TEST_LIST.md`, `DEFERRED.md`). First-client-gated
 work lives in `Docs/FIRST_CLIENT_TASKS.md` (not archived — deferred).
 
+## 2026-07-11 (evening) — COMBINED session: bundle cleanup + autonomous test session + GATE A review
+
+Fable 5, Brendan present. Verified the already-live v51 bundle, cleaned up 3 infra residuals, drove the
+tool-drivable + browser test legs, deferred GATE A. Full detail:
+`Operations/handoffs/2026-07-11-combined-bundle-test-gatea.md`.
+
+**Phase 1 infra:** elevenlabs-manage-agent **live undeploy** (Management-API DELETE, verified gone —
+BRENDAN_TODO item closed); **retell-proxy v52** — removed the dead `LEGACY_N8N_HOST` rewrite guard after a
+clean scan (0 n8n URLs across stored configs + snapshots + all 50 live Retell LLMs; commit `43a89c6`);
+**Trigger.dev 20260711.1** (syntheticProbe Slack-text drift). retell-proxy v51 bundle (GETCALL-1 + PU-9-CODE)
+confirmed live (get-call 200; PU-9 two-beat fillers + speak_after on the write tools present on the canonical
+LLMs; 0 agents mutated).
+
+**Phase 2 test session — verified PASS (live):** RLS-UISTATE-1-LIVE (throwaway client-role probe 8/8 + agency
+no-lockout), COST-4 (client-role blocked, service-role has rows), COST-1 (morning answered call accrued a voice
+cost row = call_history.cost), MAIN-OUTBOUND-SHARED-1 answered-conversation leg (dialed agent_f45f4dd, first_name
+interpolated, booked Tue 14 Jul 1:30pm Sydney) + API-DEPR-2(b) (analysis fields TOP-LEVEL) + PU-9 audible,
+PURGE-SYNC-1 + SYNC-LOG-1 (sync log rows with labeled steps + echo-skip), QH-TZ-1-LIVE (junk tz no longer stalls
+the cadence — 05:00 probe passed), B-2 CSV normalized_phone (after the B2-CSV-NORM-1 fix) + inbound internal-first
+resolve, B-2 outage leg (mint bfd-<phone> + degraded warn + no dup), GETCALL-1, G3-6 Tier-3 (5 fns 200 on a real
+JWT), G3-6-SCHEMA-1 (analytics-v2-process 200, config gate cleared), INB-1 (latest_published both bindings),
+CONTACTS-EDIT-DEAD-1, F13/F15 client-eye (client sees funnel not margin; rate card no markup; /settings redirects),
+P3-CLEANUP-1, PURGE-UI-1 (14 routes render clean, no n8n/Skool/1prompt text).
+
+**Phase 2 fixes shipped:** `043e62d` — removed dead Converteai VSL preloads from index.html (1Prompt-era, 403 on
+every load) + **fixed PURGE-UI-2** (4 text/voice-ai-rep templates+configuration redirects pointed at a 404
+`../setup`; repointed to their real setup pages; verified live). **B2-CSV-NORM-1** — process-lead-file **v18**: CSV
+import now derives normalized_phone from the raw csv value (the local display normalizer's `+` prefix was defeating
+the E164 AU branch → stored `+0400…` instead of `+61400…`); live re-probe green.
+
+**Phase 3 GATE A — DEFERRED** to the milestone/dedicated session (Brendan's call). Review found the ff355d4 draft
+is incomplete: client-role pages UPDATE base `clients.crm_filter_config`, so the blanket agency-only UPDATE gate
+would break client UI-state saves — needs client_own policies. Finding recorded on
+`Docs/GATE_A_RLS_DRAFT_2026-07-08.md`. GATE A/B live in `Docs/FIRST_CLIENT_TASKS.md` (latent, 0 client-role users).
+
 ## 2026-07-11 — SUPERVISED DEPLOY + TEST session + FULL LIST RECONCILIATION
 
 Brendan-supervised daytime session (retell-proxy v51 deploy authorized). Deployed + live-verified the staged

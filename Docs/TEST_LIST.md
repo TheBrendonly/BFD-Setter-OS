@@ -14,6 +14,21 @@ When an item passes, move it to `Docs/archive/COMPLETED_LOG.md`. When it fails, 
 
 > **⭐⭐⭐ VOICE + BROWSER TEST SESSION — 2026-07-06, and the 2026-07-05 TEST SESSION before it — ALL PASSED → `COMPLETED_LOG.md`.** Full detail there + handoffs `Operations/handoffs/2026-07-06-voice-browser-session.md` + `2026-07-05-test-session.md`. Between the two, essentially every pre-existing bug/feature check passed (onboarding-fix cluster, the shared-fn pass, F8/F9-1/F11/UI-1/F13 core/PROMPT-LINT-1/MODEL-1/API-DEPR-1 core/PROMPT-AUTH-1 X-Ray, the B-2 outage leg, G3-7 nav, SWEEP-1a/b/c). What's below is either (a) the still-open behavioral checks for the 2026-07-07 combined build, or (b) a small residual set of finer-grained checks that genuinely haven't run yet.
 
+## 2026-07-11 (evening) test session — verified PASS (→ COMPLETED_LOG)
+
+> Driven autonomously via the harness + one TOTP. **PASS this session:** PURGE-UI-1 (14 routes render clean,
+> no n8n/Skool/1prompt), **PURGE-UI-2** (fixed the 4 broken redirects first — commit `043e62d` — then verified
+> they land on the real setup pages; also purged dead Converteai preloads), PURGE-SYNC-1 + SYNC-LOG-1 (sync log
+> rows with labeled steps + echo-skip), COST-1 (morning call voice cost row), COST-4 (client-role blocked),
+> MAIN-OUTBOUND answered leg + API-DEPR-2(b), GETCALL-1, CONTACTS-EDIT-DEAD-1, INB-1, B-2 CSV normalized_phone
+> (after the B2-CSV-NORM-1 fix, process-lead-file v18) + inbound internal-first + B-2 outage leg, G3-6 Tier-3
+> (5 fns 200), G3-6-SCHEMA-1 (analytics-v2-process 200, gate cleared), F13/F15 client-eye, P3-CLEANUP-1.
+> **Still owed** (need live SMS/voice or a gated dep): the SMS multi-turn cluster, HOURS-1, FOLLOWUP-DURING-CALL-1,
+> RESCHED-SMS-1, LIVE-D, B-5, PURGE-SIM-1, MODEL-1-HARDENING backend leg, F16/F17 (flags OFF), F14 (Resend),
+> F9V2 (needs a locked setter; schedule now registered so it fires hourly), COST-2/3 (need a cadence send),
+> PURGE-TAG-1 (needs a real GHL tag-apply). New bugs → SCHED-1, B2-REPOINT-1 in `BUG_LIST.md`. Full detail:
+> `Operations/handoffs/2026-07-11-combined-bundle-test-gatea.md`.
+
 ## Branding purge (2026-07-10) — live-verify
 
 > Frontend restructure + 7 edge fns redeployed (all boot-smoked 400, tsc/build/253 tests green). Full context:

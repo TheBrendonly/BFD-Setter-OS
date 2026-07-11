@@ -15,6 +15,16 @@ user) after applying. `get_user_role` is already deterministic (ROLE-RESOLVE-1, 
 
 ---
 
+> **⚠️ 2026-07-11 review finding (resolves part of §1's OPEN QUESTION):** the client-role-reachable pages
+> `AccountSettings.tsx`, `AnalyticsLayout.tsx`, and `ClientDashboard.tsx` **UPDATE base `clients`** to persist
+> UI state (`crm_filter_config`: sub-account column widths, `analytics_dashboard_order`, `last_analytics_dashboard`)
+> under a client JWT (they READ via `clients_public` but WRITE the base table). So the §1 draft's blanket agency-only
+> UPDATE gate would **silently break client UI-state saves** (wrapped in try/catch, so no crash — prefs just stop
+> persisting). The migration MUST add a `client_own` UPDATE policy scoped to `client_id = get_user_client_id(...)`
+> (mirroring the tenant-disjunction §4 shape) OR relocate those three writes to `clients_public`/an edge fn in the
+> SAME change. Do the `rg` sweep for the remaining base-`clients` reads/writes before applying. (No client-role
+> user exists today, so nothing is exposed yet — this is a correctness gate for the apply, not a live leak.)
+
 ## 1. `clients` (RLS-CLIENTS-1, Critical) — the hard one
 
 Current live policies (roles `{public}`, NO role gate):

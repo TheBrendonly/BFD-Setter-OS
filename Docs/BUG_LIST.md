@@ -20,6 +20,24 @@ reconciliation + archive sweep 2026-07-11 (this file trimmed to genuinely-open i
 
 ## Open code items (not first-client-gated)
 
+- [ ] 🟠 **SCHED-1 (Medium, infra) — the two hourly Trigger.dev cron schedules were never registered in prod.**
+  `synthetic-probe` + `poll-retell-drift` declare `schedules.task({cron:"0 * * * *"})` in code, but the prod
+  schedules list was EMPTY (even after a fresh deploy): `poll-retell-drift` had zero runs ever and `probe_results`
+  held 2 rows total since inception — the synthetic uptime probe AND the F9 drift poll had been silent the whole
+  time. **Mitigated 2026-07-11:** registered both imperatively via the Trigger API (dedup keys
+  `synthetic-probe-hourly-prod` / `poll-retell-drift-hourly-prod`); the 05:00 probe fired + passed. **Still open:**
+  root-cause why the DECLARATIVE `schedules.task` cron didn't auto-register on deploy so a future re-deploy /
+  schedule delete doesn't silently drop them again. Low urgency (imperative schedules run regardless). Verify they
+  still fire next session. Found 2026-07-11.
+
+- [ ] 🟢 **B2-REPOINT-1 (Low) — GHL-outage synthetic-lead reconcile only repoints within the minting request.**
+  `receive-twilio-sms` mints `bfd-<phone>` on a GHL outage and schedules a `waitUntil` reconcile — but ONLY in the
+  request that minted it (gated on `syntheticMinted`). If GHL is still down at mint time and recovers later, a
+  subsequent inbound just re-resolves internal-first by phone and never re-attempts the GHL repoint, so the synthetic
+  `bfd-` id is sticky. Not a drop (reply flows Twilio-direct) and no dup rows; purely that the lead never converges to
+  its real GHL contact id if GHL didn't recover during the original request. Fix: a background sweep (or a repoint
+  attempt on later inbounds) for lingering `bfd-%` leads. Found 2026-07-11 B-2 outage probe.
+
 - [ ] 🟡 **INTAKE-RL-1 (Medium, design) — `intake-lead` has no `bump_rate_limit`.** Its secret is designed to be
   embedded in public client HTML; if published, an attacker reading the secret gets unbounded immediate SMS to
   attacker-chosen numbers (the default first cadence node is SMS `delay_seconds:0`). `intake-lead` constant-time-compares
