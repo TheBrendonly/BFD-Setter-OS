@@ -36,29 +36,12 @@ When an item passes, move it to `Docs/archive/COMPLETED_LOG.md`. When it fails, 
 - [ ] **PURGE-TAG-1 — try-gary tag still routes** (ghl-tag-webhook v14): apply a legacy `1prompt-try-gary-<style>`
   tag to a test contact → agent_style/source_type derive as before; a `bfd-try-gary-<style>` tag behaves identically.
 
-## Overnight deep-work pass (2026-07-08) — live-verify
+## Overnight deep-work pass (2026-07-08) — live-verify — ALL CLOSED 2026-07-11
 
-> Tier A fixes deployed this session; server-side verified, these are the live behavioral confirmations owed.
-> Full context: `Operations/handoffs/2026-07-08-overnight-deep-work.md` + `Docs/SECURITY_REVIEW_2026-07-08.md`.
-
-- [ ] **RLS-UISTATE-1-LIVE — client-role user is scoped to its own client on chat_starred / dismissed_error_alerts.**
-  Migration applied + `pg_policies` verified (2 role-split policies per table). Live probe: create a throwaway
-  client-role user (admin `create-client-user`) bound to client A, password-grant to a client JWT, confirm: own-client
-  `chat_starred` insert → 201; sibling client B insert → 403/42501; cross-client select → `[]`. Then confirm the
-  live AGENCY user still stars/dismisses normally in the Chats UI (no lockout). Delete the throwaway user + rows.
-- [ ] **QH-TZ-1-LIVE — a client with a malformed `cadence_quiet_hours.tz` no longer stalls its cadence.**
-  Deployed Trigger.dev 20260708.1. Set a test client's `cadence_quiet_hours.tz` to junk, enqueue a cadence send,
-  confirm it falls back to the default window + logs the warn (no `RangeError`, cadence proceeds). Low risk.
-- [ ] **F16C-SMS-1-LIVE (gated on milestone 6.6) — missed-call text-back requires a verified signature.**
-  retell-call-webhook v24 deployed. Behavior-neutral until `retell_webhook_secret` is armed + Retell signing is
-  configured. When the milestone arms the secret: a forged unsigned `call_ended` produces the SUPPRESSED warn and NO
-  SMS; a real signed missed inbound call sends. Until then, confirm no regression (call_history / cost / sync still
-  work on live calls).
-- [ ] **OPTOUT-EDGE-STAGED — redeploy the 5 edge consumers of the fixed opt-out twin.** `trigger/_shared/optout.ts`
-  is live (20260708.1); the edge twin `frontend/supabase/functions/_shared/optout.ts` is fixed in code but its 5
-  consumers still run the old bundle: `deploy_single_fn.mjs` for `intake-lead`, `trigger-engagement`,
-  `receive-twilio-sms`, `stop-bot-webhook`, and (FROZEN, with the Voice smoke) `voice-booking-tools`. After each,
-  the opt-out lookup fails closed on a DB error.
+> **RLS-UISTATE-1-LIVE, QH-TZ-1-LIVE, OPTOUT-EDGE-STAGED all verified 2026-07-11 → `Docs/archive/COMPLETED_LOG.md`.**
+> (Client-role probe: sibling insert 403 / cross-client select []; agency no lockout. QH-TZ junk-tz → fallback, no
+> RangeError. 5 edge-optout consumers redeployed ACTIVE.) **F16C-SMS-1-LIVE** is gated on arming
+> `retell_webhook_secret` → moved to `Docs/FIRST_CLIENT_TASKS.md` (GATE B).
 
 ## Session P3 cleanup (2026-07-07) — live-verify
 
@@ -73,13 +56,9 @@ When an item passes, move it to `Docs/archive/COMPLETED_LOG.md`. When it fails, 
 Code + unit tests + read-only data-path checks all done + deployed (see `COMPLETED_LOG` 2026-07-07 P2).
 These are the LIVE behavioral confirmations still owed (most are dormant until a real trigger exists):
 
-- [ ] **COST-1 — voice cost event accrues.** After a real answered outbound call completes, confirm an
-  `execution_cost_events` row: `cost_kind='voice'`, real `cost_usd` (= `call_history.cost`), non-null
-  `execution_id` (outbound), `is_estimated=false`. (Idempotency + table + RLS already proven via SQL.)
-- [ ] **COST-2 — SMS cost event accrues.** After a cadence outbound SMS send, confirm an `sms` row with
-  `quantity`=num_segments, `is_estimated=true`, `provider_ref`=twilio_sid, `execution_id` set for cadence sends.
-- [ ] **COST-3 — LLM cost event accrues.** After an engagement execution that uses AI, confirm one `llm` row
-  per execution with `execution_id` + non-zero real `cost_usd`.
+> **COST-1 / COST-2 / COST-3 (need real client call/SMS/LLM traffic to accrue) → moved to `Docs/FIRST_CLIENT_TASKS.md`.**
+> COST-4 (RLS, testable now with a throwaway client) stays below.
+
 - [ ] **COST-4 — RLS.** Agency JWT can SELECT `execution_cost_events`; a client-role JWT canNOT (role-gate,
   like `client_pricing_config`). (Policy mirrors the proven F8 trap; confirm with a throwaway client user.)
 - [ ] **F9V2-1 — first live scheduled drift poll.** Confirm the hourly `poll-retell-drift` Trigger.dev task
@@ -90,35 +69,12 @@ These are the LIVE behavioral confirmations still owed (most are dormant until a
   it is UNLOCKED (demo persona), so it won't flag until locked.
 - [ ] **F9V2-2 — badge clears on pull.** After a drift is flagged, a Pull-from-Retell (or unlock) clears the
   `Drifted · pull` / `Booking tools missing` badge (flags nulled). (Verified via replica; confirm in the UI.)
-- [ ] **BOOKTZ-1 — cross-tz lead hears both zones.** With a lead whose `leads.timezone` differs from the
-  business tz (e.g. set a dogfood lead to `Australia/Perth`), confirm: (a) the TEXT setter states times in both
-  zones while booking the business-tz time; (b) after applying PU-13, the VOICE setter does the same; (c) the
-  booked `bookings.appointment_time` is STILL the business-tz absolute instant (the no-leak assertion).
-  Dormant until a real interstate lead segment exists (the gate). Voice half needs PU-13 applied first.
+> **BOOKTZ-1 (needs a real interstate lead segment) → moved to `Docs/FIRST_CLIENT_TASKS.md`.** Voice half also needs PU-13.
 
-## 🟠 MAIN-OUTBOUND-SHARED-1 — dedicated-agent restore (data fix 2026-07-07) — LIVE OUTBOUND CALL OWED
-
-> Fixed as a comprehensive data migration: the WHOLE "Main Outbound" setter (85 slot-keyed rows across
-> `prompts`/`agent_settings`/`prompt_configurations`/`prompt_docs`/`prompt_versions` + the `voice_setters`
-> binding + the display label) was moved off the poisoned slot 1 to the free slot 10, and its agent restored to
-> `agent_f45f4dd…` (`clients.retell_agent_id_10` set for durability). In the UI it is now the **"Main Outbound"
-> tile at slot 10**; an EMPTY "Setter-1" tile also renders (the code always seeds slot 1) — leave it empty.
-> DB read-back verified this session (Main Outbound and Inbound now distinct agents; nothing left at
-> `Voice-Setter-1`; from-number binding intact). Root cause + emergency rollback SQL:
-> `Operations/handoffs/2026-07-07-main-outbound-shared-1-fix.md`.
-
-- [~] **MAIN-OUTBOUND-SHARED-1 live — ROUTING + PERSONALIZATION LEG PASSED 2026-07-07; answered-conversation
-  leg optional/owed.** Live dial 2026-07-07 (`call_e9aa23eac588ad1fc33eca2499b`, `node dial.mjs` as Main
-  Outbound `b09624b5`): **(a) PASS — the call used `agent_id = agent_f45f4dd87a4072424f3c84b74c` (NOT
-  `b2f6495`)**, confirming the fix end-to-end (UUID → `voice_setters.retell_agent_id` = f45f4dd →
-  `override_agent_id`); the `first_name` dynamic variable ("Brendan") was passed through, so the
-  `{{first_name}}` opener will resolve. Brendan let it ring out → `disconnection_reason = voicemail_reached`,
-  so **(b) the spoken opener + (c) booking were not exercised this run** — a standard no-regression tick to
-  confirm on any future *answered* call, but the actual bug (outbound running the inbound agent) is proven
-  resolved. Re-saves already done + verified this session (Main Outbound stayed on f45f4dd after a real Save &
-  Push; both agents picked up the API-DEPR-2 presets). **⚠️ Do NOT create/save a setter on the empty
-  "Setter-1" tile** — saving slot 1 re-reads `retell_inbound_agent_id` (b2f6495) and would re-create the
-  collision (residual DEFERRED SLOT-MAP-1).
+> **🟠 MAIN-OUTBOUND-SHARED-1 — FULLY CLOSED 2026-07-11.** Routing + personalization leg passed 2026-07-07; the
+> answered-conversation leg passed 2026-07-11 (a live answered booking call dialed as `agent_f45f4dd…` and booked
+> end-to-end, GHL appt 14 Jul 1:30pm) → `Docs/archive/COMPLETED_LOG.md`. Residual architectural follow-up = SLOT-MAP-1
+> in `BUG_LIST.md` (do NOT create/save a setter on the empty "Setter-1" tile).
 
 ## ⭐⭐⭐ COMBINED BUILD SESSION (bugs + F15 + F16 + F17-p1) — DEPLOYED LIVE 2026-07-06/07 — LIVE CHECKS OWED
 
@@ -162,11 +118,8 @@ These are the LIVE behavioral confirmations still owed (most are dormant until a
 
 - [ ] **F13 — dashboard summary card, both roles.** Your agency login sees the margin one-liner on the client's
   ChatAnalytics dashboard (text + voice tabs, not chat-with-ai); the client login sees only toggled parts.
-- [ ] **F14 — invite E2E (AFTER Resend SMTP lands).** ManageClients → edit a sub-account → "Invite Sub-Account User by
-  Email" → invite a test address → email arrives from the branded sender → link lands on "Set Your Password" → a password
-  under 12 chars is refused → set a valid one → sign in works, role=client, correct client_id routing.
-- [ ] **F14 — client self password reset.** /forgot-password with a client-role email now sends the reset (no more
-  "Not Authorized"); the reset form enforces 12 chars; agency reset still works.
+
+> **F14 invite E2E + F14 client self password reset are Resend-SMTP-gated → moved to `Docs/FIRST_CLIENT_TASKS.md`.**
 
 - [ ] **F8 — agency panel + client card.** Agency login → Sub-Account Config → "Cost-to-Price Calculator": edit
   rates/FX/markup/toggles, Save, reload → persists; the live breakdown + blended $/min match a hand-check of the seeded

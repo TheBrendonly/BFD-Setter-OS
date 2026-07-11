@@ -444,6 +444,18 @@ Status: `[ ]` not started · `[~]` in progress · `[x]` done. Effort is rough.
   FIRST_CLIENT_MILESTONE were mid-edit by a concurrent session, not touched). Handoff
   `Operations/handoffs/2026-07-08-overnight-deep-work.md`. Pipeline: `[✓] P3  [✓] Overnight deep-work  [ ] Brendan
   deploys staged retell-proxy bundle + triages GATE A/B + TRYGARY  [ ] First-Client Milestone (gated)`.
+- [x] **Supervised deploy + test + FULL LIST RECONCILIATION — DONE 2026-07-11 (Opus 4.8, Brendan supervised).**
+  Deployed the staged Tier B bundle (retell-proxy GETCALL-1 + PU-9-CODE, now live in v52 after the branding-purge
+  rebuild) + bulk `refresh-booking-tool-messages` (7/7 slots); fixed **TRYGARY-DIAL-1** (branch deleted,
+  ghl-tag-webhook v13→v14, forged POST → 400 verified); redeployed the 5 edge-optout consumers (fail-closed).
+  Live-verified: PU-9 dead-air (answered booking call, filler + confirmation both fired, booking landed),
+  GETCALL-1 (proxy get-call 200), RLS-UISTATE-1 (both roles), QH-TZ-1 (junk-tz fallback), MAIN-OUTBOUND-SHARED-1
+  answered leg. Then reconciled ALL SIX lists: archived everything verified-done → `COMPLETED_LOG.md` (2026-07-11),
+  and **created `Docs/FIRST_CLIENT_TASKS.md`** — the single consolidated home for every first-client-gated item
+  (GATE A RLS cluster, GATE B Retell-webhook cluster, Stripe, A2P, onboarding prerequisites, Resend SMTP, billing
+  config, client-data-gated verifications, post-client build queue). GATE A/B fold into `FIRST_CLIENT_MILESTONE.md`
+  was skipped (file was mid-edit); the milestone still references them. Pipeline: `[✓] Overnight deep-work
+  [✓] Supervised deploy + reconciliation (2026-07-11)  [ ] First-Client Milestone (gated → Docs/FIRST_CLIENT_TASKS.md)`.
 4. **Brendan solo block (parallel, no Claude session):** Setter-1 prompt migration, Resend SMTP → F14 E2E,
    sms_llm rate + billing anchor/toggles, n8n Railway shutdown, PROMPT_UPDATE_LIST items (see the 2026-07-07
    action pack for the full ordered list with exact live wording + paste-ready changes).

@@ -1,7 +1,8 @@
 # BFD-Setter — Brendan's Manual / UI Todo List
 
-Things only Brendan can do (UI clicks, logins, provider dashboards, business calls). Reconciled 2026-06-25.
-Testing actions live in `TEST_LIST.md`; first-paying-client onboarding actions live in `DEFERRED.md`;
+Things only Brendan can do (UI clicks, logins, provider dashboards, business calls). Reconciled 2026-06-25;
+first-client cluster pulled out 2026-07-11. Testing actions live in `TEST_LIST.md`; **everything gated on the
+first paying client (onboarding, Resend SMTP, Stripe, A2P, GATE A/B) now lives in `Docs/FIRST_CLIENT_TASKS.md`**;
 **prompt-content edits (agent wording) live in `PROMPT_UPDATE_LIST.md`** (kept separate so you can work
 prompt tweaks independently).
 
@@ -21,12 +22,10 @@ prompt tweaks independently).
   data). Appointment restored to its original `cancelled` state. Only residual = a visual glance at the funnel card
   in the dashboard (test session). Per-client note: each real client's own GHL location needs its own copy of this
   workflow at onboarding (fold into the First-Client Milestone GHL step).
-- [ ] **After Resend SMTP lands (M1, below): the F15 weekly report email flips from stubbed to live automatically**
-  (the `weeklyClientReport` cron sends when `RESEND_API_KEY` is set + a recipient email is configured on the client's
-  "Client ROI reporting" card). No code change needed; just set `RESEND_API_KEY` on Trigger.dev prod + the recipient.
-- [ ] **Apply the prompt-content items** in the setter UI: **PU-6** (recording disclosure line, now wired to
-  `{{recording_disclosure}}`), **PU-10** (reschedule list-first), **PU-11** (live-transfer offer line). See
-  `PROMPT_UPDATE_LIST.md`.
+- [ ] **Apply the remaining prompt-content items** in the setter UI: **PU-11** (live-transfer offer line, deferred
+  until you're fielding transfers), **PU-13** (state offered times in the lead's own timezone, gated on a real
+  interstate lead). See `PROMPT_UPDATE_LIST.md`. _(PU-6 recording disclosure + PU-10 reschedule-list-first are DONE
+  + verified → archived; the Resend-gated F15 weekly-report email flip is in `Docs/FIRST_CLIENT_TASKS.md`.)_
 
 ## P3 review (2026-07-07) — low-priority follow-up
 
@@ -46,32 +45,12 @@ prompt tweaks independently).
   already live; all five are now confirmed live end-to-end (the TEST_LIST "Onboarding-fix pass" rows
   already passed 2026-07-06 → `COMPLETED_LOG.md`).
 
-## From the 2026-07-06 end-to-end onboarding dry run (what a REAL first client needs)
+## First-client onboarding prerequisites — MOVED to `Docs/FIRST_CLIENT_TASKS.md`
 
-Full report: `Docs/ONBOARDING_GAP_REPORT_2026-07-06.md`. The app alone cannot stand up a client; the
-un-automated prerequisites, roughly in order (most are code-fixable → see BUG_LIST ONBOARD-1/2, GOLIVE-1):
-
-- [ ] **External Supabase project (SOP §2.1) — the #1 un-automated blocker.** Fully manual: create a
-  `<slug>-setter-live` project on supabase.com, grab URL + `sb_secret_*` key, run the 5-table seed SQL,
-  paste into the client's Credentials page. It is a HARD dependency for BOTH text and voice setter
-  authoring (create-setter and text-save 400 without it — confirmed live). Nothing in the app or
-  `onboard-client.mjs` provisions it. Consider a provisioning script / one-click template.
-- [ ] **GHL location + Private Integration Token** (Contacts, Conversations, Calendars, Workflows,
-  Custom Fields) → `ghl_location_id`, `ghl_calendar_id`, `ghl_assignee_id`, plus the custom fields
-  (`last_synced_from` echo-guard, conversation deep-link field, `ghl_channel_field_id`,
-  `ghl_conversation_provider_id`) and the webhook actions carrying `x-wh-token`. **Everything lead-side
-  is GHL-gated**: `intake-lead` 409s "Client has no GHL credentials configured" (confirmed live), so
-  even the SOP §7.1 synthetic dry-run can't run until GHL is wired; voice booking 409s without GHL.
-- [ ] **Twilio BYO (client-owned): SID + auth token + E.164 number — NOT UI-editable.** ApiCredentials
-  has no Twilio input/save (the token is never even read back). Set via `onboard-client.mjs` or SQL.
-  Number must be UNIQUE (sharing another client's `retell_phone_1` breaks inbound routing) and imported
-  into Retell before inbound bind / "Configure Twilio Webhook" can complete. A2P is the client's (weeks).
-- [ ] **Flip `subscription_status`→`active`** on the new client (UI create sets `free`). SQL/script
-  today. (The `use_native_text_engine` half is FIXED 2026-07-06: all three UI create paths now set it
-  `true` at birth — see the onboarding-fix pass.)
-- [ ] **Confirm the canonical text `llm_model` (SOP §11).** DB default `google/gemini-2.5-pro`;
-  onboard-client.mjs default `openai/gpt-4.1-nano`; voice setters seed `gemini-3.0-flash`. A UI-created
-  client silently gets gemini-2.5-pro for the text engine. Decide the one true production text model.
+> The un-automated steps to stand up a real client (external Supabase project, GHL location + PIT, Twilio BYO,
+> `subscription_status`→active, the canonical text `llm_model` decision, fresh-agency check) now live in
+> `Docs/FIRST_CLIENT_TASKS.md` (Onboarding prerequisites). Full gap report:
+> `Docs/ONBOARDING_GAP_REPORT_2026-07-06.md`. They stop surfacing here so day-to-day work is unblocked.
 
 ## From the 2026-07-03 overnight stage-only bug-fix run (branch `feature/overnight-bugfix` + `g3-7/vite-major`)
 
@@ -96,12 +75,8 @@ un-automated prerequisites, roughly in order (most are code-fixable → see BUG_
   long code (`+61481614530`, ACMA-exempt). No rewrite risk. **Standing note for Brendan:** treat any future
   "branded/alpha sender" client request as needing ACMA Sender ID Register registration FIRST (weeks of lead
   time) — https://www.acma.gov.au/sms-sender-id-register.
-- [ ] **GHL reminder-workflow snapshot (no-show stack; do at/just before first-client onboarding).** Build ONE
-  canonical GHL workflow set in the BFD location and snapshot it for client onboarding: instant booking-confirm
-  SMS → 24h reminder with a confirm trigger-link (tap = confirmed, suppresses later nags) → 2h short reminder →
-  reschedule link in every touch → post-appointment branch on status (showed / no-show). SMS reminders cut
-  no-shows 38-40% and this is config, not code (research verdict: do NOT build a reminder engine in-product;
-  GHL's appointment-status triggers + trigger links do it all). Pairs with F15's status sync-back. `[B]`
+> **GHL reminder-workflow snapshot (no-show stack)** — first-client-gated → moved to `Docs/FIRST_CLIENT_TASKS.md`
+> (Onboarding prerequisites). Build once ahead of time, reuse per client.
 
 - [x] **Apply the Setter-1 prompt content migration (PROMPT-AUTH-1, report-only) — DONE + VERIFIED LIVE
   2026-07-07** (Brendan drove the UI edit during the action-pack session; Claude verified read-only via
@@ -156,19 +131,10 @@ un-automated prerequisites, roughly in order (most are code-fixable → see BUG_
 ## From the 2026-07-02 usage/billing + auth build (F13/F14, branch `feature/usage-billing-auth`)
 
 - [x] **Review the branch + say GO for the supervised deploy** — DONE 2026-07-03: Brendan reviewed + GO'd; DEPLOYED LIVE (6 edge fns, Trigger 20260702.1, frontend, backfill; both trap proofs 9/9 + SQL hand-check exact match; results in the handoff). What remains below is yours.
-- [→] **Resend SMTP — DEFERRED to first-client onboarding (Brendan, 2026-07-07).** No product need until there is a
-  paying client's login to provision; it should be one of the FIRST setup steps when a client signs (moved to
-  `Docs/FIRST_CLIENT_MILESTONE.md` M1). **Provider decided: Resend** (already wired into the codebase — `RESEND_API_KEY`
-  + the SMTP PATCH payload; good free tier + deliverability; no reason to use anything else). **Cost: $0** on the free
-  tier (3,000 emails/mo, 100/day, 1 domain) — comfortably covers auth invites/resets + weekly reports even at many
-  clients; paid Pro (~$20/mo, 50k emails) only if volume ever grows. When a client signs: (1) create a free Resend
-  account; (2) add + verify `buildingflowdigital.com` (Resend shows the DKIM/SPF DNS records); (3) create an API key →
-  Claude PATCHes Supabase Auth custom SMTP (`smtp_host/user/pass/sender` — currently all NULL, confirmed 2026-07-07)
-  + sets `RESEND_API_KEY` on Trigger.dev prod. Unlocks reliable F14 invite/reset emails + flips the F15 weekly report
-  email from stubbed to live. Payload ready in `Operations/handoffs/2026-07-02-usage-billing-auth.md`. `[B]`
-- [ ] **Confirm the `sms_llm` seed rate** — the per-text sell rate is built from an admin-set "LLM cost per average outbound message", seeded at US$0.003/msg (enabled by default; it does NOT change any blended $/min). Sanity-check against real OpenRouter usage and tune it in the pricing panel. `[B]`
-- [ ] **Set per-client billing anchor day + client visibility toggles** — Sub-Account Config → Cost-to-Price Calculator: pick the billing anchor day (default the 1st) and flip on whichever of rate / minutes / texts / month-total each client may see. All four default OFF. `[B]`
-- [ ] **After SMTP lands: run the invite + self-reset E2E** — send an invite to a test address (lands on "Set Your Password", 12-char minimum), and run a client-role /forgot-password (now allowed). Items are in TEST_LIST. `[B]`
+> **Resend SMTP, the `sms_llm` seed-rate confirm, the per-client billing anchor + visibility toggles, and the
+> after-SMTP F14 invite/self-reset E2E** are all first-client-gated → moved to `Docs/FIRST_CLIENT_TASKS.md`
+> (Resend SMTP + Billing config sections). Provider is decided (Resend, already wired); payload in
+> `Operations/handoffs/2026-07-02-usage-billing-auth.md`.
 
 ## From Session 7 phone-half (2026-06-30)
 

@@ -21,16 +21,16 @@ Things deliberately not being built now, each with the gate that would un-defer 
 - [ ] **3.11 HubSpot + GHL coexistence** `[B]` — **Gate:** a client using HubSpot signs.
 - [ ] **4.1 Pricing model** (cost-plus vs retainer) `[B]` — **Prereq now built:** `execution_cost_events` (Session P2 2026-07-07) is the durable per-execution cost source cost-per-booking math needs. **Remaining gate:** enough real cost-per-booking data to model against.
 - [ ] **4.3 Multi-Twilio failover** — **Gate:** combined volume exceeds one Twilio account's safe ceiling.
-- [x] **BOOK-TZ-1 — per-lead timezone (display) — BUILT 2026-07-07 (Session P2).** Captures the lead's own timezone (`leads.timezone`, from the GHL contact, IANA-validated) and lets the setter state offered times in the lead's zone while the booked absolute time stays business-tz (booking code untouched — offered/booked times unchanged; the critical no-leak property). Shipped: the `leadTimezone.ts` helper primitives (Intl, DST-aware) + tests; capture in `buildLeadInsert`/`sync-ghl-contact`/`intake-lead`; VOICE `{{lead_timezone(_label)}}` + `{{business_timezone(_label)}}` dynamic vars (inert until the prompt uses them); TEXT additive lead-timezone block in `processSetterReply` (frozen availability/tool blocks untouched). **Chosen scope was explicit-GHL-column, NOT area-code inference** (mobiles carry no geography). The VOICE prompt wording to actually speak both zones is report-only → `PROMPT_UPDATE_LIST.md` PU-13. **Dormant until a lead carries a non-business GHL timezone** (the original gate). Precise per-slot lead-tz rendering in the availability data (needs the raw ISO before compaction) is a v2 refinement. See `COMPLETED_LOG` 2026-07-07 P2.
 - [ ] **E-1 `fetch-thread-previews` 500-on-throw** — **Gate:** it has no live caller (latent); fix only if it gets wired up.
 - [ ] **Email provider / custom SMTP** — **Gate:** BFD stays SMS-only by decision; build when a client needs email.
 - [ ] **HIBP password-breach check** — **Gate:** Supabase Pro upgrade (flip `password_hibp_enabled=true` via Mgmt API).
 - [ ] **Drop the unused `clients.text_engine_webhook` column** (F5 leftover) — the n8n code path is already gone, but the column is still referenced by the `clients_public` view (79 browser reads). Dropping it cleanly needs a coordinated `DROP VIEW` + `CREATE VIEW` (preserving `security_invoker` + grants) — not worth that risk for one inert column. **Gate:** fold it into the next intentional `clients_public` view rebuild.
 
-## First-paying-client onboarding cluster `[BRENDAN]`
+## First-paying-client onboarding cluster — MOVED to `Docs/FIRST_CLIENT_TASKS.md`
 
-- [ ] **6.6** arm `retell_webhook_secret` (= the Retell API key; one controlled live call, revert to NULL on any 403) + provision the GHL/Retell/Unipile webhook signing secrets.
-- [ ] **AU SMS A2P / Messaging Service registration for `+61481614530`** — Twilio accepts messages but AU handset delivery on the bare long code is slow/unconfirmed; register A2P or confirm the regulatory bundle.
+> **6.6** (arm `retell_webhook_secret` + provision GHL/Retell/Unipile webhook signing secrets = GATE B) and the
+> **AU SMS A2P** registration for `+61481614530` now live in `Docs/FIRST_CLIENT_TASKS.md` with the rest of the
+> first-client-gated work, so they stop surfacing during normal work.
 
 ## Other
 
@@ -40,8 +40,6 @@ Things deliberately not being built now, each with the gate that would un-defer 
   automated calls/SMS; revisit F17 phase-2 (consent audit trail) + the recording-disclosure wording if so.
 
 - [ ] **By-phone Spec 2 — N-row merge + UNIQUE(client_id, normalized_phone)** — collapse the existing duplicate `leads` rows that share a `normalized_phone` into one survivor (richest/most-recent), repoint child tables (engagement_executions / bookings / campaign_events / dm_executions / scheduled_callbacks / message_queue / active_trigger_runs) onto the survivor, add the UNIQUE constraint, and clean up the GHL-side dupes. Spec 1 (go-forward) is live; Session 5's resilient-inbound collision guard explicitly **defers** the rare concurrent-create case here. **Gate:** needs a dry-run on the live dup set first (was the ~10-row `+61405482446` case); low urgency while GHL allow-duplicate-contacts stays OFF. See `project_internal_by_phone_leads_spec1_2026_06_18`.
-
-- [x] **F9 v2 — Retell lock polish — poll + alerts BUILT 2026-07-07 (Session P2).** Shipped the **scheduled drift poll** (`trigger/pollRetellDrift.ts`, hourly) + **booking-tools-lost alert**: persisted `voice_setters.retell_drift_detected_at` / `retell_booking_tools_lost_at` flags set by the poll (read live get-agent/get-retell-llm vs the stored snapshot via the pure `computeDriftState`), surfaced as error_logs rows + optional Slack push + PromptManagement tile badges; cleared on pull/unlock. Verified end-to-end against a real drift (Property Coach live v17 vs synced v13). **Gap (c) auto-hydrate-BFD-on-unlock was explicitly deferred** (the manual Pull already covers it; snapshot-expand + unlock-flow rewrite not worth it yet) — reopen only if Brendan wants hands-off editor hydration on unlock. See `COMPLETED_LOG` 2026-07-07 P2 + `FEATURE_ROADMAP` "Feature spec - F9".
 
 - [ ] **6.12a GHL custom conversation provider POC** — deferred. The upstream project never used one (it lets GHL own the channel); the marketplace-app path is bfd-specific and painful. The **F1 deep-link feature** covers the need near-term (link from GHL to BFD's conversation view). Revisit the provider only if branded in-GHL bubbles become a hard requirement.
 

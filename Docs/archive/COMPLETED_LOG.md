@@ -1,7 +1,83 @@
 # BFD-Setter — Completed / Closed Items Log (archive)
 
 Items closed out of the active lists. Newest first. The active lists are in the repo root + `Docs/`
-(`BUG_LIST.md`, `FEATURE_ROADMAP.md`, `BRENDAN_TODO.md`, `TEST_LIST.md`, `DEFERRED.md`).
+(`BUG_LIST.md`, `FEATURE_ROADMAP.md`, `BRENDAN_TODO.md`, `TEST_LIST.md`, `DEFERRED.md`). First-client-gated
+work lives in `Docs/FIRST_CLIENT_TASKS.md` (not archived — deferred).
+
+## 2026-07-11 — SUPERVISED DEPLOY + TEST session + FULL LIST RECONCILIATION
+
+Brendan-supervised daytime session (retell-proxy v51 deploy authorized). Deployed + live-verified the staged
+Tier B bundle and the Tier A live checks, fixed TRYGARY, then reconciled ALL six canonical lists: archived
+everything verified-done, and pulled every first-client-gated item into the new `Docs/FIRST_CLIENT_TASKS.md`.
+
+### Deployed + live-verified this session
+- **GETCALL-1** — retell-proxy `get-call/{id}` → `v2/get-call/{id}` (deployed v50→v51, now live in v52 after the
+  branding-purge rebuild). Verified 2026-07-11: `retell-proxy get-call` action → **HTTP 200** with full transcript
+  (was 404). Was in BUG_LIST (Low).
+- **PU-9-CODE** — lengthened `BOOKING_TOOL_MESSAGES` to two-beat ~20-30 word fillers + `speak_after_execution:true`
+  on the write tools (book/update/cancel), `false` explicit on the read tools. Bulk `refresh-booking-tool-messages`
+  ran for BFD: **7/7 slots updated, 0 locked, 0 failed**. Verified 2026-07-11 on a live answered booking call
+  (`call_c03c21e6…`): `speak_during` filler AND `speak_after` confirmation both fired across the GHL round-trip; the
+  booking landed (GHL appt `ipdrHk9K…`, Tue 14 Jul 1:30pm Sydney). Was in BUG_LIST (Low) + PROMPT_UPDATE_LIST PU-9.
+- **TRYGARY-DIAL-1 (High)** — removed the unauthenticated `try-gary-landing` branch from `ghl-tag-webhook` (Brendan
+  confirmed the GHL-side automation is dead). Deleted the branch + orphaned `handleTryGaryLanding` + its 3 exclusive
+  consts; kept `TRY_GARY_TAG_PREFIX*` / `isPhoneRecentDuplicate` / `PHONE_DEDUP_WINDOW_MINUTES` (shared). Deployed
+  ghl-tag-webhook v13 (now live at v14 after the branding-purge dual-prefix rebuild). Verified 2026-07-11: a forged
+  `source:"try-gary-landing"` POST → **400 contactId required**, 0 leads / 0 executions created. Commit `6ed6cd1`.
+- **OPTOUT-FAILOPEN-1 / OPTOUT-EDGE-STAGED** — redeployed the 5 edge consumers of the fixed opt-out twin so the
+  lookup fails CLOSED on a DB error: intake-lead v17, trigger-engagement v16, receive-twilio-sms v30,
+  stop-bot-webhook v14, voice-booking-tools v24 (frozen, with the read-only Voice smoke — 24-agent set identical
+  before/after, nothing mutated). Was BUG_LIST (High) + TEST_LIST OPTOUT-EDGE-STAGED.
+- **RLS-UISTATE-1-LIVE** — throwaway client-role probe (bound to BFD, password-grant, no MFA): own-client
+  `chat_starred`/`dismissed_error_alerts` insert → **201**; sibling-client insert → **403/42501** (both tables);
+  cross-client select → `[]`; own-client select sees its row. Agency-role path (fresh aal1 token): star insert 201,
+  select own row, unstar delete 204 → **no lockout**. `pg_policies` confirmed the role-split (agency_all_* +
+  client_own_*) on both tables. Was TEST_LIST RLS-UISTATE-1-LIVE.
+- **QH-TZ-1-LIVE** — ran the shipped `parseQuietHours` against a junk tz (`Not/AZone`): falls back to
+  `Australia/Brisbane` (default) with the warn; downstream `isWithinSendingWindow`/`getNextSendingOpening` run with
+  **no RangeError** (control confirmed the raw junk tz throws). Trigger.dev 20260708.1. Was TEST_LIST QH-TZ-1-LIVE.
+- **MAIN-OUTBOUND-SHARED-1 (answered-conversation leg)** — the live answered booking call above dialed as
+  `agent_f45f4dd…` (the restored dedicated Main Outbound agent), conversed and booked end-to-end. The routing +
+  personalization leg passed 2026-07-07; this closes the answered-conversation leg. Was TEST_LIST (`[~]`).
+
+### P3 security review cluster (fixed 2026-07-08, closed 2026-07-11)
+All five P3 items are code-complete + deployed + (where a live check was owed) verified this session:
+- **F16C-SMS-1** — CODE fix live (retell-call-webhook v24, `signatureVerified` fail-closed). The behavioral
+  **live test** is gated on arming `retell_webhook_secret` → moved to `FIRST_CLIENT_TASKS.md` (GATE B).
+- **QH-TZ-1** — fixed + live-verified (above).
+- **RLS-UISTATE-1** — migration live + cross-role probe verified (above).
+- **FUNNEL-SCAN-1** — get-show-rate-funnel v2 (warn on scan-cap truncation). Server-verified.
+- **ROLE-RESOLVE-1** — deterministic `get_user_role` (migration live; dual-role probe → `agency`). Server-verified.
+
+### PROMPT_UPDATE_LIST — applied/resolved prompt items (verified live 2026-07-07, formally archived 2026-07-11)
+Moved out of the "Open" section (each was `[x]` with a "move to COMPLETED_LOG" note):
+- **PU-1** timezone confirmation — "Sydney time" hardcoded in every canonical agent's stored prompt.
+- **PU-3** `{{first_name}}` outbound opener — resolved by the MAIN-OUTBOUND-SHARED-1 restore (dedicated agent's
+  begin_message personalizes + states purpose; inbound is a separate name-free agent).
+- **PU-4** Property Coach company-name placeholder — now "Building Flow Property", no bracket placeholder.
+- **PU-6** call-recording disclosure line — applied as direct text in Main Outbound's begin_message; verified read-only.
+- **PU-7** caller identification within 30s — Main Outbound compliant; the 4 demo Garys explicitly out of scope.
+- **PU-8** voicemail "[Your Name]" placeholder — no bracket placeholder on any of the 5 canonical agents' voicemail.
+- **PU-10** reschedule/cancel honesty (list-first, no false confirm) — applied with the Setter-1 migration; the
+  load-bearing half is the deployed RESCHED-SMS-1 code guard.
+- **PU-12** inbound-unknown-caller "never speak placeholders" guard — applied to Inbound BFD Agent SETTER CORE; verified.
+- **PU-9** dead-air — the load-bearing CODE half shipped this session (PU-9-CODE above); the optional persona
+  talk-track *bridges* remain a normal report-only prompt option if ever wanted (not tracked as an open item).
+
+### DEFERRED — items that were BUILT (Session P2, 2026-07-07)
+- **BOOK-TZ-1** — per-lead timezone display captured (`leads.timezone`, IANA-validated); booked absolute time
+  provably unchanged. VOICE prompt wording to speak both zones remains report-only (PROMPT_UPDATE_LIST PU-13, gated
+  on a real interstate lead). Dormant until a lead carries a non-business tz.
+- **F9 v2** — scheduled Retell drift poll (`trigger/pollRetellDrift.ts`, hourly) + booking-tools-lost alert; verified
+  end-to-end against a real drift. Gap (c) auto-hydrate-on-unlock explicitly deferred.
+
+### FEATURE_ROADMAP — shipped features cleared from the build queue
+All shipped + deployed live; their remaining live UI checks live in `TEST_LIST.md` (or `FIRST_CLIENT_TASKS.md` where
+Resend-gated). Specs retained in `FEATURE_ROADMAP.md` for reference. **F8** (cost-to-price calculator, Session 8),
+**F9** (per-setter Retell lock, Session 6.5), **F11** (credentials masked indicator), **F13** (usage & billing
+metering), **F14** (auth: invite/reset/12-char), **F15** (client ROI: show-rate funnel + weekly report), **F16**
+(never-miss-a-lead: speed-to-lead + missed-call text-back + live-transfer, default-OFF). **F17** phase 1 shipped
+(AU calling-hours clamp + recording-disclosure toggle); phase 2 stays gated (post-first-client).
 
 ## 2026-07-10 — BRANDING PURGE (dedicated session): all 1Prompt/n8n refs out of the product
 
