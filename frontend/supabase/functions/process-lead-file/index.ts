@@ -353,7 +353,10 @@ async function processImportJob(
           phone,
           // BUG 6.10/B-2: derive normalized_phone so CSV-imported leads are
           // resolvable by resolveLeadByPhone and covered by the STOP fan-out.
-          normalized_phone: normalizePhoneE164(phone),
+          // Normalize from the RAW csv value: the local display normalizer above
+          // prepends "+" to national numbers ("0400..." -> "+0400..."), which
+          // makes normalizePhoneE164 trust the digits and skip its AU branch.
+          normalized_phone: normalizePhoneE164(normalizedData.phone ?? phone),
           email,
           business_name: businessName,
           custom_fields: buildCustomFieldsFromData(normalizedData),
