@@ -546,8 +546,8 @@ function prepareGeneralTools(
   // BFD voice-tool URL authority + default-tool injection.
   // BFD's own function-call tools (booking + send-sms + schedule-callback) must
   // always hit our voice-booking-tools edge fn with a per-tenant clientId + Bearer
-  // auth, regardless of whatever URL is stored (legacy upstream n8n host, the
-  // sentinel placeholder, or any stale host). We key on the tool NAME so an
+  // auth, regardless of whatever URL is stored (the sentinel placeholder or any
+  // stale host). We key on the tool NAME so an
   // unrecognised old URL can never slip through; genuine custom user tools and
   // end_call/transfer_call pass through untouched.
   //
@@ -555,7 +555,6 @@ function prepareGeneralTools(
   // URL, so a placeholder-seeded tool would otherwise be stripped as "invalid".
   const supabaseUrlForTools = Deno.env.get("SUPABASE_URL")!;
   const VOICE_BOOKING_TOOLS_URL = `${supabaseUrlForTools}/functions/v1/voice-booking-tools`;
-  const LEGACY_N8N_HOST = "n8n-1prompt.99players.com";
   const forceBfdToolUrl = (t: Record<string, unknown>) => {
     const toolName = typeof t.name === "string" ? t.name.trim() : "";
     return {
@@ -572,9 +571,9 @@ function prepareGeneralTools(
     const url = typeof t.url === "string" ? t.url : "";
     // Authoritative by NAME: any known BFD tool always points at voice-booking-tools.
     if (BFD_VOICE_BOOKING_TOOL_NAMES.has(toolName)) return forceBfdToolUrl(t);
-    // Defensive fallback: name-unknown tools still carrying our placeholder or the
-    // legacy n8n host also get rewritten.
-    if (url === BFD_VOICE_BOOKING_TOOLS_PLACEHOLDER || url.includes(LEGACY_N8N_HOST)) return forceBfdToolUrl(t);
+    // Defensive fallback: name-unknown tools still carrying our placeholder also
+    // get rewritten.
+    if (url === BFD_VOICE_BOOKING_TOOLS_PLACEHOLDER) return forceBfdToolUrl(t);
     return t;
   });
   // Inject the default SMS + callback tools if this setter predates them, so every
