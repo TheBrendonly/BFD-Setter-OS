@@ -60,20 +60,47 @@ PURGE-SIM-1, PURGE-SYNC-1, PURGE-TAG-1.
   public `/workflows/*.json` + `/retell-agents/*.json` paths now return the SPA shell, not JSON.
 - `System/docs/sync-topology.md` updated with the new repo names.
 
-## NEXT SESSION (paste this prompt)
+## NEXT SESSION (paste this prompt - COMBINED 3-phase relay, updated 2026-07-11)
 
 ```
-BFD-setter continuation. Repo /srv/bfd/Projects/bfd-setter, branch main (git pull first).
-Supabase ref bjgrgbgykvjrsuwwruoh. Creds in ./.env. Live DB via Supabase Management API /database/query.
+BFD-setter combined session: retell-proxy bundle -> test session -> GATE A. Brendan is present.
+Repo /srv/bfd/Projects/bfd-setter, branch main (git pull first). Supabase ref bjgrgbgykvjrsuwwruoh.
+Creds in ./.env. Live DB via Supabase Management API /database/query (NOT postgres MCP).
 Follow the Relay Protocol in Docs/SESSION_PLAN.md. READ FIRST: Docs/SESSION_PLAN.md, the latest handoff
 (Operations/handoffs/2026-07-10-branding-purge.md), Docs/BUG_LIST.md, Docs/TEST_LIST.md.
+NEVER edit voice prompt content (report-only; see feedback_no_internal_prompt_edits). Read
+voice_setters.retell_agent_id fresh for any agent lookup. No em dashes anywhere.
 
-Task (option B from the 2026-07-09 relay): deploy the STAGED GETCALL-1 + PU-9-CODE retell-proxy bundle
-(commit 5b5cd42, v50->v51, Voice-gated). Read-only Voice smoke first, deploy via
-scripts/deploy_retell_proxy_bundle.mjs ONLY IF current (else scripts/deploy_single_fn.mjs is stale-safe;
-check memory project_p2_deferred_build_2026_07_07), then confirm get-call/{id} 200 + the longer
-booking-tool filler on a canonical agent (read voice_setters.retell_agent_id fresh; never edit prompts).
-While in retell-proxy: Brendan may also greenlight removing the now-dead LEGACY_N8N_HOST rewrite guard
-(branding-purge residual) IF the DB/Retell tool URLs are verified clean - ask first.
-Also offer: "undeploy elevenlabs-manage-agent" (one Management-API DELETE, permission-gated last session).
+UPFRONT (before other work): (a) I'll need a fresh 6-digit TOTP code for the browser half of Phase 2 -
+tell Brendan to have his authenticator ready; (b) confirm Brendan's GO on the elevenlabs-manage-agent
+live undeploy (one Management-API DELETE, repo copy already removed 2026-07-10).
+
+PHASE 1 - retell-proxy staged bundle (option B). Deploy STAGED GETCALL-1 + PU-9-CODE (commit 5b5cd42,
+v50->v51, Voice-gated): read-only Voice smoke FIRST (0 agents mutated), deploy via
+scripts/deploy_retell_proxy_bundle.mjs ONLY IF current vs the fn dir (else scripts/deploy_single_fn.mjs;
+gotcha in memory project_p2_deferred_build_2026_07_07), then confirm get-call/{id} 200 + the longer
+booking-tool filler on a canonical agent. While in retell-proxy, ASK Brendan whether to also remove the
+LEGACY_N8N_HOST rewrite guard (branding-purge residual): only if a fresh scan of the DB voice_setters
+tool snapshots + live Retell LLM tool URLs shows zero n8n-host URLs; if any exist, leave the guard.
+Also fold in the pending Trigger.dev prod deploy (cosmetic syntheticProbe Slack-text drift from
+2026-07-10) - Brendan is present so the permission gate can be approved interactively.
+
+PHASE 2 - "run test session": execute Docs/TEST_SESSION.md per its runbook (self-verify state first,
+batch into fewest live runs). This now includes the 5 branding-purge rows (PURGE-UI-1/2, PURGE-SIM-1,
+PURGE-SYNC-1, PURGE-TAG-1), the 2026-07-08 overnight rows (RLS-UISTATE-1-LIVE, QH-TZ-1-LIVE,
+OPTOUT-EDGE-STAGED redeploys), and the combined-build behavioral checks. TEST_LIST.md stays the
+pass/fail source of truth; RUN 9 is Brendan's manual checklist. Use the Playwright harness
+(scripts/test-harness/README.md) with the TOTP from UPFRONT; never probe the refresh token.
+
+PHASE 3 - GATE A (only with Brendan's explicit GO after he reviews): the RLS role-gate migration drafted
+review-only in commit ff355d4 (covers RLS-CLIENTS-1 critical + RLS-CREDENTIALS-1 / RLS-TENANT-DISJUNCTION-1 /
+RLS-GATE-SIBLING-1 / RLS-ORUSAGE-1; full rows in Docs/BUG_LIST.md). Walk Brendan through the draft, apply
+via Management API, verify pg_policies after (memory project_phase3_rls_policy_gaps), then re-run the
+RLS-UISTAGE/role live probes from Phase 2 to prove no agency lockout and client-role containment.
+GATE B items stay milestone-gated (need retell_webhook_secret armed) - do NOT arm secrets this session.
+
+CLOSE OUT per the Relay Protocol: reconcile the 6 lists + COMPLETED_LOG, daily notes/todos, dated handoff
+with the next prompt (next in line: First-Client Milestone, EVENT-GATED on a signed contract - do not run).
+If context runs low mid-way, close out the finished phases properly and emit the remaining phases as the
+next prompt instead of rushing.
 ```
