@@ -262,14 +262,14 @@ const App = () => {
               <Route path="text-ai-rep/setup" element={<TextAIRepSetup />} />
               {/* Legacy alias — kept so existing bookmarks + the previously-shipped
                   AI REP CONFIG button target still resolve. Renamed 2026-05-18. */}
-              <Route path="text-ai-rep/configuration" element={<Navigate to="../setup" replace />} />
+              <Route path="text-ai-rep/configuration" element={<Navigate to="../text-ai-rep/setup" replace />} />
               {/* n8n template-download pages removed 2026-07-10 (branding purge;
                   native text engine made the n8n workflow imports obsolete). */}
-              <Route path="text-ai-rep/templates" element={<Navigate to="../setup" replace />} />
+              <Route path="text-ai-rep/templates" element={<Navigate to="../text-ai-rep/setup" replace />} />
               <Route path="voice-ai-rep" element={<Navigate to="setup" replace />} />
               <Route path="voice-ai-rep/setup" element={<VoiceAIRepSetup />} />
-              <Route path="voice-ai-rep/configuration" element={<Navigate to="../setup" replace />} />
-              <Route path="voice-ai-rep/templates" element={<Navigate to="../setup" replace />} />
+              <Route path="voice-ai-rep/configuration" element={<Navigate to="../voice-ai-rep/setup" replace />} />
+              <Route path="voice-ai-rep/templates" element={<Navigate to="../voice-ai-rep/setup" replace />} />
               <Route path="api" element={<TextAIRepSetup />} />
               <Route path="api/configuration" element={<TextAIRepSetup />} />
               <Route path="api/workflow-imports" element={<Navigate to="../text-ai-rep/setup" replace />} />
