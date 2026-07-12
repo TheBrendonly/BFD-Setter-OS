@@ -81,6 +81,7 @@ Deno.serve(async (req) => {
       status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
+  let userId: string;
   try {
     const authClient = createClient(
       Deno.env.get("SUPABASE_URL")!,
@@ -93,10 +94,42 @@ Deno.serve(async (req) => {
         status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+    userId = user.id;
   } catch {
     return new Response(JSON.stringify({ error: "Unauthorized" }), {
       status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
+  }
+
+  // SEC-GHPROXY-1: this spends a shared server GITHUB_PAT (5000/hr). Restrict it to
+  // agency-role users and rate-limit per user, so a logged-in client-role user can't
+  // exhaust the shared GitHub budget or read arbitrary public repos via our token.
+  const admin = createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+  );
+  const { data: roleRow } = await admin
+    .from("user_roles")
+    .select("role")
+    .eq("user_id", userId)
+    .single();
+  if (roleRow?.role !== "agency") {
+    return new Response(JSON.stringify({ error: "Forbidden: agency role required" }), {
+      status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+  const GHPROXY_RATE_LIMIT = Number(Deno.env.get("GHPROXY_RATE_LIMIT_PER_MIN") || "60");
+  const { data: rlCount, error: rlErr } = await admin.rpc("bump_rate_limit", {
+    p_bucket_key: `ghproxy:${userId}`,
+    p_window_seconds: 60,
+  });
+  if (rlErr) {
+    console.warn("github-proxy: rate-limit RPC failed (allowing)", rlErr);
+  } else if (typeof rlCount === "number" && rlCount > GHPROXY_RATE_LIMIT) {
+    return new Response(
+      JSON.stringify({ error: "rate_limited", limit_per_minute: GHPROXY_RATE_LIMIT, retry_after_seconds: 60 }),
+      { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json", "Retry-After": "60" } },
+    );
   }
 
   const token = Deno.env.get("GITHUB_PAT");
