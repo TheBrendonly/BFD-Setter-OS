@@ -25,10 +25,18 @@ reconciliation + archive sweep 2026-07-11 (this file trimmed to genuinely-open i
   schedules list was EMPTY (even after a fresh deploy): `poll-retell-drift` had zero runs ever and `probe_results`
   held 2 rows total since inception — the synthetic uptime probe AND the F9 drift poll had been silent the whole
   time. **Mitigated 2026-07-11:** registered both imperatively via the Trigger API (dedup keys
-  `synthetic-probe-hourly-prod` / `poll-retell-drift-hourly-prod`); the 05:00 probe fired + passed. **Still open:**
-  root-cause why the DECLARATIVE `schedules.task` cron didn't auto-register on deploy so a future re-deploy /
-  schedule delete doesn't silently drop them again. Low urgency (imperative schedules run regardless). Verify they
-  still fire next session. Found 2026-07-11.
+  `synthetic-probe-hourly-prod` / `poll-retell-drift-hourly-prod`); confirmed firing hourly (24 `probe_results`
+  rows in the first day). **Two open follow-ups now that it actually runs:**
+  (a) root-cause why the DECLARATIVE `schedules.task` cron didn't auto-register on deploy, so a future re-deploy /
+  schedule delete doesn't silently drop them again;
+  (b) **the synthetic probe false-fails ~21/24 runs.** The failures are NOT a send bug — the probe client's cadence
+  legitimately parks outside its send window (`engagement_executions.stage_description = "Outside quiet hours —
+  resuming at 09:01 AM GMT+10"`), but the probe's pass/fail logic (`trigger/syntheticProbe.ts` step 3: "no outbound
+  message_queue row after cadence ran (60s poll)") counts a legitimate park as a FAIL. Fix: have the probe treat a
+  quiet-hours/business-hours park as PASS/SKIP (read the execution's parked status) instead of failing. **⚠️ If
+  `PROBE_ALERT_WEBHOOK_URL` is set in Trigger prod, each false-fail posts a Slack alert hourly** — Brendan should
+  check that env var and either apply the probe fix or unset the webhook until it lands (`postAlert` no-ops when
+  the var is unset, so if it was never wired there is no spam, just `passed=false` rows). Low urgency. Found 2026-07-11.
 
 - [ ] 🟢 **B2-REPOINT-1 (Low) — GHL-outage synthetic-lead reconcile only repoints within the minting request.**
   `receive-twilio-sms` mints `bfd-<phone>` on a GHL outage and schedules a `waitUntil` reconcile — but ONLY in the

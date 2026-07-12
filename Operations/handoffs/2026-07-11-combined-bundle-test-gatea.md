@@ -147,8 +147,11 @@ if browser-auth needed, and for answered voice calls). Owed: SMS multi-turn (BOO
 SMS-OBS-1, MODEL-1, RESCHED-SMS-1, LIVE-D manual-send+429), HOURS-1 (a/d), FOLLOWUP-DURING-CALL-1, B-5
 (unknown-number inbound call), PURGE-SIM-1, MODEL-1-HARDENING backend leg, F13 dashboard-card both roles,
 F16(b/c/d)+F17 (enable dogfood flags first), F9V2 (needs a locked setter), COST-2/3 (need a cadence send).
-Also verify SCHED-1: confirm the poll-retell-drift + synthetic-probe schedules still fire hourly, and decide
-whether to fix the root cause (declarative schedules not auto-registering on deploy). TEST_LIST.md stays the
+Also SCHED-1 follow-up: the schedules now fire hourly (confirmed), but (a) root-cause why declarative
+`schedules.task` cron didn't auto-register on deploy, and (b) the synthetic probe FALSE-FAILS ~21/24 runs
+because its pass/fail logic counts a legitimate quiet-hours/business-hours cadence park as a failure — fix the
+probe to treat a parked execution as PASS/SKIP, and check whether `PROBE_ALERT_WEBHOOK_URL` is set in Trigger
+prod (if so it is posting an hourly Slack FAIL alert; if unset, no spam, just `passed=false` rows). TEST_LIST.md stays the
 pass/fail SoT.
 
 After GATE A + the behavioral legs are green, the only remaining step to v1 "100%" is the First-Client
