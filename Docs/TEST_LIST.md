@@ -30,6 +30,29 @@ When an item passes, move it to `Docs/archive/COMPLETED_LOG.md`. When it fails, 
 > behavioral, PURGE-TAG-1, B-2 deterministic GHL pick. Full detail:
 > `Operations/handoffs/2026-07-12-brendan-test-session.md`.
 
+## 2026-07-12 autonomous build session — owed live behavioral checks
+
+> All items below were BUILT + DEPLOYED + server-side/live-verified this session (see
+> `Operations/handoffs/2026-07-12-autonomous-build.md` for live versions). What remains is a per-item BEHAVIORAL
+> confirmation. Pass -> `COMPLETED_LOG.md`; fail -> `BUG_LIST.md`.
+
+- [ ] **LEADREACT-CRASH-1 render** — open `/client/<id>/lead-reactivation` (dogfood): renders the totals (TOTAL
+  SENDS / RESPONSES / POSITIVE / BOOKINGS / CLIENTS + rates) with NO console TypeError, not a white screen.
+- [ ] **INTAKE-RL-1 burst-429** — >60 signed intake-lead requests in 60s for one client return 429 + Retry-After
+  once over the limit (use a throwaway client whose first cadence node is NOT an SMS delay-0, to avoid real sends).
+- [ ] **BOOK-TZ-DISPLAY-1 cross-tz SMS** — with a lead whose `leads.timezone` differs from the business tz, the SMS
+  setter offers/confirms a time in BOTH zones using the deterministic table (no wrong "your time" arithmetic).
+- [ ] **BOOK-CONFIRM-HONESTY-1 forced-failure** — force a book-appointments failure over SMS; the reply is the
+  honest holding message, NOT a false "you're booked". (No-misfire on a real booking already confirmed live.)
+- [ ] **SEC-PII-LOGS-1 log spot-check** — trigger an outbound-call / DM / webinar-match and confirm the platform
+  logs show redacted phone/email (`***1234`, `j***@domain`), not raw values.
+- [ ] **F23 live digest** — after real errors accrue in a 24h window (or a manual test run), the error-digest posts a
+  Slack rollup (PROBE_ALERT_WEBHOOK_URL); email only when RESEND_API_KEY + ERROR_DIGEST_RECIPIENT are set.
+- [ ] **SCHED-1(b) parked probe** — the next hourly synthetic-probe run that parks outside the send window records
+  `passed=true` (`raw.stage="skipped-parked"`), not a false FAIL, and posts no Slack alert.
+- [ ] **B2-REPOINT-1 outage convergence** — stage a lingering `bfd-<phone>` lead (GHL-outage sim), then send a normal
+  inbound after GHL recovers; the lead converges to its real GHL contact id (rows repointed), reply not dropped.
+
 ## 2026-07-11 (evening) test session — verified PASS (→ COMPLETED_LOG)
 
 > Driven autonomously via the harness + one TOTP. **PASS this session:** PURGE-UI-1 (14 routes render clean,

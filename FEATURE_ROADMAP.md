@@ -78,7 +78,7 @@ Features to build, in rough priority order. Reconciled 2026-06-25 with Brendan.
 > see the notes. Framed by the managed-retainer moat (visible ROI is churn driver #1; call quality #2) and the
 > existing F18-F20 queue. Effort tags: S = quick win, M/L = bigger build. Nothing here is committed.
 
-- [ ] **F21 - Booking reconciliation guard (fixes the two ROI-report correctness gaps; quick win). Effort S.**
+- [x] **F21 - Booking reconciliation guard [SHIPPED + DEPLOYED 2026-07-12: (a) sync-ghl-booking v14 rewritten to the phase7a shape + dedupe on ghl_appointment_id + booking_status_events reconcile; (b) AI-sourced-only isSetterSource filter on get-show-rate-funnel v3 + weeklyClientReport. Live-verified. -> TEST_LIST/COMPLETED_LOG] (fixes the two ROI-report correctness gaps; quick win). Effort S.**
   (a) Two live GHL booking-ingest endpoints key `bookings` on DIFFERENT columns — `bookings-webhook` on
   `(client_id, ghl_appointment_id)` (writes `booking_status_events`, reconciles with voice-tool rows) and the
   older `sync-ghl-booking` on `ghl_booking_id` (returns early on a dup WITHOUT updating status or writing
@@ -95,26 +95,26 @@ Features to build, in rough priority order. Reconciled 2026-06-25 with Brendan.
   headline. No secondary "all appointments" line requested (build session may add one later if asked).
   Evidence: `bookings-webhook/index.ts:207-261`, `sync-ghl-booking/index.ts:491-505`,
   `get-show-rate-funnel/index.ts:13-17,143`, `_shared/bookingSource.ts:14`, `weeklyClientReport.ts:109,135`.
-- [ ] **F22 - Reporting-health assertion (stops the ROI metric silently dying; quick win). Effort S.**
+- [x] **F22 - Reporting-health assertion [SHIPPED + DEPLOYED 2026-07-12: webhook-manifest v4 reportingHealth {bookings, statusTransitionsSeen, statusAutomationLikelyMissing}, surfaced separately (not folded into goLiveReady). Live-verified.] (stops the ROI metric silently dying; quick win). Effort S.**
   `show_rate` stays `null` until an appointment reaches held/no-show, which only happens if the operator wired
   the GHL appointment-status-change automation (GHL_SETUP flags it as fiddly). If missing, every booking sits
   `confirmed` forever, `show_rate` is permanently null, and nothing detects it. Add a check that
   `booking_status_events` has received >=1 non-`confirmed` transition per client, surfaced on the go-live
   readiness checklist and flagged if absent for N days. Evidence: `_shared/showRateFunnel.ts:55-63`, GHL_SETUP.md:103.
-- [ ] **F23 - Proactive failure digest over `error_logs` (the core managed-service promise; quick-to-medium). Effort S-M.**
+- [x] **F23 - Proactive failure digest [SHIPPED + DEPLOYED 2026-07-12: new errorDigest Trigger task (daily, Slack via PROBE_ALERT_WEBHOOK_URL + email behind RESEND_API_KEY), schedule auto-registered + active; also fixed sync-ghl-booking's silent error_logs column bug. -> TEST_LIST for a live digest.] over `error_logs` (the core managed-service promise; quick-to-medium). Effort S-M.**
   `error_logs` is written from ~8 functions (booking 502s, outbound-call failures, SMS failures, webhook 403s)
   but is a passive table an agency opens manually (`ErrorLogs.tsx`); only `pollRetellDrift` has an optional Slack
   push. A managed retainer's value is catching failures before the client does. Add a daily agency failure digest
   (email/Slack) or threshold alert per client. Broader than F19 (operational, not call-quality). Evidence:
   `ErrorLogs.tsx`, `make-retell-outbound-call:975`, `sync-ghl-booking:638`.
-- [ ] **F24 - Booked lead keeps getting nudged after a booking (robustness; medium). Effort S-M.**
+- [~] **F24 - Booked lead keeps getting nudged [BUILT + STAGED 2026-07-12 in the FROZEN voice-booking bundle (branch frozen/voice-booking-bundle b710eab): hoisted endCadenceOnBooking out of the id gate + defensive deriveAppointmentId. Deploy in Brendan's supervised Voice window.] after a booking (robustness; medium). Effort S-M.**
   In `voice-booking-tools/index.ts:561-618` (FROZEN — report-only) the `bookings` write AND the "end active
   cadence on booking" are both inside `if (appointmentId)` and the bookings write is non-fatal. If GHL returns
   200 with an unrecognized body (appointmentId null) or the row write fails, the appointment exists in GHL but
   BFD never ends the cadence → the just-booked lead keeps getting follow-up SMS/calls. Derive the appointment id
   defensively + end the cadence keyed on the contact even when the id is unavailable. (Frozen surface: bundle
   with the next voice-gated session.)
-- [ ] **F25 - Funnel cohort-vs-event window mismatch makes low-volume show-rate noisy (reporting polish; medium). Effort M.**
+- [x] **F25 - Funnel cohort-vs-event window [SHIPPED + DEPLOYED 2026-07-12: withEventWindowedShowRate windows held/no-show on appointment_time (get-show-rate-funnel v3 + weeklyClientReport); booked stays a creation cohort, labeled. Live-verified.] mismatch makes low-volume show-rate noisy (reporting polish; medium). Effort M.**
   The funnel counts bookings by `created_at` within the billing period, but held/no-show resolves later, so at
   first-client (low) volume the weekly show-rate jumps around (a booking near period-end holds next period).
   Report held/no-show by appointment DATE (event window) rather than booking-creation date, or clearly label it a

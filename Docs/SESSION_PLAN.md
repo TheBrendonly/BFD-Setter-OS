@@ -487,6 +487,22 @@ Status: `[ ]` not started · `[~]` in progress · `[x]` done. Effort is rough.
   BUILD session** (build/deploy every open non-frozen + non-first-client item; STAGE the frozen bundle). Owed test
   legs -> a future test pass: F16b inside-hours, SMS STOP, MODEL-1-HARDENING backend, F9V2, FOLLOWUP-DURING-CALL-1,
   RESCHED-SMS-1, PURGE-SIM-1, G3-8a, HOURS-1 behavioral, PURGE-TAG-1, B-2 deterministic-pick.
+- [x] **AUTONOMOUS BUILD session — DONE 2026-07-12 (Opus 4.8, plan approved then executed unattended).** Closed out
+  EVERY open non-frozen + non-first-client item: **7 bugs** (LEADREACT-CRASH-1 frontend; INTAKE-RL-1 v18;
+  BOOK-TZ-DISPLAY-1 + BOOK-CONFIRM-HONESTY-1 + SEC-OPENROUTER-PII-1 Trigger; SEC-PII-LOGS-1 across 4 fns
+  v14/v14/v30/v19 + new `_shared/redact.ts`; SEC-GHPROXY-1 v12 agency-gate+rate-limit) + **F21(a)** sync-ghl-booking
+  v14 (rewrote the dead old-schema insert to phase7a + dedupe + status events) + **F21(b)** AI-sourced-only funnel
+  (isSetterSource, get-show-rate-funnel v3 + weeklyClientReport) + **F22** webhook-manifest v4 reportingHealth +
+  **F23** new errorDigest Trigger task (schedule auto-registered) + sync-ghl-booking v15 error_logs fix + **F25**
+  event-windowed show-rate + **SCHED-1(b)** probe park→PASS + **B2-REPOINT-1** v31. **Trigger 20260712.1 → .2**
+  (15 tasks). Each deploy read-only-verified; a full **live SMS booking regression PASSED** (SEC-OPENROUTER-PII-1
+  didn't break booking; BOOK-CONFIRM didn't misfire) + appointment cleaned up. **F21(a)/F21(b)/F22/F25/SEC-GHPROXY-1/
+  SEC-OPENROUTER-PII-1 live-verified via DB fixtures + fn calls.** **STAGED (frozen, branch
+  `frozen/voice-booking-bundle` `b710eab`, NOT deployed):** SLOT-MAP-1 + F24 + BOOK-ABORT-GHOST-1 booking side +
+  BOOK-VOICE-FABRICATE-1 telemetry + retell-proxy:495 PII line — with a FROZEN DEPLOY CHECKLIST. The BOOK-ABORT-GHOST-1
+  text-side "never snapped up" guard shipped LIVE (20260712.2). Residual behavioral checks → `TEST_LIST.md`
+  (2026-07-12 autonomous build). Handoff `Operations/handoffs/2026-07-12-autonomous-build.md`. → emits the
+  **supervised frozen-deploy + Brendan TEST pass** prompt. Only the gated First-Client Milestone remains to v1 "100%".
 
 4. **Brendan solo block (parallel, no Claude session):** Setter-1 prompt migration, Resend SMTP → F14 E2E,
    sms_llm rate + billing anchor/toggles, n8n Railway shutdown, PROMPT_UPDATE_LIST items (see the 2026-07-07

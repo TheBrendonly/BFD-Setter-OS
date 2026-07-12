@@ -4,6 +4,29 @@ Items closed out of the active lists. Newest first. The active lists are in the 
 (`BUG_LIST.md`, `FEATURE_ROADMAP.md`, `BRENDAN_TODO.md`, `TEST_LIST.md`, `DEFERRED.md`). First-client-gated
 work lives in `Docs/FIRST_CLIENT_TASKS.md` (not archived — deferred).
 
+## 2026-07-12 — AUTONOMOUS BUILD session (SHIPPED + DEPLOYED + verified)
+
+Opus 4.8, plan approved then executed unattended. Full detail + live versions + the STAGED frozen bundle deploy
+checklist: `Operations/handoffs/2026-07-12-autonomous-build.md`. Fully live-verified items archived here; items with
+a residual behavioral check are tracked in `TEST_LIST.md` (2026-07-12 autonomous build) until that passes.
+
+- **SEC-OPENROUTER-PII-1 (DONE)** — dropped the lead's phone/email from the OpenRouter payload (identity object +
+  Lead Context line). **Live SMS booking regression PASSED** end-to-end (turn-1 prefetch `error=null`; turn-2
+  book-appointments succeeded, `bookings` row `source=sms`; appointment cancelled). Trigger 20260712.1.
+- **SEC-GHPROXY-1 (DONE)** — github-proxy v12: agency-role gate (403 for client-role) + per-user `bump_rate_limit`.
+  Verified live: throwaway client-role user → 403; agency-role → passes the gate.
+- **F21(a) (DONE)** — sync-ghl-booking v14 rewritten to the phase7a `bookings` shape + dedupe on
+  `(client_id, ghl_appointment_id)` + `resolveBookingSource` stamp + `booking_status_events` reconcile (its old insert
+  wrote non-existent columns and 500'd — a dead path). Synthetic create→reconcile verified (one row,
+  `source=ghl_calendar`, `confirmed→cancelled` event); test rows deleted.
+- **F21(b) (DONE)** — AI-sourced-only funnel/weekly `booked` via shared `isSetterSource` (get-show-rate-funnel v3 +
+  weeklyClientReport). Live BFD funnel `booked`=setter rows only; a test `ghl_calendar` row excluded; `by_source`
+  = setter sources only.
+- **F22 (DONE)** — webhook-manifest v4 `reportingHealth {bookings, statusTransitionsSeen, statusAutomationLikelyMissing}`
+  (surfaced separately, not folded into `goLiveReady`). Verified live on BFD.
+- **F25 (DONE)** — `withEventWindowedShowRate`: held/no-show windowed on `appointment_time` (get-show-rate-funnel v3 +
+  weeklyClientReport); `booked` stays a creation cohort, labeled (`held_window`/`booked_window`). Verified live.
+
 ## 2026-07-12 — BRENDAN test + build-unblock session (PASSES)
 
 Opus 4.8, Brendan present for the live legs. Harness-driven (headless Playwright + signed inbound-SMS sim +
