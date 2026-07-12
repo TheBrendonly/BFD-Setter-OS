@@ -9,6 +9,18 @@ export function hasOutboundRow(rows: unknown): boolean {
   return Array.isArray(rows) && rows.some((r) => (r as { channel?: string })?.channel === "sms_outbound");
 }
 
+// SCHED-1(b) — a legitimately PARKED cadence enqueues no outbound row by design, so the
+// probe must treat that as a pass/skip, not a failure. runEngagement writes one of these
+// stage descriptions when it parks outside the send window:
+//   "Outside quiet hours — resuming at <time>"  (quiet-hours gate)
+//   "Outside sending hours — resuming at <time>" (AU business-hours gate)
+// Match those (and the generic "resuming at") so a real send-failure still fails.
+export function isParkedStage(stageDescription: string | null | undefined): boolean {
+  const s = (stageDescription ?? "").toString();
+  if (!s) return false;
+  return /outside (quiet|sending) hours|resuming at/i.test(s);
+}
+
 export interface PollOptions {
   deadlineMs: number;
   sleepMs: number;

@@ -16,7 +16,7 @@
 
 import { schedules } from "@trigger.dev/sdk";
 import { createClient } from "@supabase/supabase-js";
-import { hasOutboundRow, pollUntil } from "./_shared/probePoll.ts";
+import { hasOutboundRow, pollUntil, isParkedStage } from "./_shared/probePoll.ts";
 
 const getSupabase = () =>
   createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -199,11 +199,31 @@ export const syntheticProbe = schedules.task({
       { deadlineMs: 60_000, sleepMs: 2_500 },
     );
     if (!sawOutbound) {
-      // Still cancel before returning.
+      // SCHED-1(b): distinguish a REAL send failure from a LEGITIMATE park outside the
+      // send window (quiet hours / AU business hours). When the cadence parks it enqueues
+      // no outbound row by design, so failing here false-alarmed ~21/24 runs (and, with
+      // PROBE_ALERT_WEBHOOK_URL set, Slack-spammed hourly). Read the execution's parked
+      // stage BEFORE cancelling and treat a park as pass/skip.
+      const { data: execRow } = await supabase
+        .from("engagement_executions")
+        .select("status, stage_description")
+        .eq("id", executionId)
+        .maybeSingle();
+      const stage = ((execRow as { stage_description?: string } | null)?.stage_description) ?? null;
+      const parked = isParkedStage(stage);
+      // Cancel the probe cadence either way (avoid spamming the operator's phone if it resumes).
       await supabase
         .from("engagement_executions")
         .update({ status: "cancelled", stop_reason: "cancelled", completed_at: new Date().toISOString() })
         .eq("id", executionId);
+      if (parked) {
+        // Healthy pipeline, just not a send window right now — PASS/SKIP, no alert.
+        return persistAndMaybeAlert({
+          passed: true,
+          duration_ms: Date.now() - startedAt,
+          raw: { stage: "skipped-parked", execution_id: executionId, parked_reason: stage, mqRows },
+        });
+      }
       return persistAndMaybeAlert({
         passed: false,
         duration_ms: Date.now() - startedAt,

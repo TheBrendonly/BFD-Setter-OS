@@ -7,7 +7,7 @@
 // re-queries on a deadline instead of asserting once.
 import test from "node:test";
 import { strict as assert } from "node:assert";
-import { hasOutboundRow, pollUntil } from "./probePoll.ts";
+import { hasOutboundRow, pollUntil, isParkedStage } from "./probePoll.ts";
 
 // A controllable clock so timing is tested without real waits. sleep() advances
 // virtual time; now() reports it.
@@ -96,4 +96,17 @@ test("pollUntil returns ok:false when the deadline passes and does not loop fore
   assert.equal(result.ok, false);
   // deadline 10_000 / sleep 2_500 => 4 sleeps to reach the deadline, 5 fetches.
   assert.equal(calls, 5, "bounded iteration count, not infinite");
+});
+
+// SCHED-1(b) — parked-cadence detection so the probe skips (not fails) outside the window.
+test("isParkedStage: quiet-hours + sending-hours parks are detected", () => {
+  assert.equal(isParkedStage("Outside quiet hours — resuming at 09:01 AM GMT+10"), true);
+  assert.equal(isParkedStage("Outside sending hours — resuming at 09:00 AM GMT+10"), true);
+  assert.equal(isParkedStage("resuming at 5pm"), true);
+});
+test("isParkedStage: a real send stage / empty is NOT a park", () => {
+  assert.equal(isParkedStage("Sending SMS..."), false);
+  assert.equal(isParkedStage("Call in progress — awaiting outcome..."), false);
+  assert.equal(isParkedStage(""), false);
+  assert.equal(isParkedStage(null), false);
 });
