@@ -32,6 +32,32 @@ Things deliberately not being built now, each with the gate that would un-defer 
 > **AU SMS A2P** registration for `+61481614530` now live in `Docs/FIRST_CLIENT_TASKS.md` with the rest of the
 > first-client-gated work, so they stop surfacing during normal work.
 
+## Security hardening (deferred — post-first-client)
+
+> From the 2026-07-12 pre-pilot red-team pass. The exploitable/latent findings were folded into GATE A/B
+> (`Docs/FIRST_CLIENT_TASKS.md`) and new code items into `BUG_LIST.md` (SEC-PII-LOGS-1 / SEC-OPENROUTER-PII-1 /
+> SEC-GHPROXY-1); these are the lower-priority defense-in-depth builds parked here.
+
+- [ ] **Encrypt the `clients` secret columns at rest (pgcrypto / Supabase Vault).** GATE A (RLS role-gate + a `REVOKE`
+  on the secret columns) closes the in-app read path, but the 13 secret columns (`supabase_service_key`,
+  `twilio_auth_token`, `ghl_api_key`, `openrouter_api_key`, …) stay PLAINTEXT at rest, so a DB/backup compromise or a
+  service-role leak exposes every tenant's downstream credentials at once. Move them behind pgcrypto or Supabase Vault
+  (decrypt server-side in the edge fns that spend them). **Gate:** post-first-client hardening (pairs with the Supabase
+  Pro / HIBP flip). Bigger lift than the GATE A grant fix, so deferred.
+- [ ] **Broaden `bump_rate_limit` to the no-JWT LLM/compute edge fns (cost-amplification / financial DoS).** Rate
+  limiting today covers only `campaign-enroll-webhook` + `crm-send-message` (+ INTAKE-RL-1 pending). The signed webhooks
+  are protected by their signatures, but the no-JWT LLM/compute endpoints (`analyze-metric`, `run-simulation`,
+  `generate-setter-config`, `modify-prompt-ai`, `compute-analytics`, …) have no per-caller / per-IP limit, so an
+  authenticated user could amplify OpenRouter/Retell spend. **Gate:** defense-in-depth; do after GATE A pins these to
+  the caller (`SEC-GHPROXY-1`'s shared-PAT limit is the same class).
+- [ ] **Validate per-client external Supabase project ownership.** Clients supply their own `supabase_url` +
+  `supabase_service_key`, which BFD opens an admin client against at runtime; nothing verifies the project is actually
+  theirs. Low concern at 1 client. **Gate:** multi-client scale / when a hostile-client threat model becomes real.
+- [ ] **Hygiene: scrub real prod identifiers from `.env.example`** (project refs, Retell agent/LLM ids, GHL location id,
+  Twilio number — fingerprinting only, not secrets) and review the blanket `Access-Control-Allow-Origin: *` on the edge
+  fns. Trivial, low value. **Gate:** next security-hygiene sweep. (A routine `npm audit` + Deno advisory scan belongs in
+  the same sweep — the 2026-07-12 dep review found nothing obvious but ran no lockfile-level scan.)
+
 ## Other
 
 - [ ] **AU Privacy Act second-tranche reform (automated-decision transparency / AI disclosure)** — anticipated

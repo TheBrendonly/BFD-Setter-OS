@@ -33,6 +33,13 @@ per-table open questions + verification steps: `Docs/GATE_A_RLS_DRAFT_2026-07-08
   `prompt_chat_threads`, `prompt_docs`, `prompt_versions`, `setter_ai_reports` use `c.agency_id=p.agency_id OR
   c.id=p.client_id` — the agency disjunct gives a client-role user read+write of sibling rows. Split into agency +
   client-own policies (the RLS-UISTATE-1 shape shipped 2026-07-08).
+- [ ] **RLS-TAGTABLES-1 (Low, latent, VERIFY — added 2026-07-12 red-team pass)** — a source-only read of early
+  migrations flagged the sibling tag tables `contact_tags`, `contact_tag_assignments`, and `lead_tag_assignments` as
+  possibly still `FOR ALL TO authenticated USING (true)` (globally cross-tenant — WORSE than the agency-disjunction on
+  `lead_tags` above), with no re-gating migration found for these three. **Verify the LIVE policy** in the GATE A probe
+  (`select * from pg_policies where tablename in ('contact_tags','contact_tag_assignments','lead_tag_assignments')`); if
+  `USING(true)` or the agency disjunction, re-gate to agency + client-own like the RLS-UISTATE-1 shape. Low value (tag
+  data only), but a tenant-isolation gap to close with the rest of GATE A.
 - [ ] **RLS-GATE-SIBLING-1 (Med, latent)** — `fetch-thread-previews` / `twilio-list-numbers` / `supabase-project-usage`
   authorize via an RLS-gate (`clients.eq(id).single()`) not `resolveClientAccess`, so a client-role user passing a
   sibling `client_id` reads the sibling's Twilio numbers / thread previews / Supabase usage. Repoint to `resolveClientAccess`.

@@ -66,6 +66,45 @@ reconciliation + archive sweep 2026-07-11 (this file trimmed to genuinely-open i
   "claims booked but no successful `book-appointments` this turn" (mirror RESCHED-SMS-1). Over-fire risk → wants a
   live forced-failure test.
 
+## Security review 2026-07-12 (pre-pilot red-team pass) — new code items
+
+> A two-model pre-pilot red-team pass over the architecture brief was reconciled against the 2026-07-08 review.
+> The BULK of it was ALREADY tracked and is NOT duplicated here: the fail-open Retell cluster (RETELL-INBOUND-PII-1
+> / -CALLHIST-POISON-1 / -BOOKING-SMS-1 / -CALLBACK-DIAL-1 = GATE B), base-`clients` secret exposure (RLS-CLIENTS-1 =
+> GATE A), the sibling-IDOR endpoints (RLS-GATE-SIBLING-1), account-mgmt authz + secret-log hygiene (reviewed CLEAN)
+> — all in `Docs/FIRST_CLIENT_TASKS.md`. The `sync-ghl-contact` "fail-open" claim was REFUTED (GHL webhooks are
+> signature-enforced today; `ghl_webhook_secret` set for both clients). The three items below are the only genuinely
+> new, live-verified CODE items. New RLS gap (contact/lead tag tables) → GATE A `RLS-TAGTABLES-1`; governance/DPA +
+> console-MFA → `BRENDAN_TODO.md`; deferred hardening (secret encryption-at-rest, broaden rate-limit, external-DB
+> ownership, hygiene) → `DEFERRED.md`.
+
+- [ ] 🟢 **SEC-PII-LOGS-1 (Low, privacy) — prospect PII is written to stdout logs (→ Supabase/Trigger/Railway logs).**
+  The 2026-07-08 review cleared SECRET-value logging, but PII (not secrets) is logged unredacted:
+  `unipile-webhook/index.ts:36` (`console.log("Unipile webhook received:", JSON.stringify(body))`) dumps the FULL
+  inbound DM (sender identity + message content); `outbound-call-processing/index.ts:490` and
+  `make-retell-outbound-call/index.ts:723,903` log full phone numbers; `match-webinar-contacts/index.ts:139,344` log
+  raw lead emails. Fix: redact to last-4 / a boolean / a count (reuse the `redactPhone` helper already used in
+  `retell-inbound-webhook`). All four fns are non-frozen. (`retell-proxy:495` is the same class but FROZEN → fold that
+  one line into the next voice-machinery touch.) Report-first, low urgency (needs platform-log access to exploit).
+  Found 2026-07-12 red-team pass.
+
+- [ ] 🟢 **SEC-OPENROUTER-PII-1 (Low, data-minimization) — the text engine sends the lead's raw phone + email to
+  OpenRouter every turn.** `trigger/processSetterReply.ts` (~lines 268-274) injects an `identity` object with `phone`,
+  `email` (+ `timeZone`) into the OpenRouter chat payload alongside the full conversation. The model almost certainly
+  does not need raw phone/email to write a reply, so this is avoidable third-party PII exposure to a subprocessor whose
+  retention/training terms are unconfirmed (see the BRENDAN_TODO DPA item). Fix: drop `phone`/`email` from the identity
+  payload (keep `contactId` + `timeZone`) unless a prompt genuinely references them. Non-frozen. Report-first: verify no
+  booking/confirmation behavior relies on the model seeing them (wants a live SMS regression). Found 2026-07-12 red-team pass.
+
+- [ ] 🟢 **SEC-GHPROXY-1 (Low, hardening; a peer red-team "P0" SSRF claim, REFUTED) — `github-proxy` is safe but spends
+  a shared PAT for any logged-in user with no rate limit / role gate.** A peer model flagged `github-proxy` as a no-auth
+  SSRF / credential relay. **Refuted on inspection:** it requires an authenticated Supabase user (`auth.getUser()`, else
+  401), slug-validates `owner`/`repo` (`/^[\w.-]{1,100}$/`), blocks `..` in paths, and builds every URL as a fixed
+  `https://api.github.com/repos/...` from a closed action enum — no arbitrary-host SSRF, no tenant data, a read-only
+  public-repo `GITHUB_PAT`. Residual (Low): it accepts ANY authenticated user (not agency-role-gated) and has no
+  `bump_rate_limit`, so a logged-in user could exhaust the shared 5000/hr GitHub budget or read any public repo via our
+  token. Fix (optional): add `bump_rate_limit` + an agency-role check. Found 2026-07-12 red-team pass.
+
 ## Open code items (frozen baseline — gated on the next intentional voice-machinery touch)
 
 - [ ] **SLOT-MAP-1 — slot 1 double-duties as both a setter slot and the inbound-agent resolver; the empty "Setter-1"

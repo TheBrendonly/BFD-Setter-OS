@@ -35,6 +35,23 @@ prompt tweaks independently).
   to add the next year's AU national public holidays (a ~10-line code edit + a Trigger deploy). Low
   urgency, harmless until 2028. From the P3 security review (`Docs/SECURITY_REVIEW_2026-07-07.md`).
 
+## Security review 2026-07-12 (pre-pilot red-team pass) — business/governance items (Claude can't do these)
+
+> A two-model pre-pilot red-team pass ran over the architecture brief; the exploitable/latent findings were folded
+> into GATE A/B (`Docs/FIRST_CLIENT_TASKS.md`), new code items into `BUG_LIST.md`, deferred hardening into
+> `DEFERRED.md`. These two are the only ones that need YOU (business/legal, not code).
+
+- [ ] **Confirm sub-processor DPAs + data-retention/training terms before the pilot handles real PII.** Real prospect
+  PII flows to Retell (transcripts, recordings), Twilio (phone + SMS body), GoHighLevel (name/phone/email + call
+  summaries), OpenRouter (the FULL conversation content + phone/email + transcripts), Trigger.dev (task payloads with
+  Name/Email/Phone), and Stripe (client billing). For a pilot on real customer PII you want a signed DPA with each, and
+  specifically OpenRouter's retention + model-training terms for what we send it (pin to a zero-retention / no-train
+  route if available). Pairs with the code-side `SEC-OPENROUTER-PII-1` (drop phone/email from the LLM payload). `[B]`
+- [ ] **Confirm MFA + least-privilege on every provider console.** Supabase, Railway, Trigger.dev, Retell, Twilio, GHL,
+  Stripe. A compromise of any ONE of these dashboards is a bigger blast radius than any in-app bug — the Supabase
+  console alone = the whole platform DB including the plaintext `clients` secret columns. (The in-APP user
+  HIBP/MFA/12-char policy is already tracked in `Docs/FIRST_CLIENT_TASKS.md`.) `[B]`
+
 ## Onboarding-fix pass 2026-07-06 — one push to ship it
 
 - [x] **Run `git push github main` from `/srv/bfd/Projects/bfd-setter`.** DONE (confirmed 2026-07-07,
