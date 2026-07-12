@@ -456,7 +456,7 @@ const LeadReactivation = () => {
                 }} />
                 {i < 4 && (
                   <div style={{ fontSize: '10px' }} className="text-muted-foreground mt-1">
-                    {i === 0 ? '' : `${((parseInt(step.value.replace(/,/g, '')) / totals.totalLeads) * 100).toFixed(1)}%`}
+                    {i === 0 ? '' : `${pct(parseInt(step.value.replace(/,/g, '')), totals.totalLeads)}%`}
                   </div>
                 )}
               </div>
