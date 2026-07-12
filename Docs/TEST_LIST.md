@@ -36,8 +36,10 @@ When an item passes, move it to `Docs/archive/COMPLETED_LOG.md`. When it fails, 
 > `Operations/handoffs/2026-07-12-autonomous-build.md` for live versions). What remains is a per-item BEHAVIORAL
 > confirmation. Pass -> `COMPLETED_LOG.md`; fail -> `BUG_LIST.md`.
 
-- [ ] **LEADREACT-CRASH-1 render** — open `/client/<id>/lead-reactivation` (dogfood): renders the totals (TOTAL
-  SENDS / RESPONSES / POSITIVE / BOOKINGS / CLIENTS + rates) with NO console TypeError, not a white screen.
+- [x] **LEADREACT-CRASH-1 render — PASSED 2026-07-12 (live browser).** `/client/<id>/lead-reactivation` renders all
+  tiles + the empty-state banner + PERFORMANCE BY CLIENT, **0 console/page errors** (white-screen fixed). Also fixed a
+  newly-visible funnel-stage `NaN%` (guarded via `pct`, commit `0435561`). **F15 funnel card** also render-verified live
+  on `/analytics/chatbot/dashboard` (Show/No-show, 0 errors) with the F21b/F25 changes.
 - [ ] **INTAKE-RL-1 burst-429** — >60 signed intake-lead requests in 60s for one client return 429 + Retry-After
   once over the limit (use a throwaway client whose first cadence node is NOT an SMS delay-0, to avoid real sends).
 - [ ] **BOOK-TZ-DISPLAY-1 cross-tz SMS** — with a lead whose `leads.timezone` differs from the business tz, the SMS

@@ -24,6 +24,8 @@ a residual behavioral check are tracked in `TEST_LIST.md` (2026-07-12 autonomous
   = setter sources only.
 - **F22 (DONE)** — webhook-manifest v4 `reportingHealth {bookings, statusTransitionsSeen, statusAutomationLikelyMissing}`
   (surfaced separately, not folded into `goLiveReady`). Verified live on BFD.
+- **LEADREACT-CRASH-1 render (DONE, live browser 2026-07-12)** — `/lead-reactivation` renders all tiles + empty-state,
+  0 console/page errors (white-screen fixed); funnel-stage `NaN%` also guarded (`0435561`). F15 funnel card render-verified.
 - **F25 (DONE)** — `withEventWindowedShowRate`: held/no-show windowed on `appointment_time` (get-show-rate-funnel v3 +
   weeklyClientReport); `booked` stays a creation cohort, labeled (`held_window`/`booked_window`). Verified live.
 
