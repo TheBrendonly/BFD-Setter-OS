@@ -7,6 +7,8 @@ import {
   needsRescheduleHonestyRewrite,
   claimsBookingSuccess,
   needsBookingHonestyRewrite,
+  claimsSlotGone,
+  needsBookErrorHonestyRewrite,
 } from "./rescheduleHonestyGuard.ts";
 
 const OK_UPDATE = [{ name: "update-appointment" }];
@@ -110,4 +112,34 @@ test("booking: various completed-booking phrasings fire without a tool success",
   ]) {
     assert.equal(needsBookingHonestyRewrite(reply, NO_MUTATION), true, reply);
   }
+});
+
+// ── BOOK-ABORT-GHOST-1 (text side): "snapped up" after a book ERROR -> honest re-check ──
+
+test("book-error guard: errored book + \"snapped up\" reply -> rewrite", () => {
+  const errored = [{ name: "book-appointments", error: "This operation was aborted" }];
+  assert.equal(needsBookErrorHonestyRewrite("Ah that 8am slot just got snapped up! How about Tuesday?", errored), true);
+  assert.equal(needsBookErrorHonestyRewrite("Sorry, that time is no longer available.", errored), true);
+});
+
+test("book-error guard: no book error -> never fires (legitimate slot-unavailable RESULT)", () => {
+  // buildSlotUnavailable returns a RESULT (no error) -> a genuine "that slot's taken" is fine.
+  assert.equal(needsBookErrorHonestyRewrite("That slot is taken, but I have 9am or 10am.", [{ name: "book-appointments" }]), false);
+  assert.equal(needsBookErrorHonestyRewrite("That slot got snapped up, try 9am.", []), false);
+});
+
+test("book-error guard: errored then succeeded this turn -> no rewrite", () => {
+  const both = [{ name: "book-appointments", error: "timeout" }, { name: "book-appointments" }];
+  assert.equal(needsBookErrorHonestyRewrite("That slot got taken", both), false);
+});
+
+test("book-error guard: errored book but reply does NOT blame the slot -> no rewrite", () => {
+  const errored = [{ name: "book-appointments", error: "502" }];
+  assert.equal(needsBookErrorHonestyRewrite("Let me double-check that and confirm shortly.", errored), false);
+});
+
+test("claimsSlotGone pure predicate", () => {
+  assert.equal(claimsSlotGone("that slot just got snapped up"), true);
+  assert.equal(claimsSlotGone("no longer available"), true);
+  assert.equal(claimsSlotGone("what time suits you?"), false);
 });

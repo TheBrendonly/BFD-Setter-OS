@@ -95,3 +95,35 @@ export function needsBookingHonestyRewrite(
   if (succeeded) return false;
   return claimsBookingSuccess(replyText);
 }
+
+// BOOK-ABORT-GHOST-1 (text side) — when a book-appointments call ERRORED this turn (a 30s
+// tool-caller abort / 502, NOT a legitimate slot-unavailable RESULT), the fast model tends
+// to fabricate "that slot just got snapped up" and offer other days. That is a false
+// negative (the create may have landed server-side) and it is what pairs with the ghost
+// booking. A GENUINE slot-unavailable comes back as a tool RESULT (no error), so it never
+// trips this. Detect: book errored + reply claims the slot is gone -> rewrite honestly.
+const SLOT_GONE_PATTERNS: RegExp[] = [
+  /\b(snapped up|got (snapped|taken|booked)|just (got )?(taken|booked|gone)|no longer available|already (taken|booked|gone|filled)|filled up)\b/i,
+  /\bthat (slot|time|spot)\b[^.!?\n]{0,30}\b(taken|gone|unavailable|booked|full|filled)\b/i,
+];
+
+export function claimsSlotGone(text: string): boolean {
+  const t = (text || "").trim();
+  if (!t) return false;
+  return SLOT_GONE_PATTERNS.some((re) => re.test(t));
+}
+
+// True when a book-appointment(s) call ERRORED this turn (with none succeeding) and the
+// reply blames the slot being gone — the caller should rewrite to an honest re-check.
+export function needsBookErrorHonestyRewrite(
+  replyText: string,
+  toolInvocations: GuardToolInvocation[],
+): boolean {
+  const invocations = toolInvocations || [];
+  const isBook = (t: GuardToolInvocation) => t.name === "book-appointments" || t.name === "book-appointment";
+  const bookErrored = invocations.some((t) => isBook(t) && !!t.error);
+  if (!bookErrored) return false;
+  const bookSucceeded = invocations.some((t) => isBook(t) && !t.error);
+  if (bookSucceeded) return false; // a later successful attempt this turn -> it really booked
+  return claimsSlotGone(replyText);
+}

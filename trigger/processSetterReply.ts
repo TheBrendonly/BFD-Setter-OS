@@ -33,7 +33,7 @@ import { buildTimeAnchorBlock, resolveClientTimeZone } from "./_shared/timeAncho
 import { resolveLeadDisplayTimeZone, zoneShortLabel } from "./_shared/leadTimezone.ts";
 import { mergeCanonicalSlots, validateBookingArgs, type CanonicalSlotMap } from "./_shared/slotBinding.ts";
 import { mergeEventIds, validateEventIdArgs, type EventIdSet } from "./_shared/eventIdBinding.ts";
-import { needsRescheduleHonestyRewrite, needsBookingHonestyRewrite } from "./_shared/rescheduleHonestyGuard.ts";
+import { needsRescheduleHonestyRewrite, needsBookingHonestyRewrite, needsBookErrorHonestyRewrite } from "./_shared/rescheduleHonestyGuard.ts";
 import {
   runSetterToolLoop,
   ToolsUnsupportedError,
@@ -60,6 +60,10 @@ const RESCHEDULE_CANCEL_FALLBACK_REPLY =
 // booking that book-appointments never confirmed this turn (ghost / fabrication).
 const BOOKING_FALLBACK_REPLY =
   "Sorry, I wasn't able to lock that time in just now. Let me double-check the calendar and confirm the booking with you shortly.";
+// BOOK-ABORT-GHOST-1 (text side): honest re-check when a book-appointments call errored and
+// the reply fabricated "that slot got snapped up" (the slot may well still be open).
+const BOOK_RETRY_FALLBACK_REPLY =
+  "Sorry, I hit a snag locking that time in just now. It may well still be open — let me re-check and confirm it with you shortly.";
 // Per-call timeouts. The tool loop caps iterations (default 4), so the worst
 // case is ~4 × (LLM_TIMEOUT + tool timeout) + a final LLM wrap-up, which stays
 // well under the task's 600s maxDuration. The 30s tool timeout lives in
@@ -458,6 +462,15 @@ export const processSetterReply = task({
         `book-appointments this turn; rewriting to an honest holding message. lead=${payload.Lead_ID}`,
       );
       setterMessages = [BOOKING_FALLBACK_REPLY];
+    } else if (needsBookErrorHonestyRewrite(rawText, loopResult.toolInvocations)) {
+      // BOOK-ABORT-GHOST-1 (text side): book-appointments errored (abort/502) and the reply
+      // blamed the slot being "snapped up" — a false negative (the create may have landed).
+      // Replace it with an honest re-check instead of fabricated scarcity.
+      console.warn(
+        `processSetterReply: BOOK-ABORT-GHOST-1 guard fired — book-appointments errored but the reply claimed ` +
+        `the slot is gone; rewriting to an honest re-check. lead=${payload.Lead_ID}`,
+      );
+      setterMessages = [BOOK_RETRY_FALLBACK_REPLY];
     }
 
     const response: Record<string, string> = {};
