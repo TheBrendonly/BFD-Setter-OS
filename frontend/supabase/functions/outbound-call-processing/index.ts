@@ -1,5 +1,6 @@
 import { createClient } from "npm:@supabase/supabase-js@2.101.0";
 import { authorizeClientRequest, AssertAccessError } from "../_shared/authorize-client-request.ts";
+import { redactPhone } from "../_shared/redact.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -487,7 +488,7 @@ Deno.serve(async (req) => {
     }
 
     // 5. Call Retell with full debug capture
-    console.log(`📞 Outbound call: agent=${agentId}, to=${phone}, from=${fromNumber}`);
+    console.log(`📞 Outbound call: agent=${agentId}, to=${redactPhone(phone)}, from=${redactPhone(fromNumber)}`);
     const retellPayload = {
       from_number: fromNumber,
       to_number: phone,

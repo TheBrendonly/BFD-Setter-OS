@@ -1,5 +1,6 @@
 import { createClient } from "npm:@supabase/supabase-js@2.101.0";
 import { authorizeClientRequest, AssertAccessError } from "../_shared/authorize-client-request.ts";
+import { redactPhone } from "../_shared/redact.ts";
 import { assertActiveSubscription } from "../_shared/assertActiveSubscription.ts";
 import { normalizePhone } from "../_shared/phone.ts";
 import { resolveLeadDisplayTimeZone, zoneShortLabel } from "../_shared/leadTimezone.ts";
@@ -720,7 +721,7 @@ Deno.serve(async (req) => {
 
           if (usablePhone?.phone_number && typeof usablePhone.phone_number === "string") {
             fromNumber = usablePhone.phone_number;
-            console.log(`📞 Found Retell phone number: ${fromNumber}`);
+            console.log(`📞 Found Retell phone number: ${redactPhone(fromNumber)}`);
           }
         }
       } catch (err) {
@@ -900,7 +901,7 @@ Deno.serve(async (req) => {
       const guardResponse = await checkIdempotencyGuard();
       if (guardResponse) return guardResponse;
     }
-    console.log(`📞 Making outbound call via Retell. Agent: ${agentId}, To: ${phone}, From: ${fromNumber}`);
+    console.log(`📞 Making outbound call via Retell. Agent: ${agentId}, To: ${redactPhone(phone)}, From: ${redactPhone(fromNumber)}`);
 
     const retellPayload: Record<string, unknown> = {
       from_number: fromNumber,

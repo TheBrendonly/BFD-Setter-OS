@@ -1,5 +1,6 @@
 import { createClient } from "npm:@supabase/supabase-js@2.101.0";
 import { loggedFetch } from "../_shared/request-logger.ts";
+import { redactEmail } from "../_shared/redact.ts";
 import { authorizeClientRequest, AssertAccessError } from "../_shared/authorize-client-request.ts";
 
 const corsHeaders = {
@@ -136,7 +137,7 @@ Deno.serve(async (req) => {
       
       // If this CRM contact's email is in the non-attendee list, skip them
       if (email && nonAttendeeEmails.has(email)) {
-        console.log(`Filtered out non-attendee: ${email}`);
+        console.log(`Filtered out non-attendee: ${redactEmail(email)}`);
         continue;
       }
       
@@ -341,7 +342,7 @@ Only include matches you're confident about. If no good match, set contactId to 
                   const idx = unmatchedAttendees.findIndex(a => a.userName === attendee.userName);
                   if (idx > -1) unmatchedAttendees.splice(idx, 1);
                   
-                  console.log(`LLM matched: "${attendee.userName}" -> "${crmContact.email}" (${match.confidence})`);
+                  console.log(`LLM matched an attendee -> ${redactEmail(crmContact.email)} (${match.confidence})`);
                 }
               }
             }

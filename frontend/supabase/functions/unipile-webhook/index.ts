@@ -5,6 +5,7 @@ import { createClient } from "npm:@supabase/supabase-js@2.101.0";
 // secret against the header value. Verify-if-present; confirm the exact header +
 // value against the Unipile webhook config before arming the secret.
 import { verifyStaticToken } from "../_shared/verify-webhook.ts";
+import { redactBodyShape } from "../_shared/redact.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -33,7 +34,9 @@ Deno.serve(async (req) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-    console.log("Unipile webhook received:", JSON.stringify(body));
+    // SEC-PII-LOGS-1: the raw body carries the full inbound DM (sender identity +
+    // message content) — log only its shape, never the values.
+    console.log("Unipile webhook received:", redactBodyShape(body));
 
     // Phase 8c — verify sig when client has the secret. clientId comes
     // from `?client_id=` (preferred) or body.name (legacy).
