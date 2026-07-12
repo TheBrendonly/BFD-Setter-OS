@@ -16,6 +16,7 @@
 // queries free-slots (windowStart.getTime()).
 
 import type { CallTool, ToolInvocation } from "./setterToolLoop.ts";
+import { formatSlotInZone, isValidTimeZone, zoneShortLabel } from "./leadTimezone.ts";
 
 export const PREFETCH_WINDOW_DAYS = 14;
 // Cap the injected block so a busy calendar can't blow up the system context.
@@ -45,6 +46,33 @@ export function compactSlots(raw: unknown): Record<string, string[]> {
       const m = s.match(/T(\d{2}:\d{2})/); // local HH:MM from the ISO timestamp
       return m ? m[1] : s;
     });
+  }
+  return out;
+}
+
+// BOOK-TZ-DISPLAY-1 — deterministic business-tz -> lead-tz label map, computed from the
+// raw GHL ISO slots (which carry the business offset) via formatSlotInZone. Shape:
+// { "YYYY-MM-DD": { "HH:MM"(business 24h) : "h:mm am"(lead-local) } }. The model reads
+// this table instead of doing (unreliable, weak-model) timezone arithmetic itself.
+export function leadZoneLabels(
+  raw: unknown,
+  leadZone: string,
+): Record<string, Record<string, string>> {
+  const out: Record<string, Record<string, string>> = {};
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return out;
+  for (const [key, val] of Object.entries(raw as Record<string, unknown>)) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(key)) continue; // skip traceId and other noise
+    const slots = (val as { slots?: unknown } | null)?.slots;
+    if (!Array.isArray(slots)) continue;
+    const dayMap: Record<string, string> = {};
+    for (const s of slots) {
+      if (typeof s !== "string") continue;
+      const m = s.match(/T(\d{2}:\d{2})/); // business-tz HH:MM (matches compactSlots)
+      if (!m) continue;
+      const inZone = formatSlotInZone(s, leadZone);
+      if (inZone) dayMap[m[1]] = inZone.label;
+    }
+    if (Object.keys(dayMap).length) out[key] = dayMap;
   }
   return out;
 }
@@ -101,7 +129,7 @@ export async function prefetchAvailability(args: {
 // get-available-slots" invites tool-shaped output that fails the JSON parse).
 export function buildAvailabilityBlock(
   result: PrefetchResult,
-  opts?: { channel?: "reply" | "followup" }
+  opts?: { channel?: "reply" | "followup"; leadZone?: string | null }
 ): string {
   const followup = opts?.channel === "followup";
   // The single timezone the whole flow runs in is the BUSINESS/calendar timezone
@@ -117,6 +145,27 @@ export function buildAvailabilityBlock(
         ? " (further dates exist beyond this window)"
         : " (further dates available — call get-available-slots for a later window if asked)")
       : "";
+    // BOOK-TZ-DISPLAY-1 — when the lead sits in a valid, DIFFERENT timezone, hand the
+    // model a deterministic business->lead conversion table so it states both zones
+    // without doing the timezone math (weak model, gets it wrong). Booking is unaffected:
+    // the model still books the business-tz HH:MM from the map above. Conditional +
+    // additive, so the default (same-zone) block is byte-unchanged.
+    const leadZone = opts?.leadZone ?? null;
+    let leadZoneLines: string[] = [];
+    if (leadZone && isValidTimeZone(leadZone) && leadZone !== result.timezone) {
+      const conv = leadZoneLabels(result.invocation.result, leadZone);
+      const convTrimmed: Record<string, Record<string, string>> = {};
+      for (const d of dates) if (conv[d]) convTrimmed[d] = conv[d];
+      if (Object.keys(convTrimmed).length) {
+        const leadShort = zoneShortLabel(leadZone);
+        leadZoneLines = [
+          `- STATING TIMES TO THE LEAD (they are in ${leadShort}, not ${tz}): whenever you OFFER or ` +
+          `CONFIRM a time, give BOTH the ${tz} time and the lead's local time. Take the lead's local time ` +
+          `EXACTLY from this table — never compute a timezone yourself: ${JSON.stringify(convTrimmed)} ` +
+          `(date -> { "business HH:MM": "the lead's local time" }). Still BOOK the ${tz} HH:MM exactly as listed above.`,
+        ];
+      }
+    }
     return [
       "## Live calendar availability (ground truth — already fetched for you this turn)",
       `Timezone: ${tz}. This is the COMPLETE set of real open appointment start times for about the next ${result.windowDays} days, as a map of date -> open times (24h HH:MM):`,
@@ -134,6 +183,7 @@ export function buildAvailabilityBlock(
           "- To BOOK a chosen time: call book-appointments with startDateTime as the slot's date and time joined EXACTLY as listed, format YYYY-MM-DDTHH:MM (e.g. 2026-07-06T11:00). Copy the date and time verbatim from this map; never convert timezones or compute a datetime yourself.",
           "- This snapshot is current; you do not need to re-check before offering. Only call get-available-slots again if the lead asks about a date beyond this window.",
         ]),
+      ...leadZoneLines,
     ].join("\n");
   }
 

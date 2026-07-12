@@ -16,7 +16,7 @@
 // carries the real open times + the anti-fabrication guard.
 import test from "node:test";
 import { strict as assert } from "node:assert";
-import { compactSlots, prefetchAvailability, buildAvailabilityBlock } from "./prefetchSlots.ts";
+import { compactSlots, prefetchAvailability, buildAvailabilityBlock, leadZoneLabels } from "./prefetchSlots.ts";
 import type { CallTool } from "./setterToolLoop.ts";
 
 const RAW_GHL = {
@@ -139,4 +139,36 @@ test("buildAvailabilityBlock: default (reply) mode is unchanged by the followup 
   const r = await prefetchAvailability({ callTool, timeZone: "Australia/Sydney", nowMs: NOW, windowDays: 14 });
   assert.equal(buildAvailabilityBlock(r), buildAvailabilityBlock(r, { channel: "reply" }));
   assert.match(buildAvailabilityBlock(r), /book-appointments/);
+});
+
+// ── BOOK-TZ-DISPLAY-1 — deterministic business->lead conversion (no model arithmetic) ──
+
+test("leadZoneLabels: Sydney business slots -> Perth lead-local labels (deterministic)", () => {
+  const out = leadZoneLabels(RAW_GHL, "Australia/Perth");
+  // Perth (+08:00) is 2h behind Sydney (+10:00): 09:00 -> 7:00 am, 14:00 -> 12:00 pm.
+  assert.deepEqual(out, {
+    "2026-07-01": { "09:00": "7:00 am", "09:30": "7:30 am" },
+    "2026-07-02": { "14:00": "12:00 pm", "16:00": "2:00 pm" },
+  });
+  assert.equal((out as Record<string, unknown>).traceId, undefined);
+});
+
+test("buildAvailabilityBlock: differing leadZone appends the conversion table + no-math instruction", async () => {
+  const callTool: CallTool = async () => RAW_GHL;
+  const r = await prefetchAvailability({ callTool, timeZone: "Australia/Sydney", nowMs: NOW, windowDays: 14 });
+  const block = buildAvailabilityBlock(r, { leadZone: "Australia/Perth" });
+  assert.match(block, /STATING TIMES TO THE LEAD/);
+  assert.match(block, /Perth/);
+  assert.match(block, /never compute a timezone yourself/i);
+  assert.match(block, /12:00 pm/); // the Perth-local label for the 14:00 Sydney slot
+  // Booking still references the business-tz map + verbatim HH:MM.
+  assert.match(block, /book-appointments/);
+});
+
+test("buildAvailabilityBlock: same-zone leadZone is a no-op (byte-identical to no opts)", async () => {
+  const callTool: CallTool = async () => RAW_GHL;
+  const r = await prefetchAvailability({ callTool, timeZone: "Australia/Sydney", nowMs: NOW, windowDays: 14 });
+  assert.equal(buildAvailabilityBlock(r, { leadZone: "Australia/Sydney" }), buildAvailabilityBlock(r));
+  // An invalid/junk lead zone also degrades to the unchanged block.
+  assert.equal(buildAvailabilityBlock(r, { leadZone: "Not/AZone" }), buildAvailabilityBlock(r));
 });

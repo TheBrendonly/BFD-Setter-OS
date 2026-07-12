@@ -210,15 +210,17 @@ export const processSetterReply = task({
     // different timezone. Does NOT modify the frozen availability / tool-usage blocks
     // (booking stays business-tz); it only asks the setter to also state the lead's local
     // time when it speaks a time.
+    // BOOK-TZ-DISPLAY-1: point the model at the DETERMINISTIC conversion table that
+    // buildAvailabilityBlock renders (business HH:MM -> lead-local label), instead of
+    // asking a weak model to do the timezone arithmetic itself (which it gets wrong).
     const leadTimezoneBlock = leadDisplayZone.isLeadZone
       ? `## Lead timezone (state times in BOTH zones)\n` +
-        `This lead's timezone is ${zoneShortLabel(leadDisplayZone.zone)} (${leadDisplayZone.zone}), ` +
-        `which differs from the business timezone ${zoneShortLabel(clientTimeZone)} (${clientTimeZone}). ` +
-        `The calendar, the times you offer, and the time you BOOK are all in the business timezone — book ` +
-        `exactly as listed and never convert a booking time. But whenever you SAY a time to the lead ` +
-        `(offering or confirming), give it in the business timezone AND the lead's local time, e.g. ` +
-        `"2pm ${zoneShortLabel(clientTimeZone)} time, which is 12pm your time". Work out the lead's local ` +
-        `time from the ${zoneShortLabel(leadDisplayZone.zone)} timezone.`
+        `This lead is in ${zoneShortLabel(leadDisplayZone.zone)} (${leadDisplayZone.zone}); the ` +
+        `business/calendar timezone is ${zoneShortLabel(clientTimeZone)} (${clientTimeZone}). The calendar, ` +
+        `the times you offer, and the time you BOOK are all business-tz — book exactly as listed and never ` +
+        `convert a booking time. But whenever you SAY a time to the lead (offering or confirming), give it in ` +
+        `BOTH the business timezone AND the lead's local time, reading the lead's local time from the ` +
+        `conversion table in the live availability below. Do NOT compute the timezone yourself.`
       : "";
 
     const systemContent = [
@@ -355,7 +357,9 @@ export const processSetterReply = task({
     // the SAME resolved clientTimeZone as the prefetch above.
     messages[0].content = [
       messages[0].content ?? "",
-      buildAvailabilityBlock(prefetch),
+      buildAvailabilityBlock(prefetch, {
+        leadZone: leadDisplayZone.isLeadZone ? leadDisplayZone.zone : null,
+      }),
       buildTimeAnchorBlock(clientTimeZone, nowMs),
     ].join("\n\n");
 
