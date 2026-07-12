@@ -20,6 +20,57 @@ reconciliation + archive sweep 2026-07-11 (this file trimmed to genuinely-open i
 
 ## Open code items (not first-client-gated)
 
+- [ ] 🟠 **LEADREACT-CRASH-1 (Medium, frontend) - the DB Reactivation page white-screens for every client.**
+  `frontend/src/pages/LeadReactivation.tsx` renders `formatNum(totals.totalSends)` (line 121) plus
+  `totals.totalResponses` / `totals.totalPositive` / `totals.totalBookings` / `totals.clients` (lines 125-140),
+  but `useReactivationData`'s `ReactivationTotals` / `EMPTY_TOTALS` never define those roll-up fields (only the
+  per-channel ones: `smsSent`, `callsMade`, `callPositive`, ...). They are therefore always `undefined`, and
+  `formatNum = (n) => n.toLocaleString()` throws `Cannot read properties of undefined (reading 'toLocaleString')`,
+  blanking the entire route. Verified live 2026-07-12: `/client/<id>/lead-reactivation` renders a fully blank page
+  plus that console TypeError, on the dogfood client. Data-independent (the fields are never set regardless of
+  data), so it reproduces for ANY client; a regression from the mock->live `useReactivationData` swap (the hook
+  comment claims "returns the same shape as the previous mock" but dropped the aggregate roll-ups the page still
+  reads). Fix: compute the 5 missing aggregates in the hook (totalSends = calls+sms+emails, totalResponses,
+  totalPositive, totalBookings, clients = clientData.length) OR derive them in the component, AND harden
+  `formatNum` to `(n) => (n ?? 0).toLocaleString()` as a guard. Found 2026-07-12 test session (RUN 1, browser audit).
+
+- [ ] 🔴 **BOOK-ABORT-GHOST-1 (High, booking) - a `book-appointments` tool timeout creates a GHOST appointment AND
+  the setter fabricates "that slot just got snapped up."** Live SMS test 2026-07-12 on an OPEN calendar: on "Monday
+  works for me" the SMS setter tried to book the first Monday slot (8:00am); `book-appointments` (idx1) returned
+  `{"error":"This operation was aborted"}` (the shared ~30s tool-caller AbortController fired before GHL replied), so
+  the setter told the lead *"It looks like that Monday 8:00 AM slot just got snapped up"* and offered other DAYS -
+  BUT the GHL write had actually SUCCEEDED, creating a real confirmed appointment (`bookings` f38333fa /
+  `ghl_appointment_id` 62B0ZKLKNo, Mon 13 Jul 08:00 Sydney). The lead then booked 10:00am (12ab62ff / GryZyyFpQL),
+  ending with TWO real appointments while believing they had one. Two coupled defects: (1) `book-appointments` is not
+  timeout-idempotent - a tool abort AFTER the GHL create leaves a ghost booking with no dedup/rollback / re-check;
+  (2) the engine maps a tool ABORT to "slot unavailable / snapped up" (a fabricated-scarcity message) instead of an
+  honest "let me re-confirm that for you." This is the INVERSE of BOOK-CONFIRM-HONESTY-1 (which guards the
+  false-positive "you're booked"): here it is a false-negative PLUS a ghost write. Surfaces: `book-appointments`
+  lives in the FROZEN `voice-booking-tools` (idempotency/timeout fix is voice-gated, bundle like BOOK-2/3); the
+  abort->"snapped up" interpretation is the text engine (`processSetterReply`, non-frozen) + prompt handling.
+  Fix: (a) raise/handle the book-appointments timeout and make it idempotent (on abort, re-query the appointment
+  before retry/messaging); (b) never emit "snapped up" from a tool error - route aborts through an honest re-check; (c) retry the
+  booking exactly ONCE on a failed/aborted attempt; (d) on FINAL failure, text the lead a self-serve GHL calendar
+  booking link (the fn already has Twilio + `toolSendSms`) as a backstop [(c)+(d) per Brendan directive 2026-07-12].
+  Found 2026-07-12 test session RUN 3. Evidence: tool_invocations (book-appointments idx1 "This operation was
+  aborted" @05:31:12 -> booking f38333fa) + the sms_outbound "snapped up" reply @05:31:17; the second turn's
+  book-appointments succeeded (GryZyyFpQL) with an honest confirmation.
+
+- [ ] 🔴 **BOOK-VOICE-FABRICATE-1 (High, booking/voice) - the Main Outbound voice agent intermittently confirms a
+  booking WITHOUT calling `book-appointments`.** Live 2026-07-12, two back-to-back outbound calls on the SAME agent
+  + prompt (`agent_f45f4dd`): **call_189be0af** verbally confirmed a 2:30pm booking ("All sorted... you'll get a
+  confirmation email") but Retell `tool_calls` shows ONLY `end_call` - book-appointments was NEVER invoked, no
+  appointment row, no GHL event, no email = pure fabrication; **call_bb3a8f81** DID call book-appointments ->
+  `{ok:true}` -> real appointment 3065c059 + an honest confirmation. So the agent non-deterministically skips the
+  booking tool and fabricates the confirmation. The success envelope is fine (`{ok:true,tool,result}`), so this is
+  NOT a return-shape defect - the agent simply doesn't always call the tool. PRIMARY fix = the Retell PROMPT
+  (report-only, Brendan; see PROMPT_UPDATE_LIST PU-14): require a book-appointments call before ANY booking
+  confirmation, and forbid "you're booked / a confirmation email is coming" unless the tool returned ok:true this
+  turn. CODE backstop (this build session): the BOOK-ABORT-GHOST-1 SMS-booking-link fallback also catches a
+  skipped/failed booking; optionally add telemetry when a call's analysis says "booked" but no `bookings` row exists
+  for that call. Related: BOOK-ABORT-GHOST-1 (the SMS false-negative + ghost), BOOK-CONFIRM-HONESTY-1 (SMS
+  false-positive). Found 2026-07-12 test session RUN 2 (voice).
+
 - [ ] 🟠 **SCHED-1 (Medium, infra) — the two hourly Trigger.dev cron schedules were never registered in prod.**
   `synthetic-probe` + `poll-retell-drift` declare `schedules.task({cron:"0 * * * *"})` in code, but the prod
   schedules list was EMPTY (even after a fresh deploy): `poll-retell-drift` had zero runs ever and `probe_results`

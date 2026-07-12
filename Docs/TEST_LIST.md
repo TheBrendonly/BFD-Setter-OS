@@ -14,6 +14,22 @@ When an item passes, move it to `Docs/archive/COMPLETED_LOG.md`. When it fails, 
 
 > **⭐⭐⭐ VOICE + BROWSER TEST SESSION — 2026-07-06, and the 2026-07-05 TEST SESSION before it — ALL PASSED → `COMPLETED_LOG.md`.** Full detail there + handoffs `Operations/handoffs/2026-07-06-voice-browser-session.md` + `2026-07-05-test-session.md`. Between the two, essentially every pre-existing bug/feature check passed (onboarding-fix cluster, the shared-fn pass, F8/F9-1/F11/UI-1/F13 core/PROMPT-LINT-1/MODEL-1/API-DEPR-1 core/PROMPT-AUTH-1 X-Ray, the B-2 outage leg, G3-7 nav, SWEEP-1a/b/c). What's below is either (a) the still-open behavioral checks for the 2026-07-07 combined build, or (b) a small residual set of finer-grained checks that genuinely haven't run yet.
 
+## 2026-07-12 BRENDAN test session — verified PASS + 3 new bugs
+
+> Driven via the harness (headless Playwright + signed inbound-SMS sim + service-key Retell dials) with Brendan on
+> the live phone/SMS/browser legs (2 TOTP). **PASS this session (→ COMPLETED_LOG):** F8 panel render, F13 margin
+> card (agency), F15 show-rate funnel render, API-DEPR-1 Agents tab, CHATS-DM-1 (no `dm_executions` 400), UI-1
+> labels; SMS BOOK-1 offer + booking-completes + SMS-OBS-1 + MODEL-1 + BOOK-3 day-map; B-5 (unknown caller, no name,
+> no literal `{{first_name}}`) + Inbound recording-disclosure; VM-1 voicemail detection (`voicemail_reached`);
+> linked-lead voice booking (ok:true + real appt + honest confirm); F16b outside-hours dial-defer (data-verified vs
+> `businessHours.isWithinSendingWindow`=false on Sunday, next opening Mon 09:02). **NEW FAILS → BUG_LIST:**
+> BOOK-VOICE-FABRICATE-1 (High), BOOK-ABORT-GHOST-1 (High, frozen), LEADREACT-CRASH-1 (Med); **prompt items →
+> PROMPT_UPDATE_LIST:** PU-14 (booking tool-gate), PU-6 re-verify (recording disclosure on Main Outbound). **Still
+> OWED** (need live SMS/voice or a weekday): F16b inside-hours 60s-call, SMS STOP mid-exchange, MODEL-1-HARDENING
+> backend, F9V2-1/2 (locked setter), FOLLOWUP-DURING-CALL-1, RESCHED-SMS-1, PURGE-SIM-1, G3-8a, HOURS-1 (a/d)
+> behavioral, PURGE-TAG-1, B-2 deterministic GHL pick. Full detail:
+> `Operations/handoffs/2026-07-12-brendan-test-session.md`.
+
 ## 2026-07-11 (evening) test session — verified PASS (→ COMPLETED_LOG)
 
 > Driven autonomously via the harness + one TOTP. **PASS this session:** PURGE-UI-1 (14 routes render clean,

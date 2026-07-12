@@ -4,6 +4,37 @@ Items closed out of the active lists. Newest first. The active lists are in the 
 (`BUG_LIST.md`, `FEATURE_ROADMAP.md`, `BRENDAN_TODO.md`, `TEST_LIST.md`, `DEFERRED.md`). First-client-gated
 work lives in `Docs/FIRST_CLIENT_TASKS.md` (not archived — deferred).
 
+## 2026-07-12 — BRENDAN test + build-unblock session (PASSES)
+
+Opus 4.8, Brendan present for the live legs. Harness-driven (headless Playwright + signed inbound-SMS sim +
+service-key Retell dials + Mgmt-API SQL). Full detail + the 3 new bugs + the emitted AUTONOMOUS BUILD prompt:
+`Operations/handoffs/2026-07-12-brendan-test-session.md`.
+
+**Browser (headless agency login):** F8 Cost-to-Price panel renders (markup 300 / FX 1.52 / Retell 0.07 / LLM
+0.003); F13 margin one-liner renders for agency (Billed $8.22 / Cost $3.60 / Margin $4.62 = 56.2%); F15 show-rate
+funnel renders (10 booked / 8 cancelled / 2 upcoming; sms 6 + Voice 4); API-DEPR-1 Agents tab lists 24 agents one
+row each (name/version/PUBLISHED); CHATS-DM-1 (`/chats`, no `dm_executions...messages` 400); UI-1 (Setter 1..4). 0
+secret-in-payload leaks across pages. (`check-client-subscription` "Failed to fetch" in headless = a CORS artifact;
+the fn is ACTIVE v19 + 401s on a direct call, NOT a bug.)
+
+**SMS booking (live Twilio reply to TEST_PHONE_A):** BOOK-1 offer (real slots, no fabricated "booked out"),
+booking-completes on an explicit accept (book-appointments -> confirmed), SMS-OBS-1 (tool_invocations persisted with
+args/result/error), MODEL-1 (reply, no 400), BOOK-3 (13 Jul = Monday, no day-shift).
+
+**Voice:** B-5 (inbound from anonymous/withheld -> greets with NO name, `first_name=''`, never says literal
+`{{first_name}}`); the Inbound BFD Agent speaks the recording disclosure; VM-1 voicemail DETECTION works
+(`voicemail_reached` / `in_voicemail=true`; the spoken message is Retell-side config, Brendan's domain); a
+linked-lead redial BOOKED cleanly (book-appointments -> `{ok:true}` -> real appt, honest confirmation).
+
+**F16b outside-hours:** data-verified against the real gate (`businessHours.isWithinSendingWindow` = false for
+Sunday 16:32 Sydney via `AU_LEGAL_WINDOWS[7]=null`; dial defers to Mon 09:02; node-0 confirmation SMS hours-exempt).
+
+**STEP 1 unblock:** F21b DECISION recorded (AI-sourced-only); F16b/F17 dogfood flags already ON;
+elevenlabs-manage-agent confirmed already-undeployed (BRENDAN_TODO reconciled).
+
+_New bugs from this session are NOT closed — they live in `BUG_LIST.md` for the AUTONOMOUS BUILD session
+(BOOK-VOICE-FABRICATE-1, BOOK-ABORT-GHOST-1 [frozen], LEADREACT-CRASH-1) + `PROMPT_UPDATE_LIST.md` (PU-14, PU-6 re-verify)._
+
 ## 2026-07-11 (evening) — COMBINED session: bundle cleanup + autonomous test session + GATE A review
 
 Fable 5, Brendan present. Verified the already-live v51 bundle, cleaned up 3 infra residuals, drove the

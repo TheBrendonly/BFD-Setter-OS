@@ -6,6 +6,14 @@ first paying client (onboarding, Resend SMTP, Stripe, A2P, GATE A/B) now lives i
 **prompt-content edits (agent wording) live in `PROMPT_UPDATE_LIST.md`** (kept separate so you can work
 prompt tweaks independently).
 
+## Build-session pre-clear decisions (2026-07-12) - the autonomous build session reads these
+
+- **F21(b) reporting semantics: DECIDED = AI-sourced only.** The ROI show-rate funnel + weekly-report `booked`
+  headline must count ONLY setter-created bookings (voice/SMS/cadence) and EXCLUDE `source='ghl_calendar'`
+  human-booked appointments. No secondary "all appointments" line requested. This clears F21(b)'s "confirm
+  intent before building" gate; F21(a) (the `sync-ghl-booking` dedup/redirect) needs no decision. The build
+  session reads the same decision annotated on `FEATURE_ROADMAP.md` F21.
+
 ## Combined build session 2026-07-07 (bugs + F15 + F16 + F17-p1 all DEPLOYED) — manual follow-ups
 
 - [ ] **Enable the new per-client features on the BFD dogfood client to demo them** (all default OFF). In the
@@ -123,10 +131,9 @@ prompt tweaks independently).
   rows + matching GHL workflow filters, the legacy `1prompt-try-gary-` tag prefix (accepted alongside the new
   `bfd-try-gary-`), the probe lead identity `probe@1prompt.local`, migrations/archived docs, and the factual GHL
   automation names in SOP/GHL_SETUP.md (they match your live GHL). Follow-ups → the 3 new `[B]` items below.
-- [ ] **Undeploy the dead `elevenlabs-manage-agent` edge fn (one API call, needs your go).** It was deleted
-  from the repo 2026-07-10 (only caller was the archived VoiceAISetter page; it embeds a legacy n8n URL) but
-  the permission gate blocked Claude deleting the LIVE deployed copy. Say "undeploy elevenlabs-manage-agent"
-  in a session and Claude will DELETE it via the Management API. `[B]`
+- [x] **Undeploy the dead `elevenlabs-manage-agent` edge fn - DONE 2026-07-11** (Brendan GO; one Management-API
+  DELETE during the combined bundle session). Verified still gone 2026-07-12 (not among the 96 live functions).
+  The item had been left un-ticked here; reconciled 2026-07-12.
 - [ ] **Optional GHL-side legacy renames (your GHL, your timing).** (a) The automations are still named
   `Add Lead to 1Prompt OS` / `BFD bookings -> 1prompt (BOOKED/CANCELLED)` - renaming them in GHL is cosmetic
   and safe (webhook URLs are what matter), then update SOP/GHL_SETUP.md to match. (b) New try-gary automations

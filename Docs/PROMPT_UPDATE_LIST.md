@@ -38,6 +38,25 @@ can be worked independently.
 
 ## Open
 
+- [ ] **PU-14 - Booking tool-call gate (voice; Main Outbound + Inbound BFD Agent). HIGH - do first.** Root cause of
+  BOOK-VOICE-FABRICATE-1 (live 2026-07-12): on call_189be0af the agent said "All sorted, you're booked, you'll get a
+  confirmation email" but NEVER called the `book-appointments` tool (Retell tool_calls held only `end_call`), so
+  nothing was booked and no email went out. Add a hard rule in SETTER CORE: *"To book you MUST call the
+  book-appointments tool. NEVER tell the caller they are booked/confirmed or that a confirmation email is coming
+  unless book-appointments returned a successful result (ok:true) THIS turn. If you haven't called the tool, or it
+  didn't succeed, say you're locking it in and will confirm, then call the tool."* Also confirm in Prompt Management
+  -> the setter's Voice/Retell settings -> Tools that book-appointments is attached with `speak_after_execution` ON
+  (spoken confirmation generated FROM the tool result) and no canned success line that fires regardless. Report-only.
+
+- [ ] **PU-6 re-verify - recording disclosure not spoken despite the F17 toggle ON (voice; Main Outbound + Inbound).**
+  Live 2026-07-12: two Main Outbound calls (call_189be0af, call_bb3a8f81) both received `recording_disclosure='required'`
+  as a dynamic var (F17 toggle on for BFD) but NEITHER opener spoke any disclosure. PU-6 was marked applied+archived,
+  but it looks absent from the live Main Outbound prompt or not keyed to `{{recording_disclosure}}` / its 'required'
+  value. **UPDATE same session:** the INBOUND BFD Agent DID speak it on a live inbound call (call_4069e887: "this call
+  is being recorded for quality"), so the disclosure works on Inbound and is missing ONLY on Main Outbound. Use the
+  Inbound prompt as the reference and add/fix the disclosure line (keyed to `{{recording_disclosure}}`) on Main
+  Outbound. Report-only; apply via Prompt Management.
+
 - [ ] **PU-5 — Stand up "Main Outbound V2" (voice).** A full new-prompt draft is ready:
   `Docs/archive/MAIN_OUTBOUND_V2_PROMPT_2026-06-16.md` (folds the Eddie/"Steven" structure into BFD V1: call-flow
   map, consent/AI-disclosure beat, path triage + goal hierarchy Book>Callback>Info, booking-failure ladder,

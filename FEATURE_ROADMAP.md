@@ -90,7 +90,10 @@ Features to build, in rough priority order. Reconciled 2026-06-25 with Brendan.
   headline → first reconciliation dispute. Scope the funnel/weekly `booked` to setter sources, or split
   "AI-sourced" vs "all". **NOTE:** (b) is a reporting-semantics decision (does Brendan want AI-sourced-only or
   all appointments in the ROI headline?) → also flagged in `BUG_LIST.md` sibling notes; confirm intent before
-  building. Evidence: `bookings-webhook/index.ts:207-261`, `sync-ghl-booking/index.ts:491-505`,
+  building. **DECISION (Brendan, 2026-07-12): AI-sourced-only.** Scope the funnel/weekly `booked` count to
+  setter sources (voice/SMS/cadence); EXCLUDE `source='ghl_calendar'` human-booked appointments from the
+  headline. No secondary "all appointments" line requested (build session may add one later if asked).
+  Evidence: `bookings-webhook/index.ts:207-261`, `sync-ghl-booking/index.ts:491-505`,
   `get-show-rate-funnel/index.ts:13-17,143`, `_shared/bookingSource.ts:14`, `weeklyClientReport.ts:109,135`.
 - [ ] **F22 - Reporting-health assertion (stops the ROI metric silently dying; quick win). Effort S.**
   `show_rate` stays `null` until an appointment reaches held/no-show, which only happens if the operator wired

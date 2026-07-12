@@ -471,6 +471,23 @@ Status: `[ ]` not started · `[~]` in progress · `[x]` done. Effort is rough.
   Handoff `Operations/handoffs/2026-07-11-combined-bundle-test-gatea.md`. Pipeline: `[✓] Supervised deploy
   [✓] Combined bundle+test+GATE-A-review (2026-07-11)  [ ] dedicated GATE A + residual behavioral legs
   [ ] First-Client Milestone (gated)`.
+- [x] **BRENDAN test + build-unblock session - DONE 2026-07-12 (Opus 4.8; Brendan present for live legs).** STEP 1
+  unblock done (F21b DECISION = AI-sourced-only, recorded on FEATURE_ROADMAP F21 + BRENDAN_TODO; F16b+F17 dogfood
+  flags already ON; elevenlabs-manage-agent reconciled as already-undeployed). Partial live TEST pass via the harness
+  (headless Playwright + signed inbound-SMS sim + service-key dials): PASS the browser batch (F8 panel, F13 margin
+  card, F15 funnel render, API-DEPR-1 Agents tab, CHATS-DM-1, UI-1), SMS booking (BOOK-1 offer / booking-completes /
+  SMS-OBS-1 / MODEL-1 / BOOK-3 day-map), B-5 (unknown caller, no name), VM-1 detection, F16b outside-hours
+  (data-verified vs the real businessHours gate). **Surfaced 3 new CODE bugs + 2 prompt items:**
+  BOOK-VOICE-FABRICATE-1 (High: Main Outbound confirms a booking WITHOUT calling book-appointments, intermittent),
+  BOOK-ABORT-GHOST-1 (High: SMS book-appointments abort -> ghost booking + false "snapped up"; FROZEN -> stage),
+  LEADREACT-CRASH-1 (Med: /lead-reactivation white-screens; frontend, deploy); PU-14 (booking tool-gate, HIGH) +
+  PU-6 re-verify (recording disclosure fires on Inbound but not Main Outbound). No product code deployed (test-only;
+  retell-proxy v52 / process-lead-file v18 unchanged; docs commit). Calendar cleaned (4 test appts cancelled, real
+  14 Jul 1:30pm kept). Handoff `Operations/handoffs/2026-07-12-brendan-test-session.md`. -> emits the **AUTONOMOUS
+  BUILD session** (build/deploy every open non-frozen + non-first-client item; STAGE the frozen bundle). Owed test
+  legs -> a future test pass: F16b inside-hours, SMS STOP, MODEL-1-HARDENING backend, F9V2, FOLLOWUP-DURING-CALL-1,
+  RESCHED-SMS-1, PURGE-SIM-1, G3-8a, HOURS-1 behavioral, PURGE-TAG-1, B-2 deterministic-pick.
+
 4. **Brendan solo block (parallel, no Claude session):** Setter-1 prompt migration, Resend SMTP → F14 E2E,
    sms_llm rate + billing anchor/toggles, n8n Railway shutdown, PROMPT_UPDATE_LIST items (see the 2026-07-07
    action pack for the full ordered list with exact live wording + paste-ready changes).
