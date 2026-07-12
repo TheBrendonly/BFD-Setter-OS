@@ -33,7 +33,7 @@ import { buildTimeAnchorBlock, resolveClientTimeZone } from "./_shared/timeAncho
 import { resolveLeadDisplayTimeZone, zoneShortLabel } from "./_shared/leadTimezone.ts";
 import { mergeCanonicalSlots, validateBookingArgs, type CanonicalSlotMap } from "./_shared/slotBinding.ts";
 import { mergeEventIds, validateEventIdArgs, type EventIdSet } from "./_shared/eventIdBinding.ts";
-import { needsRescheduleHonestyRewrite } from "./_shared/rescheduleHonestyGuard.ts";
+import { needsRescheduleHonestyRewrite, needsBookingHonestyRewrite } from "./_shared/rescheduleHonestyGuard.ts";
 import {
   runSetterToolLoop,
   ToolsUnsupportedError,
@@ -56,6 +56,10 @@ const DEFAULT_MODEL = "openai/gpt-4.1-nano";
 // Code-side default Brendan can tune; the prompt-side reinforcement is PU-10.
 const RESCHEDULE_CANCEL_FALLBACK_REPLY =
   "Sorry, I wasn't able to make that change just now. Let me take another look and I'll confirm the details with you shortly.";
+// BOOK-CONFIRM-HONESTY-1: honest holding message when the reply claims a fresh
+// booking that book-appointments never confirmed this turn (ghost / fabrication).
+const BOOKING_FALLBACK_REPLY =
+  "Sorry, I wasn't able to lock that time in just now. Let me double-check the calendar and confirm the booking with you shortly.";
 // Per-call timeouts. The tool loop caps iterations (default 4), so the worst
 // case is ~4 × (LLM_TIMEOUT + tool timeout) + a final LLM wrap-up, which stays
 // well under the task's 600s maxDuration. The 30s tool timeout lives in
@@ -439,6 +443,15 @@ export const processSetterReply = task({
         `mutation this turn; rewriting to an honest holding message. lead=${payload.Lead_ID}`,
       );
       setterMessages = [RESCHEDULE_CANCEL_FALLBACK_REPLY];
+    } else if (needsBookingHonestyRewrite(rawText, loopResult.toolInvocations)) {
+      // BOOK-CONFIRM-HONESTY-1: reply claims a fresh booking but book-appointments
+      // never returned ok this turn (fabrication, or a BOOK-ABORT-GHOST tool abort) —
+      // replace the false "you're booked" with an honest holding message.
+      console.warn(
+        `processSetterReply: BOOK-CONFIRM-HONESTY-1 guard fired — reply claimed a booking with no successful ` +
+        `book-appointments this turn; rewriting to an honest holding message. lead=${payload.Lead_ID}`,
+      );
+      setterMessages = [BOOKING_FALLBACK_REPLY];
     }
 
     const response: Record<string, string> = {};

@@ -53,3 +53,45 @@ export function needsRescheduleHonestyRewrite(
   if (succeeded) return false;
   return claimsRescheduleOrCancelSuccess(replyText);
 }
+
+// BOOK-CONFIRM-HONESTY-1 — the mirror of the reschedule guard for a FRESH booking.
+// The fast text model (or a tool abort, per BOOK-ABORT-GHOST-1) can produce a
+// "you're booked / all set for 2pm / confirmation email coming" reply while
+// book-appointments never returned ok this turn, leaving the lead believing they
+// are booked when nothing (or a ghost) landed. These patterns are DISTINCT from
+// the reschedule ones and deliberately narrow to a COMPLETED booking claim
+// (past-tense / "you're booked in / confirmed for <time>"); a mere OFFER
+// ("I can book you in for 2pm?", "shall I lock in 2pm?") must NOT trigger a rewrite.
+const BOOKING_CONFIRM_PATTERNS: RegExp[] = [
+  /\byou'?re (all )?booked\b/i, // you're booked / you're all booked (incl. "booked in")
+  /\byou'?re (all )?set (for|on)\b/i, // "you're all set for Tuesday" (not "set to choose")
+  /\byou'?re (confirmed|scheduled|booked) (for|on|in)\b/i,
+  /\b(locked|penciled|pencilled) (you )?in\b/i, // past tense only ("locked in", not "lock in")
+  /\bi'?ve (booked|scheduled|got) you (in|down|for)\b/i,
+  /\bgot you (booked|scheduled|down) (in|for)\b/i,
+  /\b(your |the )?(appointment|booking|call|meeting|slot) (is |has been )?(booked|confirmed|all set|sorted|locked in|scheduled)\b/i,
+  /\b(booking|appointment) (is )?(confirmed|complete|done)\b/i,
+  /\ball booked in\b/i,
+];
+
+// True when the text reads as a fresh-booking SUCCESS confirmation and is not hedged.
+export function claimsBookingSuccess(text: string): boolean {
+  const t = (text || "").trim();
+  if (!t) return false;
+  if (!BOOKING_CONFIRM_PATTERNS.some((re) => re.test(t))) return false;
+  if (HEDGE_PATTERNS.some((re) => re.test(t))) return false;
+  return true;
+}
+
+// True when the reply claims a booking succeeded but no book-appointment(s) tool
+// returned ok this turn — the caller should rewrite the reply honestly.
+export function needsBookingHonestyRewrite(
+  replyText: string,
+  toolInvocations: GuardToolInvocation[],
+): boolean {
+  const succeeded = (toolInvocations || []).some(
+    (t) => (t.name === "book-appointments" || t.name === "book-appointment") && !t.error,
+  );
+  if (succeeded) return false;
+  return claimsBookingSuccess(replyText);
+}
