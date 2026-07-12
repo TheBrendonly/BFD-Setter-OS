@@ -326,6 +326,27 @@ Deno.serve(async (req) => {
       throw new IntakeError(403, "Invalid intake secret");
     }
 
+    // INTAKE-RL-1 — per-client rate limit (fixed window, keyed on the client id ≡
+    // the intake secret's scope). The secret is designed to sit in public client
+    // HTML, so a leaked secret could otherwise drive unbounded immediate SMS to
+    // attacker-chosen numbers (the default first cadence node is SMS delay 0).
+    // Mirrors the campaign-enroll-webhook pattern. Fail-open on RPC error: the
+    // limiter is a safety net, the constant-time secret compare above is the gate.
+    const INTAKE_RATE_LIMIT = Number(Deno.env.get("INTAKE_RATE_LIMIT_PER_MIN") || "60");
+    const { data: rlCount, error: rlErr } = await supabase.rpc("bump_rate_limit", {
+      p_bucket_key: `intake:${clientId}`,
+      p_window_seconds: 60,
+    });
+    if (rlErr) {
+      console.warn("intake-lead: rate-limit RPC failed (allowing)", rlErr);
+    } else if (typeof rlCount === "number" && rlCount > INTAKE_RATE_LIMIT) {
+      console.warn("intake-lead: rate limited", { clientId, count: rlCount, limit: INTAKE_RATE_LIMIT });
+      return new Response(
+        JSON.stringify({ error: "rate_limited", limit_per_minute: INTAKE_RATE_LIMIT, retry_after_seconds: 60 }),
+        { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json", "Retry-After": "60" } },
+      );
+    }
+
     // B1 — server-side subscription gate (dormant unless ENFORCE_SUBSCRIPTION_GATE
     // =true). Blocks billable intake (lead create + auto-enrolment) for a non-active
     // client. The helper exempts is_system (the probe) and the default client, so the
