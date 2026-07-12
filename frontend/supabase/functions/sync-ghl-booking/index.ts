@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.101.0";
+import { resolveBookingSource } from "../_shared/bookingSource.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -487,21 +488,20 @@ Deno.serve(async (req) => {
     steps.push(makeStep("booking-trigger", "Receive New Booking", "trigger", "completed",
       `GHL Account: ${resolvedGhlAccountId ?? "unknown"}, Booking: ${bookingId}`));
 
-    // Check for duplicate before client resolution so repeated webhooks still resolve cleanly
+    // F21(a): dedupe on the SAME key bookings-webhook uses — (client_id, ghl_appointment_id)
+    // — via the GHL appointment id (globally unique, so this find is client-agnostic). We no
+    // longer EARLY-RETURN on a dup: the old behaviour returned "duplicate" without updating
+    // status or writing booking_status_events, so a booking wired to THIS endpoint (instead of
+    // bookings-webhook) never deduped, funnel-double-counted, and never surfaced held/no-show.
+    // Now we fall through to an upsert that reconciles source + status like bookings-webhook.
     const { data: existingBooking } = await supabase
       .from("bookings")
-      .select("id, client_id")
-      .eq("ghl_booking_id", bookingId)
+      .select("id, client_id, status, source")
+      .eq("ghl_appointment_id", bookingId)
       .maybeSingle();
-
+    const isNewBooking = !existingBooking;
     if (existingBooking) {
-      steps.push(makeStep("booking-duplicate", "Duplicate Check", "condition", "completed", `Already exists: ${existingBooking.id}`));
-      console.info("[sync-ghl-booking] Duplicate booking", JSON.stringify({ bookingId, clientId: existingBooking.client_id }));
-      await logExecution(existingBooking.client_id ?? null, bookingId, contactName || null, "duplicate", null, steps);
-      return new Response(
-        JSON.stringify({ status: "duplicate", booking_id: existingBooking.id }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      steps.push(makeStep("booking-duplicate", "Duplicate Check", "condition", "completed", `Reconciling existing: ${existingBooking.id}`));
     }
 
     const clientResolution = await resolveClientForBooking({
@@ -662,16 +662,12 @@ Deno.serve(async (req) => {
 
     // Extract appointment details from GHL event data
     const appt = ghlData || {};
-    const calLinks = isRecord(appt.calLinks) ? appt.calLinks : {};
     const title = firstNonEmptyString(appt.title, appt.Title, body.title) || null;
     const startTime = firstNonEmptyString(appt.startTime, appt.start_time, body.start_time) || null;
     const endTime = firstNonEmptyString(appt.endTime, appt.end_time, body.end_time) || null;
     const status = firstNonEmptyString(appt.appointmentStatus, appt.status, body.status) || "confirmed";
-    const location = firstNonEmptyString(appt.address, appt.location, body.location) || null;
     const notes = firstNonEmptyString(appt.notes, body.notes) || null;
     const calendarId = firstNonEmptyString(appt.calendarId, appt.calendar_id, body.calendar_id, clientRow.ghl_calendar_id) || null;
-    const cancellationLink = firstNonEmptyString(calLinks.cancellationLink) || null;
-    const rescheduleLink = firstNonEmptyString(calLinks.rescheduleLink) || null;
 
     // Campaign attribution: find the most recent engagement execution for this lead.
     // Bug 24 — also capture exec.id into cadence_execution_id so bookings link back
@@ -710,29 +706,30 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Insert booking
+    // F21(a): upsert on (client_id, ghl_appointment_id) using the phase7a schema the live
+    // `bookings` table actually has (ghl_appointment_id / appointment_time / source / status),
+    // matching bookings-webhook. This is also the fix for sync-ghl-booking being dead: its old
+    // insert wrote columns that do not exist on the live table (ghl_booking_id / start_time /
+    // title / ...), so every call 500'd. Stamp source via resolveBookingSource so a pre-existing
+    // setter-origin (voice_call/sms) is preserved and a human GHL booking lands as ghl_calendar.
+    const previousStatus = (existingBooking?.status as string | null) ?? null;
+    const existingSource = (existingBooking?.source as string | null) ?? null;
+    const bookingSource = resolveBookingSource(existingSource, "ghl_calendar");
     const { data: newBooking, error: insertErr } = await supabase
       .from("bookings")
-      .insert({
+      .upsert({
         client_id: clientId,
         lead_id: leadId,
-        ghl_contact_id: contactId || null,
-        ghl_booking_id: bookingId,
-        campaign_id: campaignId,
-        cadence_execution_id: cadenceExecutionId,
-        setter_name: null,
-        setter_type: null,
-        title,
-        start_time: startTime,
-        end_time: endTime,
+        ghl_appointment_id: bookingId,
+        ghl_calendar_id: calendarId,
+        appointment_time: startTime,
+        appointment_end_time: endTime,
         status,
-        location,
+        source: bookingSource,
         notes,
-        calendar_id: calendarId,
-        cancellation_link: cancellationLink,
-        reschedule_link: rescheduleLink,
-        raw_ghl_data: ghlData,
-      })
+        cadence_execution_id: cadenceExecutionId,
+        raw_payload: ghlData,
+      }, { onConflict: "client_id,ghl_appointment_id" })
       .select("id")
       .single();
 
@@ -747,8 +744,26 @@ Deno.serve(async (req) => {
 
     steps.push(makeStep("booking-insert", "Create Booking", "create_contact", "completed", `Booking: ${newBooking.id}`));
 
-    // Insert campaign_events for analytics
-    if (campaignId && leadIdForAttribution) {
+    // F21(a): on a reconcile where the status actually changed, append a booking_status_events
+    // transition (the funnel's held/no-show source) — mirrors bookings-webhook; idempotent on
+    // a re-fire because we only write when previousStatus !== status.
+    if (existingBooking && previousStatus !== status) {
+      try {
+        await supabase.from("booking_status_events").insert({
+          client_id: clientId,
+          booking_id: newBooking.id,
+          ghl_appointment_id: bookingId,
+          from_status: previousStatus,
+          to_status: status,
+          source: bookingSource,
+          raw: body,
+        });
+      } catch (_evtErr) { /* non-fatal */ }
+    }
+
+    // Insert campaign_events for analytics — only on the FIRST create (a reconcile
+    // re-fire must not double-log the appointment_booked event).
+    if (campaignId && leadIdForAttribution && isNewBooking) {
       try {
         await supabase.from("campaign_events").insert({
           campaign_id: campaignId,
@@ -768,10 +783,11 @@ Deno.serve(async (req) => {
       }
     }
 
-    await logExecution(clientId, bookingId, contactName || null, "created", null, steps);
+    const outcome = isNewBooking ? "created" : "reconciled";
+    await logExecution(clientId, bookingId, contactName || null, outcome, null, steps);
 
     return new Response(
-      JSON.stringify({ status: "created", booking_id: newBooking.id }),
+      JSON.stringify({ status: outcome, booking_id: newBooking.id }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error: any) {
