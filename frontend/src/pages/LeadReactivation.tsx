@@ -19,7 +19,9 @@ const CHANNEL_COLORS = {
 
 const PIE_COLORS = [CHANNEL_COLORS.phone.main, CHANNEL_COLORS.sms.main, CHANNEL_COLORS.email.main];
 
-const formatNum = (n: number) => n.toLocaleString();
+const formatNum = (n: number) => (n ?? 0).toLocaleString();
+// Safe percentage: 0 when the denominator is missing/zero (avoids "NaN%").
+const pct = (num: number, den: number) => (den ? ((num / den) * 100).toFixed(1) : '0.0');
 
 const LeadReactivation = () => {
   const { clientId } = useParams<{ clientId: string }>();
@@ -141,11 +143,11 @@ const LeadReactivation = () => {
         </div>
         <div className="stat-cell">
           <div style={{ fontSize: '11px' }} className="font-medium text-muted-foreground mb-2 uppercase tracking-wide">OVERALL RESPONSE RATE</div>
-          <div style={{ fontSize: '24px' }} className="font-light">{((totals.totalResponses / totals.totalSends) * 100).toFixed(1)}%</div>
+          <div style={{ fontSize: '24px' }} className="font-light">{pct(totals.totalResponses, totals.totalSends)}%</div>
         </div>
         <div className="stat-cell">
           <div style={{ fontSize: '11px' }} className="font-medium text-muted-foreground mb-2 uppercase tracking-wide">BOOKING RATE</div>
-          <div style={{ fontSize: '24px' }} className="font-light">{((totals.totalBookings / totals.totalPositive) * 100).toFixed(1)}%</div>
+          <div style={{ fontSize: '24px' }} className="font-light">{pct(totals.totalBookings, totals.totalPositive)}%</div>
         </div>
       </div>
 

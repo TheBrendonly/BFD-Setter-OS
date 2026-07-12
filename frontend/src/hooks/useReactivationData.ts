@@ -72,6 +72,14 @@ export interface ReactivationTotals {
   callBookingRate: number;
   smsBookingRate: number;
   emailBookingRate: number;
+  // Cross-channel roll-ups consumed by the dashboard summary tiles
+  // (LEADREACT-CRASH-1: the page reads these; the hook must define them or
+  // formatNum(undefined) throws and the whole route white-screens).
+  totalSends: number;
+  totalResponses: number;
+  totalPositive: number;
+  totalBookings: number;
+  clients: number;
 }
 
 const EMPTY_TOTALS: ReactivationTotals = {
@@ -81,6 +89,7 @@ const EMPTY_TOTALS: ReactivationTotals = {
   callPickupRate: 0, smsResponseRate: 0, emailResponseRate: 0,
   callPositiveRate: 0, smsPositiveRate: 0, emailPositiveRate: 0,
   callBookingRate: 0, smsBookingRate: 0, emailBookingRate: 0,
+  totalSends: 0, totalResponses: 0, totalPositive: 0, totalBookings: 0, clients: 0,
 };
 
 function ratePct(num: number, den: number): number {
@@ -240,6 +249,12 @@ export function useReactivationData(clientId: string | undefined) {
         totals.smsBookingRate = ratePct(totals.smsBookings, totals.smsPositive);
         totals.emailBookingRate = ratePct(totals.emailBookings, totals.emailPositive);
 
+        // Cross-channel roll-ups the dashboard summary tiles read (LEADREACT-CRASH-1).
+        totals.totalSends = totals.callsMade + totals.smsSent + totals.emailsSent;
+        totals.totalResponses = totals.callPickups + totals.smsResponses + totals.emailResponses;
+        totals.totalPositive = totals.callPositive + totals.smsPositive + totals.emailPositive;
+        totals.totalBookings = totals.callBookings + totals.smsBookings + totals.emailBookings;
+
         // Multi-client breakdown — fetch the client name from clients table.
         const { data: clientRow } = await (supabase
           .from('clients_public')
@@ -264,6 +279,8 @@ export function useReactivationData(clientId: string | undefined) {
           emailPositive: totals.emailPositive,
           emailBookings: totals.emailBookings,
         }];
+
+        totals.clients = clientData.length;
 
         if (!cancelled) {
           setData({ totals, monthlyData: months, clientData });
