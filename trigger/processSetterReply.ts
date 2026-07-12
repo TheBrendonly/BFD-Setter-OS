@@ -229,7 +229,11 @@ export const processSetterReply = task({
 
     const systemContent = [
       setterPrompt && setterPrompt.trim(),
-      `## Lead Context\nName: ${payload.Name || "(unknown)"}\nEmail: ${payload.Email || "(none)"}\nPhone: ${payload.Phone || "(none)"}`,
+      // SEC-OPENROUTER-PII-1: send only the lead's NAME to the model, not their raw
+      // phone/email. Booking attaches via the engine-injected contactId (below), and
+      // the setter never needs to recite the lead's own contact details back to them,
+      // so the phone/email were avoidable third-party PII in every OpenRouter payload.
+      `## Lead Context\nName: ${payload.Name || "(unknown)"}`,
       leadTimezoneBlock,
       MULTI_MESSAGE_INSTRUCTION,
       // §3.12 — code-side tool-usage guidance (NOT a stored-prompt edit). Must
@@ -271,13 +275,15 @@ export const processSetterReply = task({
     // Engine-injected identity — overrides anything the model supplies so the
     // booking always attaches to THIS lead (contactId = the GHL/internal lead
     // id) and is stamped source="sms".
+    // SEC-OPENROUTER-PII-1: do NOT put the lead's raw phone/email here. The booking
+    // tool resolves the GHL contact from contactId server-side, so phone/email are
+    // not needed to book — and this object is echoed into the tool-call args that
+    // transit OpenRouter, so omitting them keeps prospect PII out of the LLM payload.
     const identity: Record<string, unknown> = {
       contactId: payload.Lead_ID,
       source: "sms",
+      timeZone: clientTimeZone,
     };
-    if (payload.Phone) identity.phone = payload.Phone;
-    if (payload.Email) identity.email = payload.Email;
-    identity.timeZone = clientTimeZone;
 
     const callLlm: CallLlm = async ({ messages: llmMessages, tools: llmTools, toolChoice }) => {
       const controller = new AbortController();
