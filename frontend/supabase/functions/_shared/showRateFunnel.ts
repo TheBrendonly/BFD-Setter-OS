@@ -65,6 +65,33 @@ export function computeFunnel(rows: FunnelBookingRow[]): FunnelCounts {
   };
 }
 
+// F25 — held/no-show measured over appointments whose SCHEDULED time
+// (`appointment_time`) falls in the reporting period, NOT the booking-creation date.
+// At first-client (low) volume, a booking created near period-end but scheduled next
+// period would otherwise swing the weekly show-rate. `booked` stays a creation cohort
+// (labelled `held_window: "appointment_date"` by the caller); only the held/no-show
+// slice + show/no-show rates are recomputed from the event-windowed rows and folded
+// onto the creation-cohort funnel. Pass the SAME setter-source-filtered rows in.
+export function withEventWindowedShowRate(
+  creationFunnel: FunnelCounts,
+  eventRows: FunnelBookingRow[],
+): FunnelCounts {
+  let held = 0, no_show = 0;
+  for (const r of eventRows) {
+    const stage = classifyBookingStatus(r.status);
+    if (stage === "held") held++;
+    else if (stage === "no_show") no_show++;
+  }
+  const reached = held + no_show;
+  return {
+    ...creationFunnel,
+    held,
+    no_show,
+    show_rate: reached > 0 ? held / reached : null,
+    no_show_rate: reached > 0 ? no_show / reached : null,
+  };
+}
+
 // Break the funnel down by a dimension key (booking source or lead source).
 export function computeFunnelByDimension(
   rows: FunnelBookingRow[],

@@ -3,6 +3,7 @@ import {
   classifyBookingStatus,
   computeFunnel,
   computeFunnelByDimension,
+  withEventWindowedShowRate,
   type FunnelBookingRow,
 } from "./showRateFunnel.ts";
 
@@ -69,4 +70,34 @@ Deno.test("computeFunnelByDimension groups by source", () => {
   assertEquals(bySource["voice_call"].show_rate, 0.5);
   assertEquals(bySource["sms_link"].held, 1);
   assertEquals(bySource["unknown"].upcoming, 1);
+});
+
+// F25 — held/no-show windowed by appointment date, booked by creation date.
+Deno.test("withEventWindowedShowRate: booked from creation cohort, held/no-show from event cohort", () => {
+  // Created this period: 3 bookings (booked=3), one already cancelled.
+  const creation: FunnelBookingRow[] = [
+    { status: "confirmed", source: "voice_call" }, // upcoming, scheduled NEXT period
+    { status: "confirmed", source: "sms" },
+    { status: "cancelled", source: "voice_call" },
+  ];
+  // Scheduled THIS period (event cohort): 2 held, 1 no-show (some created last period).
+  const events: FunnelBookingRow[] = [
+    { status: "attended", source: "voice_call" },
+    { status: "attended", source: "sms" },
+    { status: "no_show", source: "voice_call" },
+  ];
+  const funnel = withEventWindowedShowRate(computeFunnel(creation), events);
+  assertEquals(funnel.booked, 3);      // creation cohort
+  assertEquals(funnel.cancelled, 1);   // creation cohort
+  assertEquals(funnel.held, 2);        // event cohort
+  assertEquals(funnel.no_show, 1);     // event cohort
+  assertEquals(funnel.show_rate, 2 / 3);
+});
+
+Deno.test("withEventWindowedShowRate: no event-cohort appointments -> show_rate null", () => {
+  const creation: FunnelBookingRow[] = [{ status: "confirmed", source: "voice_call" }];
+  const funnel = withEventWindowedShowRate(computeFunnel(creation), []);
+  assertEquals(funnel.booked, 1);
+  assertEquals(funnel.held, 0);
+  assertEquals(funnel.show_rate, null);
 });

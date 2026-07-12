@@ -22,6 +22,7 @@ import { computeBillingPeriod, sanitizeAnchorDay } from "../_shared/billingPerio
 import {
   computeFunnel,
   computeFunnelByDimension,
+  withEventWindowedShowRate,
   type FunnelBookingRow,
 } from "../_shared/showRateFunnel.ts";
 import { isSetterSource } from "../_shared/bookingSource.ts";
@@ -159,12 +160,33 @@ Deno.serve(async (req) => {
     // overall == sum(by_source) stays consistent (no secondary "all appointments" line).
     const setterRows = rows.filter((r) => isSetterSource(r.source));
 
-    const overall = computeFunnel(setterRows);
+    // F25: held/no-show measured over appointments SCHEDULED in the period (event window
+    // on appointment_time), not created in it — so a booking made near period-end but
+    // scheduled next period doesn't swing the show-rate. `booked` stays a creation cohort.
+    // Volume is small; a single page suffices.
+    const { data: eventPage, error: eventErr } = await supabase
+      .from("bookings")
+      .select("status, source")
+      .eq("client_id", client_id)
+      .gte("appointment_time", period.start_utc)
+      .lt("appointment_time", period.end_utc)
+      .limit(PAGE_SIZE);
+    if (eventErr) throw eventErr;
+    const setterEventRows: FunnelBookingRow[] = (eventPage ?? [])
+      .filter((b) => isSetterSource((b.source as string | null) ?? null))
+      .map((b) => ({ status: (b.status as string) ?? "confirmed", source: (b.source as string | null) ?? null }));
+
+    const overall = withEventWindowedShowRate(computeFunnel(setterRows), setterEventRows);
     const bySource = computeFunnelByDimension(setterRows, (r) => r.source);
     const byLeadSource = computeFunnelByDimension(setterRows, (r) => r.lead_source);
 
     const funnel = {
       period: { start_utc: period.start_utc, end_utc: period.end_utc, label: period.label },
+      // F25: `booked` counts bookings CREATED in the period; held/no-show + show_rate in
+      // `overall` count appointments SCHEDULED in the period. The by_source/by_lead_source
+      // breakdowns remain a creation cohort.
+      booked_window: "created_at",
+      held_window: "appointment_date",
       overall,
       by_source: bySource,
       by_lead_source: byLeadSource,

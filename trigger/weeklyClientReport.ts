@@ -10,7 +10,7 @@
 
 import { schedules } from "@trigger.dev/sdk";
 import { createClient } from "@supabase/supabase-js";
-import { computeFunnel, type FunnelBookingRow } from "../frontend/supabase/functions/_shared/showRateFunnel.ts";
+import { computeFunnel, withEventWindowedShowRate, type FunnelBookingRow } from "../frontend/supabase/functions/_shared/showRateFunnel.ts";
 import { isSetterSource } from "../frontend/supabase/functions/_shared/bookingSource.ts";
 import { billableMinutes, type UsageCall } from "../frontend/supabase/functions/_shared/computeUsage.ts";
 import {
@@ -110,7 +110,17 @@ export const weeklyClientReport = schedules.task({
         // F21(b): AI-sourced-only headline — count only setter-created bookings
         // (voice/SMS/cadence); exclude human ghl_calendar/manual + intake_form/NULL.
         // Keeps the weekly report aligned with get-show-rate-funnel.
-        const funnel = computeFunnel(bookingRows.filter((b) => isSetterSource(b.source)));
+        const setterCreationRows = bookingRows.filter((b) => isSetterSource(b.source));
+        // F25: held/no-show over appointments SCHEDULED in the window (event cohort on
+        // appointment_time), not created in it, so the weekly show-rate stops swinging at
+        // low volume. `booked` stays a creation cohort. Aligned with get-show-rate-funnel.
+        const { data: eventBookings } = await supabase
+          .from("bookings").select("status, source")
+          .eq("client_id", clientId).gte("appointment_time", win.start).lt("appointment_time", win.end);
+        const setterEventRows: FunnelBookingRow[] = (eventBookings ?? [])
+          .filter((b) => isSetterSource((b.source as string | null) ?? null))
+          .map((b) => ({ status: (b.status as string) ?? "confirmed", source: (b.source as string | null) ?? null }));
+        const funnel = withEventWindowedShowRate(computeFunnel(setterCreationRows), setterEventRows);
 
         // Report config (visibility + "what we improved") from client_report_config.
         const { data: reportRow } = await supabase
