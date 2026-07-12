@@ -43,6 +43,8 @@ import {
   extractApptEvents,
   realEventIds,
   activeAppointments,
+  findAppointmentAtInstant,
+  type ApptEvent,
 } from "./bookingHelpers.ts";
 
 const corsHeaders = {
@@ -496,6 +498,98 @@ async function toolGetAvailableSlots(args: {
 //   firstName/lastName/phone  optional, used when creating a new contact
 //   contactId       optional override (skips email lookup)
 //   title/calendarId/notes    optional
+// ── BOOK-ABORT-GHOST-1 / F24 helpers ───────────────────────────────────────
+
+// F24: defensive appointment-id derivation. GHL normally returns { id }, but a 200 with
+// an unexpected envelope must not silently drop the bookings write. Try the known shapes.
+function deriveAppointmentId(appt: any): string | null {
+  return appt?.id || appt?.appointmentId || appt?.event?.id || appt?.appointment?.id ||
+    appt?.data?.id || appt?.data?.appointment?.id || null;
+}
+
+// F24: end any active cadence for this lead — a booking takes priority. Hoisted out of the
+// `if (appointmentId)` gate so a just-booked lead's cadence ALWAYS ends, even when the id
+// can't be derived from an odd GHL body (otherwise the booked lead keeps getting nudged).
+// Keyed on the CONTACT. Best-effort — never throws.
+async function endCadenceOnBooking(supabase: any, clientId: string, contactId: string): Promise<void> {
+  try {
+    const { data: active } = await supabase
+      .from("engagement_executions")
+      .select("id, trigger_run_id")
+      .eq("ghl_contact_id", contactId)
+      .eq("client_id", clientId)
+      .in("status", ["pending", "running", "waiting"]);
+    const triggerKey = Deno.env.get("TRIGGER_SECRET_KEY");
+    for (const exec of active || []) {
+      await supabase
+        .from("engagement_executions")
+        .update({ status: "completed", stop_reason: "booking_created", completed_at: new Date().toISOString() })
+        .eq("id", exec.id);
+      if (exec.trigger_run_id && triggerKey) {
+        try {
+          await fetch(`https://api.trigger.dev/api/v2/runs/${exec.trigger_run_id}/cancel`, {
+            method: "POST",
+            headers: { Authorization: `Bearer ${triggerKey}`, "Content-Type": "application/json" },
+          });
+        } catch (cancelErr) {
+          console.warn("Failed to cancel cadence trigger run on booking", cancelErr);
+        }
+      }
+    }
+  } catch (cadenceErr) {
+    console.warn("voice-booking-tools: cadence end-on-booking failed (non-fatal)", cadenceErr);
+  }
+}
+
+// BOOK-ABORT-GHOST-1 (a): re-query GHL for an ACTIVE appointment already at the intended
+// instant (idempotency). The text engine's 30s tool-caller can abort a create the edge fn
+// still completed, so checking before create/retry prevents a duplicate ghost. Best-effort
+// — returns null on any GHL error so a genuine first booking still proceeds.
+async function findExistingAppointment(
+  client: ClientRow,
+  contactId: string,
+  bookStart: string,
+): Promise<ApptEvent | null> {
+  try {
+    const r = await ghlGet(`/contacts/${contactId}/appointments/`, client.ghl_api_key as string);
+    if (r.status >= 400) return null;
+    return findAppointmentAtInstant(extractApptEvents(r.body), bookStart);
+  } catch {
+    return null;
+  }
+}
+
+// BOOK-ABORT-GHOST-1 (d): on a FINAL booking failure, text the lead a self-serve GHL
+// calendar booking link so they can still book instantly. Best-effort — never throws.
+async function sendBookingLinkFallback(
+  client: ClientRow,
+  contactId: string,
+  calendarId: string,
+  supabase: any,
+): Promise<void> {
+  try {
+    const { data: lead } = await supabase
+      .from("leads")
+      .select("phone, normalized_phone")
+      .eq("client_id", client.id)
+      .eq("lead_id", contactId)
+      .maybeSingle();
+    const phone = (lead?.phone as string | null) || (lead?.normalized_phone as string | null);
+    if (!phone) return;
+    const link = `https://api.leadconnectorhq.com/widget/booking/${calendarId}`;
+    await toolSendSms({
+      client,
+      body: {
+        phone,
+        message: `Sorry, I couldn't lock that time in just now. You can pick a time here and it'll book instantly: ${link}`,
+      },
+      supabase,
+    });
+  } catch (e) {
+    console.warn("voice-booking-tools: booking-link fallback SMS failed (non-fatal)", e);
+  }
+}
+
 async function toolBookAppointments(args: {
   client: ClientRow;
   body: Record<string, unknown>;
@@ -526,6 +620,16 @@ async function toolBookAppointments(args: {
   }
   const bookEnd = addMinutesPreserveOffset(bookStart, 30);
 
+  // BOOK-ABORT-GHOST-1 (a) idempotency: a prior attempt — e.g. one the SMS engine's 30s
+  // tool-caller aborted — may already have created THIS exact appointment server-side.
+  // Re-query before creating and reuse it instead of minting a duplicate ghost. Also
+  // ensure the cadence is ended (the just-booked lead must not keep getting nudged).
+  const preExisting = await findExistingAppointment(client, contactId, bookStart);
+  if (preExisting) {
+    await endCadenceOnBooking(supabase, client.id, contactId);
+    return { id: preExisting.id, startTime: preExisting.startTime ?? bookStart, status: preExisting.appointmentStatus ?? "confirmed", idempotent: true };
+  }
+
   // Body shape mirrors the original upstream n8n workflow's bookAppointment
   // node: meetingLocationType + ignoreDateRange + toNotify + ignoreFreeSlotValidation
   // are all required by GHL for predictable behaviour even though they have
@@ -546,20 +650,40 @@ async function toolBookAppointments(args: {
   if (client.ghl_assignee_id) ghlBody.assignedUserId = client.ghl_assignee_id;
   if (typeof body.notes === "string") ghlBody.notes = body.notes;
 
-  const r = await ghlSend("POST", "/calendars/events/appointments", client.ghl_api_key as string, ghlBody);
+  // BOOK-ABORT-GHOST-1 (c): attempt the create, and on a NON-slot failure retry exactly
+  // ONCE — but re-check idempotency between attempts (a failed/aborted first POST may have
+  // actually landed) so the retry never double-books. A genuine slot rejection short-circuits
+  // to real alternatives (never a retry, never "snapped up").
+  let r = await ghlSend("POST", "/calendars/events/appointments", client.ghl_api_key as string, ghlBody);
   if (r.status >= 400) {
-    // We already canonicalised + availability-matched above, so a slot rejection here is almost
-    // always a genuine race (the slot was taken between our match and this POST). Return real
-    // alternatives rather than an opaque error. Non-slot GHL errors still surface as a 502.
     const bodyStr = JSON.stringify(r.body);
+    // A slot rejection here is a genuine race (the slot was taken between our match and this
+    // POST) — return real alternatives rather than an opaque error.
     if (r.status === 400 && /no longer available|not available|slot/i.test(bodyStr)) {
       return await buildSlotUnavailable(client, calendarId, startDateTime);
     }
-    throw new ToolError(502, `GHL book-appointments failed ${r.status}: ${bodyStr.slice(0, 300)}`);
+    // Non-slot failure (502 / timeout class): the first POST may have partially landed.
+    const landed = await findExistingAppointment(client, contactId, bookStart);
+    if (landed) {
+      await endCadenceOnBooking(supabase, client.id, contactId);
+      return { id: landed.id, startTime: landed.startTime ?? bookStart, status: landed.appointmentStatus ?? "confirmed", idempotent: true };
+    }
+    // Retry the create exactly once.
+    r = await ghlSend("POST", "/calendars/events/appointments", client.ghl_api_key as string, ghlBody);
+    if (r.status >= 400) {
+      const retryStr = JSON.stringify(r.body);
+      if (r.status === 400 && /no longer available|not available|slot/i.test(retryStr)) {
+        return await buildSlotUnavailable(client, calendarId, startDateTime);
+      }
+      // BOOK-ABORT-GHOST-1 (d): final failure — text the lead a self-serve booking link so
+      // they can still book, then surface an honest error (the caller must NOT say "snapped up").
+      await sendBookingLinkFallback(client, contactId, calendarId, supabase);
+      throw new ToolError(502, `GHL book-appointments failed ${r.status}: ${retryStr.slice(0, 300)}`);
+    }
   }
 
   const appt = (r.body as any) ?? {};
-  const appointmentId = appt.id || appt.appointmentId || appt.event?.id || null;
+  const appointmentId = deriveAppointmentId(appt); // F24: tolerant of odd 200 bodies
   if (appointmentId) {
     try {
       await supabase
@@ -583,40 +707,12 @@ async function toolBookAppointments(args: {
     } catch (writeErr) {
       console.warn("voice-booking-tools: bookings row write failed (non-fatal)", writeErr);
     }
-
-    // End any active cadence for this lead — booking takes priority
-    try {
-      const { data: active } = await supabase
-        .from("engagement_executions")
-        .select("id, trigger_run_id")
-        .eq("ghl_contact_id", contactId)
-        .eq("client_id", client.id)
-        .in("status", ["pending", "running", "waiting"]);
-      const triggerKey = Deno.env.get("TRIGGER_SECRET_KEY");
-      for (const exec of active || []) {
-        await supabase
-          .from("engagement_executions")
-          .update({
-            status: "completed",
-            stop_reason: "booking_created",
-            completed_at: new Date().toISOString(),
-          })
-          .eq("id", exec.id);
-        if (exec.trigger_run_id && triggerKey) {
-          try {
-            await fetch(`https://api.trigger.dev/api/v2/runs/${exec.trigger_run_id}/cancel`, {
-              method: "POST",
-              headers: { Authorization: `Bearer ${triggerKey}`, "Content-Type": "application/json" },
-            });
-          } catch (cancelErr) {
-            console.warn("Failed to cancel cadence trigger run on booking", cancelErr);
-          }
-        }
-      }
-    } catch (cadenceErr) {
-      console.warn("voice-booking-tools: cadence end-on-booking failed (non-fatal)", cadenceErr);
-    }
   }
+
+  // F24: end the cadence keyed on the CONTACT even when appointmentId couldn't be derived
+  // (hoisted OUT of the id gate) — a 200 with an unrecognised body would otherwise leave
+  // the just-booked lead in an active cadence, still getting follow-up SMS/calls.
+  await endCadenceOnBooking(supabase, client.id, contactId);
 
   return r.body;
 }

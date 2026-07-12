@@ -134,3 +134,25 @@ export function activeAppointments(events: ApptEvent[]): ApptEvent[] {
     .filter((e) => (e.appointmentStatus ?? "").toLowerCase() !== "cancelled")
     .sort((a, b) => (a.startTime ?? "").localeCompare(b.startTime ?? ""));
 }
+
+// ── BOOK-ABORT-GHOST-1 ────────────────────────────────────────────────────────
+// Idempotency: does an ACTIVE appointment already exist for this contact at the
+// intended instant? The text engine's 30s tool-caller can ABORT a book-appointments
+// call that the edge fn still completed server-side (creating the appt), so a naive
+// retry — or a "snapped up" message — produces a ghost / a false negative. Re-query the
+// contact's appointments and match by absolute INSTANT (both the canonical GHL slot and
+// the appointment startTime carry the offset, so equal slots are equal epochs). Returns
+// the existing appointment to reuse, or null when there is genuinely none yet.
+export function findAppointmentAtInstant(
+  events: ApptEvent[],
+  targetIso: string,
+): ApptEvent | null {
+  const target = new Date(targetIso).getTime();
+  if (Number.isNaN(target)) return null;
+  for (const e of activeAppointments(events)) {
+    if (!e.startTime) continue;
+    const t = new Date(e.startTime).getTime();
+    if (!Number.isNaN(t) && t === target) return e;
+  }
+  return null;
+}

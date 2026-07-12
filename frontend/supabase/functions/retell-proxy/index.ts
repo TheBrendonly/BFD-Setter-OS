@@ -6,6 +6,7 @@ import {
   BFD_SCHEDULE_CALLBACK_TOOL,
 } from "../_shared/bfdVoiceTools.ts";
 import { buildVoiceSetterDeactivatePayload } from "../_shared/voice-setter.ts";
+import { redactPhone } from "../_shared/redact.ts";
 import {
   assertAgentNotLocked,
   assertLlmNotLocked,
@@ -492,7 +493,7 @@ async function repointPhoneVersionsAfterPublish(
       }
 
       if (bumped.length === 0) {
-        console.log(`[repoint-phones] ${phone} routes no direction to ${agentId}; skipping (slot ${slotNumber})`);
+        console.log(`[repoint-phones] ${redactPhone(phone)} routes no direction to ${agentId}; skipping (slot ${slotNumber})`);
         continue;
       }
 
@@ -749,6 +750,29 @@ async function syncVoiceSetter(
   const supabase = getSupabaseAdmin();
   const agentColumn = SLOT_TO_AGENT_COLUMN[slotNumber];
   if (!agentColumn) throw new Error(`Invalid voice setter slot number: ${slotNumber}`);
+
+  // SLOT-MAP-1: slot 1 aliases clients.retell_inbound_agent_id (a legacy single-agent
+  // column). P3a retired outbound slots 2/3, so there is NO legitimate OUTBOUND setter on
+  // slot 1 — real setters live on slots 4-10 and the inbound agent is bound via the
+  // inbound-toggle flow, not this sync path. A push to slot 1 (e.g. creating/saving a setter
+  // on the always-rendered empty "Setter-1" tile) re-reads + clobbers retell_inbound_agent_id
+  // and forces the inbound agent onto the new setter — exactly the MAIN-OUTBOUND-SHARED-1
+  // incident. Refuse a slot-1 sync unless that slot genuinely holds the inbound setter.
+  if (agentColumn === "retell_inbound_agent_id") {
+    const { data: slot1Setter } = await supabase
+      .from("voice_setters")
+      .select("id, is_inbound")
+      .eq("client_id", clientId)
+      .eq("legacy_slot", slotNumber)
+      .maybeSingle();
+    if (!slot1Setter?.is_inbound) {
+      throw new Error(
+        "SLOT-MAP-1: voice setter slot 1 is reserved for the inbound agent. Create or save this " +
+          "setter on its own tile (slots 4-10), not the empty \"Setter-1\" tile — a slot-1 push " +
+          "would clobber the client's inbound agent binding.",
+      );
+    }
+  }
 
   // Multi-tenant: fetch this client's intake_lead_secret + timezone. Secret feeds
   // booking-tool URL rewrites with per-tenant auth; timezone feeds the DYNAMIC_VARS

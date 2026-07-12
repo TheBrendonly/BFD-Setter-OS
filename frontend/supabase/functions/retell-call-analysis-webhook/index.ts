@@ -466,6 +466,39 @@ Deno.serve(async (req) => {
 
       console.log(`✅ Call ${record.call_id} stored successfully`);
 
+      // BOOK-VOICE-FABRICATE-1 telemetry (code backstop; PRIMARY fix is the prompt, PU-14).
+      // The Main Outbound agent intermittently "confirms" a booking WITHOUT calling
+      // book-appointments, so post-call analysis says booked but no `bookings` row exists.
+      // bookings has no call_id, so match by client_id + lead_id(contactId) + a recent
+      // creation window (the booking happens during the call). If analysis claims booked but
+      // no row landed, log an error_logs row so the fabrication is caught from the DB.
+      if (appointmentBooked === true && contactId && clientId) {
+        try {
+          const sinceIso = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+          const { count } = await supabase
+            .from("bookings")
+            .select("id", { count: "exact", head: true })
+            .eq("client_id", clientId)
+            .eq("lead_id", contactId)
+            .gte("created_at", sinceIso);
+          if ((count ?? 0) === 0) {
+            await supabase.from("error_logs").insert({
+              client_id: clientId,
+              client_ghl_account_id: resolvedGhlAccountId || "unknown",
+              lead_id: contactId,
+              severity: "warning",
+              source: "retell-call-analysis-webhook",
+              error_type: "booking_claimed_no_row",
+              error_message: "Post-call analysis says booked but no bookings row exists for this contact (possible fabricated confirmation without a book-appointments call).",
+              context: { call_id: record.call_id, appointment_time: appointmentTime },
+            });
+            console.warn(`⚠️ BOOK-VOICE-FABRICATE-1: call ${record.call_id} analysis=booked but no bookings row for contact ${contactId}`);
+          }
+        } catch (telemetryErr) {
+          console.warn("BOOK-VOICE-FABRICATE-1 telemetry check failed (non-fatal):", telemetryErr);
+        }
+      }
+
       // Session P2 — per-execution cost ledger (platform db). Voice cost is real (Retell).
       // Idempotent via UNIQUE(cost_kind, provider_ref) shared with retell-call-webhook.
       // Best-effort — never affects the 200 returned to Retell.
