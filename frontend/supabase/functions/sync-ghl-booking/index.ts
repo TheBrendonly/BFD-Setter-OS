@@ -639,8 +639,10 @@ Deno.serve(async (req) => {
               client_id: clientId,
               source: "new-booking-from-gohighlevel",
               error_type: "ghl_api_error",
-              message: `Failed to fetch appointment ${bookingId}: ${errDetail}`,
-              raw_payload: { bookingId, response: errDetail, ghlAccountId: resolvedGhlAccountId },
+              // F23: error_logs has error_message/context, NOT message/raw_payload, so
+              // these inserts silently failed and the digest never saw GHL booking errors.
+              error_message: `Failed to fetch appointment ${bookingId}: ${errDetail}`,
+              context: { bookingId, response: errDetail, ghlAccountId: resolvedGhlAccountId },
             });
           } catch (_logErr) { /* ignore logging failures */ }
         }
@@ -651,8 +653,9 @@ Deno.serve(async (req) => {
             client_id: clientId,
             source: "new-booking-from-gohighlevel",
             error_type: "ghl_api_error",
-            message: `Exception fetching appointment ${bookingId}: ${e.message}`,
-            raw_payload: { bookingId },
+            // F23: use the real error_logs columns (error_message/context).
+            error_message: `Exception fetching appointment ${bookingId}: ${e.message}`,
+            context: { bookingId },
           });
         } catch (_logErr) { /* ignore */ }
       }
