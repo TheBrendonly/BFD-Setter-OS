@@ -234,6 +234,33 @@ Deno.serve(async (req) => {
       requiredWebhooksReceived: requiredEntries.every((e) => e.lastReceivedAt !== null),
     };
 
+    // F22: reporting-health assertion. show_rate stays null forever unless the GHL
+    // appointment-status-change automation is wired (it is what drives
+    // booking_status_events transitions off 'confirmed'). If bookings exist but NONE
+    // have ever left 'confirmed', the automation is almost certainly missing and the
+    // client's ROI show-rate is silently dead. Surfaced SEPARATELY (not folded into
+    // goLiveReady, which must not block a brand-new client that has no bookings yet).
+    const { count: bookingsCount } = await supabase
+      .from("bookings")
+      .select("id", { count: "exact", head: true })
+      .eq("client_id", clientId);
+    const { data: transitionSeen } = await supabase
+      .from("booking_status_events")
+      .select("id")
+      .eq("client_id", clientId)
+      .neq("to_status", "confirmed")
+      .limit(1)
+      .maybeSingle();
+    const totalBookings = bookingsCount ?? 0;
+    const statusTransitionsSeen = Boolean(transitionSeen);
+    const reportingHealth = {
+      bookings: totalBookings,
+      statusTransitionsSeen,
+      // The alarming state the operator must fix: bookings exist but the status
+      // automation has never fired, so held/no-show never resolves.
+      statusAutomationLikelyMissing: totalBookings > 0 && !statusTransitionsSeen,
+    };
+
     return json({
       ok: true,
       clientId,
@@ -242,6 +269,7 @@ Deno.serve(async (req) => {
       // auto_engagement_workflow_id flip (SOP 8.1) on this.
       goLiveReady: Object.values(goLiveChecklist).every(Boolean),
       goLiveChecklist,
+      reportingHealth,
       generated: Object.keys(fills),
     });
   } catch (err) {
