@@ -694,6 +694,11 @@ Deno.serve(async (req) => {
     // GHL hiccup. A background reconcile (before the final return) links the
     // real GHL contact id once GHL recovers.
     let syntheticMinted = false;
+    // B2-REPOINT-1: true when this inbound resolved to a LINGERING synthetic lead
+    // (bfd-<phone>, minted during a past GHL outage that hadn't recovered by the end of
+    // its minting request). The background reconcile below runs for it too, so the lead
+    // finally converges to its real GHL contact id once GHL is back.
+    let lingeringSynthetic = false;
 
     if (normalizedFrom) {
       const existingLead = await resolveLeadByPhone(supabase, client.id, normalizedFrom);
@@ -708,6 +713,11 @@ Deno.serve(async (req) => {
           leadId: existingLead.id,
           contactId,
         });
+        // A bfd-<phone> id that survived past its minting request is a lingering synthetic;
+        // schedule the same reconcile when GHL creds exist so it can now converge.
+        if (contactId.startsWith("bfd-") && client.ghl_api_key && client.ghl_location_id) {
+          lingeringSynthetic = true;
+        }
       }
     }
 
@@ -1138,13 +1148,14 @@ Deno.serve(async (req) => {
       debounceSeconds: effectiveDebounce,
     });
 
-    if (syntheticMinted) {
-      // Background reconcile: GHL was down when this inbound landed, so the lead
-      // was minted internally (bfd-<phone>) and the reply already flows
-      // Twilio-direct. Now that the response is returned, retry GHL and, on
-      // success, repoint ONLY the rows born in THIS request from the synthetic
-      // id to the real GHL contact id. Bounded child set; constraint-safe via
-      // the collision guard. Never blocks the inbound (runs in waitUntil).
+    if (syntheticMinted || lingeringSynthetic) {
+      // Background reconcile: GHL was down when this lead was minted internally
+      // (bfd-<phone>) and the reply flows Twilio-direct. Now that the response is
+      // returned, retry GHL and, on success, repoint every row still on the synthetic
+      // id to the real GHL contact id. Runs for a fresh mint (syntheticMinted) AND for a
+      // later inbound that resolved to a still-lingering bfd-<phone> lead (B2-REPOINT-1),
+      // so a lead that couldn't converge during its minting request converges on a later
+      // touch. Constraint-safe via the collision guard. Never blocks the inbound (waitUntil).
       const syntheticId = contactId;
       const execIdForRepoint = executionId;
       const ghlAccountIdForRepoint = ghlAccountId;
