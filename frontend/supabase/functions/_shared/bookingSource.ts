@@ -18,3 +18,15 @@ export function resolveBookingSource(
   }
   return existingSource;
 }
+
+/**
+ * F21(b) — the AI-setter-created booking sources: voice agent (`voice_call`), the
+ * SMS text engine (`sms`), and cadence/link SMS (`sms_link`). Used to scope the ROI
+ * show-rate funnel + weekly-report `booked` headline to AI-sourced bookings only, per
+ * Brendan's 2026-07-12 decision. Everything else — `ghl_calendar` and `manual` (human
+ * bookings), `intake_form`, and NULL/unknown — is NOT an AI booking and is excluded.
+ */
+const SETTER_SOURCES = new Set(["voice_call", "sms", "sms_link"]);
+export function isSetterSource(source: string | null | undefined): boolean {
+  return !!source && SETTER_SOURCES.has(source);
+}

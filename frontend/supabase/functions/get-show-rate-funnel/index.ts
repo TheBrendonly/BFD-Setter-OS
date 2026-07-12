@@ -24,6 +24,7 @@ import {
   computeFunnelByDimension,
   type FunnelBookingRow,
 } from "../_shared/showRateFunnel.ts";
+import { isSetterSource } from "../_shared/bookingSource.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -151,9 +152,16 @@ Deno.serve(async (req) => {
       r.lead_source = r.lead_id ? (leadSourceById.get(r.lead_id) ?? null) : null;
     }
 
-    const overall = computeFunnel(rows);
-    const bySource = computeFunnelByDimension(rows, (r) => r.source);
-    const byLeadSource = computeFunnelByDimension(rows, (r) => r.lead_source);
+    // F21(b): AI-sourced-only headline (Brendan, 2026-07-12). Count ONLY setter-created
+    // bookings (voice/SMS/cadence). After F21(a) human GHL bookings land in `bookings` as
+    // source='ghl_calendar', so without this the funnel would inflate the client's "AI
+    // booked" number with human/manual/intake_form/NULL rows. Filter every dimension so
+    // overall == sum(by_source) stays consistent (no secondary "all appointments" line).
+    const setterRows = rows.filter((r) => isSetterSource(r.source));
+
+    const overall = computeFunnel(setterRows);
+    const bySource = computeFunnelByDimension(setterRows, (r) => r.source);
+    const byLeadSource = computeFunnelByDimension(setterRows, (r) => r.lead_source);
 
     const funnel = {
       period: { start_utc: period.start_utc, end_utc: period.end_utc, label: period.label },

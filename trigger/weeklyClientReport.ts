@@ -11,6 +11,7 @@
 import { schedules } from "@trigger.dev/sdk";
 import { createClient } from "@supabase/supabase-js";
 import { computeFunnel, type FunnelBookingRow } from "../frontend/supabase/functions/_shared/showRateFunnel.ts";
+import { isSetterSource } from "../frontend/supabase/functions/_shared/bookingSource.ts";
 import { billableMinutes, type UsageCall } from "../frontend/supabase/functions/_shared/computeUsage.ts";
 import {
   assembleWeeklyReport,
@@ -106,7 +107,10 @@ export const weeklyClientReport = schedules.task({
         for (const b of bookings ?? []) {
           bookingRows.push({ status: (b.status as string) ?? "confirmed", source: (b.source as string | null) ?? null });
         }
-        const funnel = computeFunnel(bookingRows);
+        // F21(b): AI-sourced-only headline — count only setter-created bookings
+        // (voice/SMS/cadence); exclude human ghl_calendar/manual + intake_form/NULL.
+        // Keeps the weekly report aligned with get-show-rate-funnel.
+        const funnel = computeFunnel(bookingRows.filter((b) => isSetterSource(b.source)));
 
         // Report config (visibility + "what we improved") from client_report_config.
         const { data: reportRow } = await supabase
