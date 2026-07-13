@@ -33,9 +33,12 @@ When an item passes, move it to `Docs/archive/COMPLETED_LOG.md`. When it fails, 
 > `Operations/handoffs/2026-07-13-gate-a-rls.md`). The isolation itself is server-side proven. What remains is a
 > live-UI belt-and-braces pass. Pass → `COMPLETED_LOG.md`; fail → `BUG_LIST.md`.
 
-- [ ] **GATE-A agency UI unaffected** — with a 2FA agency login on the deployed build: dashboard, Credentials, the
-  system ticker (OPENROUTER_BALANCE still shows for agency), tags/CRM, and a Sub-Account settings save all load +
-  persist. (Server-side probe already proved agency reads of clients/clients_public/credentials/openrouter/leads.)
+- [x] **GATE-A agency UI unaffected — PASSED 2026-07-13 (headless agency smoke, 2FA).** dashboard / credentials /
+  leads-CRM / account-settings all render clean on the deployed build (against the new `clients_public`
+  security_definer view), and the SystemTicker OPENROUTER_BALANCE shows `$6` for the agency. **NOTE:** the first
+  smoke caught a white-screen regression I introduced in the GATE-A ticker change (`isAgency` referenced out of
+  scope in `ClientLayout()`); fixed in `06dbc67` (define isAgency from useAuth), redeployed, re-smoked 4/4 twice.
+  tsc + vite build did NOT catch it (runtime ReferenceError) — render smoke is the only thing that does.
 - [ ] **GATE-A first client-role login** (at onboarding) — the first real client-role user sees ONLY its own
   dashboard/CRM/tags, no sibling data, no secret values, the ticker hides OPENROUTER_BALANCE, and its UI-state prefs
   (crm_filter_config: column widths, filters) persist across reloads.
