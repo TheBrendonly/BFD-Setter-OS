@@ -1124,7 +1124,8 @@ export function ClientLayout() {
   const { clientId } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
-  const { user } = useAuth();
+  const { user, role: userRole } = useAuth();
+  const isAgency = userRole === 'agency';
 
   // Global real-time error notifications
   useErrorLogNotifications();
