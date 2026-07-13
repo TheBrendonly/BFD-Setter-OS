@@ -14,18 +14,19 @@ When an item passes, move it to `Docs/archive/COMPLETED_LOG.md`. When it fails, 
 
 > **⭐⭐⭐ VOICE + BROWSER TEST SESSION — 2026-07-06, and the 2026-07-05 TEST SESSION before it — ALL PASSED → `COMPLETED_LOG.md`.** Full detail there + handoffs `Operations/handoffs/2026-07-06-voice-browser-session.md` + `2026-07-05-test-session.md`. Between the two, essentially every pre-existing bug/feature check passed (onboarding-fix cluster, the shared-fn pass, F8/F9-1/F11/UI-1/F13 core/PROMPT-LINT-1/MODEL-1/API-DEPR-1 core/PROMPT-AUTH-1 X-Ray, the B-2 outage leg, G3-7 nav, SWEEP-1a/b/c). What's below is either (a) the still-open behavioral checks for the 2026-07-07 combined build, or (b) a small residual set of finer-grained checks that genuinely haven't run yet.
 
-## 2026-07-13 frozen voice-bundle deploy — SMS booking PASSED; owed = voice F24 + PU items
+## 2026-07-13 frozen voice-bundle deploy — SMS + VOICE booking PASSED; PU-14/PU-6 verified
 
 > Deployed retell-proxy v53 / voice-booking-tools v25 / retell-call-analysis-webhook v28 (0 agents mutated).
-> SMS booking regression PASSED (book-appointments v25 booked + cancelled). Owed live legs:
 
-- [ ] **F24 live VOICE booking** — an answered outbound call books cleanly and the booked lead's cadence ENDS
-  (no further nudges), with no ghost appointment on a slow GHL. (Brendan, phone.)
-- [ ] **SLOT-MAP-1 live refuse** — a slot-1 Save & Push in the UI is refused with the SLOT-MAP-1 message (guard
-  is present in deployed source + unit-tested; a live UI confirm is belt-and-braces). (Brendan, UI.)
-- [ ] **PU-14 + PU-6 applied** (Brendan, setter UI) — PU-14 booking tool-call gate on Main Outbound (primary fix
-  for BOOK-VOICE-FABRICATE-1); PU-6 recording-disclosure re-verify on Main Outbound. Then re-confirm a voice
-  booking states the disclosure + only claims "booked" after a real book-appointments call.
+- [x] **F24 / v25 live VOICE booking — PASSED 2026-07-13** (call `call_9ad640407735916a081516f1ec2`, 108s). Main
+  Outbound (agent_f45f4dd) booked cleanly end-to-end on v25 — real GHL appt + `bookings` row (source=voice_call),
+  no ghost; test appt cancelled. F24 cadence-end not exercised (lead had no active cadence); code + unit-verified.
+- [x] **PU-14 + PU-6 — APPLIED (Brendan) + VERIFIED on the same call.** PU-6: disclosure spoken in the opener.
+  PU-14: agent booked via a real `book-appointments` call (no fabricated "booked"). → COMPLETED_LOG.
+- [x] **SMS STOP/START — PASSED 2026-07-13 (autonomous).** A signed inbound STOP recorded an internal opt-out
+  (`lead_optouts`, source=sms_stop); START cleared it; safety-net delete confirmed TEST_PHONE_A not left opted out.
+- [ ] **SLOT-MAP-1 live UI refuse** (optional, belt-and-braces) — the guard is present in the deployed source
+  (retell-proxy:754) + unit-tested; a live "Save & Push on the empty Setter-1 tile → refused" confirm is Brendan/UI.
 
 ## 2026-07-13 GATE A (RLS role-gate) — server-side PROVEN; owed = live UI confirmation
 

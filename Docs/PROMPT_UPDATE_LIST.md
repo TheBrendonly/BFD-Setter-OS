@@ -38,7 +38,7 @@ can be worked independently.
 
 ## Open
 
-- [ ] **PU-14 - Booking tool-call gate (voice; Main Outbound + Inbound BFD Agent). HIGH - do first.** Root cause of
+- [x] **PU-14 - Booking tool-call gate (voice; Main Outbound + Inbound). ✅ APPLIED (Brendan) + VERIFIED LIVE 2026-07-13** — on Main Outbound call `call_9ad640407735916a081516f1ec2` the agent booked via a real `book-appointments` call (confirmed `bookings` row, no fabricated "booked"); `speak_after_execution` was already ON on both agents (agent v26→v28). → COMPLETED_LOG. Original finding: Root cause of
   BOOK-VOICE-FABRICATE-1 (live 2026-07-12): on call_189be0af the agent said "All sorted, you're booked, you'll get a
   confirmation email" but NEVER called the `book-appointments` tool (Retell tool_calls held only `end_call`), so
   nothing was booked and no email went out. Add a hard rule in SETTER CORE: *"To book you MUST call the
@@ -48,7 +48,7 @@ can be worked independently.
   -> the setter's Voice/Retell settings -> Tools that book-appointments is attached with `speak_after_execution` ON
   (spoken confirmation generated FROM the tool result) and no canned success line that fires regardless. Report-only.
 
-- [ ] **PU-6 re-verify - recording disclosure not spoken despite the F17 toggle ON (voice; Main Outbound + Inbound).**
+- [x] **PU-6 - recording disclosure on Main Outbound. ✅ APPLIED (Brendan) + VERIFIED LIVE 2026-07-13** — Main Outbound now speaks it (call `call_9ad640...`: "I'm Brendan's AI assistant helping out with the calls today, and just so you know, we might record this for quality — that all good with you?"). → COMPLETED_LOG. Original finding:**
   Live 2026-07-12: two Main Outbound calls (call_189be0af, call_bb3a8f81) both received `recording_disclosure='required'`
   as a dynamic var (F17 toggle on for BFD) but NEITHER opener spoke any disclosure. PU-6 was marked applied+archived,
   but it looks absent from the live Main Outbound prompt or not keyed to `{{recording_disclosure}}` / its 'required'

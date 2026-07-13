@@ -4,6 +4,21 @@ Items closed out of the active lists. Newest first. The active lists are in the 
 (`BUG_LIST.md`, `FEATURE_ROADMAP.md`, `BRENDAN_TODO.md`, `TEST_LIST.md`, `DEFERRED.md`). First-client-gated
 work lives in `Docs/FIRST_CLIENT_TASKS.md` (not archived — deferred).
 
+## 2026-07-13 — Voice verification (PU-14/PU-6 + F24/v25) + Phase 4 legs + cache-control
+
+Supervised voice window + autonomous Phase 4. Full detail: `Operations/handoffs/2026-07-13-voice-verify-and-phase4.md`.
+- **PU-14 + PU-6 (Brendan applied) — VERIFIED LIVE** on Main Outbound call `call_9ad640...` (108s, agent v26→v28):
+  disclosure spoken (PU-6); agent booked via a real `book-appointments` call, no fabricated "booked" (PU-14);
+  v25 booked cleanly on voice, no ghost; test appt cancelled. Frozen voice bundle now validated on SMS + voice.
+- **INTAKE-RL-1 (DONE)** — 85 concurrent intake-lead POSTs → 60×409 + 25×429 Retry-After:60 in one calendar-minute
+  window; no leads/sends (throwaway had no GHL); throwaway deleted.
+- **SMS STOP/START (DONE)** — signed STOP recorded a `lead_optouts` opt-out (source=sms_stop); START cleared it;
+  safety-net delete confirmed TEST_PHONE_A not left opted out.
+- **Cache-control hardening (`d520930`)** — `public/serve.json`: index.html + SPA routes `no-cache`, hashed
+  `assets/**` immutable; SPA rewrite preserved (verified locally). Fixes the stale-white-screen class.
+- **White-screen regression (mine, `06dbc67`)** — GATE-A ticker referenced `isAgency` out of scope in
+  ClientLayout(); tsc/build missed it (root tsconfig is a no-op); caught by the render smoke, fixed, re-smoked 4/4.
+
 ## 2026-07-13 — Frozen voice-booking bundle DEPLOYED (SLOT-MAP-1 + F24 + BOOK-ABORT-GHOST-1)
 
 Deployed the staged `frozen/voice-booking-bundle` (`b710eab`) onto main (`212ea77`) in a supervised window
