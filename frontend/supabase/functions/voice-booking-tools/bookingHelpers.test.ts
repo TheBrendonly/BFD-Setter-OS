@@ -6,6 +6,7 @@ import {
   hasExplicitOffset,
   wallClockLocalToEpochMs,
   extractApptEvents,
+  findAppointmentAtInstant,
   realEventIds,
   activeAppointments,
 } from "./bookingHelpers.ts";
@@ -96,4 +97,24 @@ Deno.test("realEventIds: the binding set a cancel/reschedule eventId must be in"
 Deno.test("activeAppointments: drops cancelled, sorts earliest first", () => {
   const view = activeAppointments(extractApptEvents(APPTS_BODY));
   assertEquals(view.map((e) => e.id), ["realB", "realA"]);
+});
+
+Deno.test("findAppointmentAtInstant: matches an active appt at the same INSTANT (offset-aware)", () => {
+  const events = extractApptEvents({ events: [
+    { id: "a1", startTime: "2026-07-13T09:00:00+10:00", appointmentStatus: "confirmed" },
+    { id: "a2", startTime: "2026-07-13T10:00:00+10:00", appointmentStatus: "confirmed" },
+  ]});
+  // same instant, expressed with a different offset -> still matches a1
+  assertEquals(findAppointmentAtInstant(events, "2026-07-12T23:00:00Z")?.id, "a1");
+  assertEquals(findAppointmentAtInstant(events, "2026-07-13T09:00:00+10:00")?.id, "a1");
+  assertEquals(findAppointmentAtInstant(events, "2026-07-13T10:00:00+10:00")?.id, "a2");
+});
+
+Deno.test("findAppointmentAtInstant: no match / cancelled-only / bad input -> null", () => {
+  const events = extractApptEvents({ events: [
+    { id: "c1", startTime: "2026-07-13T09:00:00+10:00", appointmentStatus: "cancelled" },
+  ]});
+  assertEquals(findAppointmentAtInstant(events, "2026-07-13T09:00:00+10:00"), null); // cancelled excluded
+  assertEquals(findAppointmentAtInstant([], "2026-07-13T09:00:00+10:00"), null);
+  assertEquals(findAppointmentAtInstant(events, "not-a-date"), null);
 });
