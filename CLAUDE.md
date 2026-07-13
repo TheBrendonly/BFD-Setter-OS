@@ -19,6 +19,8 @@ Closed items move to `Docs/archive/COMPLETED_LOG.md`. `Docs/ROADMAP.md` is build
 
 **FIRST-CLIENT ONBOARDING.** When Brendan says **"I'm onboarding a client" / "onboarding a client" / "first client signed"**, read `Docs/FIRST_CLIENT_MILESTONE.md` and run its prompt. It is event-gated (flips Stripe / subscription enforcement / live webhook secrets / AU A2P) — do NOT run it before a contract actually signs. It is the last step to v1 "100%".
 
+**NEXT SESSION.** When Brendan says **"run next session prompt" / "run the next session prompt"**, read `Docs/NEXT_SESSION_PROMPT.md` and execute the fenced prompt inside it as the session's instructions. That file is the canonical next-session relay prompt and is OVERWRITTEN at each session's closeout (per the Relay Protocol in `Docs/SESSION_PLAN.md`).
+
 ## ⚠️ LOGIN ACCESS / 2FA - CHECK AT THE START OF ANY SESSION THAT MAY LOG IN (Playwright)
 
 **Access is deliberately NON-PERSISTENT.** The BFD app agency login has TOTP (2FA), and Supabase's refresh token is single-use (rotates on every refresh) and expires ~17h. There is no standing test account and no committed credential. So:
