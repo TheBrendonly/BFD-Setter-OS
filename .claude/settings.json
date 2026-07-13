@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__plane__list_work_items",
+      "mcp__plane__list_projects",
+      "mcp__plane__list_states",
+      "mcp__claude_ai_Notion__notion-fetch",
+      "mcp__claude_ai_Notion__notion-search",
+      "mcp__claude_ai_Notion__notion-query-data-sources"
+    ]
+  }
+}
