@@ -14,6 +14,19 @@ When an item passes, move it to `Docs/archive/COMPLETED_LOG.md`. When it fails, 
 
 > **⭐⭐⭐ VOICE + BROWSER TEST SESSION — 2026-07-06, and the 2026-07-05 TEST SESSION before it — ALL PASSED → `COMPLETED_LOG.md`.** Full detail there + handoffs `Operations/handoffs/2026-07-06-voice-browser-session.md` + `2026-07-05-test-session.md`. Between the two, essentially every pre-existing bug/feature check passed (onboarding-fix cluster, the shared-fn pass, F8/F9-1/F11/UI-1/F13 core/PROMPT-LINT-1/MODEL-1/API-DEPR-1 core/PROMPT-AUTH-1 X-Ray, the B-2 outage leg, G3-7 nav, SWEEP-1a/b/c). What's below is either (a) the still-open behavioral checks for the 2026-07-07 combined build, or (b) a small residual set of finer-grained checks that genuinely haven't run yet.
 
+## 2026-07-13 GATE A (RLS role-gate) — server-side PROVEN; owed = live UI confirmation
+
+> GATE A shipped + verified 2026-07-13 with a throwaway agency + client-role probe (24/24 — see
+> `Operations/handoffs/2026-07-13-gate-a-rls.md`). The isolation itself is server-side proven. What remains is a
+> live-UI belt-and-braces pass. Pass → `COMPLETED_LOG.md`; fail → `BUG_LIST.md`.
+
+- [ ] **GATE-A agency UI unaffected** — with a 2FA agency login on the deployed build: dashboard, Credentials, the
+  system ticker (OPENROUTER_BALANCE still shows for agency), tags/CRM, and a Sub-Account settings save all load +
+  persist. (Server-side probe already proved agency reads of clients/clients_public/credentials/openrouter/leads.)
+- [ ] **GATE-A first client-role login** (at onboarding) — the first real client-role user sees ONLY its own
+  dashboard/CRM/tags, no sibling data, no secret values, the ticker hides OPENROUTER_BALANCE, and its UI-state prefs
+  (crm_filter_config: column widths, filters) persist across reloads.
+
 ## 2026-07-12 BRENDAN test session — verified PASS + 3 new bugs
 
 > Driven via the harness (headless Playwright + signed inbound-SMS sim + service-key Retell dials) with Brendan on

@@ -18,36 +18,34 @@ until the first client-role *user* is invited). Created 2026-07-11 by the full-l
 
 ## GATE A — role-gate the RLS cluster BEFORE inviting the first client-role user
 
-**Hard prerequisite: must ship before the first client-role user is created.** High blast radius (`clients` has
-79+ reads) → dedicated careful session with a live throwaway-client-role probe, NOT unattended. Draft migration +
-per-table open questions + verification steps: `Docs/GATE_A_RLS_DRAFT_2026-07-08.md`.
+> **✅ SHIPPED + VERIFIED 2026-07-13 (Opus 4.8, plan-approved, continuous session). The last pre-client CODE gate is
+> CLOSED.** Full detail + exact live state: `Operations/handoffs/2026-07-13-gate-a-rls.md`. 3 migrations
+> (`20260713120000/130000/140000`) + 4 edge fns (fetch-thread-previews / twilio-list-numbers / supabase-project-usage
+> **v11**, get-openrouter-usage **v2**) + a frontend ticker role-branch. Design = Option A (clients command-split +
+> `guard_client_clients_update` trigger freezing subscription_status + bundled keys) with `leads` role-split too.
+> Proven with a throwaway agency + client-role probe across two sibling clients in one shared agency: **24/24** — agency
+> unaffected; client sees only its own row (no siblings, no secrets — `retell_api_key` SELECT → 42501), UI-state writes
+> persist, subscription_status/bundled-key self-escalation blocked by the trigger, all 4 sibling edge fns → 403. Owed:
+> the agency-UI browser smoke + the first real client-role login (→ `TEST_LIST.md`). Three catches the draft missed,
+> found + fixed live: (1) `clients_public` was `security_invoker` → recreated `security_definer` + tenant WHERE;
+> (2) the client-own UPDATE needed a client-own SELECT policy + a table→column SELECT REVOKE (111 non-secret cols) to
+> work without leaking secrets; (3) `get-openrouter-usage` (RLS-ORUSAGE-1) allowed client-role → agency-gated.
 
-- [ ] **RLS-CLIENTS-1 (Critical, latent)** — base `clients` policies have no `get_user_role()='agency'` gate and
-  `anon`/`authenticated` hold column SELECT/UPDATE/INSERT on the secret columns. A client-role user would read every
-  sibling's `supabase_service_key` (full-DB key), Twilio token, and BFD-bundled Retell/OpenRouter/GHL keys, and could
-  `UPDATE subscription_status` / DELETE sibling rows. Fix: add the role gate to all four `clients` policies (mirror
-  `client_pricing_config`), keep client reads on `clients_public`, consider `REVOKE` on secret columns from `authenticated`.
-- [ ] **RLS-CREDENTIALS-1 (High, latent)** — `credentials.gohighlevel_api_key` readable by a client-role user (ungated
-  agency policy; no browser read, so a role-gate is pure hardening).
-- [ ] **RLS-TENANT-DISJUNCTION-1 (Med, latent)** — `client_custom_fields`, `lead_ai_columns`, `lead_tags`,
-  `prompt_chat_threads`, `prompt_docs`, `prompt_versions`, `setter_ai_reports` use `c.agency_id=p.agency_id OR
-  c.id=p.client_id` — the agency disjunct gives a client-role user read+write of sibling rows. Split into agency +
-  client-own policies (the RLS-UISTATE-1 shape shipped 2026-07-08).
-- [ ] **RLS-TAGTABLES-1 (Low, latent, VERIFY — added 2026-07-12 red-team pass)** — a source-only read of early
-  migrations flagged the sibling tag tables `contact_tags`, `contact_tag_assignments`, and `lead_tag_assignments` as
-  possibly still `FOR ALL TO authenticated USING (true)` (globally cross-tenant — WORSE than the agency-disjunction on
-  `lead_tags` above), with no re-gating migration found for these three. **Verify the LIVE policy** in the GATE A probe
-  (`select * from pg_policies where tablename in ('contact_tags','contact_tag_assignments','lead_tag_assignments')`); if
-  `USING(true)` or the agency disjunction, re-gate to agency + client-own like the RLS-UISTATE-1 shape. Low value (tag
-  data only), but a tenant-isolation gap to close with the rest of GATE A.
-- [ ] **RLS-GATE-SIBLING-1 (Med, latent)** — `fetch-thread-previews` / `twilio-list-numbers` / `supabase-project-usage`
-  authorize via an RLS-gate (`clients.eq(id).single()`) not `resolveClientAccess`, so a client-role user passing a
-  sibling `client_id` reads the sibling's Twilio numbers / thread previews / Supabase usage. Repoint to `resolveClientAccess`.
-- [ ] **RLS-ORUSAGE-1 (Med, latent)** — `openrouter_usage_cache.cached_data` (BFD margin/cost) readable by a client-role
-  user. NOTE the table IS browser-read (`useTickerStats`/`useOpenRouterUsage`), so the fix must role-branch (agency-only
-  read), not merely add a gate.
-- [ ] **RLS-UNIPILE-1 / RLS-AGENCIES-1 (Low, latent)** — client-role user could read a sibling's connected LinkedIn/IG
-  display name+id (`unipile_accounts`) / rename the shared agency (`agencies`). Fold into the GATE A role-gate sweep.
+- [x] **RLS-CLIENTS-1 (Critical)** — DONE. clients command-split (SELECT/INSERT/DELETE agency-role-gated; UPDATE agency
+  OR client-own-row) + guard trigger freezing subscription_status + bundled keys + client-own SELECT + secret-column
+  SELECT REVOKE. clients read via `clients_public` (now security_definer).
+- [x] **RLS-CREDENTIALS-1 (High)** — DONE. `agency_all_credentials` role-gated agency-only.
+- [x] **RLS-TENANT-DISJUNCTION-1 (Med)** — DONE. All 7 parents split into agency-role-gated FOR ALL + client-own FOR ALL.
+- [x] **RLS-TAGTABLES-1 (Low, VERIFY)** — RESOLVED. Live pg_policies showed `lead_tags`/`lead_tag_assignments` already
+  tenant-scoped (NO lingering `USING(true)` orphans; `contact_tags`/`contact_tag_assignments` renamed away). `lead_tags`
+  folded into the disjunction split; `lead_tag_assignments` inherits `leads`.
+- [x] **RLS-GATE-SIBLING-1 (Med)** — DONE. 3 edge fns repointed to `resolveClientAccess` (supabase-project-usage also
+  moved its secret read to the service role). All → 403 for a sibling client_id in the probe.
+- [x] **RLS-ORUSAGE-1 (Med)** — DONE. `openrouter_usage_cache` agency-only + `get-openrouter-usage` agency-gated (was a
+  2nd margin-leak vector) + ticker role-branched to skip the read for client-role.
+- [x] **RLS-UNIPILE-1 / RLS-AGENCIES-1 (Low)** — DONE. `unipile_accounts` agency-role-gated; `agencies` UPDATE role-gated.
+- [x] **LEADS-ROLE-SPLIT-1 (added 2026-07-13)** — DONE. `leads` role-split (agency FOR ALL + client-own FOR ALL); children
+  `lead_ai_values` / `lead_tag_assignments` inherit. Probe: client reads only its own leads, sibling leads → 0 rows.
 
 ## GATE B — arm `retell_webhook_secret` + fail-close the Retell auto-actions (milestone step 6.6)
 

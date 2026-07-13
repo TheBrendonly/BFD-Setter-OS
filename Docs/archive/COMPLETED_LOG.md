@@ -4,6 +4,30 @@ Items closed out of the active lists. Newest first. The active lists are in the 
 (`BUG_LIST.md`, `FEATURE_ROADMAP.md`, `BRENDAN_TODO.md`, `TEST_LIST.md`, `DEFERRED.md`). First-client-gated
 work lives in `Docs/FIRST_CLIENT_TASKS.md` (not archived — deferred).
 
+## 2026-07-13 — GATE A: RLS role-gate cluster (SHIPPED + VERIFIED, the last pre-client CODE gate)
+
+Opus 4.8, plan-approved, continuous session. Full detail + exact live state: `Operations/handoffs/2026-07-13-gate-a-rls.md`.
+Role-gated the whole latent RLS cluster so the first client-role user cannot touch any sibling client's
+secrets/cost/config/leads. Proven with a throwaway agency + client-role probe across two sibling clients in one
+shared agency: **24/24 PASS** (agency unaffected; client sees only its own row, no secrets — `retell_api_key`
+SELECT → 42501; no sibling leads/tags/AI-values; 4 sibling edge fns → 403; own UI-state writes persist;
+subscription_status/bundled-key self-escalation blocked by trigger). Then the throwaways were deleted.
+
+- **RLS-CLIENTS-1 (Critical)** — `clients` command-split (SELECT/INSERT/DELETE agency-role-gated; UPDATE agency OR
+  client-own-row) + `guard_client_clients_update` BEFORE-UPDATE trigger freezing `subscription_status` + the 4 bundled
+  infra keys for client-role writers + `client_own_clients_select` + table→column SELECT REVOKE (111 non-secret cols).
+- **RLS-CREDENTIALS-1 / RLS-ORUSAGE-1 / RLS-UNIPILE-1 / RLS-AGENCIES-1** — role-gated agency-only. RLS-ORUSAGE-1 also
+  agency-gated the `get-openrouter-usage` edge fn (v1→v2, a 2nd margin-leak vector) + role-branched the ticker read.
+- **RLS-TENANT-DISJUNCTION-1 + RLS-TAGTABLES-1** — the 7 tenant parents split into agency-role-gated + client-own FOR
+  ALL. Live pg_policies showed the tag tables already tenant-scoped (no `USING(true)` orphans).
+- **RLS-GATE-SIBLING-1** — `fetch-thread-previews` / `twilio-list-numbers` / `supabase-project-usage` (all v10→v11)
+  repointed to `resolveClientAccess`.
+- **LEADS-ROLE-SPLIT-1** — `leads` role-split (children inherit).
+- **clients_public** — `security_invoker`→`security_definer` + tenant WHERE (so client reads survive the base gate).
+
+Migrations `20260713120000` / `130000` / `140000`. Owed live UI confirmation (agency smoke + first client-role login) →
+`TEST_LIST.md` (2026-07-13 GATE A). GATE B + Stripe + AU A2P + per-client provisioning stay in `FIRST_CLIENT_TASKS.md`.
+
 ## 2026-07-12 — AUTONOMOUS BUILD session (SHIPPED + DEPLOYED + verified)
 
 Opus 4.8, plan approved then executed unattended. Full detail + live versions + the STAGED frozen bundle deploy

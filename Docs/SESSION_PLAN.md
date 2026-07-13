@@ -503,6 +503,16 @@ Status: `[ ]` not started · `[~]` in progress · `[x]` done. Effort is rough.
   text-side "never snapped up" guard shipped LIVE (20260712.2). Residual behavioral checks → `TEST_LIST.md`
   (2026-07-12 autonomous build). Handoff `Operations/handoffs/2026-07-12-autonomous-build.md`. → emits the
   **supervised frozen-deploy + Brendan TEST pass** prompt. Only the gated First-Client Milestone remains to v1 "100%".
+- [x] **Pre-first-client hardening — PHASE 1 GATE A (RLS role-gate) — DONE 2026-07-13 (Opus 4.8, plan-approved, continuous).**
+  The last pre-client CODE gate. Role-gated the whole latent RLS cluster + split `leads` + fixed `clients_public`
+  (security_invoker→definer) + swapped the 3 sibling edge fns (v11) + agency-gated `get-openrouter-usage` (v2) + ticker
+  role-branch. 3 migrations (`20260713120000/130000/140000`); Option A (clients command-split + guard trigger). **Proven
+  24/24 with a throwaway agency + client-role probe** across two sibling clients in one shared agency (agency unaffected;
+  full client isolation incl. secrets/leads/edge-fns; client UI-state writes persist; self-escalation blocked); throwaways
+  deleted. Owed = agency-UI browser smoke + first client-role login (→ `TEST_LIST.md` 2026-07-13). Handoff
+  `Operations/handoffs/2026-07-13-gate-a-rls.md`. → **Phases 2-4** (frozen voice deploy [supervised], readiness
+  provisioning, live TEST pass) then the gated First-Client Milestone. Pipeline: `[✓] Autonomous build  [✓] GATE A
+  (2026-07-13)  [ ] Phase 2 frozen voice deploy  [ ] Phase 3 readiness  [ ] Phase 4 TEST pass  [ ] First-Client (gated)`.
 
 4. **Brendan solo block (parallel, no Claude session):** Setter-1 prompt migration, Resend SMTP → F14 E2E,
    sms_llm rate + billing anchor/toggles, n8n Railway shutdown, PROMPT_UPDATE_LIST items (see the 2026-07-07
