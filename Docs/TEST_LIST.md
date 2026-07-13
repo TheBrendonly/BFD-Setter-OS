@@ -69,8 +69,11 @@ When an item passes, move it to `Docs/archive/COMPLETED_LOG.md`. When it fails, 
   tiles + the empty-state banner + PERFORMANCE BY CLIENT, **0 console/page errors** (white-screen fixed). Also fixed a
   newly-visible funnel-stage `NaN%` (guarded via `pct`, commit `0435561`). **F15 funnel card** also render-verified live
   on `/analytics/chatbot/dashboard` (Show/No-show, 0 errors) with the F21b/F25 changes.
-- [ ] **INTAKE-RL-1 burst-429** — >60 signed intake-lead requests in 60s for one client return 429 + Retry-After
-  once over the limit (use a throwaway client whose first cadence node is NOT an SMS delay-0, to avoid real sends).
+- [x] **INTAKE-RL-1 burst-429 — PASSED 2026-07-13 (autonomous).** 85 CONCURRENT signed intake-lead POSTs on a
+  throwaway client (no GHL creds → under-limit requests 409 at the GHL check, before enroll → no leads/sends) →
+  **60×409 + 25×429 with `Retry-After: 60`** in a single per-minute window (count 85). Note: the limiter is a
+  fixed CALENDAR-MINUTE window (`bump_rate_limit`), so a slow sequential burst that straddles the boundary won't
+  trip it — must be concurrent. Throwaway deleted. → COMPLETED_LOG.
 - [ ] **BOOK-TZ-DISPLAY-1 cross-tz SMS** — with a lead whose `leads.timezone` differs from the business tz, the SMS
   setter offers/confirms a time in BOTH zones using the deterministic table (no wrong "your time" arithmetic).
 - [ ] **BOOK-CONFIRM-HONESTY-1 forced-failure** — force a book-appointments failure over SMS; the reply is the
