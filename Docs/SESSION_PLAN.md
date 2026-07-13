@@ -512,7 +512,11 @@ Status: `[ ]` not started · `[~]` in progress · `[x]` done. Effort is rough.
   deleted. Owed = agency-UI browser smoke + first client-role login (→ `TEST_LIST.md` 2026-07-13). Handoff
   `Operations/handoffs/2026-07-13-gate-a-rls.md`. → **Phases 2-4** (frozen voice deploy [supervised], readiness
   provisioning, live TEST pass) then the gated First-Client Milestone. Pipeline: `[✓] Autonomous build  [✓] GATE A
-  (2026-07-13)  [ ] Phase 2 frozen voice deploy  [ ] Phase 3 readiness  [ ] Phase 4 TEST pass  [ ] First-Client (gated)`.
+  (2026-07-13)  [✓] Phase 2 frozen voice deploy (SMS + voice booking + PU-14/PU-6 verified)  [✓] Phase 3 slice
+  (llm_model live; HIBP Pro-gated; Resend + GHL held for Brendan)  [~] Phase 4 (INTAKE-RL-1 + SMS STOP done;
+  long-tail behavioral legs optional)  [ ] First-Client Milestone (gated)`. Handoffs: 2026-07-13-gate-a-rls +
+  -frozen-deploy-readiness + -voice-verify-and-phase4. All pre-client CODE is done; only Resend/GHL (Brendan) +
+  the event-gated First-Client Milestone remain.
 
 4. **Brendan solo block (parallel, no Claude session):** Setter-1 prompt migration, Resend SMTP → F14 E2E,
    sms_llm rate + billing anchor/toggles, n8n Railway shutdown, PROMPT_UPDATE_LIST items (see the 2026-07-07
