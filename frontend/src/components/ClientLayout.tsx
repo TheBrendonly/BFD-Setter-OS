@@ -1170,7 +1170,7 @@ export function ClientLayout() {
           </div>
         </PageHeaderProvider>
       </div>
-      <SystemTicker clientId={clientId} />
+      <SystemTicker clientId={clientId} isAgency={isAgency} />
     </SidebarProvider>
   );
 }

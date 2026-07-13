@@ -13,7 +13,7 @@ export interface TickerStats {
 
 const REFRESH_MS = 60_000;
 
-export function useTickerStats(clientId: string | undefined) {
+export function useTickerStats(clientId: string | undefined, isAgency = false) {
   const [stats, setStats] = useState<TickerStats>({
     totalLeads: null,
     unreadChats: null,
@@ -43,7 +43,11 @@ export function useTickerStats(clientId: string | undefined) {
           supabase.from('prompts').select('category').eq('client_id', clientId).eq('is_active', true).in('category', ['text_agent', 'voice_setter']),
           supabase.from('engagement_campaigns' as any).select('id', { count: 'exact', head: true }).eq('client_id', clientId).eq('status', 'active'),
           supabase.from('call_history').select('id', { count: 'exact', head: true }).eq('client_id', clientId).eq('direction', 'outbound'),
-          supabase.from('openrouter_usage_cache' as any).select('cached_data').eq('client_id', clientId).maybeSingle(),
+          // RLS-ORUSAGE-1: openrouter_usage_cache is agency-only (BFD's bundled-account margin).
+          // Skip the read for client-role users (RLS would deny it) and hide the balance below.
+          isAgency
+            ? supabase.from('openrouter_usage_cache' as any).select('cached_data').eq('client_id', clientId).maybeSingle()
+            : Promise.resolve({ data: null } as any),
           supabase.from('leads').select('id, last_message_at').eq('client_id', clientId).not('last_message_at', 'is', null),
           supabase.from('chat_read_status').select('lead_id, last_read_at').eq('client_id', clientId),
         ]);
@@ -85,7 +89,7 @@ export function useTickerStats(clientId: string | undefined) {
     fetchAll();
     const id = setInterval(fetchAll, REFRESH_MS);
     return () => { cancelled = true; clearInterval(id); };
-  }, [clientId]);
+  }, [clientId, isAgency]);
 
   return stats;
 }

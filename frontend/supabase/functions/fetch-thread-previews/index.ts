@@ -1,4 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2.101.0";
+import { resolveClientAccess, AssertAccessError } from "../_shared/assert-client-access.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -21,31 +22,11 @@ Deno.serve(async (req) => {
     }
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
-    const supabaseAnonKey =
-      Deno.env.get("SUPABASE_ANON_KEY") ?? Deno.env.get("SUPABASE_PUBLISHABLE_KEY");
     const supabaseServiceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
-    if (!supabaseUrl || !supabaseAnonKey || !supabaseServiceRoleKey) {
+    if (!supabaseUrl || !supabaseServiceRoleKey) {
       throw new Error("Supabase environment is not configured");
     }
-
-    // Validate JWT via supabase-js client (more resilient than raw fetch)
-    const authClient = createClient(supabaseUrl, supabaseAnonKey, {
-      global: { headers: { Authorization: authHeader } },
-    });
-    const { data: { user }, error: authError } = await authClient.auth.getUser();
-
-    if (authError || !user?.id) {
-      console.error("fetch-thread-previews auth failed:", authError?.message);
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    const adminClient = createClient(supabaseUrl, supabaseServiceRoleKey);
-    // Reuse authClient for RLS-scoped queries
-    const userClient = authClient;
 
     const body = await req.json().catch(() => ({}));
     const { client_id, session_ids, messages_per_session = 20 } = body;
@@ -57,18 +38,22 @@ Deno.serve(async (req) => {
       );
     }
 
-    const { data: accessibleClient, error: accessError } = await userClient
-      .from("clients")
-      .select("id")
-      .eq("id", client_id)
-      .single();
-
-    if (accessError || !accessibleClient) {
-      return new Response(JSON.stringify({ error: "Client not found or no access" }), {
-        status: 403,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    // RLS-GATE-SIBLING-1: authorize via resolveClientAccess (verifies the JWT + pins a
+    // client-role caller to its OWN client). The old userClient.from("clients") RLS-gate
+    // matched any sibling in the shared agency once base `clients` SELECT was agency-scoped.
+    try {
+      await resolveClientAccess(authHeader, client_id);
+    } catch (e) {
+      if (e instanceof AssertAccessError) {
+        return new Response(JSON.stringify({ error: e.message }), {
+          status: e.status,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      throw e;
     }
+
+    const adminClient = createClient(supabaseUrl, supabaseServiceRoleKey);
 
     const { data: clientData, error: clientErr } = await adminClient
       .from("clients")

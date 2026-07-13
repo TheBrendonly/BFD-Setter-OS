@@ -9,7 +9,7 @@
 // already consumed (credits / keyUsage / activity).
 
 import { createClient } from "npm:@supabase/supabase-js@2.101.0";
-import { authorizeClientRequest, AssertAccessError } from "../_shared/authorize-client-request.ts";
+import { resolveClientAccess, AssertAccessError } from "../_shared/assert-client-access.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -35,8 +35,13 @@ Deno.serve(async (req) => {
     const { clientId } = await req.json();
     if (!clientId) return json({ error: "clientId is required" }, 400);
 
+    // RLS-ORUSAGE-1: OpenRouter usage/credits = BFD's bundled-account cost basis / margin, so gate
+    // to AGENCY role only. authorizeClientRequest previously allowed a client-role caller for its
+    // own client_id, which would expose BFD's margin. Browser-only caller (useOpenRouterUsage), so
+    // no server-to-server service-role path is lost by using resolveClientAccess.
     try {
-      await authorizeClientRequest(req.headers.get("Authorization"), clientId);
+      const { role } = await resolveClientAccess(req.headers.get("Authorization"), clientId);
+      if (role !== "agency") return json({ error: "Forbidden" }, 403);
     } catch (e) {
       if (e instanceof AssertAccessError) return json({ error: e.message }, e.status);
       throw e;

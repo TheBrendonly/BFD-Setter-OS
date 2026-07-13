@@ -5,13 +5,14 @@ const fmt = (n: number | null) => (n === null ? '...' : n.toLocaleString());
 
 interface SystemTickerProps {
   clientId?: string;
+  isAgency?: boolean;
 }
 
 /**
  * Retro system ticker bar — live data from CRM, OpenRouter, and Retell.
  */
-export function SystemTicker({ clientId }: SystemTickerProps) {
-  const stats = useTickerStats(clientId);
+export function SystemTicker({ clientId, isAgency = false }: SystemTickerProps) {
+  const stats = useTickerStats(clientId, isAgency);
 
   const green = 'hsl(153 35% 38%)';
   const blue = 'hsl(217 91% 60%)';
@@ -31,10 +32,14 @@ export function SystemTicker({ clientId }: SystemTickerProps) {
       {sep}
       <span style={{ color: blue }}>ACTIVE_CAMPAIGNS: {fmt(stats.activeCampaigns)}</span>
       {sep}
-      <span style={{ color: orange }}>
-        OPENROUTER_BALANCE: {stats.openrouterBalance === null ? '...' : `$${stats.openrouterBalance.toLocaleString()}`}
-      </span>
-      {sep}
+      {isAgency && (
+        <>
+          <span style={{ color: orange }}>
+            OPENROUTER_BALANCE: {stats.openrouterBalance === null ? '...' : `$${stats.openrouterBalance.toLocaleString()}`}
+          </span>
+          {sep}
+        </>
+      )}
       <span style={{ color: green }}>OUTBOUND_CALLS: {fmt(stats.outboundCalls)}</span>
       {sep}
     </>

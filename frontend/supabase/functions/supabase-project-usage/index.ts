@@ -1,4 +1,5 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.101.0'
+import { resolveClientAccess, AssertAccessError } from '../_shared/assert-client-access.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -65,24 +66,6 @@ Deno.serve(async (req) => {
       })
     }
 
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_ANON_KEY')!,
-      { global: { headers: { Authorization: authHeader } } },
-    )
-
-    const {
-      data: { user },
-      error: userErr,
-    } = await supabase.auth.getUser()
-
-    if (userErr || !user) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-        status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
-    }
-
     const { client_id, action, table_name } = await req.json()
     if (!client_id) {
       return new Response(JSON.stringify({ error: 'client_id required' }), {
@@ -91,7 +74,27 @@ Deno.serve(async (req) => {
       })
     }
 
-    const { data: client, error: clientErr } = await supabase
+    // RLS-GATE-SIBLING-1: authorize via resolveClientAccess (verifies the JWT + pins a
+    // client-role caller to its OWN client), then read the tenant secret with the SERVICE
+    // ROLE. The old code read supabase_url/access_token via the user client, which the
+    // now-agency-only base `clients` SELECT policy would deny for a client-role user.
+    try {
+      await resolveClientAccess(authHeader, client_id)
+    } catch (e) {
+      if (e instanceof AssertAccessError) {
+        return new Response(JSON.stringify({ error: e.message }), {
+          status: e.status,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+      throw e
+    }
+
+    const admin = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+    )
+    const { data: client, error: clientErr } = await admin
       .from('clients')
       .select('supabase_url, supabase_access_token')
       .eq('id', client_id)

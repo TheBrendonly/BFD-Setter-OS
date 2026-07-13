@@ -1,0 +1,152 @@
+-- GATE A (part 2) — clients_public: security_invoker -> security_definer + tenant-scoping WHERE.
+--
+-- Part 1 (20260713120000) gated base `clients` SELECT to agency-role only. clients_public is a
+-- security_invoker=on view whose has_* booleans are expressions over the secret columns, so under the
+-- invoker model a client-role user would (a) be denied all rows once base SELECT is agency-only, and
+-- (b) any column-REVOKE workaround would break the has_* expressions. Fix: flip the view to
+-- security_definer (runs as the owner postgres, bypassing base RLS so the has_* expressions resolve and
+-- NO raw secret value is ever projected) and enforce tenancy in the view's own WHERE:
+--   * service_role  -> all rows (edge fns; matches the prior invoker behaviour where service bypassed RLS)
+--   * agency role   -> clients in the user's agency (same set the base agency policy returned)
+--   * client role   -> ONLY the user's own client row
+-- anon (no JWT) matches no branch -> 0 rows, exactly as before. CREATE OR REPLACE preserves the existing
+-- anon/authenticated SELECT grants. This is what makes "clients read via clients_public" hold once the
+-- base table is agency-gated. Verified with the throwaway client-role probe.
+
+CREATE OR REPLACE VIEW public.clients_public WITH (security_invoker=off) AS
+  SELECT id,
+    ghl_location_id,
+    ghl_send_setter_reply_webhook_url,
+    send_followup_webhook_url,
+    text_engine_webhook,
+    debounce_seconds,
+    llm_model,
+    supabase_url,
+    supabase_table_name,
+    created_at,
+    updated_at,
+    name,
+    email,
+    description,
+    agency_id,
+    subscription_status,
+    image_url,
+    system_prompt,
+    analytics_webhook_url,
+    knowledge_base_add_webhook_url,
+    knowledge_base_delete_webhook_url,
+    prompt_webhook_url,
+    ai_chat_webhook_url,
+    transfer_to_human_webhook_url,
+    user_details_webhook_url,
+    twilio_account_sid,
+    setup_guide_completed_steps,
+    sort_order,
+    presentation_only_mode,
+    crm_filter_config,
+    elevenlabs_agent_id,
+    ghl_calendar_id,
+    gohighlevel_booking_title,
+    ghl_assignee_id,
+    retell_inbound_agent_id,
+    retell_outbound_agent_id,
+    retell_outbound_followup_agent_id,
+    retell_agent_id_4,
+    retell_phone_1,
+    retell_phone_1_country_code,
+    retell_phone_2,
+    retell_phone_2_country_code,
+    retell_phone_3,
+    retell_phone_3_country_code,
+    api_webhook_url,
+    campaign_webhook_url,
+    chat_analytics_webhook_url,
+    outbound_caller_webhook_1_url,
+    outbound_caller_webhook_2_url,
+    outbound_caller_webhook_3_url,
+    save_reply_webhook_url,
+    simulation_webhook,
+    database_reactivation_inbound_webhook_url,
+    lead_score_webhook_url,
+    update_pipeline_webhook_url,
+    send_message_webhook_url,
+    send_engagement_webhook_url,
+    twilio_default_phone,
+    stop_bot_webhook_url,
+    retell_agent_id_5,
+    retell_agent_id_6,
+    retell_agent_id_7,
+    retell_agent_id_8,
+    retell_agent_id_9,
+    retell_agent_id_10,
+    phone_call_webhook_url,
+    dm_enabled,
+    auto_engagement_workflow_id,
+    use_native_text_engine,
+    cadence_quiet_hours,
+    voicemail_audio_url,
+    ghl_last_synced_from_field_id,
+    setter_display_names,
+    ghl_conversation_provider_id,
+    ghl_call_sentiment_field_id,
+    ghl_call_appt_booked_field_id,
+    timezone,
+    sync_ghl_enabled,
+    ghl_last_synced_from_field_value,
+    voicemail_config,
+    ghl_channel_field_id,
+    try_gary_persona_slots,
+    ai_meta_prompt,
+    brand_voice,
+    weekly_cost_ceiling_cents,
+    monthly_cost_ceiling_cents,
+    is_system,
+    ghl_call_outcome_field_id,
+    ghl_call_summary_field_id,
+    ghl_call_intent_field_id,
+    ghl_lead_qualified_field_id,
+    ghl_last_call_date_field_id,
+    ghl_callback_requested_field_id,
+    ghl_callback_datetime_field_id,
+    ghl_appointment_datetime_field_id,
+    ghl_sms_sentiment_field_id,
+    ghl_sms_intent_field_id,
+    ghl_sms_qualified_field_id,
+    ghl_sms_summary_field_id,
+    supabase_service_key IS NOT NULL AND supabase_service_key <> ''::text AS has_supabase_service_key,
+    supabase_access_token IS NOT NULL AND supabase_access_token <> ''::text AS has_supabase_access_token,
+    twilio_auth_token IS NOT NULL AND twilio_auth_token <> ''::text AS has_twilio_auth_token,
+    openrouter_api_key IS NOT NULL AND openrouter_api_key <> ''::text AS has_openrouter_api_key,
+    openrouter_management_key IS NOT NULL AND openrouter_management_key <> ''::text AS has_openrouter_management_key,
+    openai_api_key IS NOT NULL AND openai_api_key <> ''::text AS has_openai_api_key,
+    retell_api_key IS NOT NULL AND retell_api_key <> ''::text AS has_retell_api_key,
+    retell_webhook_secret IS NOT NULL AND retell_webhook_secret <> ''::text AS has_retell_webhook_secret,
+    ghl_api_key IS NOT NULL AND ghl_api_key <> ''::text AS has_ghl_api_key,
+    ghl_webhook_secret IS NOT NULL AND ghl_webhook_secret <> ''::text AS has_ghl_webhook_secret,
+    intake_lead_secret IS NOT NULL AND intake_lead_secret <> ''::text AS has_intake_lead_secret,
+    elevenlabs_api_key IS NOT NULL AND elevenlabs_api_key <> ''::text AS has_elevenlabs_api_key,
+    unipile_webhook_secret IS NOT NULL AND unipile_webhook_secret <> ''::text AS has_unipile_webhook_secret,
+    crm_page_size,
+    crm_column_widths,
+    log_column_widths,
+    sync_ghl_booking_enabled,
+    what_to_do_acknowledged,
+    ghl_conversation_link_field_id,
+    stripe_customer_id,
+    subscription_start_date,
+    subscription_end_date,
+    recording_disclosure_enabled,
+    speed_to_lead_enabled,
+    missed_call_textback_enabled
+   FROM clients
+  WHERE (
+    auth.role() = 'service_role'
+    OR (public.get_user_role(auth.uid()) = 'agency'
+        AND clients.agency_id IN (SELECT profiles.agency_id FROM profiles WHERE profiles.id = auth.uid()))
+    OR (public.get_user_role(auth.uid()) = 'client'
+        AND clients.id = public.get_user_client_id(auth.uid()))
+  );
+
+ALTER VIEW public.clients_public SET (security_invoker = off);
+
+NOTIFY pgrst, 'reload schema';

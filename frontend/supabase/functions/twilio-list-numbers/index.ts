@@ -1,4 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2.101.0";
+import { resolveClientAccess, AssertAccessError } from "../_shared/assert-client-access.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -49,10 +50,6 @@ Deno.serve(async (req) => {
     const userId = user.id;
 
     const adminClient = createClient(supabaseUrl, supabaseServiceRoleKey);
-    // userClient for RLS-scoped queries
-    const userClient = createClient(supabaseUrl, supabaseAnonKey, {
-      global: { headers: { Authorization: authHeader } },
-    });
 
     const body = await req.json().catch(() => ({}));
     let account_sid = typeof body.account_sid === "string" ? body.account_sid.trim() : "";
@@ -60,17 +57,18 @@ Deno.serve(async (req) => {
     const clientId = typeof body.client_id === "string" ? body.client_id.trim() : "";
 
     if (!account_sid && clientId) {
-      const { data: accessibleClient, error: accessError } = await userClient
-        .from("clients")
-        .select("id")
-        .eq("id", clientId)
-        .single();
-
-      if (accessError || !accessibleClient) {
-        return new Response(JSON.stringify({ error: "Client not found or no access" }), {
-          status: 403,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+      // RLS-GATE-SIBLING-1: pin a client-role caller to its OWN client (the old
+      // userClient.from("clients") RLS-gate matched any sibling in the shared agency).
+      try {
+        await resolveClientAccess(authHeader, clientId);
+      } catch (e) {
+        if (e instanceof AssertAccessError) {
+          return new Response(JSON.stringify({ error: e.message }), {
+            status: e.status,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        throw e;
       }
 
       const { data: client, error: clientErr } = await adminClient
