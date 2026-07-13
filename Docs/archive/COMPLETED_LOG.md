@@ -4,6 +4,22 @@ Items closed out of the active lists. Newest first. The active lists are in the 
 (`BUG_LIST.md`, `FEATURE_ROADMAP.md`, `BRENDAN_TODO.md`, `TEST_LIST.md`, `DEFERRED.md`). First-client-gated
 work lives in `Docs/FIRST_CLIENT_TASKS.md` (not archived — deferred).
 
+## 2026-07-13 — Frozen voice-booking bundle DEPLOYED (SLOT-MAP-1 + F24 + BOOK-ABORT-GHOST-1)
+
+Deployed the staged `frozen/voice-booking-bundle` (`b710eab`) onto main (`212ea77`) in a supervised window
+(Brendan authorized the autonomous deploy up to the live voice call). retell-proxy **v53**, voice-booking-tools
+**v25**, retell-call-analysis-webhook **v28**. Cherry-picked ONLY the 5 frozen files (the branch predated GATE A).
+- **Verified:** 3 fns ACTIVE; **0 live Retell agents mutated** (before/after snapshot of all 6 agents);
+  SLOT-MAP-1 guard present in deployed retell-proxy source; voice-booking-tools typecheck clean +
+  bookingHelpers tests 11/0.
+- **Live SMS booking regression PASSED:** get-available-slots (v25) returned real future slots;
+  book-appointments (v25) booked end-to-end (GHL appt `CRIRXl39…`, `bookings` row source=sms confirmed, Meet
+  link); test appointment then cancelled. (A batched-message first attempt showed the SMS setter offering a
+  stale same-day 8 AM slot + saying "snapped up" without calling book — a model-grounding artifact of the debounce
+  batching, noted for PU-14; the clean single-message booking is correct.)
+- **OWED (→ TEST_LIST):** live answered-VOICE booking (F24 cadence-ends, no ghost) + PU-14 (booking tool-call gate)
+  + PU-6 (recording disclosure on Main Outbound) — Brendan's UI + phone.
+
 ## 2026-07-13 — GATE A: RLS role-gate cluster (SHIPPED + VERIFIED, the last pre-client CODE gate)
 
 Opus 4.8, plan-approved, continuous session. Full detail + exact live state: `Operations/handoffs/2026-07-13-gate-a-rls.md`.

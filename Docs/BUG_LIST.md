@@ -31,28 +31,15 @@ reconciliation + archive sweep 2026-07-11 (this file trimmed to genuinely-open i
 
 _(No non-frozen open code bugs. New non-frozen bugs get filed here as usual.)_
 
-## Open code items (frozen baseline — STAGED on branch `frozen/voice-booking-bundle`, commit `b710eab`; DO NOT deploy headless)
+## Frozen baseline bundle — DEPLOYED 2026-07-13 (supervised window; Brendan authorized autonomous deploy)
 
-> Built + tested (test:node 178 / test:edge 262 green) + pushed, left UNDEPLOYED for Brendan's supervised Voice
-> window. Deploy checklist: `Operations/handoffs/2026-07-12-autonomous-build.md` (FROZEN DEPLOY CHECKLIST).
-
-- [~] **SLOT-MAP-1 (STAGED)** — retell-proxy `syncVoiceSetter` now refuses a slot-1 push unless slot 1 genuinely
-  holds the inbound setter, killing the empty-"Setter-1"-tile footgun that re-creates the MAIN-OUTBOUND-SHARED-1
-  collision (slot 1 aliases the legacy `retell_inbound_agent_id`). Interim mitigation (leave the empty tile alone)
-  still holds until deployed.
-- [~] **BOOK-ABORT-GHOST-1 booking side (STAGED)** — voice-booking-tools: idempotency re-query
-  (`findAppointmentAtInstant`) before create/retry + retry-once (re-checking between attempts so a retry never
-  double-books) + a self-serve GHL booking-link SMS fallback on final failure. Kills the ghost-appointment race.
-  The text-side "never snapped up" half is already LIVE (Trigger 20260712.2). Also folds in **F24** (defensive
-  `deriveAppointmentId` + hoisted `endCadenceOnBooking` so a booked lead's cadence always ends).
-- [~] **BOOK-VOICE-FABRICATE-1 code backstop (STAGED)** — retell-call-analysis-webhook logs an `error_logs`
-  `booking_claimed_no_row` row when post-call analysis says booked but no `bookings` row exists for the contact.
-  PRIMARY fix is the Retell PROMPT (**PU-14**, Brendan). The BOOK-ABORT-GHOST-1 SMS fallback also catches a
-  skipped/failed booking.
-- [~] **SEC-PII-LOGS-1 retell-proxy fold-in (STAGED)** — the one FROZEN redact line (`retell-proxy:495`, the
-  repoint-phones log) ships with this bundle; the 4 non-frozen fns are already deployed.
-
-_(F24 was previously listed on `FEATURE_ROADMAP.md`; it is folded into the BOOK-ABORT-GHOST-1 booking-side bundle above.)_
+> **The staged `frozen/voice-booking-bundle` (`b710eab`) is DEPLOYED to prod** (main `212ea77`): retell-proxy
+> **v52→v53**, voice-booking-tools **v24→v25**, retell-call-analysis-webhook **v27→v28**. Verified read-only:
+> **0 live Retell agents mutated** (before/after snapshot), SLOT-MAP-1 guard present in deployed source, and a
+> live **SMS booking regression PASSED** (get-available-slots + book-appointments v25 booked end-to-end — GHL appt
+> + `bookings` row confirmed — then cancelled). **SLOT-MAP-1 / BOOK-ABORT-GHOST-1 (booking side) / F24 /
+> BOOK-VOICE-FABRICATE-1 telemetry / SEC-PII-LOGS-1 retell-proxy:495** all live → `Docs/archive/COMPLETED_LOG.md`.
+> **OWED (→ TEST_LIST):** live answered-VOICE booking (F24 cadence-ends, no ghost) + PU-14 + PU-6 (Brendan UI).
 
 ---
 
