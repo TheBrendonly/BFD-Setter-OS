@@ -519,8 +519,10 @@ Status: `[ ]` not started · `[~]` in progress · `[x]` done. Effort is rough.
   the event-gated First-Client Milestone remain.
 
 4. **Brendan solo block (parallel, no Claude session):** Setter-1 prompt migration, Resend SMTP → F14 E2E,
-   sms_llm rate + billing anchor/toggles, n8n Railway shutdown, PROMPT_UPDATE_LIST items (see the 2026-07-07
+   sms_llm rate + billing anchor/toggles, PROMPT_UPDATE_LIST items (see the 2026-07-07
    action pack for the full ordered list with exact live wording + paste-ready changes).
+   (**n8n Railway shutdown removed from this list 2026-07-20:** closed WON'T DO on 2026-07-09,
+   `Docs/BRENDAN_TODO.md:148`. Brendan keeps that service for other, non-bfd-setter work.)
 5. **Candidate pre-first-client feature sessions (Brendan picks; from the 2026-07-04 market research,
    `FEATURE_ROADMAP.md` F15-F17):** F15 client ROI visibility pack (show-rate funnel + weekly report) ·
    F16 never-miss-a-lead pack (speed-to-lead + missed-call text-back + live-transfer config) · F17 phase-1
