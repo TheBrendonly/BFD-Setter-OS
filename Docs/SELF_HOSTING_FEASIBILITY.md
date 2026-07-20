@@ -180,7 +180,7 @@ leads mid-cadence.
 **Cons**
 - **You inherit all DB ops** — backups, point-in-time recovery, JWT rotation,
   Postgres upgrades.
-- **Edge-runtime risk** — if it won't run on Railway, you rewrite 84 functions.
+- **Edge-runtime risk** — if it won't run on Railway, you rewrite 97 functions (count re-verified 2026-07-20; this doc originally said 84).
 - **`runEngagement` rebuild is real engineering risk** — durable-wait state
   machine done wrong = double-sends or dropped leads.
 - **Net savings are modest** once your time is priced in. SaaS fees are small
