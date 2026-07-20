@@ -10,7 +10,7 @@ BFD-setter is Building Flow Digital's internal codebase for the **Building Flow*
 
 A business connects their GoHighLevel sub-account. A lead messages them. The AI setter replies automatically — handling objections, booking appointments, following up — without the business touching anything.
 
-This is the complete platform source code: the React dashboard, all 70+ Supabase Edge Functions, the Trigger.dev background task engine, and the database schemas.
+This is the complete platform source code: the React dashboard, all 97 Supabase Edge Functions, the Trigger.dev background task engine, and the database schemas.
 
 ---
 
@@ -62,27 +62,35 @@ bfd-setter/
 │
 ├── frontend/                        ← React dashboard + all Edge Functions
 │   ├── src/
-│   │   ├── pages/                   ← 50+ pages (dashboard, analytics, AI reps, contacts, etc.)
+│   │   ├── pages/                   ← 72 pages (dashboard, analytics, AI reps, contacts, etc.)
 │   │   ├── components/              ← UI components (shadcn/ui + custom)
 │   │   ├── hooks/                   ← Custom React hooks
 │   │   ├── integrations/supabase/   ← Supabase client + generated DB types
 │   │   └── lib/ utils/ types/       ← Helpers and TypeScript types
 │   ├── supabase/
-│   │   ├── functions/               ← 70+ Deno Edge Functions
-│   │   └── migrations/              ← 300+ SQL migrations (full schema history)
+│   │   ├── functions/               ← 97 Deno Edge Functions + _shared/ modules
+│   │   ├── migrations/              ← 387 SQL migrations (full schema history)
+│   │   └── config.toml              ← per-function verify_jwt settings
 │   └── public/                      ← static assets
 │
-├── trigger/                         ← Trigger.dev background tasks (TypeScript)
-│   ├── processMessages.ts           ← core DM flow: debounce → native engine → GHL reply
-│   ├── runAiJob.ts                  ← AI generation: setter config, prompt editing
+├── trigger/                         ← Trigger.dev background tasks (15 tasks, TypeScript)
+│   ├── _shared/                     ← task helpers + the 23 Node unit tests
+│   ├── processMessages.ts           ← core DM flow: debounce → native engine → Twilio reply
+│   ├── processSetterReply.ts        ← native text engine: prompt + history → AI reply
+│   ├── runEngagement.ts             ← cadence state machine (engage / delay / phone_call)
 │   ├── sendFollowup.ts              ← scheduled follow-up sequence
-│   ├── runEngagement.ts             ← engagement automation
-│   ├── executeWorkflow.ts           ← GHL workflow node execution
-│   └── placeOutboundCall.ts         ← outbound call triggering
+│   ├── runAiJob.ts                  ← AI generation: setter config, prompt editing
+│   ├── executeWorkflow.ts           ← workflow node execution
+│   ├── placeOutboundCall.ts         ← outbound call triggering
+│   ├── scheduleCallback.ts          ← callback scheduling
+│   └── (7 scheduled tasks)          ← analyzeSmsConversations, refreshCadenceFunnel,
+│                                       nudgeColdReply, errorDigest, pollRetellDrift,
+│                                       syntheticProbe, weeklyClientReport
 │
-├── supabase/
+├── supabase/                        ← loose schema SQL only (NO functions, NO migrations)
 │   ├── schema.sql                   ← platform database schema — run in YOUR Supabase project
-│   └── client-schema.sql            ← client database schema — run in each CLIENT'S Supabase project
+│   ├── client-schema.sql            ← client database schema — run in each CLIENT'S Supabase project
+│   └── client-schema-extension.sql  ← additive client-schema columns
 │
 ├── trigger.config.ts                ← Trigger.dev project config
 ├── package.json                     ← Trigger.dev dependencies

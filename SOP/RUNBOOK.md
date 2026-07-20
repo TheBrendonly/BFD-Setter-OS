@@ -6,8 +6,8 @@ BFD-setter runs on four independent services. No one host owns the whole stack.
 
 | Layer | Where it runs | What it does | Canonical env reference |
 |---|---|---|---|
-| Frontend dashboard | **Railway** service `1prompt-os-production` | Vite-built React admin UI (`frontend/`). Auto-deploys on push to `main`. | [`Docs/RAILWAY_ENV.md`](../Docs/archive/RAILWAY_ENV.md) |
-| n8n workflows | **Railway** (separate service, being decommissioned in Phase 10) | Legacy text-engine + booking workflows. Native edge-fn replacements live behind `clients.use_native_text_engine`. | n8n URLs catalogued in [`Docs/WEBHOOKS.md`](../Docs/WEBHOOKS.md) |
+| Frontend dashboard | **Railway** production service (renamed from `1prompt-os-production` in the 2026-07-10 branding purge) | Vite-built React admin UI (`frontend/`). Auto-deploys on push to `main`. No Dockerfile or `railway.json` in the repo: Railway auto-detects the Node build and `npm start` runs `npx serve dist -s`. | [`Docs/archive/RAILWAY_ENV.md`](../Docs/archive/RAILWAY_ENV.md) (archived snapshot) |
+| n8n workflows | **Railway** (separate service) | **The n8n code path is DEAD** as of Phase 10: `processMessages` throws rather than calling n8n (`trigger/processMessages.ts:112-113`), so `use_native_text_engine` is effectively mandatory. Whether the Railway service itself is still running is UNVERIFIABLE FROM REPO; shutting it down is an open Brendan item in `Docs/SESSION_PLAN.md`. | [`Docs/WEBHOOKS.md`](../Docs/WEBHOOKS.md) §C |
 | Edge functions + platform DB | **Supabase** (`bjgrgbgykvjrsuwwruoh`) | All webhooks, integrations, and `bfd-platform` Postgres. Deploy with `supabase functions deploy`. | See "Deploys → Edge function" below |
 | Background tasks | **Trigger.dev** cloud (`proj_fdozaybvhgxnzopabtse`) | Long-running cadence + AI generation tasks under `trigger/`. Deploy with `npx trigger.dev deploy`. | See "Deploys → Trigger.dev tasks" below |
 

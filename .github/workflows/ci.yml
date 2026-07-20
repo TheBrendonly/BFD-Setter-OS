@@ -1,13 +1,18 @@
 # CI: runs the repo's test suites on every push + PR.
 #
-# Runs on the GitHub mirror (github remote, TheBrendonly/1prompt-os) because its
-# runners are free and reachable; the `origin` Forgejo remote is Tailscale-only.
+# Runs on the GitHub mirror (github remote, TheBrendonly/BFD-Setter-OS; renamed
+# from 1prompt-os in the 2026-07-10 branding purge) because its runners are free
+# and reachable; the `origin` Forgejo remote is Tailscale-only.
 # This file is Forgejo/Gitea-Actions compatible (same YAML schema), so it will
 # also run unchanged if a self-hosted runner is later enabled on Forgejo.
 #
-# Two test runtimes:
-#   - Node (>=22.6 for --experimental-strip-types) over the 7 Trigger.dev tests in trigger/_shared/
-#   - Deno over the 17 edge-function tests in frontend/supabase/functions/
+# Two test runtimes (counts verified 2026-07-20):
+#   - Node (>=22.6 for --experimental-strip-types) over the 23 test files in trigger/_shared/ (183 tests)
+#   - Deno over the 35 edge-function test files in frontend/supabase/functions/ (262 tests)
+#
+# KNOWN GAPS (see Docs/AUDIT_2026-07-20.md): this workflow does NOT run the root
+# `test:frontend` suite (frontend/src/lib/*.test.ts, 8 tests), nor eslint, nor any
+# typecheck, nor a frontend build. Nothing here gates merges to main.
 name: CI
 
 on:

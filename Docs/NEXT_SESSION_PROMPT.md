@@ -10,7 +10,10 @@ first; a CONCURRENT Claude session also commits here — pull + commit by EXPLIC
 Supabase ref bjgrgbgykvjrsuwwruoh. Creds in ./.env. Live DB via Supabase Management API /database/query. Live
 Retell via api.retellai.com. NEVER edit voice/text prompt content unless Brendan explicitly permits (report-only
 -> Docs/PROMPT_UPDATE_LIST.md). VERIFY READ-ONLY after every change; for FRONTEND changes run the headless render
-smoke, NOT tsc/build (this repo's `npx tsc --noEmit` is a NO-OP: root tsconfig files:[]) -- see memory
+smoke, NOT tsc/build (there is NO root tsconfig.json, so `npx tsc --noEmit` at the repo root just errors out and
+prints help; run from frontend/ it is a true no-op because frontend/tsconfig.json has files:[]; the only config
+that checks anything is `npx tsc --noEmit -p tsconfig.app.json` in frontend/, which currently reports 21
+pre-existing errors) -- see memory
 feedback_frontend_verify_render_smoke + scratchpad auth.mjs/agency_smoke.mjs. No em dashes. Relay Protocol in
 Docs/SESSION_PLAN.md.
 READ FIRST: Operations/handoffs/2026-07-13-voice-verify-and-phase4.md (+ -gate-a-rls + -frozen-deploy-readiness),

@@ -1,5 +1,25 @@
 ---
-description: DRAFT (not applied) GATE A migration to role-gate the RLS cluster before the first client-role user - review + live-probe in a dedicated session, do NOT apply unattended.
+description: ARCHIVED - the 2026-07-08 GATE A review draft. GATE A was applied and verified on 2026-07-13; this file is the superseded pre-implementation draft, kept for provenance only.
+---
+
+> **ARCHIVED 2026-07-20 — SUPERSEDED. THE WORK BELOW HAS SHIPPED.**
+>
+> This was the pre-implementation review draft. **GATE A was applied and live-verified on 2026-07-13**
+> (proven 24/24 with a throwaway agency-role + client-role probe across two sibling clients). The text
+> below still says "DRAFT, NOT APPLIED" and "Do NOT apply unattended", which is now false and misleading:
+> re-applying it would be a duplicate migration, not a pending task.
+>
+> **Superseded by the applied migrations:**
+> `frontend/supabase/migrations/20260713120000_gate_a_rls_role_gate.sql`,
+> `20260713130000_gate_a_clients_public_definer.sql`,
+> `20260713140000_gate_a_clients_client_select_revoke.sql`.
+>
+> **What is actually current:** `Operations/handoffs/2026-07-13-gate-a-rls.md` (the shipping record),
+> `Docs/SESSION_PLAN.md` (GATE A ticked), and `Docs/FIRST_CLIENT_TASKS.md` (what is still gated).
+> Source findings remain in `Docs/SECURITY_REVIEW_2026-07-08.md`.
+>
+> Archived by the 2026-07-20 documentation audit (`Docs/AUDIT_2026-07-20.md`).
+
 ---
 
 # GATE A — RLS role-gate cluster (DRAFT, NOT APPLIED)

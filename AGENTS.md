@@ -33,6 +33,26 @@ Closed items move to `Docs/archive/COMPLETED_LOG.md`. `Docs/ROADMAP.md` is build
 - **Client-role checks (e.g. ACCESS-1) do NOT need a code:** create a throwaway client user with a known password (admin createUser), log in via password grant (fresh client users have no MFA), verify, then delete the throwaway.
 - The saved storage state lives in the session scratchpad (NOT the repo) and does not carry across sessions - expect to re-auth each session that needs it.
 
+## ⚠️ VERIFICATION REALITY - what actually checks your work (verified 2026-07-20)
+
+Green output from the obvious commands does NOT mean your change is sound. Know exactly what each one covers:
+
+| Command | What it really does |
+|---|---|
+| `npx tsc --noEmit` at the **repo root** | **There is no root `tsconfig.json`.** This errors out and prints the compiler help. It is not a check, and its failure is not about your code. |
+| `npx tsc --noEmit` inside `frontend/` | **True no-op, exit 0 always.** `frontend/tsconfig.json` has `"files": []` and only project references, which the compiler does not follow without build mode. A green run here proves nothing. |
+| `npx tsc --noEmit -p tsconfig.app.json` inside `frontend/` | The ONLY typecheck that covers anything. Covers `frontend/src` only. **Currently reports 21 pre-existing errors in 10 files** (generated DB types drifting from the live schema, `Json` mismatches, TS2589 depth blowups). Compare error counts before/after; do not expect zero. Needs ~60s and enough free RAM: it has been killed under memory pressure on this box. |
+| `npm test` (repo root) | **The real safety net. 453 tests, all passing, ~10s.** Runs `test:node` (183, `trigger/_shared/`), `test:frontend` (8, `frontend/src/lib/`), `test:edge` (262 Deno, `frontend/supabase/functions/`). Unit-only: no integration, no DOM, no E2E. |
+| `npm run build` in `frontend/` | Vite **strips** types rather than checking them. Passes in ~6s with all 21 type errors present. A green build is not a green typecheck. |
+| CI (`.github/workflows/ci.yml`) | Runs `test:node` + `test:edge` only. Does **not** run `test:frontend`, lint, typecheck, or a build. Nothing gates merges to `main`. |
+
+**Nothing typechecks `trigger/` (15 tasks) or the 97 edge functions.** Node's type-stripping mode and
+`deno test --no-check` both skip type checking by design. For those surfaces, tests plus a read-only
+server-side check are the only real verification.
+
+**For FRONTEND changes, run the headless render smoke**, not tsc/build: a GATE-A change once white-screened
+production while build and tsc were both green.
+
 ## Behavioral Guidelines
 
 Source: forrestchang/andrej-karpathy-skills. Behavioral guidelines to reduce common LLM coding mistakes. These bias toward caution over speed; use judgment on trivial tasks.
@@ -100,12 +120,23 @@ shell commands, and other important information, read the current plan
 
 ## Spec-Driven Development (spec-kit)
 
+> **STATUS: SCAFFOLDED BUT NEVER USED — this describes available tooling, not how this repo actually
+> works.** Verified 2026-07-20. spec-kit was wired in a single commit (`c9fe9e4`, 2026-06-04) and has not
+> been touched since. There is no `.specify/specs/` directory, so **no feature has ever gone through this
+> loop**, and `.specify/memory/constitution.md` is still the **unfilled template** (18 unreplaced
+> `[PLACEHOLDER]` markers). The method this repo actually runs on is the **Relay Protocol** in
+> `Docs/SESSION_PLAN.md` plus the 6 canonical lists. Use spec-kit if you want it, but do not assume any
+> prior work followed it, and do not cite the constitution as if it contained principles.
+
 This repo is wired for GitHub spec-kit (v0.9.3). The spec -> plan -> tasks -> implement loop runs
 through `/speckit-*` commands/skills; shared project memory and templates live in `.specify/`.
 Per-tool command files: Claude (`.claude/skills/`) only — the Codex/Cursor/Gemini/Copilot
-spec-kit mirrors were removed 2026-06-10 (unused on this project).
+spec-kit mirrors were removed 2026-06-10 (unused on this project), but note they have since
+**reappeared as untracked files** via Syncthing (`.agents/`, `.cursor/`, `.gemini/`, `GEMINI.md`,
+`.github/agents/`, `.github/prompts/`, `.github/copilot-instructions.md`). They are not tracked and
+not authoritative; see `Docs/AUDIT_2026-07-20.md`.
 
-- Constitution / principles: `.specify/memory/constitution.md` (fill or amend via `/speckit-constitution`).
+- Constitution / principles: `.specify/memory/constitution.md` — **currently an empty template**; fill via `/speckit-constitution` before relying on it.
 - Core loop: `/speckit-specify` -> `/speckit-clarify` -> `/speckit-plan` -> `/speckit-tasks` -> `/speckit-implement`.
 - Supporting: `/speckit-analyze`, `/speckit-checklist`. Git helpers: `/speckit-git-*`.
 - `/speckit-taskstoissues` is GitHub-only and a NO-OP here (we use Forgejo `origin`).

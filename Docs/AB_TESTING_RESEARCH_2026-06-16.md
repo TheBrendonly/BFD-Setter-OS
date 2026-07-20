@@ -13,10 +13,10 @@ go / no-go and a phased build decision. Nothing here is built.
 leads/week**; primary "winner" metric = **booking rate** (other metrics tracked as secondary).
 
 **Reference-name correction:** the kickoff brief points at `FEATURE_ROADMAP.md §3.1a/b/c`. That
-file does not exist. The canonical A/B design lives in [Docs/ROADMAP.md](Docs/ROADMAP.md) under
+file does not exist. The canonical A/B design lives in [Docs/ROADMAP.md](ROADMAP.md) under
 "Future feature: A/B testing" (lines 163-177). The a/b/c layer labels (campaign-level,
 agent-level, AI-variants) come from the kickoff doc framing in
-[Docs/NEXT_SESSION_BUILD_KICKOFF_2026-06-17.md](Docs/NEXT_SESSION_BUILD_KICKOFF_2026-06-17.md#L54).
+[Docs/NEXT_SESSION_BUILD_KICKOFF_2026-06-17.md](archive/NEXT_SESSION_BUILD_KICKOFF_2026-06-17.md#L54).
 This report supersedes the one-paragraph ROADMAP design where the research found a sharper path.
 
 ---
@@ -117,7 +117,7 @@ feature existing. The automated version is an efficiency play for when several c
 
 The two kickoff briefs add a **second phase on top of all three levels**: an **AI-evaluation loop**
 that periodically reads the results, judges a winner, and proposes the next test
-([NEXT_SESSION_BUILD_KICKOFF_2026-06-15.md](Docs/NEXT_SESSION_BUILD_KICKOFF_2026-06-15.md#L53-L57)).
+([NEXT_SESSION_BUILD_KICKOFF_2026-06-15.md](archive/NEXT_SESSION_BUILD_KICKOFF_2026-06-15.md#L53-L57)).
 That loop is treated as its own phase (section 9), not a fourth level.
 
 ---
@@ -247,7 +247,7 @@ names follow the confirmed convention `YYYYMMDDHHMM00_slug.sql`.
   the correct behavior when a lead can re-enter a cadence. Slightly uneven splits at low N.
 - **Recommendation:** sticky-by-lead for correctness (matches the ROADMAP note), with round-robin
   acceptable for a v1 if re-entry is rare. This mirrors the verified ROADMAP guidance
-  ([ROADMAP.md](Docs/ROADMAP.md#L173)).
+  ([ROADMAP.md](ROADMAP.md#L173)).
 
 ---
 
@@ -342,7 +342,7 @@ tests useful in weeks rather than months. Not worth building a fine-grained copy
 The hard project rule: **voice-agent prompt content is Brendan's to apply via the BFD setter UI;
 the system never edits or auto-promotes a voice prompt**
 ([CLAUDE.md "Voice Agent Prompts: Do Not Edit, Report Only"], and
-[NEXT_SESSION_BUILD_KICKOFF_2026-06-15.md](Docs/NEXT_SESSION_BUILD_KICKOFF_2026-06-15.md#L64)). A/B
+[NEXT_SESSION_BUILD_KICKOFF_2026-06-15.md](archive/NEXT_SESSION_BUILD_KICKOFF_2026-06-15.md#L64)). A/B
 testing must be designed around this, not against it. Concretely:
 
 - **Rotation between existing setters is fine.** Brendan builds "variant B" in the UI (the Try-Gary
@@ -374,7 +374,7 @@ voice prompt stays on Brendan's side of the line.
 
 The kickoff brief's second phase: on a schedule, an AI reads the running test's results, judges the
 winner, and proposes the next test, forming an iterative optimization loop
-([NEXT_SESSION_BUILD_KICKOFF_2026-06-15.md](Docs/NEXT_SESSION_BUILD_KICKOFF_2026-06-15.md#L53-L57)).
+([NEXT_SESSION_BUILD_KICKOFF_2026-06-15.md](archive/NEXT_SESSION_BUILD_KICKOFF_2026-06-15.md#L53-L57)).
 
 - **What it reads:** the per-arm comparison from section 6 (`cadence_metrics` grouped by arm),
   enrolment counts, the pre-committed sample/time target, and the booking-rate + reply-rate splits.
@@ -441,18 +441,18 @@ justify fine-grained, machine-driven optimization.
 wants to A/B personas, DEFER Phase 3 until volume materially exceeds 200/week or multiple clients
 are pooled. This matches the ROADMAP's own "MODERATE difficulty, defer to a dedicated build,
 do it properly with sticky-by-lead and a clean comparison dashboard" conclusion
-([ROADMAP.md](Docs/ROADMAP.md#L177)), and sharpens it with the volume-driven metric strategy.
+([ROADMAP.md](ROADMAP.md#L177)), and sharpens it with the volume-driven metric strategy.
 
 ---
 
 ## 12. Appendix
 
 ### Citation index
-- A/B design + constraints + difficulty: [Docs/ROADMAP.md](Docs/ROADMAP.md#L163-L177)
+- A/B design + constraints + difficulty: [Docs/ROADMAP.md](ROADMAP.md#L163-L177)
 - Two-phase brief (setup + AI-eval loop), report-only rule, statistical-validity ask:
-  [Docs/NEXT_SESSION_BUILD_KICKOFF_2026-06-15.md](Docs/NEXT_SESSION_BUILD_KICKOFF_2026-06-15.md#L45-L67)
+  [Docs/NEXT_SESSION_BUILD_KICKOFF_2026-06-15.md](archive/NEXT_SESSION_BUILD_KICKOFF_2026-06-15.md#L45-L67)
 - Sequencing (research -> 3.1a -> 3.1b -> 3.1c):
-  [Docs/NEXT_SESSION_BUILD_KICKOFF_2026-06-17.md](Docs/NEXT_SESSION_BUILD_KICKOFF_2026-06-17.md#L54)
+  [Docs/NEXT_SESSION_BUILD_KICKOFF_2026-06-17.md](archive/NEXT_SESSION_BUILD_KICKOFF_2026-06-17.md#L54)
 - Tag resolver (first-match):
   [resolve-workflow.ts](frontend/supabase/functions/_shared/resolve-workflow.ts#L37-L47)
 - One-workflow-per-tag partial unique index:
@@ -469,7 +469,7 @@ do it properly with sticky-by-lead and a clean comparison dashboard" conclusion
   [20260513150000_cadence_v2_day3_email_metrics.sql](frontend/supabase/migrations/20260513150000_cadence_v2_day3_email_metrics.sql)
 - AI copy generation (ephemeral, unstamped):
   [aiGenerateEngagementCopy.ts](trigger/_shared/aiGenerateEngagementCopy.ts)
-- Voice prompt report-only rule: [CLAUDE.md](CLAUDE.md) ("Voice Agent Prompts: Do Not Edit")
+- Voice prompt report-only rule: [CLAUDE.md](../CLAUDE.md) ("Voice Agent Prompts: Do Not Edit")
 
 ### Statistical method note (reproducible)
 Sample sizes use the two-proportion normal approximation at 80% power, two-sided alpha = 0.05:

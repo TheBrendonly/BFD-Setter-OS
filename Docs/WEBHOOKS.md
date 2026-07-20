@@ -4,11 +4,16 @@ description: Single source of truth for every webhook URL in BFD-setter — inbo
 
 # WEBHOOKS
 
-Catalogue of every HTTP endpoint involved in the BFD-setter platform.
+> **Partially re-verified 2026-07-20** (`Docs/AUDIT_2026-07-20.md`). The URL patterns, tenant-resolution
+> rules and §G GHL workflow setup were confirmed accurate. The auth column and §C were stale and have
+> been corrected. **This catalogue is still not exhaustive:** it covers the endpoints an operator has to
+> wire, not all 97 edge functions.
+
+Catalogue of the HTTP endpoints an operator must wire on the BFD-setter platform.
 
 - **Inbound** = external system calls one of our Supabase edge functions
 - **Outbound** = our edge function calls an external service
-- **Legacy** = currently still pointed at n8n; being migrated to native edge functions
+- **Legacy** = the decommissioned n8n path, kept for provenance
 
 All inbound URLs are on the bfd-platform Supabase project: `https://bjgrgbgykvjrsuwwruoh.supabase.co/functions/v1/<fn-name>`.
 
@@ -49,7 +54,8 @@ For client-specific examples below the BFD client id `e467dabc-57ee-416c-8831-83
 |---|---|---|---|---|
 | `voice-booking-tools` | [voice-booking-tools](../frontend/supabase/functions/voice-booking-tools/index.ts) | **5 tools** the voice agent calls mid-call to read/write the GHL calendar. Single edge function; routes by `?tool=<name>` query string. Tenant resolution by `&clientId=<uuid>`. | Retell → LLM → Functions → set URL on each of: `get-available-slots`, `book-appointments`, `get-contact-appointments`, `update-appointment`, `cancel-appointments` | `Authorization: Bearer <clients.intake_lead_secret>` header on each tool |
 | `retell-call-webhook` | [retell-call-webhook](../frontend/supabase/functions/retell-call-webhook/index.ts) | Receives `call_started`, `call_ended`, transcript events. Writes `call_history`. **Also (since `phase-night-bug1-call-outcome-coordination` 2026-05-13):** on `call_ended`, stamps `engagement_executions.last_call_outcome` keyed by `dynamicVars.execution_id` so `runEngagement.ts` can resume past `phone_call` channels with the disconnect outcome. Shape: `{ call_id, disconnect_reason, call_status, ended_at }`. | Retell → Agent → webhook config | Optional `clients.retell_webhook_secret` HMAC |
-| `retell-call-analysis-webhook` | [retell-call-analysis-webhook](../frontend/supabase/functions/retell-call-analysis-webhook/index.ts) | Receives `call_analyzed` (post-call summary, sentiment, appointment_booked). Writes `call_history` analysis fields **and** pushes a GHL Note + 2 custom fields if configured (per `phase-night-ghl-push-gap-1` 2026-05-02). | Retell → Agent → webhook (separate from call events, or same endpoint) | Optional `retell_webhook_secret` |
+| `retell-call-analysis-webhook` | [retell-call-analysis-webhook](../frontend/supabase/functions/retell-call-analysis-webhook/index.ts) | Receives `call_analyzed` (post-call summary, sentiment, appointment_booked). Writes `call_history` analysis fields **and** pushes a GHL Note + 2 custom fields if configured (per `phase-night-ghl-push-gap-1` 2026-05-02). | Retell → Agent → webhook (separate from call events, or same endpoint) | `retell_webhook_secret`, verify-if-present (`index.ts:209`) |
+| `retell-inbound-webhook` | [retell-inbound-webhook](../frontend/supabase/functions/retell-inbound-webhook/index.ts) | **Added to this catalogue 2026-07-20 (was missing).** Inbound-call webhook: resolves the tenant and returns per-call dynamic variables to Retell at call start. | Retell → inbound number / agent webhook | `retell_webhook_secret`, verify-if-present (`index.ts:107`) |
 
 **BFD voice tool URLs (5):**
 ```
@@ -69,7 +75,7 @@ Header on each: `Authorization: Bearer <clients.intake_lead_secret>`.
 
 | Endpoint | Function | What it does | Where to wire it | Auth |
 |---|---|---|---|---|
-| `receive-dm-webhook` | [receive-dm-webhook](../frontend/supabase/functions/receive-dm-webhook/index.ts) | Receives inbound social DMs. Mirrors `receive-twilio-sms` shape (queue + execution + Trigger.dev fire). Tenant via `?client_id=` query string. | Unipile → Webhooks | Per-client `clients.unipile_webhook_secret` (HMAC). Currently optional. |
+| `receive-dm-webhook` | [receive-dm-webhook](../frontend/supabase/functions/receive-dm-webhook/index.ts) | Receives inbound social DMs. Mirrors `receive-twilio-sms` shape (queue + execution + Trigger.dev fire). Tenant via `?client_id=` query string. | Unipile → Webhooks | **FAILS CLOSED** since the 2026-06-24 hardening: a secret is required unless `DM_WEBHOOK_REQUIRE_SECRET` is explicitly set false (`receive-dm-webhook/auth.ts:9-14`). |
 | `unipile-webhook` | [unipile-webhook](../frontend/supabase/functions/unipile-webhook/index.ts) | Earlier path for Unipile events. Still deployed; check before pointing new accounts here vs `receive-dm-webhook`. | Unipile → Webhooks | Same |
 
 ### A.5 Stripe
@@ -118,14 +124,23 @@ We call these with API keys/PATs read from per-client `clients` row columns. Not
 
 ---
 
-## §C — Legacy / being decommissioned
+## §C — Legacy / decommissioned
+
+**Status as of 2026-07-20: the n8n path is DEAD in code.** Both migrations below completed. `processMessages`
+now throws rather than calling n8n (`trigger/processMessages.ts:112-113`), so `use_native_text_engine` is
+effectively mandatory, and the last in-repo n8n remnants were removed in the 2026-07-10 branding purge.
 
 | URL | Replaced by | Status |
 |---|---|---|
-| `https://n8n-1prompt.99players.com/webhook/<...>` (text engine) | Native `processSetterReply` in `processMessages.ts` | Phase 9 cutover for BFD shipped at `phase-9-bfd-native-cutover` (`319f2a8`). 14-day soak day 5/14 as of 2026-05-04. Phase 10 = delete the n8n branch + drop `clients.text_engine_webhook`. |
-| `https://n8n-1prompt.99players.com/webhook/e4cffeea-…` (voice tools) | `voice-booking-tools` edge function | A3 in progress 2026-05-04. |
+| `https://n8n-1prompt.99players.com/webhook/<...>` (text engine) | Native `processSetterReply` in `processMessages.ts` | **DONE.** Phase 9 cutover shipped at `phase-9-bfd-native-cutover` (`319f2a8`); Phase 10 removed the n8n branch. |
+| `https://n8n-1prompt.99players.com/webhook/e4cffeea-…` (voice tools) | `voice-booking-tools` edge function | **DONE** (A3). |
 
-After A3 + Phase 10, n8n hosts nothing for BFD and the Railway n8n service can be shut down.
+Two dead n8n URL literals still sit in code and are harmless but should not be mistaken for live wiring:
+`elevenlabs-manage-agent` (`n8n-1prompt.99players.com`) and `voice-booking-tools`
+(`primary-production-392b.up.railway.app`).
+
+Whether the **Railway n8n service** is still running is **UNVERIFIABLE FROM REPO**. Shutting it down is
+still listed as an open Brendan item in `Docs/SESSION_PLAN.md`.
 
 ---
 
@@ -167,16 +182,29 @@ https://bjgrgbgykvjrsuwwruoh.supabase.co/functions/v1/intake-lead?clientId={clie
 
 ## §E — Auth conventions
 
-| Method | Used by | Where the secret lives |
-|---|---|---|
-| `Authorization: Bearer <intake_lead_secret>` | `voice-booking-tools`, `intake-lead` | `clients.intake_lead_secret` (`encode(gen_random_bytes(24), 'base64')`) |
-| Twilio HMAC-SHA1 (X-Twilio-Signature header) | `receive-twilio-sms`, `twilio-status-webhook` | `clients.twilio_auth_token`. **Critical:** verify against the **public** URL, not `req.url` (memory `reference_supabase_deno_req_url`). |
-| GHL HMAC | `bookings-webhook`, `sync-ghl-contact`, optional on others | `clients.ghl_webhook_secret`. Currently best-effort, will be enforced in A6. |
-| Retell HMAC | `retell-call-webhook`, `retell-call-analysis-webhook` | `clients.retell_webhook_secret`. Currently optional. |
-| Stripe sig | `stripe-webhook` | env `STRIPE_WEBHOOK_SECRET` |
-| Token query string | `campaign-enroll-webhook`, `workflow-inbound-webhook` | DB-issued tokens per workflow / campaign |
+Verified against code 2026-07-20. The column that matters is **fail-closed vs verify-if-present**:
+"verify-if-present" means the endpoint accepts the request UNVERIFIED while the per-client secret is
+NULL, and is therefore forgeable until the secret is armed.
 
-**A6 (signature verification ON for GHL + Retell + Twilio + Unipile) is the LAST step of Phase A** — once the per-client secrets are populated, sig mismatches return 403 and silently kill inbound traffic. Get a known-good baseline first.
+| Method | Used by | Behaviour when secret is unset | Where the secret lives |
+|---|---|---|---|
+| `Authorization: Bearer <intake_lead_secret>` | `voice-booking-tools` (`index.ts:143`), `intake-lead` (`index.ts:313`) | **FAIL CLOSED** (401) | `clients.intake_lead_secret` (`encode(gen_random_bytes(24), 'base64')`) |
+| Twilio HMAC-SHA1 (X-Twilio-Signature) | `receive-twilio-sms` (`index.ts:487-501`), `twilio-status-webhook` (`index.ts:147`), `twilio-inbound-sms` | **FAIL CLOSED** (403) | `clients.twilio_auth_token`. **Critical:** verify against the **public** URL, not `req.url` (memory `reference_supabase_deno_req_url`). Note the helper is triplicated across the three functions rather than shared. |
+| Stripe sig | `stripe-webhook` (`index.ts:83-84`) | **FAIL CLOSED** (400, "refusing unverified webhook") | env `STRIPE_WEBHOOK_SECRET` |
+| Unipile static token | `receive-dm-webhook` (`auth.ts:9-14`) | **FAIL CLOSED** by default (override: `DM_WEBHOOK_REQUIRE_SECRET=false`) | `clients.unipile_webhook_secret` |
+| GHL HMAC-SHA256 **or** static `x-wh-token` | `bookings-webhook` (`index.ts:193`), `sync-ghl-contact` (`index.ts:352-354`), `ghl-tag-webhook` (`index.ts:403-405`), `workflow-inbound-webhook` (`index.ts:98-107`) | **verify-if-present** (forgeable while NULL) | `clients.ghl_webhook_secret`, auto-generated by `webhook-manifest` |
+| Retell HMAC-SHA256 (`X-Retell-Signature: v=ts,d=hex`) | `retell-call-webhook` (`index.ts:141`), `retell-call-analysis-webhook` (`index.ts:209`), `retell-inbound-webhook` (`index.ts:107`) | **verify-if-present** (forgeable while NULL) | `clients.retell_webhook_secret`. Deliberately NOT auto-generated (`webhook-manifest/index.ts:13`). |
+| Unipile static token | `unipile-webhook` (`index.ts:55-63`) | **verify-if-present**, and the scheme itself is **unconfirmed** | `clients.unipile_webhook_secret`. `_shared/verify-webhook.ts:76-86` says to confirm the exact header/value against Unipile's live config before arming it; leave NULL (inert) until then. |
+| Token query string / header | `campaign-enroll-webhook` (`index.ts:27`) | 400 when absent | DB-issued tokens per campaign |
+
+**Retell signature scheme** (`_shared/verify-webhook.ts:33-77`): parse `X-Retell-Signature: v={ts},d={hex}`,
+enforce a 5-minute replay window, compute `HMAC_SHA256(rawBody + ts, RETELL_API_KEY)`, constant-time compare.
+Note it is keyed by the **API key**, not by a separate signing secret (memory `project_webhook_sig_verify_scheme_bug`).
+
+**Arming the remaining secrets is a first-client gate,** tracked in `Docs/FIRST_CLIENT_TASKS.md`, not here.
+Once a per-client secret is populated, signature mismatches return 403 and will silently kill inbound
+traffic, so get a known-good baseline first. `webhook-manifest` is the registry that generates and persists
+`ghl_webhook_secret` + `intake_lead_secret` (`webhook-manifest/index.ts:68`).
 
 ---
 
@@ -230,4 +258,7 @@ Per-client `timezone` (`clients.timezone`, default `Australia/Sydney`) is read b
 
 ---
 
-**Last updated:** 2026-05-05 (A4 closed — bookings-webhook live, two-workflow GHL pattern documented, `clients.timezone` added)
+**Last updated:** 2026-07-20 (docs audit: §C n8n marked decommissioned, §E rewritten as fail-closed vs
+verify-if-present with code citations, `retell-inbound-webhook` added, `receive-dm-webhook` corrected to
+fail-closed). Previous update 2026-05-05 (A4 closed — bookings-webhook live, two-workflow GHL pattern
+documented, `clients.timezone` added).
