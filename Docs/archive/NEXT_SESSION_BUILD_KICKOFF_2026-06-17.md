@@ -2,6 +2,16 @@
 description: Next BFD-setter build-session kickoff (authored 2026-06-16 after the P0-P2 cluster shipped). Lead item = finish cutting GHL out of the outbound SMS send path so the leadconnectorhq webhook fields become removable. Plus the full filtered remaining backlog (Claude-buildable + gated) and the Brendan action/test list.
 ---
 
+> **ARCHIVED / HISTORICAL — NOT CURRENT STATE.**
+>
+> This document is kept for provenance only. It records what was true when it was written and is
+> **not maintained**. Do not treat any status, version number, or "next step" in it as current.
+>
+> For what is actually true now, start at [`Docs/README.md`](../README.md) and
+> [`Docs/SESSION_PLAN.md`](../SESSION_PLAN.md).
+
+---
+
 # Next Build Session Kickoff (2026-06-17)
 
 Prior session (2026-06-16, HEAD `5bf22e3`) shipped the full P0-P2 cluster (voice publish fix + booking collapse + doc-page UI + sig-verify rewrite + analytics recordings + probe is_system bypass + ChatAnalytics hang + credentials cleanup + inbound webhook manifest) and retired the n8n remnants (Simulation card + api_webhook_url mirror). Record: `Operations/handoffs/2026-06-16-p0-p2-cluster-build.md`. The P0 fix is VERIFIED live (Main Outbound agent v15 is now `is_published=true`, phone repinned).

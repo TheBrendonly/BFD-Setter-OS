@@ -2,6 +2,16 @@
 description: 2026-06-14 token-efficient functionally-identical rewrites of BFD 5 live Retell voice agents (Main Outbound + 4 Garys), produced read-only by a multi-agent run + adversarial verify. Brendan pastes each into the named BFD setter card; Claude does NOT apply. Each section has new main prompt, new Booking Instructions, greeting, tool/model report, metrics, verify verdict.
 ---
 
+> **ARCHIVED / HISTORICAL — NOT CURRENT STATE.**
+>
+> This document is kept for provenance only. It records what was true when it was written and is
+> **not maintained**. Do not treat any status, version number, or "next step" in it as current.
+>
+> For what is actually true now, start at [`Docs/README.md`](../README.md) and
+> [`Docs/SESSION_PLAN.md`](../SESSION_PLAN.md).
+
+---
+
 # Voice Agent Prompt Rewrites (2026-06-14)
 
 For each agent: paste NEW MAIN PROMPT into the BFD setter main/doc editor, NEW BOOKING INSTRUCTIONS into Agent Settings -> Booking Instructions, set begin_message + begin_message_delay_ms, then Save/Push. Bar = ZERO functional change. After pushing, send Claude the call_id(s) for read-only latency + version-repoint verification.

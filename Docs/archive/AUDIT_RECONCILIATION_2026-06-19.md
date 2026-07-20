@@ -1,3 +1,12 @@
+> **ARCHIVED / HISTORICAL — NOT CURRENT STATE.**
+>
+> This document is kept for provenance only. It records what was true when it was written and is
+> **not maintained**. Do not treat any status, version number, or "next step" in it as current.
+>
+> For what is actually true now, start at [`Docs/README.md`](../README.md) and
+> [`Docs/SESSION_PLAN.md`](../SESSION_PLAN.md).
+
+---
 # Audit Reconciliation — 2026-06-10 Full-System Audit vs Current Code (2026-06-19)
 
 Walks every confirmed finding in `Docs/AUDIT_2026-06-10_full-system-audit.md` (62 findings) against the **current** code at HEAD `d4c5626` (≈90 commits ahead of the audit), its migrations, and the **live** platform DB (`bjgrgbgykvjrsuwwruoh`). Each finding gets a verdict + the citation that proves it. Genuinely-open items were promoted into `Docs/BUG_LIST.md` (the "Audit-sourced" section).

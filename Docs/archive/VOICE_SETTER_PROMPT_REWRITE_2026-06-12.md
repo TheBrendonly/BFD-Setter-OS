@@ -1,3 +1,12 @@
+> **ARCHIVED / HISTORICAL — NOT CURRENT STATE.**
+>
+> This document is kept for provenance only. It records what was true when it was written and is
+> **not maintained**. Do not treat any status, version number, or "next step" in it as current.
+>
+> For what is actually true now, start at [`Docs/README.md`](../README.md) and
+> [`Docs/SESSION_PLAN.md`](../SESSION_PLAN.md).
+
+---
 # Voice-Setter Prompt Rewrite — latency fix (2026-06-12)
 
 **Status:** Rewrite complete, ready for Brendan to apply in the UI. No Retell writes made by Claude (report-only per the no-prompt-edits rule). Verify via `get-call` after applying.

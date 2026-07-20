@@ -2,6 +2,16 @@
 description: Next BFD-setter build-session kickoff prompt (authored 2026-06-15 action-walker). Critical voice-publish fix + voice UI/architecture collapse + credentials cleanup & auto-surfacing webhook manifest + analytics/probe fixes + standing backlog. Paste the PROMPT block into the build session.
 ---
 
+> **ARCHIVED / HISTORICAL — NOT CURRENT STATE.**
+>
+> This document is kept for provenance only. It records what was true when it was written and is
+> **not maintained**. Do not treat any status, version number, or "next step" in it as current.
+>
+> For what is actually true now, start at [`Docs/README.md`](../README.md) and
+> [`Docs/SESSION_PLAN.md`](../SESSION_PLAN.md).
+
+---
+
 # Next Build Session Kickoff (2026-06-16)
 
 ## PROMPT (paste from here)

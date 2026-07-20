@@ -2,6 +2,16 @@
 description: Durable "walk me through my tasks one at a time" prompt for Brendan after the 2026-06-15 build. Paste the PROMPT block into a Claude Code session; the agent then presents each action item in order with exact steps and waits for confirmation. Self-contained task list embedded so it survives handoff-doc churn.
 ---
 
+> **ARCHIVED / HISTORICAL — NOT CURRENT STATE.**
+>
+> This document is kept for provenance only. It records what was true when it was written and is
+> **not maintained**. Do not treat any status, version number, or "next step" in it as current.
+>
+> For what is actually true now, start at [`Docs/README.md`](../README.md) and
+> [`Docs/SESSION_PLAN.md`](../SESSION_PLAN.md).
+
+---
+
 # Brendan Action Walker
 
 Paste the block below into a Claude Code session at `/srv/bfd/Projects/bfd-setter`. It makes the agent hand you your outstanding actions one at a time, in order, with exact steps, waiting for you between each.

@@ -1,3 +1,12 @@
+> **ARCHIVED / HISTORICAL — NOT CURRENT STATE.**
+>
+> This document is kept for provenance only. It records what was true when it was written and is
+> **not maintained**. Do not treat any status, version number, or "next step" in it as current.
+>
+> For what is actually true now, start at [`Docs/README.md`](../README.md) and
+> [`Docs/SESSION_PLAN.md`](../SESSION_PLAN.md).
+
+---
 # BFD-setter — Master Rebuild Plan
 
 > Mirror of `C:\Users\brend\.claude\plans\resuming-1prompt-os-work-read-reactive-puffin.md`. The plan file is the canonical source; this is the in-repo copy so a fresh session sees it via the codebase.

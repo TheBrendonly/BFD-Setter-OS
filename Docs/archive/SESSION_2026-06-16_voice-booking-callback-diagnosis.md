@@ -2,6 +2,16 @@
 description: Deep-dive diagnosis + fixes for two issues on live call call_c74254fa21bf2f68fc435e44ddb — invented booking slots (prompt-flow, backend healthy) and the first-ever AI callback (will fire; double-dial hole closed).
 ---
 
+> **ARCHIVED / HISTORICAL — NOT CURRENT STATE.**
+>
+> This document is kept for provenance only. It records what was true when it was written and is
+> **not maintained**. Do not treat any status, version number, or "next step" in it as current.
+>
+> For what is actually true now, start at [`Docs/README.md`](../README.md) and
+> [`Docs/SESSION_PLAN.md`](../SESSION_PLAN.md).
+
+---
+
 # Voice booking + callback deep-dive — 2026-06-16
 
 Call under test: `call_c74254fa21bf2f68fc435e44ddb` (Main Outbound `agent_f45f4dd87a4072424f3c84b74c`

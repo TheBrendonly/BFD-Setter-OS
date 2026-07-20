@@ -2,6 +2,16 @@
 description: Inventory of every event the BFD-setter platform pushes to GoHighLevel today, what is NOT pushed (gap list), and recommended fixes ranked by leverage. Reference doc — keep current as new push paths land.
 ---
 
+> **ARCHIVED / HISTORICAL — NOT CURRENT STATE.**
+>
+> This document is kept for provenance only. It records what was true when it was written and is
+> **not maintained**. Do not treat any status, version number, or "next step" in it as current.
+>
+> For what is actually true now, start at [`Docs/README.md`](../README.md) and
+> [`Docs/SESSION_PLAN.md`](../SESSION_PLAN.md).
+
+---
+
 # GHL Push Audit — what BFD-setter mirrors back to GoHighLevel
 
 **Last updated:** 2026-05-02 (gaps 1, 2+3 closed — voice call summary + SMS bodies now mirrored)

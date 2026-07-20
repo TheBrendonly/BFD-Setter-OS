@@ -2,6 +2,16 @@
 description: Durable kickoff prompt for the NEXT BFD-setter build session (authored 2026-06-15, post comprehensive build). Paste the PROMPT block to start. Includes the gated/ungated build backlog AND a standalone A/B-testing RESEARCH brief. Kept in Docs/ (not handoffs) so it is not regenerated/overwritten.
 ---
 
+> **ARCHIVED / HISTORICAL — NOT CURRENT STATE.**
+>
+> This document is kept for provenance only. It records what was true when it was written and is
+> **not maintained**. Do not treat any status, version number, or "next step" in it as current.
+>
+> For what is actually true now, start at [`Docs/README.md`](../README.md) and
+> [`Docs/SESSION_PLAN.md`](../SESSION_PLAN.md).
+
+---
+
 # Next Session Build Kickoff (2026-06-15)
 
 Paste the block below to start the next build session at `/srv/bfd/Projects/bfd-setter`. This doc lives in `Docs/` on purpose so it survives handoff regeneration.

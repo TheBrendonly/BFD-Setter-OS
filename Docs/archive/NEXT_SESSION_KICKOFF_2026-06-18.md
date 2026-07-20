@@ -2,6 +2,16 @@
 description: Single copy-paste kickoff prompt for the 2026-06-18 BFD-setter session. Ties together the 2026-06-17 full-live-run-through leftovers + the Create-New-Setter E2E verification + the P3a post-ship repoints/tests into ONE live session (Brendan drives UI clicks + live calls; Claude verifies read-only). Booking timezone root cause already fixed (eb53690 / voice-booking-tools v17) so booking is now a RE-TEST. Claude-side code fixes are a separate backlog at the bottom.
 ---
 
+> **ARCHIVED / HISTORICAL — NOT CURRENT STATE.**
+>
+> This document is kept for provenance only. It records what was true when it was written and is
+> **not maintained**. Do not treat any status, version number, or "next step" in it as current.
+>
+> For what is actually true now, start at [`Docs/README.md`](../README.md) and
+> [`Docs/SESSION_PLAN.md`](../SESSION_PLAN.md).
+
+---
+
 # BFD-Setter — Next Session Kickoff (2026-06-18)
 
 Paste the block below into a fresh session. It is a LIVE verification session: Brendan does the UI

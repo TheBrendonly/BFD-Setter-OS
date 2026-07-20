@@ -2,6 +2,16 @@
 description: Copy-paste build prompt for a focused session to fix the voice-booking "agent invents slots for unavailable days" failure (diagnosed 2026-06-17 during the live run-through). Backend is healthy; the agent fabricates times for days with no GHL availability and book-appointments correctly rejects them in a loop. Two fixes - a prompt hardening (Brendan applies via UI) and a server-side guard in voice-booking-tools.
 ---
 
+> **ARCHIVED / HISTORICAL — NOT CURRENT STATE.**
+>
+> This document is kept for provenance only. It records what was true when it was written and is
+> **not maintained**. Do not treat any status, version number, or "next step" in it as current.
+>
+> For what is actually true now, start at [`Docs/README.md`](../README.md) and
+> [`Docs/SESSION_PLAN.md`](../SESSION_PLAN.md).
+
+---
+
 # Voice Booking Fix - "agent invents slots for unavailable days"
 
 > **SUPERSEDED 2026-06-17 (mostly).** A parallel session shipped `eb53690` (voice-booking-tools

@@ -2,6 +2,16 @@
 description: Session closeout (2026-06-16, HEAD 5bf22e3 → cd66282 docs). Single source of truth for what's left after the P0-P2 cluster build, split into (1) missed things, (2) Brendan's tasks, (3) build tasks. Plus copy-paste kickoff prompts for each phase, executed in order: missed → my tasks → build sessions (full run-through test is the very last thing).
 ---
 
+> **ARCHIVED / HISTORICAL — NOT CURRENT STATE.**
+>
+> This document is kept for provenance only. It records what was true when it was written and is
+> **not maintained**. Do not treat any status, version number, or "next step" in it as current.
+>
+> For what is actually true now, start at [`Docs/README.md`](../README.md) and
+> [`Docs/SESSION_PLAN.md`](../SESSION_PLAN.md).
+
+---
+
 # BFD-Setter — Session Closeout + Next Prompts (2026-06-16)
 
 **State:** HEAD `cd66282` on `main` (Forgejo + GitHub). The P0-P2 cluster shipped, deployed, verified live (full record: `Operations/handoffs/2026-06-16-p0-p2-cluster-build.md`; next-build detail: `Docs/NEXT_SESSION_BUILD_KICKOFF_2026-06-17.md`). The P0 voice-publish fix is confirmed live (Main Outbound agent v15 `is_published=true`, phone repinned).

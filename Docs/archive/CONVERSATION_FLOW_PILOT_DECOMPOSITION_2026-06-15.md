@@ -2,6 +2,16 @@
 description: 2026-06-15 rigid Conversation Flow pilot decomposition for the BFD voice setter (Voice-Setter-Test / "Main Outbound"). Report-only design doc — Brendan builds the agent's node graph in the Retell dashboard; Claude built the engine + this map. Rigid mode only, never Flex.
 ---
 
+> **ARCHIVED / HISTORICAL — NOT CURRENT STATE.**
+>
+> This document is kept for provenance only. It records what was true when it was written and is
+> **not maintained**. Do not treat any status, version number, or "next step" in it as current.
+>
+> For what is actually true now, start at [`Docs/README.md`](../README.md) and
+> [`Docs/SESSION_PLAN.md`](../SESSION_PLAN.md).
+
+---
+
 # Conversation Flow Pilot — Decomposition (2026-06-15)
 
 Companion to `Docs/RETELL_CONVERSATION_FLOW_EVALUATION_2026-06-11.md` (verdict: CONDITIONAL GO, rigid only). The CF engine in the platform is now built (Stage D): a "Convert to Conversation Flow" action on the voice doc page seeds a rigid 5-node template, and Push to Retell creates + round-trips the flow. This doc is the build map for the **one pilot agent**.

@@ -2,6 +2,16 @@
 description: Session close-out (2026-06-16, late) — booking/callback fixes shipped, prompt-size research, Main Outbound V2 draft + stood up, and a NEW BUG (Create-New-Setter skips the setup wizard so new setters get no booking tools). Includes a copy-paste build prompt for next session.
 ---
 
+> **ARCHIVED / HISTORICAL — NOT CURRENT STATE.**
+>
+> This document is kept for provenance only. It records what was true when it was written and is
+> **not maintained**. Do not treat any status, version number, or "next step" in it as current.
+>
+> For what is actually true now, start at [`Docs/README.md`](../README.md) and
+> [`Docs/SESSION_PLAN.md`](../SESSION_PLAN.md).
+
+---
+
 # Session close-out — 2026-06-16 (voice booking/callback + V2 + wizard-skip bug)
 
 ## What shipped this session (live in prod, verified)

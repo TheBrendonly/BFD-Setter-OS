@@ -1,3 +1,12 @@
+> **ARCHIVED / HISTORICAL — NOT CURRENT STATE.**
+>
+> This document is kept for provenance only. It records what was true when it was written and is
+> **not maintained**. Do not treat any status, version number, or "next step" in it as current.
+>
+> For what is actually true now, start at [`Docs/README.md`](../README.md) and
+> [`Docs/SESSION_PLAN.md`](../SESSION_PLAN.md).
+
+---
 # BFD-setter — Full System + Security Audit (2026-06-10)
 
 Method: 9 specialist auditors (security/IDOR, webhook-ingress, secrets-exposure, cadence-correctness, edge-correctness, data-schema, reliability, dependencies, features) fanned out across the whole codebase, then every finding adversarially verified by an independent agent. **80 raised → 62 confirmed real, 18 rejected** as false-positive or already-known.

@@ -2,6 +2,16 @@
 description: Draft "Main Outbound V2" voice prompt (report-only) — folds the Eddie/Steven structure (consent beat, path triage + goal hierarchy, booking-failure ladder, post-booking prep questions, TTS guide, rapport framing) into BFD's proven V1 (Gary persona, 3 must-haves, a-e slot logic, single pre-loaded-availability ref). Brendan stands it up via the BFD setter UI.
 ---
 
+> **ARCHIVED / HISTORICAL — NOT CURRENT STATE.**
+>
+> This document is kept for provenance only. It records what was true when it was written and is
+> **not maintained**. Do not treat any status, version number, or "next step" in it as current.
+>
+> For what is actually true now, start at [`Docs/README.md`](../README.md) and
+> [`Docs/SESSION_PLAN.md`](../SESSION_PLAN.md).
+
+---
+
 # Main Outbound V2 — draft prompt (report-only)
 
 **Status:** DRAFT for Brendan to apply. Per the no-prompt-edits rule, Claude did NOT push this to Retell.

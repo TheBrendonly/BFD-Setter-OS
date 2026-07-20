@@ -1,10 +1,14 @@
-> **ARCHIVED / HISTORICAL — NOT CURRENT STATE.**
+> **ARCHIVED 2026-07-20 — DO NOT USE AS CURRENT.**
 >
-> This document is kept for provenance only. It records what was true when it was written and is
-> **not maintained**. Do not treat any status, version number, or "next step" in it as current.
+> This file was deliberately deleted from the repo in commit `d6a4692 (docs(Session 0): make doc set coherent against locked decisions)`, then
+> reappeared in the working tree as an untracked file when `Projects/` was put under full
+> Syncthing sync on 2026-07-17. Its content is a pre-deletion snapshot (mtime 2026-06-05) and
+> is **older than the canonical version**.
 >
-> For what is actually true now, start at [`Docs/README.md`](../README.md) and
-> [`Docs/SESSION_PLAN.md`](../SESSION_PLAN.md).
+> **Superseded by:** `Docs/archive/WORKING_PROMPTS.md (identical copy already archived)`
+>
+> Archived by the 2026-07-20 documentation audit (`Docs/AUDIT_2026-07-20.md`) so it can no
+> longer shadow the canonical doc in searches. Kept for reference only.
 
 ---
 # Working Prompts (paste at session start)
@@ -41,7 +45,7 @@ Pull EVERYTHING that requires ME (Brendan) — the human-only actions you can't 
 
 Scan:
 - Docs/ROADMAP.md "Brendan-only list" + every [YOU] marker.
-- The newest Operations/handoffs/ doc (its "Brendan to-do" section), and SOP/GHL_SETUP.md, SOP/PERSONA_SETUP.md, Docs/FORM_ROUTING.md.
+- The newest Operations/handoffs/ doc (its "Brendan to-do" section), and Docs/GHL_SETUP.md, Docs/PERSONA_SETUP.md, Docs/FORM_ROUTING.md.
 - Memory feedback notes (provisioning rules, phone-collision rule, no-prompt-edits rule, env-var audits, test-phone permission).
 - Current blockers on me: GHL forms/automations/tags wiring; Retell/Twilio agent + number provisioning; prompt/persona content (Duplicate + "Modify with AI"); activating cadences (e.g. the Try-Gary persona campaigns are cloned + INACTIVE with TODO voice sentinels); phone / ghl_location_id collision remediation; Railway + Trigger.dev env vars; end-to-end tests.
 
