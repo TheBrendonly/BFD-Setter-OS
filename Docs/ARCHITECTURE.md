@@ -115,7 +115,7 @@ sequenceDiagram
   RcvSMS->>Plat: cancel active engagement_executions (status=running/waiting)
   RcvSMS->>Trigger: cancel cadence run
   RcvSMS->>Trigger: trigger processMessages (debounce window)
-  ProcMsg->>ProcMsg: wait debounce (60s default)
+  ProcMsg->>ProcMsg: wait debounce (clients.debounce_seconds, default 30s)
   ProcMsg->>Setter: triggerAndWait (if use_native_text_engine)
   Setter->>OpenRouter: chat completion
   OpenRouter-->>Setter: response

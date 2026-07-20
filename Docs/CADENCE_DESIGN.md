@@ -38,7 +38,9 @@ type EngagementNode =
   | { id: string; type: "drip"; batch_size: number; interval_seconds: number };
 
 type EngageChannel = {
-  type: "sms" | "whatsapp" | "phone_call";
+  // CORRECTED 2026-07-20: the runtime also accepts "email" (Cadence v2), which this
+  // block omitted. See trigger/runEngagement.ts:33 and the Cadence v2 note below.
+  type: "sms" | "whatsapp" | "phone_call" | "email";
   enabled: boolean;
   message: string;
   delay_seconds: number;
@@ -259,3 +261,39 @@ Voicemail handling for v2's phone_call nodes (n3, n9, n17) is intentionally NOT 
 - Keep first-touch SMS under 160 chars (1 SMS segment, faster delivery).
 - Use `{{first_name}}` not `{{full_name}}`.
 - Sign-offs: `— [agent first name]` is fine; no full company sigs (looks autoreply).
+
+---
+
+## Cadence v2 additions (documented 2026-07-20, previously undocumented)
+
+Two capabilities shipped into `runEngagement.ts` on `main` without being written up here. Both are
+**built and reachable**, and both default to OFF.
+
+### Email channel
+
+`EngageChannel.type` accepts `"email"` (`trigger/runEngagement.ts:33`). It is authored in the
+Engagement editor (`frontend/src/pages/Engagement.tsx:685`, seeded `enabled: false` at `:230`) with
+`subject`, `body_format` (`"html"` default) and an optional `from_email` override.
+
+Sending goes through **GHL's Conversations API, not an email provider**
+(`trigger/runEngagement.ts:1347-1397`). If the GHL location has no email infrastructure configured it
+**falls back to writing a GHL Note** rather than failing. A missing `ghl_api_key`/`ghl_location_id` or a
+missing subject throws. On success it increments `metricsBuffer.emails_sent`, logs a `message_sent`
+campaign event with `channel: "email"`, and mirrors into chat history. Post-send writes are non-fatal.
+
+This does **not** contradict the "BFD is SMS-only, email provider deferred" decision: no SMTP or email
+provider is wired anywhere, and this channel is off by default. It reuses the GHL connection BFD
+already has.
+
+### AI-generated copy
+
+When `ch.ai_generate` is true and the channel is `sms` or `email`, the runtime calls
+`aiGenerateEngagementCopy` with `ai_prompt` as the touch intent and uses the LLM output as the message
+(and the subject, for email). See `trigger/runEngagement.ts:1186-1206`.
+
+### Known type drift
+
+`frontend/src/lib/engagementExecutionState.ts:1` still declares
+`EngageChannelType = 'sms' | 'whatsapp' | 'phone_call'`, omitting `email`. `Engagement.tsx` carries its
+own wider local type, so the UI works, but the mismatch produces 2 of the 21 pre-existing typecheck
+errors. Harmless at runtime; fix when regenerating types.
