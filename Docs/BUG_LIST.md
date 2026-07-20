@@ -29,7 +29,30 @@ reconciliation + archive sweep 2026-07-11 (this file trimmed to genuinely-open i
 > booking-side half is staged (below). **SCHED-1(a)** (declarative cron auto-register) appeared RESOLVED on this
 > deploy — all 7 schedules registered; monitor after the next Trigger deploy.
 
-_(No non-frozen open code bugs. New non-frozen bugs get filed here as usual.)_
+- [ ] **REACT-NORMPHONE-1 — `reactivate-lead-list` writes `leads` rows with a NULL `normalized_phone`.** Found
+  2026-07-20 while tracing flows for `PROJECT_OVERVIEW.md`. Every other lead-write path goes through
+  `_shared/lead-insert.ts:29`, which stamps `normalized_phone = normalizePhone(phone)`.
+  `reactivate-lead-list/index.ts:63-74` hand-rolls its own upsert (`client_id, lead_id, first_name,
+  last_name, phone, email`) and does not import `buildLeadInsert` or `normalizePhone`, so leads created
+  **only** by the reactivation/CSV list path have `normalized_phone` NULL.
+
+  **Verified blast radius, and it is narrower than it first looks.** The primary opt-out gate is NOT
+  affected: `trigger/_shared/optout.ts:1-16` queries `lead_optouts` by `(client_id, phone)` using the phone
+  normalized from the runtime payload, not `leads.normalized_phone`, and it fails closed. So a reactivated
+  lead who texts STOP is still blocked from further sends. What actually degrades:
+  1. **`stop-bot-webhook` fan-out misses these rows.** `stop-bot-webhook/index.ts:122-126` sets
+     `setter_stopped` on all leads matching `(client_id, normalized_phone)`; a NULL never matches. The
+     `lead_optouts` upsert in the same handler still fires, so `isCancelled()` still catches the lead via its
+     third check (`runEngagement.ts:300-315`). This is lost defence-in-depth, not a lost opt-out.
+  2. **By-phone lead resolution misses these rows.** `_shared/leadResolve.ts:11` matches only on
+     `normalized_phone`, so the B-2 by-phone inbound path cannot find them and will mint a duplicate
+     `bfd-<normalized_phone>` lead instead of matching the existing one.
+
+  **Severity: Medium (data integrity + duplicate leads), NOT a compliance breach.** An earlier automated
+  pass characterised this as "a real, live opt-out hole"; that is wrong and should not be repeated.
+  **Fix:** route the upsert through `buildLeadInsert` like every other ingress. Backfill existing rows with
+  `UPDATE leads SET normalized_phone = ... WHERE normalized_phone IS NULL`. Note
+  `scripts/phone_uniqueness_audit_and_fix.sql` already exists for the audit half.
 
 ## Frozen baseline bundle — DEPLOYED 2026-07-13 (supervised window; Brendan authorized autonomous deploy)
 

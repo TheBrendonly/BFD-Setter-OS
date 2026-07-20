@@ -115,7 +115,7 @@ sequenceDiagram
   RcvSMS->>Plat: cancel active engagement_executions (status=running/waiting)
   RcvSMS->>Trigger: cancel cadence run
   RcvSMS->>Trigger: trigger processMessages (debounce window)
-  ProcMsg->>ProcMsg: wait debounce (clients.debounce_seconds, default 30s)
+  ProcMsg->>ProcMsg: wait debounce (resolved by the edge fn, default 60s)
   ProcMsg->>Setter: triggerAndWait (if use_native_text_engine)
   Setter->>OpenRouter: chat completion
   OpenRouter-->>Setter: response
@@ -258,5 +258,6 @@ These supersede any older detail in the diagrams above where they conflict:
 - **Inbound voice is a SEPARATE agent.** `+61481614530` inbound is bound to `agent_b2f6495` ("Inbound BFD Agent", neutral greeting); outbound is `agent_f45f4dd` ("Main Outbound", `{{first_name}}` opener). Always read the **phone-number binding** (`list-phone-numbers` `inbound_agent_id`/`outbound_agent_id`) to know which agent serves a direction — never trust a hardwired number on an agent.
 - **Outbound SMS is Twilio-direct.** As of 2026-06-17 every outbound message is sent DIRECT via Twilio; GHL is cut out of the send path (GHL is only mirrored). The component map's SMS branch is correct; the multi-channel (WhatsApp/DM) scaffolding is intentionally preserved but un-surfaced. See `Docs/ROADMAP.md` "inbound multi-channel" + memory `project_ghl_is_the_outbound_send_channel`.
 - **Voicemail is Retell-native**, not the old Twilio `<Play>` TwiML path (removed in phase-11d). See `Docs/CADENCE_DESIGN.md` → "Voicemail (Retell-native)".
+- **SMS debounce precedence** (verified 2026-07-20). `receive-twilio-sms` resolves the window and always passes it explicitly: `agent_settings.response_delay_seconds` for `(client_id, "Setter-1")` → `clients.debounce_seconds` → hard default **60s** (`receive-twilio-sms/index.ts:860-878`, default at `:862`). `processMessages.ts:156` carries its own `?? 30` fallback, but it is unreachable from the SMS path because the edge function never omits the value. Quote 60s, not 30s, as the effective default.
 - **Multi-DB.** The frontend reads the platform DB *and* per-client external DBs, so `types.ts` is never wholesale-regenerated (surgical adds only).
 - **`clients_public` view.** Browser reads of non-secret `clients` columns go through the `clients_public` view (security_invoker; omits 13 secret columns, exposes `has_<col>` booleans). Secret *values* still read by some browser flows are tracked as `BUG_LIST` G3-6. See memory `project_clients_public_view_b5_s1_1_2026_06_24`.

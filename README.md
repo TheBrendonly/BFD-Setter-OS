@@ -1,6 +1,11 @@
 # BFD-setter — Building Flow's AI Appointment Setter
 
-BFD-setter is Building Flow Digital's internal codebase for the **Building Flow** AI appointment-setter platform — an AI receptionist (Gary) that handles inbound lead conversations on behalf of businesses across SMS, Instagram DMs, and Facebook messages, using GoHighLevel, Supabase, and Trigger.dev.
+BFD-setter is Building Flow Digital's internal codebase for the **Building Flow** AI appointment-setter platform — an AI setter (Gary) that works inbound leads over **SMS and AI voice calls** and books them into the client's calendar, using GoHighLevel, Supabase, Retell and Trigger.dev.
+
+> **Channel scope, as built:** BFD is **SMS + voice only** today. Outbound email and outbound social DM
+> are **not live**, and the cadence engine hard-fails non-SMS outbound on purpose. Inbound DM and
+> WhatsApp plumbing exists (`receive-dm-webhook`) but is a roadmap item, not a shipped capability.
+> Do not promise email or DM to a client. Source: [`SOP/CLIENT_ONBOARDING_SOP.md`](./SOP/CLIENT_ONBOARDING_SOP.md) §"Channel scope".
 
 > Forked from an upstream OSS project on 2026-04-14 (see git history for lineage). BFD maintains a divergent fork; all upstream branding was removed in the 2026-07-10 branding purge.
 
@@ -19,7 +24,7 @@ This is the complete platform source code: the React dashboard, all 97 Supabase 
 Four services. All must be connected and configured for the system to work.
 
 ```
-Lead sends message (SMS / Instagram / Facebook)
+Lead sends message (SMS today; Instagram / Facebook plumbed but not live)
         ↓
 GoHighLevel fires webhook
         ↓
