@@ -67,7 +67,8 @@ Auto-deploys on push to `main`. To redeploy without code change: hit the **Redep
 ### One phase back (preferred)
 ```bash
 git revert phase-N..HEAD             # creates a revert commit
-git push origin main                  # triggers Railway redeploy
+git push origin main                  # Forgejo (Tailscale-only). Does NOT deploy anything.
+git push github main                  # THIS is what triggers the Railway redeploy
 # Redeploy affected edge fns + Trigger.dev tasks per CHANGES_LOG.md "files changed" list
 ```
 
@@ -352,4 +353,9 @@ Local `.env` template at `.env.example`. Required for autonomous sessions:
 - `BFD_CLIENT_ID` — for SQL filters during scripts
 - `TRIGGER_DEPLOY_PAT` — for `npx trigger.dev deploy`
 
-Pre-commit hook (`.git/hooks/pre-commit`) runs `scripts/check-secrets.mjs` to block accidental re-leakage. NEVER inline secrets in committed code.
+> **CORRECTED 2026-07-20: there is NO pre-commit hook, and this line previously claimed there was.**
+> `scripts/check-secrets.mjs` exists and works, but nothing invokes it automatically. Verified:
+> `git config core.hooksPath` is unset, and `.git/hooks/` contains only `post-commit` and
+> `post-checkout`, both installed by graphify. CI does not run it either. **Secret scanning is
+> currently manual: run `node scripts/check-secrets.mjs` yourself before committing**, or install it
+> as a real hook. NEVER inline secrets in committed code.

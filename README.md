@@ -2,6 +2,13 @@
 
 BFD-setter is Building Flow Digital's internal codebase for the **Building Flow** AI appointment-setter platform — an AI setter (Gary) that works inbound leads over **SMS and AI voice calls** and books them into the client's calendar, using GoHighLevel, Supabase, Retell and Trigger.dev.
 
+> ## → Start at [`PROJECT_OVERVIEW.md`](./PROJECT_OVERVIEW.md)
+>
+> That is the **canonical document for this project**: what it is, how it is built, how it functions end
+> to end with file-level traces, why it was built this way, and its honest current state. This README is
+> a short orientation; the overview is the real thing. A new developer or a fresh AI session should read
+> it first.
+
 > **Channel scope, as built:** BFD is **SMS + voice only** today. Outbound email and outbound social DM
 > are **not live**, and the cadence engine hard-fails non-SMS outbound on purpose. Inbound DM and
 > WhatsApp plumbing exists (`receive-dm-webhook`) but is a roadmap item, not a shipped capability.
@@ -52,7 +59,7 @@ Dashboard  (frontend/src/)
 
 **Deployment topology** (hosts that run BFD-setter in production):
 
-- **Frontend dashboard** → Railway production service (renamed from the legacy upstream name 2026-07-10; auto-deploys on `git push origin main`)
+- **Frontend dashboard** → Railway production service (renamed from the legacy upstream name 2026-07-10). **Auto-deploys on `git push github main`, NOT `origin`.** `origin` is Forgejo on Tailscale and deploys nothing; Railway is wired to the GitHub mirror.
 - **Edge functions + platform Postgres** → Supabase (`bjgrgbgykvjrsuwwruoh`)
 - **Background tasks** → Trigger.dev cloud (`proj_fdozaybvhgxnzopabtse`)
 

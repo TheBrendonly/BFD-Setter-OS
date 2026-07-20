@@ -1,6 +1,12 @@
 # BFD-Setter Documentation
 
-Start here. The docs are a small, maintained set; everything historical lives in `archive/` (kept for reference, not maintained). Every file in `archive/` carries an ARCHIVED banner as of 2026-07-20.
+> ## → The canonical project document is [`/PROJECT_OVERVIEW.md`](../PROJECT_OVERVIEW.md)
+>
+> Read that first. It explains the whole system in one file: what it is, the architecture, the data model,
+> every end-to-end flow traced to real files, the reasoning behind the significant decisions, how to run
+> and deploy it, and its honest current state. Everything below is the supporting doc set.
+
+Then continue here. The docs are a small, maintained set; everything historical lives in `archive/` (kept for reference, not maintained). Every file in `archive/` carries an ARCHIVED banner as of 2026-07-20.
 
 > **Index verified complete 2026-07-20** (`AUDIT_2026-07-20.md`). Every tracked doc under `Docs/` is
 > listed on this page, and every link on this page resolves.
