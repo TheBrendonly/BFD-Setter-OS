@@ -40,6 +40,14 @@ import {
 } from "./_shared/businessHours";
 import { isVoiceCallActive } from "./_shared/voiceCallActive";
 
+// SEC-PII-LOGS-1 — keep raw prospect phones out of platform logs.
+const redactPhone = (p: string | null | undefined): string => {
+  if (!p) return "<no-phone>";
+  const s = String(p);
+  if (s.length <= 6) return s.slice(0, 2) + "***";
+  return s.slice(0, 4) + "***" + s.slice(-3);
+};
+
 const getMainSupabase = () =>
   createClient(
     process.env.SUPABASE_URL!,
@@ -245,7 +253,7 @@ export const nudgeColdReply = schedules.task({
       if (normalizedNudgePhone) {
         const nudgePhoneOptedOut = await isPhoneOptedOut(supabase, lead.client_id!, normalizedNudgePhone);
         if (nudgePhoneOptedOut) {
-          console.log(`nudgeColdReply: phone ${normalizedNudgePhone} is in lead_optouts for lead ${lead.lead_id}, skipping.`);
+          console.log(`nudgeColdReply: phone ${redactPhone(normalizedNudgePhone)} is in lead_optouts for lead ${lead.lead_id}, skipping.`);
           stats.skipped++;
           continue;
         }

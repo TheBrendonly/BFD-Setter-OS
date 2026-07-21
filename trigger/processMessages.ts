@@ -225,7 +225,7 @@ export const processMessages = task({
       if (normalizedContactPhone) {
         const phoneOptedOut = await isPhoneOptedOut(supabase, client.id, normalizedContactPhone);
         if (phoneOptedOut) {
-          console.log(`Lead ${lead_id} phone ${normalizedContactPhone} is in lead_optouts, cancelling before send.`);
+          console.log(`Lead ${lead_id} phone ${redactPhone(normalizedContactPhone)} is in lead_optouts, cancelling before send.`);
           await updateExecution({
             status: "cancelled",
             stage_description: "Lead opted out (phone in lead_optouts): cadence cancelled before reply.",

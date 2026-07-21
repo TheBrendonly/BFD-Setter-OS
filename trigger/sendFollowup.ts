@@ -19,6 +19,14 @@ import { makeVoiceBookingCallTool } from "./_shared/voiceBookingCallTool.ts";
 import { buildFollowupUserMessage } from "./_shared/buildFollowupContext";
 import type { CallTool } from "./_shared/setterToolLoop";
 
+// SEC-PII-LOGS-1 — keep raw prospect phones out of platform logs.
+const redactPhone = (p: string | null | undefined): string => {
+  if (!p) return "<no-phone>";
+  const s = String(p);
+  if (s.length <= 6) return s.slice(0, 2) + "***";
+  return s.slice(0, 4) + "***" + s.slice(-3);
+};
+
 const getMainSupabase = () =>
   createClient(
     process.env.SUPABASE_URL!,
@@ -140,7 +148,7 @@ export const sendFollowup = task({
     if (normalizedFollowupPhone) {
       const phoneOptedOut = await isPhoneOptedOut(supabase, client_id, normalizedFollowupPhone);
       if (phoneOptedOut) {
-        console.log(`Follow-up timer ${timer_id}: phone ${normalizedFollowupPhone} in lead_optouts, cancelling timers.`);
+        console.log(`Follow-up timer ${timer_id}: phone ${redactPhone(normalizedFollowupPhone)} in lead_optouts, cancelling timers.`);
         await supabase
           .from("followup_timers")
           .update({ status: "cancelled", updated_at: new Date().toISOString() })
