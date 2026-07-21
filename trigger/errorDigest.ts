@@ -15,27 +15,12 @@
 import { schedules } from "@trigger.dev/sdk";
 import { createClient } from "@supabase/supabase-js";
 import { rollupErrors, formatDigestLine } from "./_shared/errorDigest";
+import { postAlert } from "./_shared/postAlert.ts";
 
 const LOOKBACK_MS = 24 * 60 * 60 * 1000;
 
 const escapeHtml = (s: string) =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-
-async function postSlack(text: string): Promise<boolean> {
-  const url = process.env.PROBE_ALERT_WEBHOOK_URL;
-  if (!url) return false;
-  try {
-    await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text }),
-    });
-    return true;
-  } catch (e) {
-    console.warn(`errorDigest: postSlack failed: ${(e as Error).message}`);
-    return false;
-  }
-}
 
 export const errorDigest = schedules.task({
   id: "error-digest",
@@ -77,7 +62,7 @@ export const errorDigest = schedules.task({
 
     const lines = clients.map((c) => formatDigestLine(nameById.get(c.clientKey) ?? c.clientKey, c));
     const header = `⚠️ BFD failure digest (last 24h): ${total} error(s) across ${clients.length} client(s)`;
-    const slackSent = await postSlack(`${header}\n${lines.map((l) => `• ${l}`).join("\n")}`);
+    const slackSent = await postAlert(`${header}\n${lines.map((l) => `• ${l}`).join("\n")}`);
 
     // Email leg — behind RESEND_API_KEY (same gate as the F15 weekly report).
     let emailSent = false;

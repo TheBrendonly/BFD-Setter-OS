@@ -17,6 +17,7 @@
 import { schedules } from "@trigger.dev/sdk";
 import { createClient } from "@supabase/supabase-js";
 import { hasOutboundRow, pollUntil, isParkedStage } from "./_shared/probePoll.ts";
+import { postAlert } from "./_shared/postAlert.ts";
 
 const getSupabase = () =>
   createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -27,23 +28,6 @@ type ProbeResult = {
   error_message?: string;
   raw: Record<string, unknown>;
 };
-
-async function postAlert(message: string, raw: Record<string, unknown>): Promise<void> {
-  const url = process.env.PROBE_ALERT_WEBHOOK_URL;
-  if (!url) return;
-  try {
-    await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        text: `🚨 BFD-setter synthetic probe FAIL: ${message}`,
-        attachments: [{ text: JSON.stringify(raw, null, 2).slice(0, 2000) }],
-      }),
-    });
-  } catch (e) {
-    console.warn(`postAlert failed: ${(e as Error).message}`);
-  }
-}
 
 export const syntheticProbe = schedules.task({
   id: "synthetic-probe",
@@ -73,7 +57,10 @@ export const syntheticProbe = schedules.task({
         console.warn(`probe_results insert failed: ${(e as Error).message}`);
       }
       if (!result.passed) {
-        await postAlert(result.error_message ?? "unknown failure", result.raw);
+        await postAlert(
+          `🚨 BFD-setter synthetic probe FAIL: ${result.error_message ?? "unknown failure"}`,
+          JSON.stringify(result.raw, null, 2),
+        );
       }
       return result;
     };

@@ -16,6 +16,7 @@
 import { schedules } from "@trigger.dev/sdk";
 import { createClient } from "@supabase/supabase-js";
 import { computeDriftState } from "./_shared/retellDrift";
+import { postAlert } from "./_shared/postAlert.ts";
 
 const RETELL_BASE = "https://api.retellai.com";
 
@@ -35,18 +36,8 @@ async function retellGet(apiKey: string, path: string): Promise<any | null> {
   }
 }
 
-async function postAlert(message: string): Promise<void> {
-  const url = process.env.PROBE_ALERT_WEBHOOK_URL;
-  if (!url) return;
-  try {
-    await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text: `🔒 BFD voice-setter drift: ${message}` }),
-    });
-  } catch (e) {
-    console.warn(`pollRetellDrift: postAlert failed: ${(e as Error).message}`);
-  }
+async function postDriftAlert(message: string): Promise<void> {
+  await postAlert(`🔒 BFD voice-setter drift: ${message}`);
 }
 
 export const pollRetellDrift = schedules.task({
@@ -166,7 +157,7 @@ export const pollRetellDrift = schedules.task({
         } catch (e) {
           console.warn(`pollRetellDrift: error_logs insert failed (non-fatal): ${(e as Error).message}`);
         }
-        await postAlert(msg);
+        await postDriftAlert(msg);
       }
     }
 
