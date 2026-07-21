@@ -611,18 +611,18 @@ export const ContactConversationHistory: React.FC<ContactConversationHistoryProp
       if (contactId) {
         const { data: bookingRecords } = await supabase
           .from('bookings')
-          .select('id, title, start_time, end_time, status, location, created_at')
+          .select('id, appointment_time, status, created_at')
           .eq('lead_id', contactId)
           .order('created_at', { ascending: true });
         for (const booking of bookingRecords || []) {
-          const startFormatted = booking.start_time
-            ? new Date(booking.start_time).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+          const startFormatted = booking.appointment_time
+            ? new Date(booking.appointment_time).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
             : '';
           bookingMessages.push({
             type: 'booking',
-            content: `${booking.title || 'Appointment'}${startFormatted ? ` - ${startFormatted}` : ''}`,
-            timestamp: booking.created_at,
-            bookingStatus: booking.status,
+            content: `Appointment${startFormatted ? ` - ${startFormatted}` : ''}`,
+            timestamp: booking.created_at ?? new Date().toISOString(),
+            bookingStatus: booking.status ?? undefined,
             bookingId: booking.id,
           });
         }

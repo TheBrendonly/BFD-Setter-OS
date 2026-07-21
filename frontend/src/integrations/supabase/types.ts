@@ -315,74 +315,59 @@ export type Database = {
       }
       bookings: {
         Row: {
-          calendar_id: string | null
-          campaign_id: string | null
-          cancellation_link: string | null
-          client_id: string
-          created_at: string
-          end_time: string | null
-          ghl_booking_id: string | null
-          ghl_contact_id: string | null
+          appointment_end_time: string | null
+          appointment_time: string | null
+          cadence_execution_id: string | null
+          client_id: string | null
+          created_at: string | null
+          ghl_appointment_id: string | null
+          ghl_calendar_id: string | null
           id: string
           lead_id: string | null
-          location: string | null
           notes: string | null
-          raw_ghl_data: Json | null
-          reschedule_link: string | null
-          setter_name: string | null
-          setter_type: string | null
-          start_time: string | null
-          status: string
-          title: string | null
+          raw_payload: Json | null
+          source: string | null
+          status: string | null
+          updated_at: string | null
         }
         Insert: {
-          calendar_id?: string | null
-          campaign_id?: string | null
-          cancellation_link?: string | null
-          client_id: string
-          created_at?: string
-          end_time?: string | null
-          ghl_booking_id?: string | null
-          ghl_contact_id?: string | null
+          appointment_end_time?: string | null
+          appointment_time?: string | null
+          cadence_execution_id?: string | null
+          client_id?: string | null
+          created_at?: string | null
+          ghl_appointment_id?: string | null
+          ghl_calendar_id?: string | null
           id?: string
           lead_id?: string | null
-          location?: string | null
           notes?: string | null
-          raw_ghl_data?: Json | null
-          reschedule_link?: string | null
-          setter_name?: string | null
-          setter_type?: string | null
-          start_time?: string | null
-          status?: string
-          title?: string | null
+          raw_payload?: Json | null
+          source?: string | null
+          status?: string | null
+          updated_at?: string | null
         }
         Update: {
-          calendar_id?: string | null
-          campaign_id?: string | null
-          cancellation_link?: string | null
-          client_id?: string
-          created_at?: string
-          end_time?: string | null
-          ghl_booking_id?: string | null
-          ghl_contact_id?: string | null
+          appointment_end_time?: string | null
+          appointment_time?: string | null
+          cadence_execution_id?: string | null
+          client_id?: string | null
+          created_at?: string | null
+          ghl_appointment_id?: string | null
+          ghl_calendar_id?: string | null
           id?: string
           lead_id?: string | null
-          location?: string | null
           notes?: string | null
-          raw_ghl_data?: Json | null
-          reschedule_link?: string | null
-          setter_name?: string | null
-          setter_type?: string | null
-          start_time?: string | null
-          status?: string
-          title?: string | null
+          raw_payload?: Json | null
+          source?: string | null
+          status?: string | null
+          updated_at?: string | null
         }
         Relationships: [
           {
-            foreignKeyName: "bookings_campaign_id_fkey"
-            columns: ["campaign_id"]
+            foreignKeyName: "bookings_cadence_execution_id_fkey"
+            columns: ["cadence_execution_id"]
             isOneToOne: false
-            referencedRelation: "engagement_campaigns"
+            referencedRelation: "engagement_executions"
             referencedColumns: ["id"]
           },
           {
@@ -393,10 +378,10 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "bookings_lead_id_fkey"
-            columns: ["lead_id"]
+            foreignKeyName: "bookings_client_id_fkey"
+            columns: ["client_id"]
             isOneToOne: false
-            referencedRelation: "leads"
+            referencedRelation: "clients_public"
             referencedColumns: ["id"]
           },
         ]
@@ -2647,6 +2632,51 @@ export type Database = {
           },
         ]
       }
+      lead_optouts: {
+        Row: {
+          client_id: string | null
+          created_at: string | null
+          email: string | null
+          id: string
+          phone: string
+          raw_keyword: string | null
+          source: string | null
+        }
+        Insert: {
+          client_id?: string | null
+          created_at?: string | null
+          email?: string | null
+          id?: string
+          phone: string
+          raw_keyword?: string | null
+          source?: string | null
+        }
+        Update: {
+          client_id?: string | null
+          created_at?: string | null
+          email?: string | null
+          id?: string
+          phone?: string
+          raw_keyword?: string | null
+          source?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lead_optouts_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lead_optouts_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients_public"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       lead_tag_assignments: {
         Row: {
           created_at: string | null
@@ -2726,7 +2756,7 @@ export type Database = {
           consent_text: string | null
           consent_timestamp: string | null
           consent_version: string | null
-          created_at: string
+          created_at: string | null
           custom_fields: Json | null
           email: string | null
           first_name: string | null
@@ -2738,16 +2768,19 @@ export type Database = {
           last_name: string | null
           last_outbound_at: string | null
           last_reply_at: string | null
-          lead_id: string | null
+          last_sms_analyzed_at: string | null
+          lead_id: string
+          normalized_phone: string | null
           nudge_count: number
           phone: string | null
           phone_valid: boolean
-          setter_stopped: boolean
-          source_ip: string | null
+          setter_stopped: boolean | null
+          source_ip: unknown
           source_type: string | null
           tagged_silent_after_engagement: boolean
           tags: Json | null
-          updated_at: string
+          timezone: string | null
+          updated_at: string | null
           user_agent: string | null
           utm_campaign: string | null
           utm_content: string | null
@@ -2762,7 +2795,7 @@ export type Database = {
           consent_text?: string | null
           consent_timestamp?: string | null
           consent_version?: string | null
-          created_at?: string
+          created_at?: string | null
           custom_fields?: Json | null
           email?: string | null
           first_name?: string | null
@@ -2774,16 +2807,19 @@ export type Database = {
           last_name?: string | null
           last_outbound_at?: string | null
           last_reply_at?: string | null
-          lead_id?: string | null
+          last_sms_analyzed_at?: string | null
+          lead_id: string
+          normalized_phone?: string | null
           nudge_count?: number
           phone?: string | null
           phone_valid?: boolean
-          setter_stopped?: boolean
-          source_ip?: string | null
+          setter_stopped?: boolean | null
+          source_ip?: unknown
           source_type?: string | null
           tagged_silent_after_engagement?: boolean
           tags?: Json | null
-          updated_at?: string
+          timezone?: string | null
+          updated_at?: string | null
           user_agent?: string | null
           utm_campaign?: string | null
           utm_content?: string | null
@@ -2798,7 +2834,7 @@ export type Database = {
           consent_text?: string | null
           consent_timestamp?: string | null
           consent_version?: string | null
-          created_at?: string
+          created_at?: string | null
           custom_fields?: Json | null
           email?: string | null
           first_name?: string | null
@@ -2810,16 +2846,19 @@ export type Database = {
           last_name?: string | null
           last_outbound_at?: string | null
           last_reply_at?: string | null
-          lead_id?: string | null
+          last_sms_analyzed_at?: string | null
+          lead_id?: string
+          normalized_phone?: string | null
           nudge_count?: number
           phone?: string | null
           phone_valid?: boolean
-          setter_stopped?: boolean
-          source_ip?: string | null
+          setter_stopped?: boolean | null
+          source_ip?: unknown
           source_type?: string | null
           tagged_silent_after_engagement?: boolean
           tags?: Json | null
-          updated_at?: string
+          timezone?: string | null
+          updated_at?: string | null
           user_agent?: string | null
           utm_campaign?: string | null
           utm_content?: string | null
@@ -2829,10 +2868,17 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "contacts_client_id_fkey"
+            foreignKeyName: "leads_client_id_fkey"
             columns: ["client_id"]
             isOneToOne: false
             referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "leads_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients_public"
             referencedColumns: ["id"]
           },
         ]
@@ -4169,6 +4215,54 @@ export type Database = {
           },
         ]
       }
+      sms_delivery_events: {
+        Row: {
+          client_id: string | null
+          error_code: number | null
+          error_message: string | null
+          id: string
+          raw_payload: Json | null
+          received_at: string | null
+          status: string
+          twilio_message_sid: string
+        }
+        Insert: {
+          client_id?: string | null
+          error_code?: number | null
+          error_message?: string | null
+          id?: string
+          raw_payload?: Json | null
+          received_at?: string | null
+          status: string
+          twilio_message_sid: string
+        }
+        Update: {
+          client_id?: string | null
+          error_code?: number | null
+          error_message?: string | null
+          id?: string
+          raw_payload?: Json | null
+          received_at?: string | null
+          status?: string
+          twilio_message_sid?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sms_delivery_events_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sms_delivery_events_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients_public"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sms_messages: {
         Row: {
           body: string
@@ -4899,6 +4993,29 @@ export type Database = {
       }
     }
     Views: {
+      client_cost_rollup: {
+        Row: {
+          client_id: string | null
+          month_cents: number | null
+          week_cents: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cadence_metrics_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cadence_metrics_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients_public"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       clients_public: {
         Row: {
           agency_id: string | null

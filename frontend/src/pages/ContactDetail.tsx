@@ -184,12 +184,30 @@ const ContactDetail = () => {
 
   const fetchBookings = useCallback(async () => {
     if (!contactId) return;
+    // bookings is the phase7a schema; map it into the local Booking view model.
     const { data } = await supabase
       .from('bookings')
-      .select('id, title, start_time, end_time, status, location, notes, setter_name, setter_type, cancellation_link, reschedule_link, ghl_booking_id, ghl_contact_id, calendar_id, campaign_id, created_at')
+      .select('id, appointment_time, appointment_end_time, status, notes, ghl_appointment_id, ghl_calendar_id, created_at')
       .eq('lead_id', contactId)
-      .order('start_time', { ascending: false });
-    setBookings((data as Booking[]) || []);
+      .order('appointment_time', { ascending: false });
+    setBookings((data || []).map((r): Booking => ({
+      id: r.id,
+      title: null,
+      start_time: r.appointment_time,
+      end_time: r.appointment_end_time,
+      status: r.status ?? '',
+      location: null,
+      notes: r.notes,
+      setter_name: null,
+      setter_type: null,
+      cancellation_link: null,
+      reschedule_link: null,
+      ghl_booking_id: r.ghl_appointment_id,
+      ghl_contact_id: null,
+      calendar_id: r.ghl_calendar_id,
+      campaign_id: null,
+      created_at: r.created_at ?? new Date().toISOString(),
+    })));
   }, [contactId]);
 
   useEffect(() => { fetchBookings(); }, [fetchBookings]);

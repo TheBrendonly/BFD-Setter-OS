@@ -2007,28 +2007,40 @@ function ChatContactDetailsPanel({
       return;
     }
 
-    const selectClause = 'id, title, start_time, end_time, status, location, notes, setter_name, setter_type, cancellation_link, reschedule_link, ghl_booking_id, ghl_contact_id, calendar_id, campaign_id, created_at';
+    // bookings is the phase7a schema (booking-tools + bookings-webhook writers).
+    // lead_id already holds the GHL contact id, so one lookup on lead_id covers
+    // the ids the old code split across the removed ghl_contact_id column.
+    const { data: rows } = await supabase
+      .from('bookings')
+      .select('id, appointment_time, appointment_end_time, status, notes, ghl_appointment_id, ghl_calendar_id, created_at')
+      .in('lead_id', bookingLookupIds);
 
-    const [{ data: byLeadId }, { data: byGhlContactId }] = await Promise.all([
-      supabase
-        .from('bookings')
-        .select(selectClause)
-        .in('lead_id', bookingLookupIds),
-      supabase
-        .from('bookings')
-        .select(selectClause)
-        .in('ghl_contact_id', bookingLookupIds),
-    ]);
-
-    const merged = [...(byLeadId || []), ...(byGhlContactId || [])]
-      .filter((booking, index, array) => array.findIndex((candidate) => candidate.id === booking.id) === index)
+    const merged: Booking[] = (rows || [])
+      .map((r): Booking => ({
+        id: r.id,
+        title: null,
+        start_time: r.appointment_time,
+        end_time: r.appointment_end_time,
+        status: r.status ?? '',
+        location: null,
+        notes: r.notes,
+        setter_name: null,
+        setter_type: null,
+        cancellation_link: null,
+        reschedule_link: null,
+        ghl_booking_id: r.ghl_appointment_id,
+        ghl_contact_id: null,
+        calendar_id: r.ghl_calendar_id,
+        campaign_id: null,
+        created_at: r.created_at ?? new Date().toISOString(),
+      }))
       .sort((a, b) => {
         const aTime = a.start_time ? new Date(a.start_time).getTime() : 0;
         const bTime = b.start_time ? new Date(b.start_time).getTime() : 0;
         return bTime - aTime;
       });
 
-    setBookings(merged as Booking[]);
+    setBookings(merged);
   }, [lead]);
 
   useEffect(() => { fetchBookings(); }, [fetchBookings]);
