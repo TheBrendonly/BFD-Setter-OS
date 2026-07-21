@@ -17,6 +17,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2.101.0";
 import { assertClientAccess, AssertAccessError } from "../_shared/assert-client-access.ts";
 import { normalizeLeadRow, chunk, type NormalizedLead } from "../_shared/reactivate-list.ts";
+import { buildLeadInsert } from "../_shared/lead-insert.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -58,18 +59,22 @@ async function enrollOne(args: {
   const ghlAccountId = ghlLocationId ?? clientId;
 
   try {
-    // Upsert the leads row so analytics + booking sync have a record.
+    // Upsert the leads row so analytics + booking sync have a record. Route
+    // through buildLeadInsert (the single source of truth for the leads INSERT
+    // shape) so normalized_phone is always stamped — REACT-NORMPHONE-1: this
+    // path previously hand-rolled the upsert and dropped normalized_phone,
+    // making reactivated leads invisible to by-phone resolution + STOP fan-out.
     const { error: upsertErr } = await supabase
       .from("leads")
       .upsert(
-        {
-          client_id: clientId,
-          lead_id: leadId,
-          first_name: lead.first_name || null,
-          last_name: lead.last_name || null,
+        buildLeadInsert({
+          clientId,
+          leadId,
+          firstName: lead.first_name || null,
+          lastName: lead.last_name || null,
           phone: lead.phone || null,
           email: lead.email || null,
-        },
+        }),
         { onConflict: "client_id,lead_id" },
       );
     if (upsertErr) return { lead_id: leadId, ok: false, error: `lead_upsert: ${upsertErr.message}` };
