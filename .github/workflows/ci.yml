@@ -10,9 +10,13 @@
 #   - Node (>=22.6 for --experimental-strip-types) over the 23 test files in trigger/_shared/ (183 tests)
 #   - Deno over the 35 edge-function test files in frontend/supabase/functions/ (262 tests)
 #
-# KNOWN GAPS (see Docs/AUDIT_2026-07-20.md): this workflow does NOT run the root
-# `test:frontend` suite (frontend/src/lib/*.test.ts, 8 tests), nor eslint, nor any
-# typecheck, nor a frontend build. Nothing here gates merges to main.
+# The `test` job (node + deno) is the real gate. The `report` job below runs the
+# previously-uncovered surfaces (frontend unit tests, tsc typecheck, eslint) as
+# NON-BLOCKING reporting (continue-on-error) so the ~17-error typecheck baseline
+# and the lint baseline are VISIBLE in the Actions log and cannot silently grow,
+# without failing the workflow on the pre-existing debt. Nothing here gates merges
+# to main (no branch protection); flipping report to blocking is a later decision
+# once its baselines are driven to zero.
 name: CI
 
 on:
@@ -41,3 +45,33 @@ jobs:
 
       - name: Deno tests (frontend/supabase/functions)
         run: deno test --no-check frontend/supabase/functions/
+
+  report:
+    name: report (frontend tests + typecheck + lint, non-blocking)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install frontend deps
+        working-directory: frontend
+        run: npm install --no-audit --no-fund
+
+      - name: Frontend unit tests (frontend/src/lib)
+        run: npm run test:frontend
+        continue-on-error: true
+
+      - name: Typecheck (frontend/src via tsconfig.app.json; baseline ~17 errors 2026-07-21)
+        working-directory: frontend
+        run: npx tsc --noEmit -p tsconfig.app.json
+        continue-on-error: true
+
+      - name: Lint (frontend; pre-existing baseline, non-blocking)
+        working-directory: frontend
+        run: npm run lint
+        continue-on-error: true
