@@ -517,6 +517,20 @@ Status: `[ ]` not started · `[~]` in progress · `[x]` done. Effort is rough.
   long-tail behavioral legs optional)  [ ] First-Client Milestone (gated)`. Handoffs: 2026-07-13-gate-a-rls +
   -frozen-deploy-readiness + -voice-verify-and-phase4. All pre-client CODE is done; only Resend/GHL (Brendan) +
   the event-gated First-Client Milestone remain.
+- [x] **V1 finish loop (client-ready hardening) — AUTONOMOUS ENGINEERING DONE 2026-07-21 (Fable planned, Opus
+  executed; `Operations/prompts/04-v1-finish-loop.md`).** Ratified by the 2026-07-21 v1-vs-v2 decision (v1 carries the
+  first client; feature freeze at zero). Shipped + deployed + pushed: **bookings schema settled on phase7a** (`61c0d9d`;
+  `types.ts` fixed + 3 drift-broken booking readers repointed; tsc 21→17), **REACT-NORMPHONE-1** (`05b4323`,
+  reactivate-lead-list v10), **pre-commit secret hook** (`67e0153`), **non-blocking CI report job** (`c03dc5a`), **Spam
+  Act STOP footer** on the 4 commercial send paths (`901a583`, Trigger 20260721.2 + crm-send-message v15), **alerting
+  LIVE** to Telegram/Hermes (`5a9a990`; armed `PROBE_ALERT_WEBHOOK_URL`, forced error-digest → `slackSent:true`
+  VERIFIED), **2028 AU holidays** (`f31a3cf`), **first-client arming runbook** (`01f50df`,
+  `Docs/FIRST_CLIENT_ARMING_RUNBOOK.md`, PREP-ONLY). All 7 Trigger prod schedules confirmed active; **BUG_LIST = 0
+  open**. Brendan's calls: alert sink = Telegram; Resend + Supabase backups deferred to first-client onboarding (top of
+  `FIRST_CLIENT_TASKS.md`); DM-webhook A6 = no action (complementary, not competing). **OWED (Brendan live 2FA
+  window):** TEST_SESSION RUN 0-9 + STOP-footer live send + bookings render-smoke + REACT-NORMPHONE-1 reactivation +
+  the setup-heavy autonomous legs. Handoff `Operations/handoffs/2026-07-21-v1-finish-loop.md`; next prompt in
+  `Docs/NEXT_SESSION_PROMPT.md`.
 
 4. **Brendan solo block (parallel, no Claude session):** Setter-1 prompt migration, Resend SMTP → F14 E2E,
    sms_llm rate + billing anchor/toggles, PROMPT_UPDATE_LIST items (see the 2026-07-07
