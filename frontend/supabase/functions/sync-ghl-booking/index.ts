@@ -494,6 +494,31 @@ Deno.serve(async (req) => {
 
     if (!bookingId) {
       console.warn("[sync-ghl-booking] Missing booking identifier");
+      // Observability: record the STRUCTURE of an unparseable booking webhook
+      // (keys + id values only — no phone/email) so we can see where a given
+      // GHL workflow puts the appointment id.
+      try {
+        await supabase.from("error_logs").insert({
+          client_id: null,
+          source: "sync-ghl-booking",
+          severity: "warning",
+          error_type: "MISSING_BOOKING_ID",
+          error_message: "Booking webhook arrived with no resolvable appointment id",
+          context: {
+            topKeys: Object.keys(body).slice(0, 50),
+            calendarKeys: Object.keys(calendar),
+            calendar_appointmentId: calendar.appointmentId ?? null,
+            calendar_id: calendar.id ?? null,
+            appointmentKeys: Object.keys(appointment).slice(0, 50),
+            locationKeys: Object.keys(location),
+            location_id: location.id ?? null,
+            body_id: body.id ?? null,
+            body_appointmentId: body.appointmentId ?? null,
+            ghlAccountId: ghlAccountId ?? null,
+            workflowName: isRecord(body.workflow) ? body.workflow.name ?? null : null,
+          },
+        });
+      } catch (_e) { /* non-fatal */ }
       return new Response(
         JSON.stringify({ error: "Booking_ID is required" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
