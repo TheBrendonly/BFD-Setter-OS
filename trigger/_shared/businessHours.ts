@@ -123,6 +123,11 @@ export const AU_PUBLIC_HOLIDAYS = new Set<string>([
   // 2027
   "2027-01-01", "2027-01-26", "2027-03-26", "2027-03-29", "2027-04-25",
   "2027-04-26", "2027-12-25", "2027-12-27", "2027-12-28",
+  // 2028 (NYD Sat 1 Jan -> Mon 3 Jan substitute; Australia Day Wed 26 Jan;
+  // Good Friday 14 Apr; Easter Monday 17 Apr; Anzac Tue 25 Apr; Christmas Mon
+  // 25 Dec; Boxing Tue 26 Dec). Extend before Jan 2029 (REVIEW ANNUALLY).
+  "2028-01-01", "2028-01-03", "2028-01-26", "2028-04-14", "2028-04-17",
+  "2028-04-25", "2028-12-25", "2028-12-26",
 ]);
 
 export function isAuTimezone(tz: string): boolean {
