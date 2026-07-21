@@ -381,6 +381,18 @@ Deno.serve(async (req) => {
       payload.contact,
     );
 
+    // GHL "standard" webhook (the Inbound/workflow webhook, not the legacy
+    // Custom Webhook) nests appointment data under `calendar` and the sub-account
+    // under `location`. calendar.appointmentId is the appointment id; calendar.id
+    // is the CALENDAR id; location.id is the sub-account id. Root `id` in that
+    // payload is the OPPORTUNITY id, so calendar.appointmentId must win over it.
+    const calendar = pickFirstRecord(
+      body.calendar, nestedBody.calendar, payload.calendar, event.calendar, data.calendar,
+    );
+    const location = pickFirstRecord(
+      body.location, nestedBody.location, payload.location,
+    );
+
     const ghlAccountId = firstNonEmptyString(
       url.searchParams.get("GHL_Account_ID"), url.searchParams.get("ghl_account_id"),
       url.searchParams.get("locationId"),
@@ -394,6 +406,7 @@ Deno.serve(async (req) => {
       data.locationId, data.location_id,
       payload.locationId, payload.location_id,
       contact.locationId, contact.location_id,
+      location.id, location.location_id,
     );
 
     const contactId = firstNonEmptyString(
@@ -412,6 +425,9 @@ Deno.serve(async (req) => {
 
     const bookingId = firstNonEmptyString(
       url.searchParams.get("Booking_ID"), url.searchParams.get("booking_id"), url.searchParams.get("bookingId"),
+      // GHL standard webhook: the appointment id lives at calendar.appointmentId.
+      // Must beat body.id below, which in that payload is the OPPORTUNITY id.
+      calendar.appointmentId, calendar.appointment_id, calendar.appointmentID,
       body.Booking_ID, body.booking_id, body.bookingId,
       nestedBody.Booking_ID, nestedBody.booking_id, nestedBody.bookingId,
       body.id, nestedBody.id,
@@ -450,6 +466,7 @@ Deno.serve(async (req) => {
       event.calendarId, event.calendar_id,
       data.calendarId, data.calendar_id,
       payload.calendarId, payload.calendar_id,
+      calendar.id, calendar.calendarId, calendar.calendar_id,
     );
 
     console.info("[sync-ghl-booking] Incoming webhook", JSON.stringify({
