@@ -14,6 +14,24 @@ When an item passes, move it to `Docs/archive/COMPLETED_LOG.md`. When it fails, 
 
 > **⭐⭐⭐ VOICE + BROWSER TEST SESSION — 2026-07-06, and the 2026-07-05 TEST SESSION before it — ALL PASSED → `COMPLETED_LOG.md`.** Full detail there + handoffs `Operations/handoffs/2026-07-06-voice-browser-session.md` + `2026-07-05-test-session.md`. Between the two, essentially every pre-existing bug/feature check passed (onboarding-fix cluster, the shared-fn pass, F8/F9-1/F11/UI-1/F13 core/PROMPT-LINT-1/MODEL-1/API-DEPR-1 core/PROMPT-AUTH-1 X-Ray, the B-2 outage leg, G3-7 nav, SWEEP-1a/b/c). What's below is either (a) the still-open behavioral checks for the 2026-07-07 combined build, or (b) a small residual set of finer-grained checks that genuinely haven't run yet.
 
+## 2026-07-21 v1-finish loop — live legs owed (need Brendan phone/2FA)
+
+> Shipped + deployed + unit-verified this session (see COMPLETED_LOG 2026-07-21). These are the live behavioral
+> confirmations still owed. Alerting/F23 already PASSED above; bookings-settle tsc/build/test green.
+
+- [ ] **STOP footer live send** — from the dogfood client, send a real cadence/manual SMS to TEST_PHONE_A and
+  confirm the message ARRIVES carrying "Reply STOP to unsubscribe" (appended once, not doubled). Manual leg via the
+  CRM Send button (Playwright + 2FA); cadence leg via a test enrolment. Also confirm a body that already contains a
+  STOP line is NOT doubled.
+- [ ] **Bookings render-smoke (regression guard)** — on the vite-8 prod bundle after this deploy, open a lead's
+  **Chats** panel, **ContactDetail** bookings list, and the **Contact conversation history** booking messages:
+  each renders with NO console error and, for a lead with a real booking, the booking now DISPLAYS (was silently
+  empty pre-phase7a-fix). Confirms the 3 reader rewrites didn't white-screen (build+tsc were green but the render
+  smoke is the only real gate per `feedback_frontend_verify_render_smoke`).
+- [ ] **REACT-NORMPHONE-1 reactivation** — reactivate a phone-bearing lead via the bulk/CSV reactivation path
+  (reactivate-lead-list v10) → the new/updated `leads` row has a non-NULL `normalized_phone`; an inbound SMS from
+  that number then resolves internal-first (no duplicate `bfd-<phone>` lead).
+
 ## 2026-07-13 frozen voice-bundle deploy — SMS + VOICE booking PASSED; PU-14/PU-6 verified
 
 > Deployed retell-proxy v53 / voice-booking-tools v25 / retell-call-analysis-webhook v28 (0 agents mutated).
@@ -81,8 +99,10 @@ When an item passes, move it to `Docs/archive/COMPLETED_LOG.md`. When it fails, 
   honest holding message, NOT a false "you're booked". (No-misfire on a real booking already confirmed live.)
 - [ ] **SEC-PII-LOGS-1 log spot-check** — trigger an outbound-call / DM / webinar-match and confirm the platform
   logs show redacted phone/email (`***1234`, `j***@domain`), not raw values.
-- [ ] **F23 live digest** — after real errors accrue in a 24h window (or a manual test run), the error-digest posts a
-  Slack rollup (PROBE_ALERT_WEBHOOK_URL); email only when RESEND_API_KEY + ERROR_DIGEST_RECIPIENT are set.
+- [x] **F23 live digest — PASSED 2026-07-21** (→ COMPLETED_LOG). Seeded one throwaway `error_logs` row, triggered
+  the `error-digest` task in prod: run COMPLETED with `slackSent:true` (`emailSent:false`, Resend deferred) — a live
+  Trigger task posted the digest to Telegram (Hermes Dev topic) via the newly-armed `PROBE_ALERT_WEBHOOK_URL`.
+  Throwaway row deleted. (Email leg still owed once `RESEND_API_KEY` lands at first-client onboarding.)
 - [ ] **SCHED-1(b) parked probe** — the next hourly synthetic-probe run that parks outside the send window records
   `passed=true` (`raw.stage="skipped-parked"`), not a false FAIL, and posts no Slack alert.
 - [ ] **B2-REPOINT-1 outage convergence** — stage a lingering `bfd-<phone>` lead (GHL-outage sim), then send a normal

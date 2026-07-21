@@ -60,6 +60,21 @@ Things deliberately not being built now, each with the gate that would un-defer 
 
 ## Other
 
+- [ ] **`refreshCadenceFunnel` hourly task is dead (0 readers)** — `trigger/refreshCadenceFunnel.ts` runs
+  `REFRESH MATERIALIZED VIEW cadence_funnel` every hour, but nothing reads `cadence_funnel` (verified 2026-07-21;
+  the file's own comment notes Phase 7d closed the schema but no reader followed). Harmless but wasteful. NOT
+  removed this session: deleting a Trigger task risks a dangling prod schedule (the SCHED-1 registration fragility),
+  and the value is near-zero. **Gate:** next intentional Trigger-schedule cleanup — remove the task file (stops the
+  hourly refresh; leave the view + `refresh_cadence_funnel()` in the DB, harmless) and confirm the schedule
+  deregisters on the next deploy. Surfaced by PROJECT_OVERVIEW 12/A7.
+
+- [ ] **DM-webhook A6 — NO ACTION (audit premise corrected 2026-07-21).** PROJECT_OVERVIEW 12/A6 said "decide
+  `unipile-webhook` vs `receive-dm-webhook`, retire the loser." They are NOT competing: `receive-dm-webhook` (v18)
+  is the generic inbound-DM/message ingress (the ProcessDMs UI's `WEBHOOK_URL` + a webhook-manifest entry), while
+  `unipile-webhook` (v14) is the Unipile account-events callback (`unipile-proxy` posts to it + its own manifest
+  entry). Each has a distinct caller; retiring either breaks it. Keep both. The DM path itself stays a
+  roadmap-not-shipped surface (no live traffic) — no cleanup owed.
+
 - [ ] **AU Privacy Act second-tranche reform (automated-decision transparency / AI disclosure)** — anticipated
   ~Dec 2026 (surfaced by the 2026-07-07 F18-F20 research refresh). No AI-specific voice-disclosure law is in force
   as of mid-2026; this is a WATCH item, not a build. **Gate:** the reform lands + names an obligation touching

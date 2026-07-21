@@ -4,6 +4,45 @@ Items closed out of the active lists. Newest first. The active lists are in the 
 (`BUG_LIST.md`, `FEATURE_ROADMAP.md`, `BRENDAN_TODO.md`, `TEST_LIST.md`, `DEFERRED.md`). First-client-gated
 work lives in `Docs/FIRST_CLIENT_TASKS.md` (not archived — deferred).
 
+## 2026-07-21 — V1 finish loop (client-ready hardening): 6 code items shipped + alerting live
+
+Autonomous loop per `Operations/prompts/04-v1-finish-loop.md`, ratified by the 2026-07-21 v1-vs-v2 decision
+(v1 carries the first client; v1 feature work frozen at zero). All deployed + verified this session; live
+behavioral legs that need Brendan's phone/2FA are in `TEST_LIST.md`.
+
+- **Bookings schema settled on phase7a** (`61c0d9d`). `information_schema` confirmed live `bookings` = phase7a
+  (`appointment_time`/`ghl_appointment_id`/`source`/`raw_payload`). `types.ts` was the stale layer; spliced the
+  live blocks in (bookings + leads replaced; `lead_optouts`/`sms_delivery_events`/`client_cost_rollup` added).
+  Found + fixed 3 drift-broken readers (`Chats.tsx`, `ContactDetail.tsx`, `ContactConversationHistory.tsx`) that
+  queried dead columns (`title`/`start_time`/`ghl_contact_id`) — their booking panels were silently empty since
+  phase7a; repointed to phase7a + mapped into the local view models (JSX untouched). tsc 21 -> 17 (0 introduced),
+  build green, npm test green. Left the phantom `campaign_leads` type in place (8 frontend files still query it;
+  removing it exceeds the tsc baseline + drags in dead-UI removal — out of scope under the freeze).
+- **REACT-NORMPHONE-1 fixed** (`05b4323`, reactivate-lead-list **v10**). Routed the leads upsert through
+  `buildLeadInsert` so `normalized_phone` is always stamped. Backfill was a no-op (0 live NULL rows; bug was latent).
+- **Pre-commit secret hook** (`67e0153`). `scripts/install-git-hooks.mjs` + a `prepare` script install
+  `check-secrets.mjs` as a real hook without disturbing graphify's hooks; block-verified against a staged fake PAT.
+- **CI report job** (`c03dc5a`). Non-blocking `report` job runs frontend tests + `tsc` + eslint so the 17-error
+  typecheck + lint baselines are visible without failing the workflow.
+- **Spam Act STOP/unsubscribe footer** (`901a583`, Trigger **20260721.2** + crm-send-message **v15**). New
+  `optOutFooter` helper (idempotent; "stop by the office" false-positive guarded) appended at the 4 INITIATED
+  commercial send paths (cadence + follow-up via `sendTwilioSmsAndStamp`, nudge, manual CRM send). Wording is
+  Brendan's ratified "Reply STOP to unsubscribe"; reactive replies deliberately not footered (matches v2). Code +
+  deploy done + unit-tested; live SMS-arrives-with-footer proof owed in the 2FA window.
+- **Alerting LIVE + VERIFIED** (`5a9a990`, Trigger 20260721.2). New shared `postAlert` helper routes
+  `PROBE_ALERT_WEBHOOK_URL` to Telegram (Hermes 🛠 Dev topic) since Trigger.dev cloud can only reach public sinks
+  (greenserver Hermes is Tailscale-only). Armed the env var on Trigger prod via API, then forced a real error-digest
+  run: output `slackSent:true` (`emailSent:false`, Resend deferred) — a live Trigger task posted to Brendan's Telegram.
+  **This closes the DoD "PROBE_ALERT_WEBHOOK_URL set + a real alert observed arriving" box AND the F23 live-digest
+  TEST_LIST leg.** Throwaway error row cleaned up.
+- **2028 AU public holidays** added to the telemarketing clamp (`f31a3cf`, ships in 20260721.2).
+- **All 7 Trigger prod schedules confirmed active** after both deploys (SCHED-1 stays resolved).
+- **DM-webhook A6 corrected:** `receive-dm-webhook` (v18, generic inbound-DM ingress, ProcessDMs UI + manifest) and
+  `unipile-webhook` (v14, Unipile account-events callback, unipile-proxy) are complementary, NOT competing — no loser
+  to retire. PROJECT_OVERVIEW 12/A6's "retire the loser" premise was wrong.
+
+Handoff: `Operations/handoffs/2026-07-21-v1-finish-loop.md`.
+
 ## 2026-07-13 — Voice verification (PU-14/PU-6 + F24/v25) + Phase 4 legs + cache-control
 
 Supervised voice window + autonomous Phase 4. Full detail: `Operations/handoffs/2026-07-13-voice-verify-and-phase4.md`.

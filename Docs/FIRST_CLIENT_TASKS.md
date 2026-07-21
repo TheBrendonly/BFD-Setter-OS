@@ -16,6 +16,21 @@ until the first client-role *user* is invited). Created 2026-07-11 by the full-l
 
 ---
 
+## ⭐ Do these FIRST at onboarding (Brendan's call 2026-07-21 — pulled forward out of the general backlog)
+
+Both were candidates for the v1-finish loop but Brendan chose to stand them up AS PART OF onboarding the first
+client, near the top of the setup order. The arming runbook (`Docs/FIRST_CLIENT_ARMING_RUNBOOK.md`) lists them as
+step 0.
+
+- [ ] **Supabase backups + one restore test (+ decide Pro).** The project is on the FREE tier, which has **no
+  automated backups**. Decide the Pro upgrade (also unblocks the HIBP password-breach check), then confirm backups
+  exist and run **one restore into a scratch project** before any client data lands. No client goes on an untested
+  backup. ~2h. (PROJECT_OVERVIEW 11H / 12-B9.)
+- [ ] **Resend SMTP (`RESEND_API_KEY`).** Free-tier Resend account → verify `buildingflowdigital.com` (DKIM/SPF) →
+  API key → Claude PATCHes Supabase Auth SMTP + sets `RESEND_API_KEY` + `ERROR_DIGEST_RECIPIENT` on Trigger prod.
+  Unblocks: F14 invite/reset emails, the weekly ROI report email, AND the error-digest EMAIL leg (the Slack/Telegram
+  leg is already live as of 2026-07-21). Full detail below under "Resend SMTP (M1)". ~1h.
+
 ## GATE A — role-gate the RLS cluster BEFORE inviting the first client-role user
 
 > **✅ SHIPPED + VERIFIED 2026-07-13 (Opus 4.8, plan-approved, continuous session). The last pre-client CODE gate is
