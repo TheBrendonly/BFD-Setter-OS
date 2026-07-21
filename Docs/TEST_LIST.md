@@ -14,23 +14,23 @@ When an item passes, move it to `Docs/archive/COMPLETED_LOG.md`. When it fails, 
 
 > **⭐⭐⭐ VOICE + BROWSER TEST SESSION — 2026-07-06, and the 2026-07-05 TEST SESSION before it — ALL PASSED → `COMPLETED_LOG.md`.** Full detail there + handoffs `Operations/handoffs/2026-07-06-voice-browser-session.md` + `2026-07-05-test-session.md`. Between the two, essentially every pre-existing bug/feature check passed (onboarding-fix cluster, the shared-fn pass, F8/F9-1/F11/UI-1/F13 core/PROMPT-LINT-1/MODEL-1/API-DEPR-1 core/PROMPT-AUTH-1 X-Ray, the B-2 outage leg, G3-7 nav, SWEEP-1a/b/c). What's below is either (a) the still-open behavioral checks for the 2026-07-07 combined build, or (b) a small residual set of finer-grained checks that genuinely haven't run yet.
 
-## 2026-07-21 v1-finish loop — live legs owed (need Brendan phone/2FA)
+## 2026-07-21 v1-finish loop — live legs owed (need Brendan phone/2FA) — ALL PASS 2026-07-21 (evening)
 
-> Shipped + deployed + unit-verified this session (see COMPLETED_LOG 2026-07-21). These are the live behavioral
-> confirmations still owed. Alerting/F23 already PASSED above; bookings-settle tsc/build/test green.
+> **CLEARED 2026-07-21 (evening) live pass → `Docs/archive/COMPLETED_LOG.md`.** Also passed that window and archived:
+> COST-4, SCHED-1(b), MODEL-1-HARDENING (backend), FOLLOWUP-DURING-CALL-1, HOURS-1(a/d), BOOK-TZ-DISPLAY-1,
+> RESCHED-SMS-1, LIVE-D (manual SMS + 429), plus the answered voice-booking regression. SEC-PII-LOGS-1 residual +
+> the GHL `sync-ghl-booking` parser fix shipped the same window. **Still deferred (non-blocking):**
+> BOOK-CONFIRM-HONESTY-1 dedicated forced-failure (mechanism already evidenced), PURGE-SIM-1, PURGE-TAG-1, and the
+> pre-existing `lead_notes` frontend bug (→ `BRENDAN_TODO.md`). Handoff: `Operations/handoffs/2026-07-21-live-test-pass.md`.
 
-- [ ] **STOP footer live send** — from the dogfood client, send a real cadence/manual SMS to TEST_PHONE_A and
-  confirm the message ARRIVES carrying "Reply STOP to unsubscribe" (appended once, not doubled). Manual leg via the
-  CRM Send button (Playwright + 2FA); cadence leg via a test enrolment. Also confirm a body that already contains a
-  STOP line is NOT doubled.
-- [ ] **Bookings render-smoke (regression guard)** — on the vite-8 prod bundle after this deploy, open a lead's
-  **Chats** panel, **ContactDetail** bookings list, and the **Contact conversation history** booking messages:
-  each renders with NO console error and, for a lead with a real booking, the booking now DISPLAYS (was silently
-  empty pre-phase7a-fix). Confirms the 3 reader rewrites didn't white-screen (build+tsc were green but the render
-  smoke is the only real gate per `feedback_frontend_verify_render_smoke`).
-- [ ] **REACT-NORMPHONE-1 reactivation** — reactivate a phone-bearing lead via the bulk/CSV reactivation path
-  (reactivate-lead-list v10) → the new/updated `leads` row has a non-NULL `normalized_phone`; an inbound SMS from
-  that number then resolves internal-first (no duplicate `bfd-<phone>` lead).
+- [x] **STOP footer live send — PASS.** Manual CRM send to TEST_PHONE_A arrived with `Reply STOP to unsubscribe`
+  appended ONCE (server-verified in `message_queue`); a body already carrying STOP wording was NOT doubled; an
+  immediate re-send returned 429 (LIVE-D). Brendan confirmed both on his phone.
+- [x] **Bookings render-smoke — PASS.** ContactDetail renders the conversation + booking messages incl. the real
+  confirmation, no white-screen, no JS/page errors on vite-8. (Only console error = a PRE-EXISTING `lead_notes` 400,
+  unrelated — → BRENDAN_TODO.)
+- [x] **REACT-NORMPHONE-1 reactivation — PASS.** Reactivation stamped `normalized_phone=+61400000001`;
+  `resolveLeadByPhone` matched it (by-phone-matchable, no dup). Throwaway client, no cadence fired.
 
 ## 2026-07-13 frozen voice-bundle deploy — SMS + VOICE booking PASSED; PU-14/PU-6 verified
 

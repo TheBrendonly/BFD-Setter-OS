@@ -14,6 +14,23 @@ prompt tweaks independently).
   intent before building" gate; F21(a) (the `sync-ghl-booking` dedup/redirect) needs no decision. The build
   session reads the same decision annotated on `FEATURE_ROADMAP.md` F21.
 
+## 2026-07-21 (evening) — GHL workflow URL audit + retire old project
+
+- [ ] **Audit EVERY GHL workflow for the dead `qfbhcixkxzivpmxlciot` host.** The "Add Booking to BFD-Setter OS"
+  workflow's Custom Webhook was still pointed at the retired `qfbhcixkxzivpmxlciot` Supabase project (which still
+  serves a pre-fix copy of `sync-ghl-booking` and 400s "Booking_ID is required"). You repointed that ONE to the
+  live `https://bjgrgbgykvjrsuwwruoh.supabase.co/functions/v1/sync-ghl-booking` (verified clean). **Open every
+  other workflow's webhook/HTTP actions and repoint any still using `qfbhcixkxzivpmxlciot` to `bjgrgbgykvjrsuwwruoh`**
+  (keep the `x-wh-token: <ghl_webhook_secret>` header). The F15 status workflows already point at the live
+  `bookings-webhook` and are fine.
+- [ ] **Decommission (or lock down) the retired `qfbhcixkxzivpmxlciot` Supabase project.** It is STILL ALIVE and
+  serving stale edge-function code, which silently breaks any integration still pointed at it. Either delete the
+  project or remove its functions so a wrong-URL config fails loudly instead of running old logic.
+- [ ] **Decide on the `lead_notes` table (low priority, pre-existing).** `LeadNotesPanel`/`Chats` query a
+  `lead_notes` table that has never existed in prod → a 400 + "Error fetching notes" console error on every
+  ContactDetail open. Present since the initial commit (not a regression). Either create the table (so the notes
+  panel works) or have Claude remove the notes UI. Not blocking anything.
+
 ## Combined build session 2026-07-07 (bugs + F15 + F16 + F17-p1 all DEPLOYED) — manual follow-ups
 
 - [ ] **Enable the new per-client features on the BFD dogfood client to demo them** (all default OFF). In the

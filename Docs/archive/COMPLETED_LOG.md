@@ -4,6 +4,53 @@ Items closed out of the active lists. Newest first. The active lists are in the 
 (`BUG_LIST.md`, `FEATURE_ROADMAP.md`, `BRENDAN_TODO.md`, `TEST_LIST.md`, `DEFERRED.md`). First-client-gated
 work lives in `Docs/FIRST_CLIENT_TASKS.md` (not archived — deferred).
 
+## 2026-07-21 (evening) — Live TEST pass (Brendan present) + GHL booking-sync fix
+
+Live window with Brendan on the phone/2FA (harness: magic-link + TOTP, service-key dials, signed inbound-SMS
+sims, Mgmt-API). Full detail: `Operations/handoffs/2026-07-21-live-test-pass.md`.
+
+**The 3 owed live legs — ALL PASS:**
+- **STOP-footer (24a)** — manual CRM send to TEST_PHONE_A arrived with `Reply STOP to unsubscribe` appended ONCE
+  (server-verified in `message_queue`: `…\n\nReply STOP to unsubscribe`); a body already carrying STOP wording was
+  NOT doubled; an immediate re-send returned **429** (LIVE-D rate-limit). Brendan confirmed both texts on his phone.
+- **Bookings render-smoke** — ContactDetail renders the full conversation + booking messages incl. the real
+  confirmation ("…booked in for a Strategy Call … 12:30 PM AEST …"); no white-screen, no JS/page errors on vite-8.
+  (The only console errors are a PRE-EXISTING `lead_notes` 400 — `LeadNotesPanel` queries a table prod never had,
+  present since the initial commit, unrelated to the bookings readers.)
+- **REACT-NORMPHONE-1** — reactivation (reactivate-lead-list v10 → `buildLeadInsert`) stamped
+  `normalized_phone=+61400000001`; the `resolveLeadByPhone` query matched it (by-phone-matchable, no dup). Throwaway.
+
+**Voice booking regression — PASS.** Answered outbound on live Main Outbound (`agent_f45f4dd`, call
+`call_e49b7511cd276dd8aa89cc3f765`): real GHL appt + `bookings` row (source=voice_call, confirmed, "Strategy Call
+with Brendan", Tue 22 Jul 2pm AEST), honest confirm (email), no ghost, B-5 held. Appt cancelled after. Frozen
+v53/v25 voice baseline still good.
+
+**Autonomous legs — PASS:** COST-4 (client-role JWT sees 0 `execution_cost_events`; control read works — role-gate,
+not a dead token) · SCHED-1(b) (125 parked probe runs `passed=true`/`skipped-parked`, no false FAIL; config-fails
+all historical) · MODEL-1-HARDENING (degrades at all 5 call sites incl. the SMS setter-reply path; junk→null→
+DEFAULT_MODEL, alias remap; no 400) · FOLLOWUP-DURING-CALL-1 (`isVoiceCallActive` gate in sendFollowup + nudge) ·
+HOURS-1 a/d (AU clamp defers after 8pm/before 9am/Sat-after-5/Sun/ANZAC; new-lead OOH instant SMS + call defers) ·
+BOOK-TZ-DISPLAY-1 (setter offered dual-zone "8:00 AM Sydney (6:00 am Perth)" — correct 2h arithmetic) ·
+RESCHED-SMS-1 (no active appt → honest "wasn't able to make that change … confirm shortly", no false confirm; also
+evidences BOOK-CONFIRM-HONESTY-1's honest-holding-message mechanism).
+
+**Shipped this window:**
+- **SEC-PII-LOGS-1 residual** (`d1622dd`, Trigger **20260721.3**) — raw E.164 phone was logged in the by-phone
+  opt-out gate of 3 Trigger paths (processMessages/nudgeColdReply/sendFollowup); wrapped in the local `redactPhone`.
+  7 prod schedules re-verified active.
+- **sync-ghl-booking GHL standard-payload parser** (`436b168` v16, `58db4ea` v17) — the receiver now reads
+  `calendar.appointmentId` (at high precedence over the root opportunity `id`), `location.id`, `calendar.id`;
+  v17 adds PII-free structural logging of unparseable booking webhooks. **END-TO-END VERIFIED**: created a live GHL
+  calendar appt → workflow → `bookings` row (source=ghl_calendar) → cancel flipped it → **0** `MISSING_BOOKING_ID`.
+- **GHL "Add Booking to BFD-Setter OS" 400 root-caused + FIXED (Brendan repointed the URL).** The workflow's Custom
+  Webhook was still pointed at the **retired `qfbhcixkxzivpmxlciot` project**, which still serves a pre-fix copy of
+  `sync-ghl-booking` (proven: POST there → `{"error":"Booking_ID is required"}`). Brendan repointed it to the live
+  `bjgrgbgykvjrsuwwruoh`; re-test booking = clean, 0 errors. (The earlier stale-PIT theory was superseded: the real
+  cause was the dead-project URL.)
+- **`sync_ghl_booking_executions` audit table created** (RLS: tenant-scoped read + service-role write, index on
+  `(client_id, created_at desc)`) — the fn's `logExecution` was silently no-oping on a missing table; now GHL
+  booking syncs are observable, at parity with `sync_ghl_executions` (contact sync).
+
 ## 2026-07-21 — V1 finish loop (client-ready hardening): 6 code items shipped + alerting live
 
 Autonomous loop per `Operations/prompts/04-v1-finish-loop.md`, ratified by the 2026-07-21 v1-vs-v2 decision
