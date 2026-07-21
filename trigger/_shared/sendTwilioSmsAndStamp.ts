@@ -2,6 +2,7 @@ import { pushSmsToGhl } from "./ghl-conversations.ts";
 import { normalizePhone } from "./phone.ts";
 import { isPhoneOptedOut } from "./optout.ts";
 import { buildCostEvent } from "./costEvents.ts";
+import { appendOptOutFooter } from "./optOutFooter.ts";
 
 // Seed per-segment SMS cost (USD). Mirrors the 1.4c/SMS seed weight used by the
 // cadence_metrics estimate in runEngagement.writeCadenceMetrics. is_estimated=true
@@ -91,11 +92,15 @@ export async function sendTwilioSmsAndStamp(args: {
     }
   }
 
+  // Spam Act opt-out footer on this INITIATED commercial send (cadence /
+  // follow-up). Idempotent; skipped if the copy already carries STOP wording.
+  const body = appendOptOutFooter(args.body);
+
   const statusCallbackUrl = `${supabaseUrl}/functions/v1/twilio-status-webhook`;
   const params: Record<string, string> = {
     From: args.fromNumber,
     To: args.toNumber,
-    Body: args.body,
+    Body: body,
     StatusCallback: statusCallbackUrl,
   };
   const twilioBody = new URLSearchParams(params);
@@ -147,7 +152,7 @@ export async function sendTwilioSmsAndStamp(args: {
       await args.supabase.from("message_queue").insert({
         lead_id: args.leadId,
         ghl_account_id: args.ghlAccountId,
-        message_body: args.body,
+        message_body: body,
         contact_name: args.contactName,
         contact_email: args.contactEmail,
         contact_phone: args.toNumber,
@@ -175,7 +180,7 @@ export async function sendTwilioSmsAndStamp(args: {
       ghlLocationId: args.ghlLocationId,
       contactId: args.ghlContactId,
       conversationProviderId: args.ghlConversationProviderId,
-      message: args.body,
+      message: body,
       direction: "outbound",
       altId: twilioJson.sid ?? null,
     });

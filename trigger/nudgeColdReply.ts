@@ -31,6 +31,7 @@ import { aiGenerateEngagementCopy } from "./_shared/aiGenerateEngagementCopy";
 import { normalizePhone } from "./_shared/phone";
 import { isPhoneOptedOut } from "./_shared/optout";
 import { normalizeLlmModel } from "./_shared/llmModel";
+import { appendOptOutFooter } from "./_shared/optOutFooter";
 import {
   DEFAULT_QUIET_HOURS,
   resolveLeadTimezone,
@@ -251,12 +252,14 @@ export const nudgeColdReply = schedules.task({
       }
 
       // Send via direct Twilio. Mirrors sendTwilioSmsAndStamp's shape so
-      // the same StatusCallback path runs.
+      // the same StatusCallback path runs. Spam Act opt-out footer on this
+      // INITIATED commercial nudge (idempotent; skipped if copy has STOP wording).
+      const sendBody = appendOptOutFooter(smsBody);
       const statusCb = `${process.env.SUPABASE_URL}/functions/v1/twilio-status-webhook`;
       const formBody = new URLSearchParams({
         From: fromNumber,
         To: lead.phone!,
-        Body: smsBody,
+        Body: sendBody,
         StatusCallback: statusCb,
       });
       const twilioRes = await fetch(
@@ -291,7 +294,7 @@ export const nudgeColdReply = schedules.task({
           nudge_count: tier + 1,
           last_outbound_at: nowIso,
           last_message_at: nowIso,
-          last_message_preview: smsBody.slice(0, 200),
+          last_message_preview: sendBody.slice(0, 200),
         })
         .eq("client_id", lead.client_id!)
         .eq("lead_id", lead.lead_id!);
@@ -305,7 +308,7 @@ export const nudgeColdReply = schedules.task({
           // (ghl_location_id, client_id); the old lead_id stamp matched
           // neither, so nudge texts were invisible to the count.
           ghl_account_id: lead.client_id ?? lead.lead_id,
-          message_body: smsBody,
+          message_body: sendBody,
           contact_phone: lead.phone,
           contact_name: [lead.first_name, lead.last_name].filter(Boolean).join(" ") || null,
           contact_email: lead.email,

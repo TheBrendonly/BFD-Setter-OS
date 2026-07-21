@@ -1,6 +1,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2.101.0";
 import { assertClientAccess, AssertAccessError } from "../_shared/assert-client-access.ts";
 import { pushSmsToGhl } from "../_shared/ghl-conversations.ts";
+import { appendOptOutFooter } from "../_shared/optOutFooter.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -119,10 +120,13 @@ Deno.serve(async (req) => {
     const statusCallbackUrl = supabaseUrlEnv
       ? `${supabaseUrlEnv.replace(/\/$/, "")}/functions/v1/twilio-status-webhook`
       : null;
+    // Spam Act opt-out footer on this INITIATED commercial send (manual CRM
+    // send). Idempotent; skipped if the operator already typed STOP wording.
+    const sendBody = appendOptOutFooter(message.trim());
     const twilioFields: Record<string, string> = {
       From: fromNumber,
       To: toNumber,
-      Body: message.trim(),
+      Body: sendBody,
     };
     if (statusCallbackUrl) twilioFields.StatusCallback = statusCallbackUrl;
 
@@ -176,7 +180,7 @@ Deno.serve(async (req) => {
         await supabase.from("message_queue").insert({
           lead_id: leadId,
           ghl_account_id: client.ghl_location_id || client_id,
-          message_body: message.trim(),
+          message_body: sendBody,
           contact_phone: toNumber,
           channel: "sms_outbound",
           twilio_message_sid: twilioData.sid,
@@ -194,7 +198,7 @@ Deno.serve(async (req) => {
         ghlLocationId: client.ghl_location_id as string,
         contactId: leadId,
         conversationProviderId: (client.ghl_conversation_provider_id as string | null) ?? null,
-        message: message.trim(),
+        message: sendBody,
         direction: "outbound",
         altId: twilioData.sid ?? null,
       });
