@@ -36,8 +36,9 @@ TRACK B — if Brendan is present (ask for ONE 2FA code at the start, else skip)
 (F8 edit-persist + client rate card, F13 summary card both roles, G3-8a, G3-6 residual sub-checks) and any
 "Needs Brendan live" rows he wants to clear (F16b inside-hours, F16c after he enables the flag).
 
-ALSO: if Brendan has made the lead_notes decision (BRENDAN_TODO), implement it (create table + regen types.ts
-surgically, or strip LeadNotesPanel + its callers; render smoke after).
+OPTIONAL tidy: the pre-existing `dm_executions` 400 on ContactDetail (BRENDAN_TODO, low-pri cosmetic — guard the
+`messages`/`setter_messages` select; DM surface has no live traffic; render smoke after). (lead_notes already
+removed 2026-07-22.)
 
 Pass -> COMPLETED_LOG; fail -> BUG_LIST + fix + retest. Close out per the Relay Protocol.
 Then the ONLY thing left is the event-gated First-Client Milestone — say "I'm onboarding a client" ->
