@@ -46,6 +46,14 @@ step 0.
 > (2) the client-own UPDATE needed a client-own SELECT policy + a table→column SELECT REVOKE (111 non-secret cols) to
 > work without leaking secrets; (3) `get-openrouter-usage` (RLS-ORUSAGE-1) allowed client-role → agency-gated.
 
+> **2026-07-22 update:** the agency-UI browser smoke PASSED 2026-07-13 (headless, 4/4 twice — it also caught + fixed
+> the `isAgency` white-screen). The only remaining GATE-A verification is the first REAL client-role login, tracked
+> as the row below (moved here from TEST_LIST — it can only run at onboarding).
+
+- [ ] **GATE-A first client-role login (at onboarding).** The first real client-role user sees ONLY its own
+  dashboard/CRM/tags, no sibling data, no secret values, the ticker hides OPENROUTER_BALANCE, and its UI-state
+  prefs (crm_filter_config: column widths, filters) persist across reloads. (Server-side already proven 24/24
+  with a throwaway probe; this is the belt-and-braces live-UI leg.)
 - [x] **RLS-CLIENTS-1 (Critical)** — DONE. clients command-split (SELECT/INSERT/DELETE agency-role-gated; UPDATE agency
   OR client-own-row) + guard trigger freezing subscription_status + bundled keys + client-own SELECT + secret-column
   SELECT REVOKE. clients read via `clients_public` (now security_definer).

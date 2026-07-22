@@ -4,6 +4,40 @@ Items closed out of the active lists. Newest first. The active lists are in the 
 (`BUG_LIST.md`, `FEATURE_ROADMAP.md`, `BRENDAN_TODO.md`, `TEST_LIST.md`, `DEFERRED.md`). First-client-gated
 work lives in `Docs/FIRST_CLIENT_TASKS.md` (not archived — deferred).
 
+## 2026-07-22 — Full documentation reconciliation + archive sweep (docs-only)
+
+Brendan asked for every list to reflect open-only truth with stale info REMOVED (not just ticked). All 6 lists +
+SESSION_PLAN + TEST_SESSION rewritten/banner'd. Items physically closed INTO this log by the sweep (each with its
+real pass evidence):
+
+- **PROMPT-AUTH-1 residuals ("No leftover artifacts" + "Efficiency") — CLOSED.** Both were blocked on the Setter-1
+  content migration, which Brendan applied + Claude verified 2026-07-07 (stored prompt 68,750 → 53,720 chars; no
+  `{{ $now }}` / "Available days" / legacy tool names; passes the lint). The behavioral half (tool-calling + date
+  accuracy on `google/gemini-2.5-flash`) is proven by the subsequent live SMS passes (2026-07-12 booking day-map,
+  2026-07-13 SMS booking on v25, 2026-07-21 dual-tz offer + reschedule honesty). Nothing left to verify.
+- **API-DEPR-1 UI presentation — CLOSED** (Agents tab with full hydrated detail PASSED 2026-07-12; the
+  `v2/list-agents` call live-confirmed 2026-07-07). Residual = a Retell-dashboard notice glance → TEST_LIST.
+- **GATE-A agency-UI smoke — already passed 2026-07-13**; the remaining "first client-role login" row moved to
+  `FIRST_CLIENT_TASKS.md` (only runnable at onboarding). TEST_LIST no longer carries GATE A.
+- **B4 SMS send-idempotency live-retry leg → `DEFERRED.md`** (standing; forcing a live Trigger retry is
+  impractical; unit + DB + call-side proofs done).
+- **BRENDAN_TODO closed items archived:** GHL workflow-URL audit DONE (Brendan, 2026-07-22 — all workflows now
+  point at the live project); AU 2028 public holidays SHIPPED (`f31a3cf`, next refresh due before end-2028 for
+  2029); the syntheticProbe alert-text cosmetic drift SHIPPED (deployed with Trigger 20260712.2+/20260721.3);
+  F21(b) decision recorded as a standing note (feature shipped 2026-07-12). The long [x] history (Session 7/9/10,
+  F13/F14 deploy, branding purge, inotify, DEPLOY-1, ACMA check, Setter-1 migration, elevenlabs undeploy,
+  F1 field provisioning, Property Coach revert, MODEL-1 correction, SMS latency) was already recorded in this log
+  under its original dates and is now removed from the active file.
+- **TEST_LIST stale-pass rows removed** (all recorded here under their pass dates): PURGE-UI-1/2, PURGE-SYNC-1,
+  SYNC-LOG-1, P3-CLEANUP-1, INB-1, CONTACTS-EDIT-DEAD-1, CHATS-DM-1, COST-4, MODEL-1-HARDENING backend, HOURS-1
+  a/d, FOLLOWUP-DURING-CALL-1, RESCHED-SMS-1, BOOK-TZ-DISPLAY-1, SCHED-1(b), SEC-PII-LOGS-1 spot-check, F23,
+  LEADREACT-CRASH-1, INTAKE-RL-1, LIVE-D, B-2 CSV + outage legs, G3-6 Tier-3, F15 client-eye, F13 margin/toggles/
+  period rows, F8 panel render, the 2026-07-13 frozen-bundle legs (F24 voice booking, PU-14, PU-6, SMS STOP/START),
+  and the 2026-07-21 owed legs (STOP-footer, bookings render-smoke, REACT-NORMPHONE-1, voice regression).
+- **BUG_LIST** confirmed 0 open; the `lead_notes` pre-existing defect is tracked as a Brendan DECISION (create vs
+  remove), not an open build. **DEFERRED** cross-refs corrected (SLOT-MAP-1's exploitable half closed by the v53
+  guard — DEFERRED now the sole tracker of the architectural cleanup; INTAKE-RL-1 no longer "pending").
+
 ## 2026-07-21 (evening) — Live TEST pass (Brendan present) + GHL booking-sync fix
 
 Live window with Brendan on the phone/2FA (harness: magic-link + TOTP, service-key dials, signed inbound-SMS

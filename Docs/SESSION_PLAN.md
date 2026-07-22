@@ -531,12 +531,23 @@ Status: `[ ]` not started · `[~]` in progress · `[x]` done. Effort is rough.
   window):** TEST_SESSION RUN 0-9 + STOP-footer live send + bookings render-smoke + REACT-NORMPHONE-1 reactivation +
   the setup-heavy autonomous legs. Handoff `Operations/handoffs/2026-07-21-v1-finish-loop.md`; next prompt in
   `Docs/NEXT_SESSION_PROMPT.md`.
+- [x] **LIVE TEST PASS (the v1-finish loop's final leg) — DONE 2026-07-21 evening (Fable 5, Brendan present,
+  1 TOTP).** All 3 owed legs PASS (STOP-footer append-once/not-doubled + 429 LIVE-D; bookings render-smoke —
+  ContactDetail displays real bookings, no JS errors; REACT-NORMPHONE-1 stamp + by-phone resolve), the answered
+  voice-booking regression PASS (frozen v53/v25 good), and the autonomous batch PASS (COST-4, SCHED-1(b),
+  MODEL-1-HARDENING, FOLLOWUP-DURING-CALL-1, HOURS-1 a/d, BOOK-TZ-DISPLAY-1, RESCHED-SMS-1). Shipped in-window:
+  SEC-PII-LOGS-1 residual (`d1622dd`, Trigger 20260721.3) + the **GHL booking-sync fix** — `sync-ghl-booking`
+  v16/v17 parses the GHL standard payload; root cause of the workflow 400s was the "Add Booking" webhook still
+  pointed at the RETIRED `qfbhcixkxzivpmxlciot` project (Brendan repointed; end-to-end verified clean, BOOKED +
+  CANCELLED both flow) + the missing `sync_ghl_booking_executions` audit table created. Handoff
+  `Operations/handoffs/2026-07-21-live-test-pass.md`. **2026-07-22 full archive sweep:** all 6 lists rewritten to
+  open-only truth (BUG_LIST 0 open; TEST_LIST = residual non-blocking legs; BRENDAN_TODO = open-only; TEST_SESSION
+  banner'd as a completed/reusable template). Brendan confirmed the GHL workflow-URL audit complete.
 
-4. **Brendan solo block (parallel, no Claude session):** Setter-1 prompt migration, Resend SMTP → F14 E2E,
-   sms_llm rate + billing anchor/toggles, PROMPT_UPDATE_LIST items (see the 2026-07-07
-   action pack for the full ordered list with exact live wording + paste-ready changes).
-   (**n8n Railway shutdown removed from this list 2026-07-20:** closed WON'T DO on 2026-07-09,
-   `Docs/BRENDAN_TODO.md:148`. Brendan keeps that service for other, non-bfd-setter work.)
+4. **Brendan solo block (parallel, no Claude session):** the open `Docs/BRENDAN_TODO.md` items (retire the old
+   Supabase project, `lead_notes` decision, F16c dogfood enable, DPAs + console MFA, screenshot re-shoot,
+   GHL cosmetic renames). Resend SMTP + billing config are first-client-gated → `Docs/FIRST_CLIENT_TASKS.md`.
+   (Setter-1 prompt migration DONE 2026-07-07; n8n Railway shutdown closed WON'T DO 2026-07-09.)
 5. **Candidate pre-first-client feature sessions (Brendan picks; from the 2026-07-04 market research,
    `FEATURE_ROADMAP.md` F15-F17):** F15 client ROI visibility pack (show-rate funnel + weekly report) ·
    F16 never-miss-a-lead pack (speed-to-lead + missed-call text-back + live-transfer config) · F17 phase-1
@@ -544,15 +555,13 @@ Status: `[ ]` not started · `[~]` in progress · `[x]` done. Effort is rough.
 6. **First-client milestone (event-gated, Brendan + Claude assist):** Stripe live + `ENFORCE_SUBSCRIPTION_GATE`,
    webhook signing secrets + arm `retell_webhook_secret` (6.6), AU A2P registration for `+61481614530`, GHL
    reminder-workflow snapshot at onboarding. After this, v1 is live + 100%.
-**API-DEPR-1/2 are DONE** (retell-proxy v49 live); Session 10 (G3-7) is DONE — vite 8 is live on `main`.
-**`BUG_LIST.md`:** 0 pre-existing bugs block the milestone; the P3 review (2026-07-07) added new hardening items
-(F16C-SMS-1 High but DEFERRED-to-milestone, QH-TZ-1 Med, 3 Low) — none exploitable on the current live setup.
-Nothing blocks the First-Client Milestone on the CODE side; what remains is Brendan's live behavioral TEST_LIST
-pass (mostly the 2026-07-07 combined-build checks) + the BRENDAN_TODO manual gates in the 2026-07-07 action pack.
-
-**Ready-to-run prompts for the whole relay live in `Docs/TEST_SESSION.md` RUN 10** (T-fix → Session S → F15 → F16,
-each with a self-chaining ▶ PIPELINE footer) **and `Docs/FIRST_CLIENT_MILESTONE.md`** (the gated last step). Triggers:
-say "run test session" to start; say "I'm onboarding a client" to surface the milestone.
+**STATE AS OF 2026-07-22 (the authoritative summary):** `BUG_LIST.md` = **0 open**. The consolidated live TEST
+pass is **COMPLETE** (2026-07-21 evening). `TEST_LIST.md` holds only a short residual set of NON-BLOCKING checks
+(none gate the milestone). `BRENDAN_TODO.md` is open-only (headline: retire the old `qfbhcixkxzivpmxlciot`
+Supabase project + the `lead_notes` decision). Everything first-client-gated is in `Docs/FIRST_CLIENT_TASKS.md`.
+**The ONLY remaining step to v1 "100%" is the event-gated First-Client Milestone** — say "I'm onboarding a client"
+→ `Docs/FIRST_CLIENT_MILESTONE.md` + `Docs/FIRST_CLIENT_ARMING_RUNBOOK.md`. Next-session relay prompt (the
+optional non-blocking cleanup tail): `Docs/NEXT_SESSION_PROMPT.md`.
 **Functional 100% = Sessions 0-8 `[x]` + TEST_LIST green** (reached at the end of Session 7-finish); Sessions
 9-10 + P1 clear the last open BUG_LIST items + the doc/list backlog; the First-client milestone is the actual
 go-live. **P2 (deferred build) and P3 (review+cleanup+research) are DONE (2026-07-07)**; the only remaining step

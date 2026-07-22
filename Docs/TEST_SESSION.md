@@ -1,5 +1,14 @@
 # BFD-Setter — TEST SESSION (consolidated runbook)
 
+> **⚠️ STATUS: this consolidated pass is COMPLETE (final leg 2026-07-21 evening; sweep 2026-07-22).** Every RUN
+> below was cleared across the 2026-07-05/06/11/12/13/21 sessions — see `Docs/archive/COMPLETED_LOG.md` and
+> `Operations/handoffs/2026-07-21-live-test-pass.md`. The short residual set lives in **`Docs/TEST_LIST.md`**
+> (open-only); do NOT re-run this file top-to-bottom, and do NOT trust its inline version numbers (e.g. RUN 0's
+> "retell-proxy v49 / Trigger 20260703.2" — live is v53 / 20260721.3). This file is kept as the REUSABLE RUNBOOK
+> TEMPLATE for a future full regression pass (e.g. post-first-client); re-verify all versions at RUN 0 if reused.
+> The RUN 9 manual checklist + RUN 10 relay prompts have been superseded by `Docs/BRENDAN_TODO.md` +
+> `Docs/NEXT_SESSION_PROMPT.md`.
+
 **Trigger:** when Brendan says **"run test session" / "let's run test session" / "test session"**, read this
 file and execute it top to bottom. This is the single consolidated runbook for the live TEST pass.
 **Model:** Opus 4.8 [1m] · **Thinking:** HIGH · **Mode:** execute (NOT plan).

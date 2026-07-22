@@ -31,31 +31,15 @@ can be worked independently.
 
 > **2026-07-11 reconciliation:** the applied/resolved items **PU-1, PU-3, PU-4, PU-6, PU-7, PU-8, PU-10, PU-12**
 > (all verified live 2026-07-07) and **PU-9** (the load-bearing CODE half, PU-9-CODE, shipped + verified 2026-07-11)
-> were archived → `Docs/archive/COMPLETED_LOG.md`. **PU-2** stays below as superseded-by-code (no action). Only
-> **PU-5, PU-11, PU-13** remain genuinely open, all optional/gated.
+> were archived → `Docs/archive/COMPLETED_LOG.md`. **PU-2** stays below as superseded-by-code (no action).
+> **2026-07-22 sweep:** **PU-14** (booking tool-call gate) and the **PU-6 Main-Outbound re-apply** — both applied by
+> Brendan + verified live 2026-07-13 on call `call_9ad640…` (real `book-appointments` call, disclosure spoken in the
+> opener) — physically archived → `Docs/archive/COMPLETED_LOG.md`. Only **PU-5, PU-11, PU-13** remain genuinely
+> open, all optional/gated.
 
 ---
 
 ## Open
-
-- [x] **PU-14 - Booking tool-call gate (voice; Main Outbound + Inbound). ✅ APPLIED (Brendan) + VERIFIED LIVE 2026-07-13** — on Main Outbound call `call_9ad640407735916a081516f1ec2` the agent booked via a real `book-appointments` call (confirmed `bookings` row, no fabricated "booked"); `speak_after_execution` was already ON on both agents (agent v26→v28). → COMPLETED_LOG. Original finding: Root cause of
-  BOOK-VOICE-FABRICATE-1 (live 2026-07-12): on call_189be0af the agent said "All sorted, you're booked, you'll get a
-  confirmation email" but NEVER called the `book-appointments` tool (Retell tool_calls held only `end_call`), so
-  nothing was booked and no email went out. Add a hard rule in SETTER CORE: *"To book you MUST call the
-  book-appointments tool. NEVER tell the caller they are booked/confirmed or that a confirmation email is coming
-  unless book-appointments returned a successful result (ok:true) THIS turn. If you haven't called the tool, or it
-  didn't succeed, say you're locking it in and will confirm, then call the tool."* Also confirm in Prompt Management
-  -> the setter's Voice/Retell settings -> Tools that book-appointments is attached with `speak_after_execution` ON
-  (spoken confirmation generated FROM the tool result) and no canned success line that fires regardless. Report-only.
-
-- [x] **PU-6 - recording disclosure on Main Outbound. ✅ APPLIED (Brendan) + VERIFIED LIVE 2026-07-13** — Main Outbound now speaks it (call `call_9ad640...`: "I'm Brendan's AI assistant helping out with the calls today, and just so you know, we might record this for quality — that all good with you?"). → COMPLETED_LOG. Original finding:**
-  Live 2026-07-12: two Main Outbound calls (call_189be0af, call_bb3a8f81) both received `recording_disclosure='required'`
-  as a dynamic var (F17 toggle on for BFD) but NEITHER opener spoke any disclosure. PU-6 was marked applied+archived,
-  but it looks absent from the live Main Outbound prompt or not keyed to `{{recording_disclosure}}` / its 'required'
-  value. **UPDATE same session:** the INBOUND BFD Agent DID speak it on a live inbound call (call_4069e887: "this call
-  is being recorded for quality"), so the disclosure works on Inbound and is missing ONLY on Main Outbound. Use the
-  Inbound prompt as the reference and add/fix the disclosure line (keyed to `{{recording_disclosure}}`) on Main
-  Outbound. Report-only; apply via Prompt Management.
 
 - [ ] **PU-5 — Stand up "Main Outbound V2" (voice).** A full new-prompt draft is ready:
   `Docs/archive/MAIN_OUTBOUND_V2_PROMPT_2026-06-16.md` (folds the Eddie/"Steven" structure into BFD V1: call-flow
