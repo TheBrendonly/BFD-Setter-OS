@@ -15,7 +15,6 @@ import { StatusTag } from '@/components/StatusTag';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 import { UnsavedChangesDialog } from '@/components/UnsavedChangesDialog';
 import { ContactConversationHistory } from '@/components/contacts/ContactConversationHistory';
-import { LeadNotesPanel } from '@/components/contacts/LeadNotesPanel';
 import { useClientCredentials } from '@/hooks/useClientCredentials';
 import { useCreatorMode } from '@/hooks/useCreatorMode';
 import SavingOverlay from '@/components/SavingOverlay';
@@ -42,7 +41,6 @@ import {
   Filter,
   Save,
   Copy,
-  FileText,
   BookOpen,
   X,
   Plus,
@@ -156,8 +154,6 @@ const ContactDetail = () => {
       setSetterStopped(!!(contact as any).setter_stopped);
     }
   }, [contact]);
-  const [notesOpen, setNotesOpen] = useState(false);
-  const [notesStateLoaded, setNotesStateLoaded] = useState(false);
   const [showWorkflowDialog, setShowWorkflowDialog] = useState(false);
 
   // Bookings state
@@ -321,7 +317,7 @@ const ContactDetail = () => {
   }, [retryExecutionId, dismissError]);
 
   usePageHeader({
-    containerClassName: notesOpen ? 'max-w-[1600px]' : 'max-w-7xl',
+    containerClassName: 'max-w-7xl',
     title: 'LEADS',
     breadcrumbs: [
       { label: 'LEADS', onClick: () => safeNavigate(`/client/${clientId}/leads`) },
@@ -387,30 +383,6 @@ const ContactDetail = () => {
         className: 'groove-btn',
       },
       {
-        label: notesOpen ? 'CLOSE NOTES' : 'OPEN NOTES',
-        icon: notesOpen ? <X className="w-4 h-4" /> : <FileText className="w-4 h-4" />,
-        onClick: () => {
-          const next = !notesOpen;
-          setNotesOpen(next);
-          if (clientId) {
-            supabase
-              .from('clients_public')
-              .select('crm_filter_config')
-              .eq('id', clientId)
-              .single()
-              .then(({ data }) => {
-                const existing = (data?.crm_filter_config || {}) as Record<string, any>;
-                supabase
-                  .from('clients')
-                  .update({ crm_filter_config: { ...existing, notes_panel_open: next } })
-                  .eq('id', clientId)
-                  .then(() => {});
-              });
-          }
-        },
-        className: 'groove-btn',
-      },
-      {
         label: 'SAVE',
         icon: <Save className="w-4 h-4" />,
         onClick: () => handleSaveContact(),
@@ -425,7 +397,7 @@ const ContactDetail = () => {
         className: '!w-8 !h-8 !p-0 groove-btn-destructive',
       },
     ],
-  }, [currentIndex, totalCount, contactIds.length, hideEmpty, isDirty, saving, notesOpen, erroredExecutionId, activeError]);
+  }, [currentIndex, totalCount, contactIds.length, hideEmpty, isDirty, saving, erroredExecutionId, activeError]);
 
   const fetchContact = useCallback(async () => {
     if (!contactId) return;
@@ -551,10 +523,6 @@ const ContactDetail = () => {
         if (config.contact_sections_open) {
           setSectionsOpen(prev => ({ ...prev, ...config.contact_sections_open }));
         }
-        if (typeof config.notes_panel_open === 'boolean') {
-          setNotesOpen(config.notes_panel_open);
-        }
-        setNotesStateLoaded(true);
       } catch (err) {
         console.error('Error loading section states:', err);
       } finally {
@@ -841,7 +809,7 @@ const ContactDetail = () => {
     <>
       {!chatLoaded && <RetroLoader />}
       <div className="h-full overflow-hidden bg-background flex flex-col relative">
-      <div className={`container mx-auto flex flex-col h-full pt-6 ${notesOpen ? 'max-w-[1600px]' : 'max-w-7xl'}`} style={{ paddingBottom: '24px' }}>
+      <div className="container mx-auto flex flex-col h-full pt-6 max-w-7xl" style={{ paddingBottom: '24px' }}>
         <div className="flex gap-6 flex-1 min-h-0">
 
           {/* Left Column - Contact Info (single groove-border block) */}
@@ -1095,17 +1063,6 @@ const ContactDetail = () => {
             </div>
           </div>
 
-          {/* Notes Panel — always mounted for prefetch, hidden when closed */}
-          {clientId && contactId && (
-            <div className={`w-80 shrink-0 groove-border bg-card flex flex-col overflow-hidden ${notesOpen ? '' : 'hidden'}`}>
-              <LeadNotesPanel
-                open={notesOpen}
-                onClose={() => setNotesOpen(false)}
-                leadId={contactId}
-                clientId={clientId}
-              />
-            </div>
-          )}
         </div>
       </div>
 

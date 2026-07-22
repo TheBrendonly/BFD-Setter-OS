@@ -17,7 +17,6 @@ import {
 import RetroLoader from '@/components/RetroLoader';
 import SavingOverlay from '@/components/SavingOverlay';
 import { ContactConversationHistory } from '@/components/contacts/ContactConversationHistory';
-import { LeadNotesPanel } from '@/components/contacts/LeadNotesPanel';
 import { TagManager } from '@/components/contacts/TagManager';
 import { StatusTag } from '@/components/StatusTag';
 import { format } from 'date-fns';
@@ -73,7 +72,7 @@ interface ContactTag {
   color: string;
 }
 
-type RightPanel = 'none' | 'details' | 'notes';
+type RightPanel = 'none' | 'details';
 type Tab = 'all' | 'unread' | 'starred';
 
 const PixelStarIcon = ({ filled, ...props }: React.SVGProps<SVGSVGElement> & { filled?: boolean }) => (
@@ -144,7 +143,7 @@ export default function Chats() {
   const [starredLeadIds, setStarredLeadIds] = useState<Set<string>>(new Set());
   const [rightPanel, setRightPanel] = useState<RightPanel>(() => {
     const saved = localStorage.getItem('chats_right_panel');
-    if (saved === 'details' || saved === 'notes' || saved === 'none') return saved;
+    if (saved === 'details' || saved === 'none') return saved;
     return 'details';
   });
   const [readStatus, setReadStatus] = useState<Record<string, string>>({});
@@ -158,7 +157,6 @@ export default function Chats() {
   const [chatFilterConfig, setChatFilterConfig] = useState<CrmFilterConfig>(DEFAULT_FILTER_CONFIG);
   const [filtersReady, setFiltersReady] = useState(false);
   const chatFilterSaveRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [notesCount, setNotesCount] = useState(0);
   const [allTags, setAllTags] = useState<{ id: string; name: string; color: string | null }[]>([]);
   const [customFieldDefs, setCustomFieldDefs] = useState<string[]>([]);
   const [contactTagMap, setContactTagMap] = useState<Record<string, { id: string; name: string; color: string }[]>>({});
@@ -772,19 +770,6 @@ export default function Chats() {
       setFiltersReady(true);
     }
   }, [fetchLeads, fetchReadStatus, fetchStarred, clientId]);
-
-  // Fetch notes count for selected lead
-  const fetchNotesCount = useCallback(async () => {
-    if (!selectedLeadId || !clientId) { setNotesCount(0); return; }
-    const { count } = await (supabase as any)
-      .from('lead_notes')
-      .select('id', { count: 'exact', head: true })
-      .eq('lead_id', selectedLeadId)
-      .eq('client_id', clientId);
-    setNotesCount(count || 0);
-  }, [selectedLeadId, clientId]);
-
-  useEffect(() => { fetchNotesCount(); }, [fetchNotesCount]);
 
   useEffect(() => {
     if (!clientId) return;
@@ -1436,7 +1421,7 @@ export default function Chats() {
         className: 'groove-btn-positive',
       }] : []),
       ...(rightPanel !== 'none' ? [{
-        label: rightPanel === 'details' ? 'CLOSE DETAILS' : 'CLOSE NOTES',
+        label: 'CLOSE DETAILS',
         icon: <X className="w-4 h-4" />,
         onClick: () => {
           if (detailsDirty && rightPanel === 'details') {
@@ -1814,42 +1799,18 @@ export default function Chats() {
                 >
                   DETAILS
                 </button>
-                <button
-                  onClick={() => guardedSetRightPanel(rightPanel === 'notes' ? 'none' : 'notes')}
-                  className={`ibm-spacing-allow flex-1 py-2.5 text-center font-medium transition-colors uppercase flex items-center justify-center gap-1.5 ${
-                    rightPanel === 'notes' ? 'text-primary border-b-2 border-primary' : 'text-muted-foreground hover:text-foreground'
-                  }`}
-                  style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '13px', fontWeight: 500 }}
-                >
-                  NOTES
-                  {notesCount > 0 && (
-                    <span className="inline-flex h-[18px] w-fit items-center justify-center rounded-full bg-primary text-primary-foreground leading-none text-center" style={{ fontSize: '11px', fontWeight: 500, letterSpacing: '0em', padding: '0 5px 0 5px' }}>
-                      {notesCount}
-                    </span>
-                  )}
-                </button>
               </div>
               <div className="flex-1 min-h-0 overflow-hidden">
-                {rightPanel === 'notes' ? (
-                  <LeadNotesPanel
-                    open={true}
-                    onClose={() => handleSetRightPanel('none')}
-                    leadId={selectedLead.id}
-                    clientId={clientId}
-                    onNotesChanged={fetchNotesCount}
-                  />
-                ) : (
-                  <ChatContactDetailsPanel
-                    lead={selectedLead}
-                    clientId={clientId}
-                    onLeadUpdated={(updated) => {
-                      setLeads(prev => prev.map(l => l.id === updated.id ? updated : l));
-                    }}
-                    onDirtyChange={setDetailsDirty}
-                    saveRef={detailsSaveRef}
-                    onOpenLeadDetails={() => safeNavigate(`/client/${clientId}/leads/${selectedLead.id}`)}
-                  />
-                )}
+                <ChatContactDetailsPanel
+                  lead={selectedLead}
+                  clientId={clientId}
+                  onLeadUpdated={(updated) => {
+                    setLeads(prev => prev.map(l => l.id === updated.id ? updated : l));
+                  }}
+                  onDirtyChange={setDetailsDirty}
+                  saveRef={detailsSaveRef}
+                  onOpenLeadDetails={() => safeNavigate(`/client/${clientId}/leads/${selectedLead.id}`)}
+                />
               </div>
             </div>
           )}
