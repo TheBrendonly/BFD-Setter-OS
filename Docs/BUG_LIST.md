@@ -15,12 +15,8 @@ Open bugs and behavior fixes. Reconciled 2026-06-25; full re-audit 2026-07-07 (S
 **NONE — 0 open.** (Since the 2026-07-12 autonomous build; re-confirmed at the 2026-07-21 live TEST pass and the
 2026-07-22 sweep.)
 
-One pre-existing frontend defect is tracked as a **Brendan DECISION**, not an open build:
-
-- [B] **`lead_notes` table missing (pre-existing since the initial commit).** `LeadNotesPanel`/`Chats` query a
-  `lead_notes` table prod never had → a 400 + "Error fetching notes" console error on every ContactDetail open.
-  Not a regression, blocks nothing. Decision in `BRENDAN_TODO.md` (create the table vs remove the notes UI);
-  becomes a code item once decided.
+The one pre-existing defect — the `lead_notes` console 400 — was **resolved 2026-07-22** by removing the unused
+notes panel (`8851f79`; Brendan confirmed the feature wasn't needed). → `Docs/archive/COMPLETED_LOG.md`.
 
 ## History (context, not active work)
 

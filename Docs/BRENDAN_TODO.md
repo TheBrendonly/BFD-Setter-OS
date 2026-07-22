@@ -5,18 +5,18 @@ Things only Brendan can do (UI clicks, logins, provider dashboards, business cal
 **prompt-content edits live in `PROMPT_UPDATE_LIST.md`**. Archive sweep 2026-07-22: all completed items moved to
 `Docs/archive/COMPLETED_LOG.md` (this file is OPEN items only).
 
-## Open
+> **✅ STATUS 2026-07-22: NOTHING BLOCKING. `BUG_LIST` = 0 open; the live TEST pass is complete; GHL booking-sync
+> is fixed end-to-end; the `lead_notes` console error is removed (`8851f79`). The items below are all OPTIONAL /
+> low-priority / at-your-timing. The only things that MATTER next are (a) a new bug if one surfaces, or (b)
+> onboarding a client (real, or a dummy dry-run to derisk the process — say "I'm onboarding a client").**
 
-- [ ] **Decommission (or lock down) the retired `qfbhcixkxzivpmxlciot` Supabase project.** It is STILL ALIVE and
-  serving stale edge-function code, which silently breaks any integration still pointed at it (root cause of the
-  2026-07-21 GHL "Add Booking" 400s). In the Supabase dashboard: that project → Project Settings → General →
-  Delete (or pause / remove its functions) so a wrong-URL config fails loudly instead of running old logic.
-  _(The GHL-workflow URL audit itself is DONE — Brendan checked every workflow 2026-07-22, all now point at the
-  live `bjgrgbgykvjrsuwwruoh`.)_
-- [ ] **Decide on the `lead_notes` table (low priority, pre-existing).** `LeadNotesPanel`/`Chats` query a
-  `lead_notes` table that has never existed in prod → a 400 + "Error fetching notes" console error on every
-  ContactDetail open. Present since the initial commit (not a regression). Either create the table (so the notes
-  panel works) or have Claude remove the notes UI. Not blocking anything.
+## Open (all optional / low-priority)
+
+- [ ] **(Optional) Locate + delete the orphaned `qfbhcixkxzivpmxlciot` Supabase project.** It's an OLD project
+  from before the platform migration to `bjgrgbgykvjrsuwwruoh`, still live but NOT visible in your current Supabase
+  account — it's almost certainly under a separate/older Supabase login or org. It's now **harmless**: every GHL
+  workflow was repointed to the live project and verified clean (2026-07-22), so nothing routes to it anymore.
+  Delete it if/when you find it (check other Supabase logins/orgs); no urgency.
 - [ ] **Enable the remaining per-client F16 features on the BFD dogfood client to test them** (default OFF). Agency
   view of the client → **Client Settings → "Calls & compliance"**: **Missed-call text-back** (F16c) is still OFF
   (speed-to-lead F16b + recording-disclosure are already ON since 2026-07-12). Optionally flip the **"Client ROI
@@ -37,6 +37,11 @@ Things only Brendan can do (UI clicks, logins, provider dashboards, business cal
 - [ ] **AU public-holiday refresh — NEXT DUE before end of 2028 (for 2029).** `trigger/_shared/businessHours.ts`
   `AU_PUBLIC_HOLIDAYS` now covers 2026 + 2027 + 2028 (2028 added `f31a3cf`, 2026-07-21). Annual ritual: ask Claude
   to add the next year's national holidays (~10-line edit + a Trigger deploy). `[B]`
+
+- [ ] **(Low, pre-existing, cosmetic) `dm_executions` 400 on ContactDetail.** The contact page queries
+  `dm_executions` for `messages`/`setter_messages` columns that don't exist in prod → 2 console 400s (same class as
+  the old CHATS-DM-1). The DM channel has no live traffic, so the panel just returns empty — noise only. Have Claude
+  guard the select (or fold it into the next CRM-panel cleanup) whenever; not blocking. Surfaced 2026-07-22.
 
 ## Standing notes
 

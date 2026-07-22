@@ -4,6 +4,23 @@ Items closed out of the active lists. Newest first. The active lists are in the 
 (`BUG_LIST.md`, `FEATURE_ROADMAP.md`, `BRENDAN_TODO.md`, `TEST_LIST.md`, `DEFERRED.md`). First-client-gated
 work lives in `Docs/FIRST_CLIENT_TASKS.md` (not archived — deferred).
 
+## 2026-07-22 — lead-notes panel removed (the last console-error blemish)
+
+`8851f79`. The `LeadNotesPanel` (per-contact internal notes) queried a `lead_notes` table prod never had → a 400 +
+"Error fetching notes" on every ContactDetail/Chats open since the initial commit. Brendan confirmed the feature
+wasn't needed, so removed rather than created: deleted `LeadNotesPanel.tsx` + both call sites (Chats right-panel
+NOTES tab → DETAILS-only; ContactDetail slide-out panel + its OPEN/CLOSE NOTES toolbar action + `notes_panel_open`
+persistence). The separate booking-note field (`selectedBooking.notes`) untouched; the inert `lead_notes` type block
+in the generated `types.ts` left as-is. −634 lines. **Verified:** build + 453 tests green; **headless render smoke
+on the deployed vite bundle** (index-24HnNOgD.js) — ContactDetail + Chats render clean, no white-screen, no page
+errors, `leadNotesErrorGone:true` (Chats now has ZERO console errors).
+
+> **Observed (pre-existing, NOT introduced) — low priority.** ContactDetail still logs 2 `dm_executions` 400s
+> (its query selects `messages`/`setter_messages` columns that don't exist in prod) — same class as the old
+> CHATS-DM-1, on the DM surface which has NO live traffic (the panel returns empty; cosmetic console noise only).
+> Tracked as a low-priority cleanup, not opened during the 2026-07-22 wind-down. Fix if the DM channel is ever
+> shipped, or fold into a future CRM-panel cleanup.
+
 ## 2026-07-22 — Full documentation reconciliation + archive sweep (docs-only)
 
 Brendan asked for every list to reflect open-only truth with stale info REMOVED (not just ticked). All 6 lists +
