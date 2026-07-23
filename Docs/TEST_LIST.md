@@ -12,45 +12,36 @@ When it fails, open a bug in `BUG_LIST.md`.
 
 ## Claude-drivable (autonomous, next cleanup session)
 
+> **2026-07-23 cleanup-tail pass:** PURGE-SIM-1, PURGE-TAG-1, F15 funnel, F15 report, and F9V2-1/2 all PASSED
+> autonomously and moved to `Docs/archive/COMPLETED_LOG.md` (2026-07-23 entry). The two below remain OPEN — both
+> were blocked from clean unsupervised execution (see notes); their underlying mechanisms are already evidenced live.
+
 - [ ] **BOOK-CONFIRM-HONESTY-1 — dedicated forced-failure.** Force a `book-appointments` failure over SMS (throwaway
-  client) → the reply is the honest holding message, NOT a false "you're booked". (The mechanism is already
-  evidenced live: RESCHED-SMS-1 passed 2026-07-21 with the honest "wasn't able to make that change" reply; this is
-  belt-and-braces on the booking-specific path.)
-- [ ] **PURGE-SIM-1 — simulator end-to-end** (run-simulation v21 + generate-simulation-personas v21): generate
-  personas, run a short simulation; new dummy leads are `bfd-simulation-*@gmail.com`; OpenRouter calls succeed with
-  the new attribution headers.
-- [ ] **PURGE-TAG-1 — try-gary tag still routes** (ghl-tag-webhook v14): apply a legacy `1prompt-try-gary-<style>`
-  tag to a test GHL contact (Claude can do this via the GHL API) → agent_style/source_type derive as before; a
-  `bfd-try-gary-<style>` tag behaves identically.
-- [ ] **F15 funnel — status transition reaches the dashboard.** Flip a real booking confirmed→showed in GHL (the
-  status workflows are verified live as of 2026-07-21: BOOKED + CANCELLED both flowed) → the dashboard funnel row
-  updates (booked/held/no-show). Claude-drivable via the GHL API + a booking fixture.
-- [ ] **F15 report — generate + preview.** On the dogfood client, generate a weekly report + view it via
-  ReportSettingsCard "Preview latest report"; sections respect the toggles. (Email leg stays Resend-gated →
-  `FIRST_CLIENT_TASKS.md`.)
-- [ ] **F9V2-1/2 — locked-setter drift flag + badge clear.** Deliberately Retell-lock a setter (config write, not
-  prompt content) → the hourly `poll-retell-drift` flags a real drift (`retell_drift_detected_at` + `error_logs`
-  row) → the tile badge shows → a Pull-from-Retell/unlock clears it. (The schedule itself is registered + firing —
-  verified 2026-07-21. Property Coach has a real v17-vs-synced-13 drift but is unlocked, so it correctly won't flag.)
+  client) → the reply is the honest holding message, NOT a false "you're booked". (Mechanism already evidenced live:
+  RESCHED-SMS-1 passed 2026-07-21 with the honest "wasn't able to make that change" reply; this is belt-and-braces
+  on the booking-specific path.) **NOT run 2026-07-23:** a clean forced failure needs a throwaway SMS-wired client
+  (heavy) or breaking BFD's live booking (pollution/risk) — deferred to a supervised run.
 - [ ] **B2-REPOINT-1 — outage convergence.** Stage a lingering `bfd-<phone>` lead (GHL-outage sim: break/restore
   `ghl_api_key`, pre-authorized in the TEST_SESSION rules), then send a normal inbound after GHL recovers → the lead
-  converges to its real GHL contact id (rows repointed), reply not dropped.
+  converges to its real GHL contact id (rows repointed), reply not dropped. **NOT run 2026-07-23:** the inbound leg
+  needs a number NOT in the CRM (the engine sends a real Twilio reply to it); TEST_PHONE_A is a known CRM lead and
+  freeing it is Brendan-gated, TEST_PHONE_B is ask-first — no safe non-CRM number available unsupervised. By-phone
+  convergence was verified in prior sessions; run this with Brendan present + a safe test number.
 
 ## Needs a browser session (2FA code from Brendan at the start)
 
-- [ ] **F8 — agency panel edit-persist + client rate card.** Sub-Account Config → Cost-to-Price Calculator: edit
-  rates/FX/markup/toggles, Save, reload → persists; blended $/min matches a hand-check. Flip **show-rate-to-client**
-  ON → a client-role login sees the read-only rate card (no breakdown/markup); OFF → gone. (Panel render + the
-  server-side trap are already proven; this is the edit/persist/toggle behavioral leg.)
-- [ ] **F13 — dashboard summary card, both roles.** Agency login sees the margin one-liner on the client's
-  ChatAnalytics dashboard (text + voice tabs); a client login sees only toggled parts.
-- [ ] **G3-8(a) — reactivation webhook fires server-side, no browser secret.** Execute-lead on a reactivation
-  campaign → row reaches `completed`; the browser Network tab shows the request going to `execute-lead-webhook`
-  with NO `supabase_service_key` in any browser payload; a failure marks the row `failed`.
-- [ ] **G3-6 residual — analytics browser sub-checks.** CreateMetricDialog widget suggestions
-  (`analytics-v2-suggest-widgets`), the OpenRouter usage panel (`get-openrouter-usage`), and a full
-  analyze-chat-history / AnalyticsV2 render for BFD (the G3-6-SCHEMA-1 browser leg). Everything else in G3-6
-  passed 2026-07-11.
+> **2026-07-23 cleanup-tail pass (agency browser session):** all four pages render CLEAN on the live vite bundle
+> (authed, 0 console errors, 0 ≥400 responses). **G3-6 residual + G3-8(a) PASSED** (→ COMPLETED_LOG). F8/F13 render
+> verified; only their edit/persist + client-role-visibility behavioral legs remain (need form interaction / a
+> second-role login — best as a short live glance).
+
+- [ ] **F8 — edit-persist + client rate card (behavioral leg only).** Render + server-side trap already proven; the
+  panel renders clean (2026-07-23). Remaining: Sub-Account Config → Cost-to-Price Calculator — edit rates/FX/markup,
+  Save, reload → persists + blended $/min hand-check; flip **show-rate-to-client** ON → a client-role login sees the
+  read-only rate card (no breakdown), OFF → gone. (Short live UI pass.)
+- [ ] **F13 — dashboard summary card, both roles (content leg only).** Dashboard renders clean (2026-07-23).
+  Remaining: confirm the agency margin one-liner text on the ChatAnalytics dashboard (text + voice tabs) and that a
+  client login sees only toggled parts. (Short live UI pass / second-role login.)
 
 ## Needs Brendan live (phone / UI / a second phone)
 

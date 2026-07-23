@@ -4,6 +4,59 @@ Items closed out of the active lists. Newest first. The active lists are in the 
 (`BUG_LIST.md`, `FEATURE_ROADMAP.md`, `BRENDAN_TODO.md`, `TEST_LIST.md`, `DEFERRED.md`). First-client-gated
 work lives in `Docs/FIRST_CLIENT_TASKS.md` (not archived — deferred).
 
+## 2026-07-23 — Optional cleanup tail: dm_executions 400 fix + 6 residual test PASSES
+
+Non-blocking cleanup-tail session (agency browser session live at the start, then autonomous).
+
+**Code shipped — `dm_executions` 400 on ContactDetail FIXED (`f840144`).** The live `dm_executions` table has
+`setter_messages` but no `messages` column (schema drift; `types.ts` still declares it), so two selects in
+`ContactConversationHistory.tsx` (lines 162, 302) 400'd on every ContactDetail open. Dropped `messages` from both
+selects (line 193 cast `(row as any).messages` to avoid a new TS error); both consumers already coerce a missing
+value to `[]`, so it is runtime-safe; `setter_messages` kept (it exists + drives outbound bubbles). Matches the
+correct pattern in `Chats.tsx:587`. **Verified:** npm test green (192 node + 8 frontend + 262 edge); targeted
+`tsc -p tsconfig.app.json` added no new errors; headless render smoke on the deployed bundle — ContactDetail went
+from 3× `dm_executions` 400 (pre-deploy) to **0 bad responses + 0 console errors** (post-deploy). This was the last
+cosmetic 400 on the page (the `lead_notes` one was removed 2026-07-22).
+
+**TRACK A residual tests — PASSED (autonomous, DB/edge-verified, all fixtures cleaned up):**
+- **F9V2-1/2 — locked-setter drift flag + badge + clear.** Locked Property Coach (synced v13, live Retell v19),
+  triggered `poll-retell-drift` (prod run, `checked:1 flagged:1`) → `retell_drift_detected_at` stamped + an
+  `error_logs` warning row ("live v19 > synced v13"); the voice-prompts tile showed **RETELL-LOCKED + DRIFTED · PULL**
+  chips (screenshot); mirrored the unlock handler (clears the flag) → state restored to exact original.
+- **F15 funnel — status transition reaches the dashboard.** Inserted a confirmed sms booking fixture → POSTed
+  `bookings-webhook` `appointmentStatus:showed` → booking mapped `confirmed→attended` (source `sms` preserved) + a
+  `booking_status_events` row (`confirmed→attended`); `get-show-rate-funnel` (agency JWT) moved **held 0→1,
+  show_rate null→1**. Fixtures deleted.
+- **F15 report — generate + preview.** Triggered `weekly-client-report` (prod: `clients:1 reports:1 stubbed:1
+  errors:0`) → fresh `weekly_reports` row; the `usage:false` toggle correctly excluded the usage section while
+  enabled sections rendered; `get-weekly-report` (the ReportSettingsCard preview source) returned the html.
+- **PURGE-TAG-1 — legacy + new try-gary prefixes route identically** (live `ghl-tag-webhook` v14). Isolated E2E
+  (throwaway workflows + pre-seeded `pending` executions to block the cadence): both `1prompt-try-gary-luxtest` and
+  `bfd-try-gary-luxtest` derived identical `agent_style='luxtest'` + `source_type='try_gary_landing'`. All fixtures
+  removed. (Note: BFD's real new-leads workflows use per-style `bfd_setter-try_gary-*` tags; the suffix-derivation
+  path is the legacy landing-page scheme, retained for backwards-compat.)
+- **PURGE-SIM-1 — simulator personas + OpenRouter attribution.** `generate-simulation-personas` created 2 personas
+  with `bfd-simulation-*@gmail.com` emails; `run-simulation` generated user + assistant messages — proving the
+  OpenRouter calls succeed with the BFD attribution headers (`buildingflowdigital.com` / "BFD Setter Simulation…",
+  no `1prompt`). Simulation deleted (CASCADE). **Observed:** the n8n `simulation_webhook` (setter-reply leg) returns
+  **500**, so full persona runs end in `error` — an n8n-side issue relevant to **M3 (n8n shutdown)**: the simulator
+  will need repointing to the native engine when n8n is decommissioned.
+
+**TRACK B — agency browser session (magiclink + TOTP, storageState reused all session):**
+- All four pages render CLEAN on the live vite bundle (authed, 0 console errors, 0 ≥400 responses):
+  ClientSettings, ChatAnalytics dashboard, AnalyticsV2, LeadReactivation.
+- **G3-6 residual — PASSED.** AnalyticsV2 renders clean; `get-openrouter-usage` (usage panel) + `analytics-v2-suggest-widgets`
+  (CreateMetricDialog suggestions) both return 200 with data under the agency JWT.
+- **G3-8(a) — PASSED.** LeadReactivation renders clean; the execute path (`LeadRow.tsx:115`) fires **server-side** via
+  `supabase.functions.invoke('execute-lead-webhook', …)`; browser code only ever reads the masked `has_supabase_service_key`
+  boolean, never the secret — the core "no browser secret" assertion holds by code + render.
+- F8 / F13 render verified; their edit-persist + client-role-visibility behavioral legs remain (a short live UI pass).
+
+**NOT run (blocked unsupervised, remain OPEN in TEST_LIST):** BOOK-CONFIRM-HONESTY-1 (needs a throwaway SMS-wired
+client or breaking live booking) and B2-REPOINT-1 (needs a number NOT in the CRM to receive a real Twilio reply;
+TEST_PHONE_A is a known lead + Brendan-gated to free, TEST_PHONE_B is ask-first). Both mechanisms already evidenced
+live; run with Brendan present.
+
 ## 2026-07-22 — lead-notes panel removed (the last console-error blemish)
 
 `8851f79`. The `LeadNotesPanel` (per-contact internal notes) queried a `lead_notes` table prod never had → a 400 +

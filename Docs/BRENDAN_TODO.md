@@ -38,10 +38,12 @@ Things only Brendan can do (UI clicks, logins, provider dashboards, business cal
   `AU_PUBLIC_HOLIDAYS` now covers 2026 + 2027 + 2028 (2028 added `f31a3cf`, 2026-07-21). Annual ritual: ask Claude
   to add the next year's national holidays (~10-line edit + a Trigger deploy). `[B]`
 
-- [ ] **(Low, pre-existing, cosmetic) `dm_executions` 400 on ContactDetail.** The contact page queries
-  `dm_executions` for `messages`/`setter_messages` columns that don't exist in prod → 2 console 400s (same class as
-  the old CHATS-DM-1). The DM channel has no live traffic, so the panel just returns empty — noise only. Have Claude
-  guard the select (or fold it into the next CRM-panel cleanup) whenever; not blocking. Surfaced 2026-07-22.
+- [x] **(Low, pre-existing, cosmetic) `dm_executions` 400 on ContactDetail — FIXED 2026-07-23 (`f840144`).**
+  The contact page selected a `messages` column that does not exist on the live `dm_executions` table (only
+  `setter_messages` does). Dropped `messages` from the two selects in `ContactConversationHistory.tsx` (both
+  consumers already coerce a missing value to `[]`, so it is runtime-safe; `setter_messages` kept). npm test green;
+  headless render smoke on the deployed bundle: ContactDetail now returns 0 bad responses + 0 console errors
+  (was 3× `dm_executions` 400 pre-deploy). This was the last cosmetic 400 on the page.
 
 ## Standing notes
 
