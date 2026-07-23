@@ -159,7 +159,7 @@ export const ContactConversationHistory: React.FC<ContactConversationHistoryProp
     try {
       const { data } = await supabase
         .from('dm_executions')
-        .select('id,status,messages,started_at,resume_at,channel')
+        .select('id,status,started_at,resume_at,channel')
         .eq('lead_id', ghlId)
         .in('status', ['pending', 'waiting', 'grouping', 'sending', 'failed'])
         .order('started_at', { ascending: false })
@@ -190,7 +190,7 @@ export const ContactConversationHistory: React.FC<ContactConversationHistoryProp
           }
         }
 
-        const msgs = (Array.isArray(row.messages) ? row.messages : []) as PendingExecution['messages'];
+        const msgs = (Array.isArray((row as any).messages) ? (row as any).messages : []) as PendingExecution['messages'];
         const prev = pendingRef.current;
         const newExec: PendingExecution = { id: row.id, status: row.status ?? '', messages: msgs, started_at: row.started_at ?? '', resume_at: (row as any).resume_at ?? null, channel: (row as any).channel ?? null };
         const pendingSignature = `${row.id}:${msgs.length}:${msgs.map((msg: any) => msg?.received_at || msg?.timestamp || '').join('|')}`;
@@ -299,7 +299,7 @@ export const ContactConversationHistory: React.FC<ContactConversationHistoryProp
     try {
       const { data, error: fetchErr } = await (supabase as any)
         .from('dm_executions')
-        .select('id,lead_id,messages,setter_messages,completed_at,started_at,channel')
+        .select('id,lead_id,setter_messages,completed_at,started_at,channel')
         .eq('lead_id', ghlId)
         .in('status', ['completed', 'paused'])
         .order('started_at', { ascending: true });
