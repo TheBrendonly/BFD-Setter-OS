@@ -57,17 +57,22 @@ Deno.serve(async (req) => {
 
     const { data: client, error: clientError } = await supabase
       .from("clients")
-      .select("simulation_webhook, ghl_location_id, openrouter_api_key")
+      .select("ghl_location_id, openrouter_api_key")
       .eq("id", simulation.client_id)
       .single();
-    if (clientError || !client?.simulation_webhook) {
-      throw new Error("Client simulation_webhook not configured. Please add your Simulation webhook URL in the credentials page.");
+    if (clientError || !client) {
+      throw new Error("Client not found for this simulation.");
     }
     if (!client?.openrouter_api_key) {
       throw new Error("OpenRouter API key not configured. Please add it in API Credentials.");
     }
 
-    const webhookBaseUrl = client.simulation_webhook;
+    // The setter reply now comes from the NATIVE engine (the process-setter-reply Trigger
+    // task) instead of the retired n8n simulation_webhook, which had started returning
+    // "Workflow execution failed" (500) and killed every persona run. The column is left
+    // in place but is no longer read, so the simulator has no n8n dependency at all.
+    const triggerSecretKey = Deno.env.get("TRIGGER_SECRET_KEY");
+    if (!triggerSecretKey) throw new Error("TRIGGER_SECRET_KEY not configured");
     const openrouterApiKey = client.openrouter_api_key as string;
 
     // If no specific persona, set simulation status and queue all runnable personas.
@@ -282,36 +287,72 @@ Deno.serve(async (req) => {
           });
         }
 
-        // Send to webhook
+        // Send the turn to the NATIVE setter engine (process-setter-reply).
         const actualUserTurnCount = needsNewUserMessage ? completedUserTurns + 1 : completedUserTurns;
-        const webhookUrl = new URL(webhookBaseUrl);
 
         // Use dummy contact info from persona
         const dummyEmail = persona.dummy_email || `bfd-simulation-${persona.name.toLowerCase().replace(/\s+/g, '')}-${Math.random().toString(36).substring(2, 8)}@gmail.com`;
         const dummyPhone = persona.dummy_phone || `+1555${String(persona.age || 30).padStart(3, "0")}${String(messageOrder).padStart(4, "0")}`;
 
-        // Set all data as query parameters to match n8n webhook format
-        webhookUrl.searchParams.set("Message_Body", userMessage);
-        webhookUrl.searchParams.set("Lead_ID", persona.id);
-        webhookUrl.searchParams.set("GHL_Account_ID", client.ghl_location_id || simulation.client_id);
-        webhookUrl.searchParams.set("Name", persona.name);
-        webhookUrl.searchParams.set("Email", dummyEmail);
-        webhookUrl.searchParams.set("Phone", dummyPhone);
-        webhookUrl.searchParams.set("Setter_Number", String(simulation.agent_number));
-        webhookUrl.searchParams.set("Simulation", "True");
+        // Prior turns of this simulated conversation. The engine uses these instead of the
+        // client's chat_history (which simulations must neither read nor pollute), so
+        // multi-turn memory still works. Re-read here so it includes anything inserted
+        // this turn (e.g. the outreach opener).
+        const { data: historyRows } = await supabase
+          .from("simulation_messages")
+          .select("role, content, message_order")
+          .eq("persona_id", persona.id)
+          .order("message_order", { ascending: true });
 
-        const webhookPayload = {};
+        const simulationHistory = (historyRows || [])
+          .filter((m: any) => (m.role === "user" || m.role === "assistant") && typeof m.content === "string" && m.content.trim())
+          .map((m: any) => ({ role: m.role as "user" | "assistant", content: m.content as string }));
+        // The current turn travels in Message_Body, so drop it from the history tail.
+        while (
+          simulationHistory.length > 0 &&
+          simulationHistory[simulationHistory.length - 1].role === "user" &&
+          simulationHistory[simulationHistory.length - 1].content === userMessage
+        ) {
+          simulationHistory.pop();
+        }
 
+        const setterPayload = {
+          Message_Body: userMessage,
+          Lead_ID: persona.id,
+          Contact_ID: persona.id,
+          GHL_Account_ID: client.ghl_location_id || simulation.client_id,
+          Name: persona.name,
+          Email: dummyEmail,
+          Phone: dummyPhone,
+          Setter_Number: String(simulation.agent_number),
+          Simulation: true,
+          SimulationHistory: simulationHistory,
+        };
 
-        console.log(`[Simulation] Sending turn ${actualUserTurnCount}/${totalMessages}${isInBookingPhase ? ' (BOOKING)' : ''} for persona ${persona.name} to ${webhookUrl.toString()}`);
+        console.log(`[Simulation] Sending turn ${actualUserTurnCount}/${totalMessages}${isInBookingPhase ? ' (BOOKING)' : ''} for persona ${persona.name} to process-setter-reply (history ${simulationHistory.length})`);
 
-        const webhookResponse = await loggedFetch(
-          webhookUrl.toString(),
+        const failTurn = async (status: number | string, detail: string) => {
+          console.error(`[Simulation] setter engine error for persona ${persona.name}:`, detail);
+          messageOrder++;
+          await supabase.from("simulation_messages").insert({
+            persona_id: persona.id,
+            role: "assistant",
+            content: `[ERROR: setter engine ${status}] ${String(detail).slice(0, 500)}`,
+            message_order: messageOrder,
+          });
+          throw new Error(`Setter engine failed (${status})`);
+        };
+
+        const triggerResponse = await loggedFetch(
+          "https://api.trigger.dev/api/v1/tasks/process-setter-reply/trigger",
           {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(webhookPayload),
-            signal: AbortSignal.timeout(180000),
+            headers: {
+              Authorization: `Bearer ${triggerSecretKey}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ payload: setterPayload }),
+            signal: AbortSignal.timeout(30000),
           },
           {
             client_id: simulation.client_id,
@@ -322,22 +363,46 @@ Deno.serve(async (req) => {
           }
         );
 
-        if (!webhookResponse.ok) {
-          const errText = await webhookResponse.text();
-          console.error(`Webhook error for persona ${persona.name}:`, errText);
-
-          messageOrder++;
-          await supabase.from("simulation_messages").insert({
-            persona_id: persona.id,
-            role: "assistant",
-            content: `[ERROR: Webhook returned ${webhookResponse.status}] ${errText}`,
-            message_order: messageOrder,
-          });
-
-          throw new Error(`Webhook failed with status ${webhookResponse.status}`);
+        if (!triggerResponse.ok) {
+          await failTurn(triggerResponse.status, await triggerResponse.text());
+        }
+        const triggerJson = await triggerResponse.json().catch(() => null) as { id?: string } | null;
+        const runId = triggerJson?.id;
+        if (!runId) {
+          await failTurn("no_run_id", JSON.stringify(triggerJson));
         }
 
-        const responseText = await webhookResponse.text();
+        // Poll the run to completion. The booking tool loop can take tens of seconds; the
+        // old n8n call budgeted 180s here. NOTE: the v2 GET returns HTML, v3 is the
+        // correct retrieve endpoint.
+        const POLL_DEADLINE_MS = Date.now() + 150000;
+        let runOutput: unknown = null;
+        let finalStatus = "";
+        let runErrorDetail = "";
+        while (Date.now() < POLL_DEADLINE_MS) {
+          await new Promise((r) => setTimeout(r, 2000));
+          const pollRes = await fetch(`https://api.trigger.dev/api/v3/runs/${runId}`, {
+            headers: { Authorization: `Bearer ${triggerSecretKey}` },
+          });
+          if (!pollRes.ok) continue;
+          const runJson = await pollRes.json().catch(() => null) as
+            { status?: string; output?: unknown; error?: unknown } | null;
+          if (!runJson?.status) continue;
+          finalStatus = runJson.status;
+          if (["COMPLETED", "FAILED", "CANCELED", "CRASHED", "TIMED_OUT", "SYSTEM_FAILURE", "INTERRUPTED"].includes(finalStatus)) {
+            runOutput = runJson.output ?? null;
+            runErrorDetail = runJson.error ? JSON.stringify(runJson.error) : "";
+            break;
+          }
+        }
+
+        if (finalStatus !== "COMPLETED") {
+          await failTurn(finalStatus || "timeout", runErrorDetail || `run ${runId} did not complete in time`);
+        }
+
+        // process-setter-reply returns { Message_1, Message_2, ... }, which is exactly what
+        // the existing Message_N parser below expects.
+        const responseText = JSON.stringify(runOutput ?? {});
 
         console.log(`[Simulation] Got response for persona ${persona.name}, turn ${actualUserTurnCount}`);
 

@@ -29,6 +29,7 @@ import { persistToolInvocations } from "./_shared/persistToolInvocations.ts";
 import { persistHumanTurn } from "./_shared/persistHumanTurn.ts";
 import { prefetchAvailability, buildAvailabilityBlock } from "./_shared/prefetchSlots.ts";
 import { makeVoiceBookingCallTool } from "./_shared/voiceBookingCallTool.ts";
+import { makeSimulationCallTool } from "./_shared/simulationCallTool.ts";
 import { buildTimeAnchorBlock, resolveClientTimeZone } from "./_shared/timeAnchor.ts";
 import { resolveLeadDisplayTimeZone, zoneShortLabel } from "./_shared/leadTimezone.ts";
 import { mergeCanonicalSlots, validateBookingArgs, type CanonicalSlotMap } from "./_shared/slotBinding.ts";
@@ -140,6 +141,14 @@ export const processSetterReply = task({
     Email: string;
     Phone: string;
     Setter_Number: string;
+    // ── Simulator mode (run-simulation). Absent on every real inbound SMS, and when
+    // absent this task behaves exactly as before. When true: conversation history comes
+    // from the simulator instead of the client's chat_history, nothing is written back to
+    // chat_history, and mutating tools are stubbed so no real appointment or SMS happens.
+    Simulation?: boolean;
+    // Prior turns of the simulated conversation, oldest first, EXCLUDING the current
+    // Message_Body (which is appended as the latest user turn like the real path).
+    SimulationHistory?: Array<{ role: "user" | "assistant"; content: string }>;
   }) => {
     const supabase = getMainSupabase();
     const setterNumber = String(payload.Setter_Number || "1").trim() || "1";
@@ -202,15 +211,32 @@ export const processSetterReply = task({
         .maybeSingle();
       setterPrompt = (promptRow?.system_prompt as string | null) ?? "";
 
-      const { data: history } = await clientSupabase
-        .from("chat_history")
-        .select("message, timestamp")
-        .eq("session_id", payload.Lead_ID)
-        .order("timestamp", { ascending: false })
-        .limit(MAX_HISTORY_ROWS);
-      if (Array.isArray(history)) {
-        chatHistory = (history as ChatHistoryRow[]).slice().reverse();
+      // Simulator runs are self-contained: their history lives in simulation_messages,
+      // not the client's chat_history (which they must neither read nor pollute). The
+      // prompt above is still the client's REAL setter prompt, which is the point.
+      if (!payload.Simulation) {
+        const { data: history } = await clientSupabase
+          .from("chat_history")
+          .select("message, timestamp")
+          .eq("session_id", payload.Lead_ID)
+          .order("timestamp", { ascending: false })
+          .limit(MAX_HISTORY_ROWS);
+        if (Array.isArray(history)) {
+          chatHistory = (history as ChatHistoryRow[]).slice().reverse();
+        }
       }
+    }
+
+    // Simulated conversations supply their own prior turns (oldest first) so multi-turn
+    // memory still works with chat_history reads/writes switched off.
+    if (payload.Simulation && Array.isArray(payload.SimulationHistory)) {
+      chatHistory = payload.SimulationHistory
+        .filter((t) => t && typeof t.content === "string" && t.content.trim())
+        .slice(-MAX_HISTORY_ROWS)
+        .map((t) => ({
+          message: { type: t.role === "assistant" ? "ai" : "human", content: t.content },
+          timestamp: "",
+        }));
     }
 
     // ── STEP 3: Build OpenAI-format message array ──
@@ -349,11 +375,15 @@ export const processSetterReply = task({
 
     // Shared with sendFollowup (which previously forked this closure and dropped
     // the 30s timeout) — semantics unchanged for this path.
-    const callTool = makeVoiceBookingCallTool({
+    const realCallTool = makeVoiceBookingCallTool({
       supabaseUrl,
       clientId: client.id,
       intakeSecret: client.intake_lead_secret ?? null,
     });
+    // Simulation: reads still hit real GHL (so offered times are genuine and the
+    // canonical-slot / event-id binding below keeps working), but mutating tools are
+    // stubbed so a dummy persona never books a real appointment or sends a real SMS.
+    const callTool = payload.Simulation ? makeSimulationCallTool(realCallTool) : realCallTool;
 
     // ── BOOK-1: prefetch real calendar availability and inject it as ground truth
     // before the model speaks (mirrors the Voice setter). Best-effort — a prefetch
@@ -479,7 +509,9 @@ export const processSetterReply = task({
     });
 
     // ── STEP 6: Append human + assistant turns to chat_history (best-effort) ──
-    if (clientSupabase) {
+    // Skipped for simulations: their transcript belongs in simulation_messages, and
+    // writing dummy personas into the client's real chat_history would skew analytics.
+    if (clientSupabase && !payload.Simulation) {
       // SMS-MEM-1: persist the inbound human turn too (was missing entirely in this
       // normal path — only the setter_stopped branch in receive-twilio-sms wrote it),
       // so the next reply's history read isn't blind to what the lead actually said.
