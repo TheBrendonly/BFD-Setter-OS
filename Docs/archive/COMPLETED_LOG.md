@@ -38,6 +38,20 @@ multi-turn memory demonstrably working; fixture torn down.
 > **Follow-on:** M3 (n8n Railway shutdown) is now fully unblocked. Known limitation: simulated *cancel/reschedule*
 > bind against `knownEventIds` from real `get-contact-appointments`, and a dummy persona has no real appointments,
 > so those flows exercise the honest "couldn't make that change" path rather than a stubbed success.
+>
+> **2026-07-24 post-decommission re-verify (n8n now actually removed):** re-ran the simulator E2E three more times.
+> All three that *launched* reached `complete` (12 real replies, 0 errors, 0 booking delta, 0 persona chat_history)
+> — the repoint is unaffected by n8n being gone (confirming nothing ran through n8n). One of four runs stalled at
+> `personas_ready` with the persona `pending` and **zero** `request_logs` in its window, i.e. the launch never
+> fired the per-persona invocation. Root cause is PRE-EXISTING and unrelated to this change: `enqueuePersonaRun`
+> re-invokes `run-simulation` fire-and-forget via `EdgeRuntime.waitUntil` (`run-simulation/index.ts:534-563`); a
+> dropped background invocation leaves the persona unstarted. Not touched by the repoint (the self-enqueue pattern
+> predates it). Filed as an observation, not a blocker; a retry/idempotent-restart hardening of the enqueue path is
+> a separate low-priority item if the flakiness recurs in real use.
+>
+> Also confirmed no runtime n8n dependency survives: the live frontend bundle (entry `index-DH-zKseh.js` + all
+> preloaded chunks) has ZERO `primary-production-392b` / `99players` / `/webhook/` literals, and the `VITE_*`
+> webhook env vars degrade gracefully when unset (empty default or a clear "not configured" error, never a crash).
 
 ## 2026-07-23 — Optional cleanup tail: dm_executions 400 fix + 6 residual test PASSES
 
