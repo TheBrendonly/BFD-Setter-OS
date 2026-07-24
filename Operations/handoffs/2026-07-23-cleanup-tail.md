@@ -40,8 +40,10 @@ ran autonomously after Brendan left. Model Opus 4.8 [1m], execute mode. Nothing 
 - **F16b/c/d, B-5** — the "Needs Brendan live" phone rows (unchanged).
 
 ## Findings worth carrying
-- **n8n simulation_webhook returns 500** (the simulator's setter-reply leg). n8n is slated for shutdown (M3); when it
-  goes, the simulator needs repointing to the native text engine. Not opened as a bug (internal QA tool, low pri).
+- **n8n simulation_webhook returned 500** (the simulator's setter-reply leg). **FIXED 2026-07-24 (`4518408`)** by
+  repointing the simulator to the native `process-setter-reply` engine rather than repairing a service M3 deletes.
+  The simulator now has no n8n dependency, so the M3 Railway shutdown is fully unblocked. See the 2026-07-24
+  entry in `COMPLETED_LOG.md`.
 - **PURGE-TAG-1 nuance:** BFD's real new-leads workflows use per-style `bfd_setter-try_gary-*` tags, so the
   tag-suffix agent_style derivation is the legacy landing-page scheme (retained for backwards-compat). Both prefixes
   work when used.

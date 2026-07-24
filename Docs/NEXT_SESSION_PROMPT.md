@@ -40,8 +40,9 @@ REMAINING (all need Brendan; skip any you don't want to bother with — none blo
   sees only toggled parts. (Dashboard render already verified.)
 - (If Brendan wants) the "Needs Brendan live" phone rows: F16b inside-hours 60s call, F16c missed-call text-back
   (enable missed_call_textback_enabled first), F16d transfer, B-5 unknown-caller voice.
-- (Housekeeping, M3) the simulator's setter-reply leg depends on the n8n simulation_webhook, which returns 500;
-  when n8n is decommissioned (M3) the simulator needs repointing to the native text engine.
+- (Housekeeping, M3) n8n Railway shutdown is now FULLY UNBLOCKED: the simulator was repointed off the n8n
+  simulation_webhook to the native process-setter-reply engine on 2026-07-24 (`4518408`), so nothing depends on
+  n8n any more. Brendan can remove the Railway n8n service whenever he likes.
 
 Browser session note: access is non-persistent (magiclink + TOTP). If a browser leg is needed, ASK BRENDAN FOR ONE
 6-DIGIT 2FA CODE at the start; a client-role check can instead use a throwaway password client (no 2FA).

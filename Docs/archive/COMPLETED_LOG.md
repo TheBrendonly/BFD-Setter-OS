@@ -4,6 +4,41 @@ Items closed out of the active lists. Newest first. The active lists are in the 
 (`BUG_LIST.md`, `FEATURE_ROADMAP.md`, `BRENDAN_TODO.md`, `TEST_LIST.md`, `DEFERRED.md`). First-client-gated
 work lives in `Docs/FIRST_CLIENT_TASKS.md` (not archived — deferred).
 
+## 2026-07-24 — Simulator repointed off n8n to the native engine (SIM-N8N-500 fixed)
+
+`4518408`. The simulator's setter-reply leg POSTed to `clients.simulation_webhook` (n8n on Railway), which had
+started returning **HTTP 500 `{"message":"Workflow execution failed"}` after ~12s**, so every persona run ended in
+`error` (surfaced 2026-07-23). Reproduced live. n8n is up and routing, so the failure is *inside* the legacy
+workflow, which **is** the old text engine: production stopped using it (`processMessages` throws unless
+`use_native_text_engine`) and M3 schedules the service for deletion. No n8n credential exists in `.env`, the repo,
+or a readable vault, so the failing node could not even be inspected. Decision (Brendan): repoint rather than
+repair.
+
+**`run-simulation` (v22)** now calls the native **`process-setter-reply`** Trigger task instead of the webhook. The
+task already accepted the identical payload contract, returns `{ Message_1, ... }` which run-simulation's existing
+`Message_N` parser handles unchanged, and does not send SMS (the Twilio send lives in `processMessages`). The
+`simulation_webhook` requirement was dropped, so **the simulator now has no n8n dependency at all**, which is what
+makes the M3 shutdown safe. Trigger-and-poll uses `GET /api/v3/runs/<id>` (v2 returns HTML).
+
+**`processSetterReply`** gained an **additive, default-off** `Simulation` mode so simulated runs cause no
+real-world side effects: history comes from the simulator's own transcript (`SimulationHistory`) instead of the
+client's `chat_history` (preserving multi-turn memory), `chat_history` writes are skipped, and mutating tools
+(`book`/`cancel`/`update`/`schedule-callback`/`send-sms`) are stubbed by the new
+`trigger/_shared/simulationCallTool.ts` while READ tools still hit real GHL so offered times are genuine. The stubs
+**resolve rather than throw**, because `setterToolLoop` only stamps `ToolInvocation.error` on a throw and
+`needsBookingHonestyRewrite` would otherwise rewrite every simulated confirmation into a holding message.
+
+**Verified:** `npm test` green (**469**, +7 new `simulationCallTool` tests); `deno check` clean on run-simulation;
+Trigger **20260724.1** (15 tasks) with all **7 prod schedules still active**; run-simulation **v22**.
+*Regression (flag absent = real inbound SMS path):* `process-setter-reply` returned a normal reply and
+`chat_history` went **91 → 93** (+2 turns), i.e. unchanged. *Simulator E2E:* simulation reached **complete**,
+**8 real assistant replies**, **0** `[ERROR]` rows, **0** new `bookings`, **0** persona `chat_history` rows;
+multi-turn memory demonstrably working; fixture torn down.
+
+> **Follow-on:** M3 (n8n Railway shutdown) is now fully unblocked. Known limitation: simulated *cancel/reschedule*
+> bind against `knownEventIds` from real `get-contact-appointments`, and a dummy persona has no real appointments,
+> so those flows exercise the honest "couldn't make that change" path rather than a stubbed success.
+
 ## 2026-07-23 — Optional cleanup tail: dm_executions 400 fix + 6 residual test PASSES
 
 Non-blocking cleanup-tail session (agency browser session live at the start, then autonomous).
