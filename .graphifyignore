@@ -1,0 +1,34 @@
+# Graphify ignore for the bfd-setter (1prompt-os) code graph.
+# Same syntax as .gitignore. Keeps secrets, deps, and generated output
+# out of the knowledge graph.
+#
+# NOTE: reconstructed 2026-06-05 after the original local copy was removed
+# during a clone re-sync. Adjust if the prior scoping differed.
+
+.git/
+node_modules/
+dist/
+build/
+.next/
+.trigger/
+.worktrees/
+
+# Supabase / tooling transients
+supabase/.temp/
+frontend/supabase/.temp/
+
+# Lockfiles (noise, not semantics)
+frontend/pnpm-lock.yaml
+pnpm-lock.yaml
+package-lock.json
+
+# Secrets must never be extracted into a graph
+.env
+.env.*
+!.env.example
+credentials.env
+
+# Tooling output
+.letta/
+frontend/src/.letta/
+graphify-out/
