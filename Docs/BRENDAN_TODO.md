@@ -10,6 +10,18 @@ Things only Brendan can do (UI clicks, logins, provider dashboards, business cal
 > low-priority / at-your-timing. The only things that MATTER next are (a) a new bug if one surfaces, or (b)
 > onboarding a client (real, or a dummy dry-run to derisk the process — say "I'm onboarding a client").**
 
+## Open — demo-callback funnel (2026-08-11, blocks the dry run)
+
+- [ ] **Rotate the Supabase PAT.** `SUPABASE_PAT` in `.env` 401s on the simplest Management-API call — deploys are
+  dead until replaced (dashboard → Account → Access Tokens; update `.env`). Blocks deploying `demo-callback`.
+- [ ] **Create the "Stapleton Finance Demo" voice setter** (~10 min UI): duplicate "Gary - Mortgage Broker" (Copy
+  icon) → name `Stapleton Finance Demo` → Modify-with-AI with the block from the 2026-08-11 session report →
+  Save Setter → Push to Retell. Then tell Claude (fills the UUID into the registry + creates the phone binding).
+- [ ] **Decide: bot defense before the first REAL prospect.** The security review's one structural finding: nothing
+  proves a submitter owns the number they type. Rate limits (4 dimensions) raise the bar but don't close it. Options:
+  Cloudflare Turnstile on the form (needs a site key) or SMS-OTP before dialling (adds friction + cost). Fine to run
+  the dry run and drop #1 without it; not fine at scale.
+
 ## Open (all optional / low-priority)
 
 - [ ] **(Optional) Locate + delete the orphaned `qfbhcixkxzivpmxlciot` Supabase project.** It's an OLD project

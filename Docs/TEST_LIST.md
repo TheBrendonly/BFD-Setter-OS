@@ -10,6 +10,25 @@ When it fails, open a bug in `BUG_LIST.md`.
 > (2026-07-21 evening, `Operations/handoffs/2026-07-21-live-test-pass.md`); nothing below blocks the
 > First-Client Milestone.
 
+## Demo-callback funnel dry run (2026-08-11 build — blocked on PAT rotation + setter creation)
+
+> Built + review-hardened 2026-08-11 (`9fc1dd1`..`87b522e`): public `/g/:slug` callback landing page +
+> `demo-callback` edge fn. NOT yet deployed (SUPABASE_PAT dead) and the Stapleton setter is not yet created
+> (Brendan UI action). Run these once both unblock:
+
+- [ ] **DEMO-CB-1 — end-to-end dry run.** Submit `/g/stapleton-finance-b7q4` with Brendan's name+email+mobile →
+  `leads` row on BFD client carries the email (real GHL contact id, `form_source bfd-demo:stapleton-finance-b7q4`,
+  GHL contact tagged `bfd-demo-callback`) → real outbound call fires from +61481614530 → agent sounds
+  Stapleton-specific (qualification trio + NCCP guardrail hold) → booking lands on BFD's GHL calendar → confirmation
+  email arrives at the SUBMITTED address.
+- [ ] **DEMO-CB-2 — guard checks.** Second submit within the hour → per-phone 429 copy. Submit after 8pm AEST →
+  honest calling-hours decline. Unknown slug → 404 "Unknown demo page.". Opted-out number (if one exists) →
+  indistinguishable from call-failure copy.
+- [ ] **DEMO-CB-3 — `on_lead_change` residual check** (from the breakage review): confirm no `workflows` row on the
+  BFD client is `is_active` with `contact_created` in nodes (SQL in the 2026-08-11 session notes), so the lead upsert
+  cannot fire the legacy workflow-execute trigger. Expected clean (checked empty 2026-08-11 pre-fix; re-confirm at
+  dry-run time).
+
 ## Claude-drivable (autonomous, next cleanup session)
 
 > **2026-07-23 cleanup-tail pass:** PURGE-SIM-1, PURGE-TAG-1, F15 funnel, F15 report, and F9V2-1/2 all PASSED
