@@ -101,6 +101,7 @@ const Engagement = lazyRetry(() => import("./pages/Engagement"));
 const InstagramDMs = lazyRetry(() => import("./pages/InstagramDMs"));
 
 const EmailInbox = lazyRetry(() => import("./pages/EmailInbox"));
+const DemoCallbackPage = lazyRetry(() => import("./pages/DemoCallbackPage"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -235,6 +236,8 @@ const App = () => {
             <Route path="/onboarding" element={<ProtectedRoute><Onboarding /></ProtectedRoute>} />
             <Route path="/subscribe" element={<ProtectedRoute><Subscribe /></ProtectedRoute>} />
             <Route path="/demo/:slug" element={<PublicDemoPage />} />
+            {/* Public outbound-callback demo, one page per named prospect. Unlisted. */}
+            <Route path="/g/:slug" element={<DemoCallbackPage />} />
             <Route 
               path="/" 
               element={<IndexRoute />}
