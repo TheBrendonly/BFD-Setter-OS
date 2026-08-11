@@ -24,9 +24,11 @@ export interface DemoProspectCopy {
   readonly bullets: readonly [string, string, string];
 }
 
+// Slug keys carry the same random suffix as the server registry, so a demo URL
+// cannot be guessed from the firm's name alone.
 export const DEMO_PROSPECT_COPY: Readonly<Record<string, DemoProspectCopy>> = {
-  'stapleton-finance': {
-    slug: 'stapleton-finance',
+  'stapleton-finance-b7q4': {
+    slug: 'stapleton-finance-b7q4',
     firmName: 'Stapleton Finance',
     principalFirstName: 'Gayle',
     eyebrow: 'A live demo, built for Stapleton Finance',

@@ -1,9 +1,13 @@
 import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
+  clientIpFromHeaders,
   DEMO_PROSPECTS,
+  ipBucketKey,
+  isWithinCallingHours,
   phoneBucketKey,
   resolveProspect,
   slugBucketKey,
+  slugSpacingBucketKey,
   validateCallbackRequest,
 } from "./prospects.ts";
 
@@ -116,10 +120,54 @@ Deno.test("every registry entry is internally consistent", () => {
   }
 });
 
+Deno.test("prototype-chain slugs resolve to null, not a crash", () => {
+  // "__proto__"/"constructor" index the prototype on a plain object; without
+  // the hasOwn guard resolveProspect would throw instead of 404ing.
+  assertEquals(resolveProspect("__proto__"), null);
+  assertEquals(resolveProspect("constructor"), null);
+  assertEquals(resolveProspect("toString"), null);
+});
+
 // ── rate limit buckets ──
 
-Deno.test("bucket keys are namespaced and distinct per subject", () => {
+Deno.test("bucket keys are namespaced and distinct per subject and dimension", () => {
   assertEquals(phoneBucketKey("+61405482446"), "demo-callback:phone:+61405482446");
   assertEquals(slugBucketKey("stapleton-finance"), "demo-callback:slug:stapleton-finance");
+  assertEquals(ipBucketKey("203.0.113.7"), "demo-callback:ip:203.0.113.7");
+  assertEquals(slugSpacingBucketKey("stapleton-finance"), "demo-callback:slugmin:stapleton-finance");
   assertEquals(phoneBucketKey("+61400000000") === phoneBucketKey("+61405482446"), false);
+  // The daily-cap and spacing buckets for one slug must never collide.
+  assertEquals(slugBucketKey("x") === slugSpacingBucketKey("x"), false);
+});
+
+Deno.test("clientIpFromHeaders takes the first x-forwarded-for hop", () => {
+  assertEquals(
+    clientIpFromHeaders(new Headers({ "x-forwarded-for": "203.0.113.7, 10.0.0.1" })),
+    "203.0.113.7",
+  );
+  assertEquals(clientIpFromHeaders(new Headers({ "x-forwarded-for": " 198.51.100.2 " })), "198.51.100.2");
+  assertEquals(clientIpFromHeaders(new Headers()), null);
+  assertEquals(clientIpFromHeaders(new Headers({ "x-forwarded-for": "" })), null);
+});
+
+// ── calling hours ──
+
+Deno.test("calling hours: inside the Sydney window", () => {
+  // 2026-08-11T02:00Z = midday AEST (UTC+10).
+  assertEquals(isWithinCallingHours(new Date("2026-08-11T02:00:00Z"), "Australia/Sydney"), true);
+});
+
+Deno.test("calling hours: 11pm Sydney is outside the window", () => {
+  // 2026-08-11T13:00Z = 11pm AEST.
+  assertEquals(isWithinCallingHours(new Date("2026-08-11T13:00:00Z"), "Australia/Sydney"), false);
+});
+
+Deno.test("calling hours: boundaries — 8am is in, 8pm is out", () => {
+  // 22:00Z = 8am AEST next day; 10:00Z = 8pm AEST.
+  assertEquals(isWithinCallingHours(new Date("2026-08-10T22:00:00Z"), "Australia/Sydney"), true);
+  assertEquals(isWithinCallingHours(new Date("2026-08-11T10:00:00Z"), "Australia/Sydney"), false);
+});
+
+Deno.test("calling hours: an invalid timezone fails open", () => {
+  assertEquals(isWithinCallingHours(new Date("2026-08-11T13:00:00Z"), "Not/AZone"), true);
 });

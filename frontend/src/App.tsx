@@ -202,7 +202,7 @@ const ConditionalSupportChat = () => {
     checkPresentationMode();
   }, [clientId]);
   
-  if (location.pathname.startsWith('/demo/')) {
+  if (location.pathname.startsWith('/demo/') || location.pathname.startsWith('/g/')) {
     return null;
   }
   

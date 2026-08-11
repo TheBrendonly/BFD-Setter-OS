@@ -101,7 +101,58 @@ export async function findOrCreateGhlContact(
     return duplicateId;
   }
 
-  throw new GhlContactError(
-    `GHL contact create failed ${createResponse.status}: ${JSON.stringify(createJson).slice(0, 200)}`,
-  );
+  // SEC-PII-LOGS-1 discipline: GHL error payloads echo the submitted phone and
+  // email back. This message reaches the outer catch-all's console.error, so it
+  // must carry the status only, never the body.
+  throw new GhlContactError(`GHL contact create failed ${createResponse.status}`);
+}
+
+/**
+ * Best-effort tag add on an EXISTING contact, so a reused contact is just as
+ * filterable from real pipeline as a freshly created one. POST /contacts/:id/tags
+ * appends — unlike a contact PUT with a tags array, it cannot clobber the
+ * contact's existing tags. Never throws: tagging is bookkeeping, not the funnel.
+ */
+export async function addContactTags(
+  args: { ghlApiKey: string; contactId: string; tags: readonly string[] },
+  fetchImpl: FetchLike = fetch,
+): Promise<boolean> {
+  try {
+    const response = await fetchImpl(
+      `${GHL_BASE}/contacts/${encodeURIComponent(args.contactId)}/tags`,
+      {
+        method: "POST",
+        headers: headersFor(args.ghlApiKey),
+        body: JSON.stringify({ tags: [...args.tags] }),
+      },
+    );
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Best-effort email update on an EXISTING contact. The booking confirmation
+ * email goes to the address GHL holds, so when a returning submitter gives a
+ * different email the stored one must be refreshed or the confirmation lands
+ * in a stale inbox. Never throws.
+ */
+export async function updateContactEmail(
+  args: { ghlApiKey: string; contactId: string; email: string },
+  fetchImpl: FetchLike = fetch,
+): Promise<boolean> {
+  try {
+    const response = await fetchImpl(
+      `${GHL_BASE}/contacts/${encodeURIComponent(args.contactId)}`,
+      {
+        method: "PUT",
+        headers: headersFor(args.ghlApiKey),
+        body: JSON.stringify({ email: args.email }),
+      },
+    );
+    return response.ok;
+  } catch {
+    return false;
+  }
 }

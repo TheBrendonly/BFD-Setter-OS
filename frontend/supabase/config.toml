@@ -95,3 +95,6 @@ verify_jwt = false
 
 [functions.push-contact-to-ghl]
 verify_jwt = false
+
+[functions.demo-callback]
+verify_jwt = false

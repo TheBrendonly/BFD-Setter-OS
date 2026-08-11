@@ -1,5 +1,10 @@
 import { assertEquals, assertRejects } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { findOrCreateGhlContact, GhlContactError } from "./ghlContact.ts";
+import {
+  addContactTags,
+  findOrCreateGhlContact,
+  GhlContactError,
+  updateContactEmail,
+} from "./ghlContact.ts";
 
 const BASE_ARGS = {
   ghlApiKey: "test-key",
@@ -112,4 +117,66 @@ Deno.test("throws on a non-duplicate create failure", async () => {
     jsonResponse({ message: "unauthorized" }, 401),
   ]);
   await assertRejects(() => findOrCreateGhlContact(BASE_ARGS, impl), GhlContactError);
+});
+
+Deno.test("create-failure error message carries the status but never the PII-echoing body", async () => {
+  // SEC-PII-LOGS-1: GHL error payloads echo submitted phone/email; the thrown
+  // message reaches console.error via the handler's catch-all.
+  const { impl } = stubFetch([
+    jsonResponse({ contacts: [] }),
+    jsonResponse({ contacts: [] }),
+    jsonResponse({ message: "bad", phone: "+61405482446", email: "brendan@example.com" }, 422),
+  ]);
+  try {
+    await findOrCreateGhlContact(BASE_ARGS, impl);
+    throw new Error("expected throw");
+  } catch (err) {
+    const message = (err as Error).message;
+    assertEquals(message.includes("422"), true);
+    assertEquals(message.includes("+61405482446"), false);
+    assertEquals(message.includes("brendan@example.com"), false);
+  }
+});
+
+// ── addContactTags ──
+
+Deno.test("addContactTags POSTs to the append-only tags endpoint", async () => {
+  const { impl, calls } = stubFetch([jsonResponse({ succeeded: true })]);
+  const ok = await addContactTags(
+    { ghlApiKey: "k", contactId: "contact_1", tags: ["bfd-demo-callback"] },
+    impl,
+  );
+  assertEquals(ok, true);
+  assertEquals(calls[0].url, "https://services.leadconnectorhq.com/contacts/contact_1/tags");
+  assertEquals(calls[0].init?.method, "POST");
+  assertEquals(JSON.parse(String(calls[0].init?.body)), { tags: ["bfd-demo-callback"] });
+});
+
+Deno.test("addContactTags reports failure without throwing", async () => {
+  const { impl } = stubFetch([jsonResponse({ error: "nope" }, 401)]);
+  assertEquals(await addContactTags({ ghlApiKey: "k", contactId: "c", tags: ["t"] }, impl), false);
+  const throwing = () => Promise.reject(new Error("offline"));
+  assertEquals(await addContactTags({ ghlApiKey: "k", contactId: "c", tags: ["t"] }, throwing), false);
+});
+
+// ── updateContactEmail ──
+
+Deno.test("updateContactEmail PUTs only the email field", async () => {
+  const { impl, calls } = stubFetch([jsonResponse({ contact: { id: "contact_1" } })]);
+  const ok = await updateContactEmail(
+    { ghlApiKey: "k", contactId: "contact_1", email: "new@example.com" },
+    impl,
+  );
+  assertEquals(ok, true);
+  assertEquals(calls[0].url, "https://services.leadconnectorhq.com/contacts/contact_1");
+  assertEquals(calls[0].init?.method, "PUT");
+  assertEquals(JSON.parse(String(calls[0].init?.body)), { email: "new@example.com" });
+});
+
+Deno.test("updateContactEmail reports failure without throwing", async () => {
+  const { impl } = stubFetch([jsonResponse({ error: "nope" }, 500)]);
+  assertEquals(
+    await updateContactEmail({ ghlApiKey: "k", contactId: "c", email: "a@b.co" }, impl),
+    false,
+  );
 });

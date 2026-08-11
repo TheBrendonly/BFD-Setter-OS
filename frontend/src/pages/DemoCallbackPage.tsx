@@ -80,7 +80,9 @@ const DemoCallbackPage = () => {
       return;
     }
     setStatus('idle');
-    setError(result.error);
+    // 'in' narrowing: this tsconfig has strict:false, which defeats
+    // discriminated-union narrowing on the boolean literal.
+    setError('error' in result ? result.error : 'Something went wrong.');
   };
 
   const submitting = status === 'submitting';
@@ -127,9 +129,11 @@ const DemoCallbackPage = () => {
                 <p className="mobile-heading-2 font-semibold text-on-surface">
                   Gary is calling you now
                 </p>
+                {/* No missed-call promise: this funnel bypasses the cadence
+                    engine, so there is no follow-up SMS to back one. */}
                 <p className="field-text text-on-surface-variant">
-                  Keep your phone handy. It usually rings within a minute. If you miss it, he'll
-                  text you.
+                  Keep your phone handy. It usually rings within a minute. If you miss it, give it
+                  an hour and submit again.
                 </p>
               </div>
             ) : (
@@ -218,8 +222,12 @@ const DemoCallbackPage = () => {
           </div>
         </div>
 
+        {/* Attribution guards against a leaked URL reading as the firm's own
+            page: the demo presents a real firm's branding to its principal,
+            and a third party must not mistake it for the firm itself. */}
         <p className="mt-16 text-center text-xs text-on-surface-variant">
-          A demonstration by Building Flow Digital
+          Built by Building Flow Digital as a demonstration for {prospect.firmName}. Not
+          affiliated with or endorsed by {prospect.firmName}.
         </p>
       </div>
     </div>
