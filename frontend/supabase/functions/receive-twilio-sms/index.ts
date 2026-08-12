@@ -19,6 +19,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2.101.0";
 import { pushSmsToGhl } from "../_shared/ghl-conversations.ts";
 import { normalizePhone } from "../_shared/phone.ts";
+import { findOrCreateGhlContact as findOrCreateGhlContactShared } from "../_shared/ghlContact.ts";
 import { resolveLeadByPhone } from "../_shared/leadResolve.ts";
 
 // Schedule a fire-and-forget GHL mirror that completes after the TwiML response
@@ -327,96 +328,31 @@ async function setGhlContactChannel(
   }
 }
 
-// GHL contact upsert: search by phone, create if missing.
+
+// Thin adapter over _shared/ghlContact.ts. Preserves this function's original
+// contract exactly: phone-only search, the deterministic most-recently-updated
+// survivor when GHL returns several contacts for one number (mirroring
+// _shared/leadResolve.ts), and the "SMS Lead" / "Unknown" name fallbacks.
 async function findOrCreateGhlContact(
   ghlApiKey: string,
   ghlLocationId: string,
   fromPhone: string,
-  body: string,
 ): Promise<{ contactId: string; name: string; email: string }> {
-  const headers = {
-    Authorization: `Bearer ${ghlApiKey}`,
-    "Content-Type": "application/json",
-    Version: "2021-07-28",
-    Accept: "application/json",
+  const result = await findOrCreateGhlContactShared({
+    ghlApiKey,
+    ghlLocationId,
+    phone: fromPhone,
+    firstName: "SMS",
+    lastName: fromPhone,
+    source: "Twilio SMS (BFD)",
+    multiMatch: "mostRecent",
+  });
+  const fallbackName = result.outcome === "found" ? "Unknown" : "SMS Lead";
+  return {
+    contactId: result.contactId,
+    name: result.name || fallbackName,
+    email: result.outcome === "found" ? result.email : "",
   };
-
-  // Search by phone
-  const searchUrl = new URL("https://services.leadconnectorhq.com/contacts/search");
-  searchUrl.searchParams.set("locationId", ghlLocationId);
-  searchUrl.searchParams.set("query", fromPhone);
-  const searchResp = await fetch(searchUrl.toString(), { headers });
-  if (searchResp.ok) {
-    const searchData = await searchResp.json().catch(() => null);
-    const contacts = searchData?.contacts || [];
-    const exactMatches = contacts.filter((c: any) =>
-      c?.phone === fromPhone || c?.phone === fromPhone.replace(/^\+/, "")
-    );
-    if (exactMatches.length > 0) {
-      // Deterministic survivor when GHL returns >1 contact for the phone:
-      // most-recently-updated wins, tie-break by dateAdded desc, then id desc.
-      // Mirrors _shared/leadResolve.ts resolveLeadByPhone so the GHL fallback
-      // and the internal resolver agree on which contact owns a shared number.
-      // (Date.parse(undefined) -> NaN, NaN || 0 -> 0, so missing dates sort last.)
-      exactMatches.sort((a: any, b: any) => {
-        const au = Date.parse(a?.dateUpdated ?? "") || 0;
-        const bu = Date.parse(b?.dateUpdated ?? "") || 0;
-        if (bu !== au) return bu - au;
-        const aa = Date.parse(a?.dateAdded ?? "") || 0;
-        const ba = Date.parse(b?.dateAdded ?? "") || 0;
-        if (ba !== aa) return ba - aa;
-        return String(b?.id ?? "").localeCompare(String(a?.id ?? ""));
-      });
-      const exact = exactMatches[0];
-      if (exact?.id) {
-        return {
-          contactId: exact.id,
-          name:
-            [exact.firstName, exact.lastName].filter(Boolean).join(" ") ||
-            exact.contactName || "Unknown",
-          email: exact.email || "",
-        };
-      }
-    }
-  } else {
-    console.warn("GHL contact search failed", searchResp.status);
-  }
-
-  // Create — GHL returns 400 with meta.contactId when a duplicate already
-  // exists (search above can miss it on phone-only lookups). Treat that as
-  // "found" and return the existing id.
-  const createResp = await fetch(
-    "https://services.leadconnectorhq.com/contacts/",
-    {
-      method: "POST",
-      headers,
-      body: JSON.stringify({
-        phone: fromPhone,
-        locationId: ghlLocationId,
-        source: "Twilio SMS (BFD)",
-        firstName: "SMS",
-        lastName: fromPhone,
-      }),
-    },
-  );
-  const createBody = await createResp.json().catch(() => null);
-  if (createResp.ok) {
-    const newId = createBody?.contact?.id || createBody?.id;
-    if (!newId) throw new Error("GHL contact create returned no id");
-    return { contactId: newId, name: "SMS Lead", email: "" };
-  }
-  // Duplicate path: { statusCode: 400, message: "This location does not allow duplicated contacts.", meta: { contactId, contactName, matchingField } }
-  const dupId = createBody?.meta?.contactId;
-  if (createResp.status === 400 && dupId) {
-    return {
-      contactId: dupId,
-      name: createBody?.meta?.contactName || "SMS Lead",
-      email: "",
-    };
-  }
-  throw new Error(
-    `GHL contact create failed ${createResp.status}: ${JSON.stringify(createBody)}`,
-  );
 }
 
 Deno.serve(async (req) => {
@@ -731,7 +667,6 @@ Deno.serve(async (req) => {
             client.ghl_api_key,
             client.ghl_location_id,
             fromPhone,
-            messageBody,
           );
           contactId = c.contactId;
           contactName = c.name;
@@ -1165,7 +1100,6 @@ Deno.serve(async (req) => {
             client.ghl_api_key!,
             client.ghl_location_id!,
             fromPhone,
-            messageBody,
           );
           const realId = c.contactId;
           if (!realId || realId === syntheticId) return;

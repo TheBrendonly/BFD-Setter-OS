@@ -25,6 +25,7 @@ import { fetchActiveNewLeadsWorkflows, resolveWorkflow } from "../_shared/resolv
 import { normalizePhone } from "../_shared/phone.ts";
 import { isValidTimeZone } from "../_shared/leadTimezone.ts";
 import { resolveLeadByPhone } from "../_shared/leadResolve.ts";
+import { findOrCreateGhlContact, GhlContactError } from "../_shared/ghlContact.ts";
 import { isPhoneOptedOut } from "../_shared/optout.ts";
 import { assertActiveSubscription } from "../_shared/assertActiveSubscription.ts";
 import { AssertAccessError } from "../_shared/assert-client-access.ts";
@@ -71,73 +72,6 @@ function normalisePhone(input: string | undefined): string | null {
   if (cleaned.startsWith("+")) return cleaned;
   if (/^04\d{8}$/.test(cleaned)) return "+61" + cleaned.slice(1);
   return cleaned;
-}
-
-async function findOrCreateGhlContact(args: {
-  ghlApiKey: string;
-  ghlLocationId: string;
-  firstName: string | null;
-  lastName: string | null;
-  phone: string | null;
-  email: string | null;
-  source: string;
-  tags: string[];
-}): Promise<{ contactId: string }> {
-  const { ghlApiKey, ghlLocationId, firstName, lastName, phone, email, source, tags } = args;
-
-  const headers = {
-    Authorization: `Bearer ${ghlApiKey}`,
-    "Content-Type": "application/json",
-    Version: "2021-07-28",
-    Accept: "application/json",
-  };
-
-  // Try to search by phone first (preferred), then email
-  const queries = [phone, email].filter(Boolean) as string[];
-  for (const q of queries) {
-    const searchUrl = new URL("https://services.leadconnectorhq.com/contacts/search");
-    searchUrl.searchParams.set("locationId", ghlLocationId);
-    searchUrl.searchParams.set("query", q);
-    const r = await fetch(searchUrl.toString(), { headers });
-    if (r.ok) {
-      const j = await r.json().catch(() => null);
-      const contacts = j?.contacts || [];
-      const exact = contacts.find((c: any) =>
-        (phone && (c?.phone === phone || c?.phone === phone.replace(/^\+/, ""))) ||
-        (email && c?.email && c.email.toLowerCase() === email.toLowerCase())
-      );
-      if (exact?.id) return { contactId: exact.id };
-    }
-  }
-
-  // Create new
-  const createBody: Record<string, unknown> = {
-    locationId: ghlLocationId,
-    source: source || "intake-lead",
-  };
-  if (firstName) createBody.firstName = firstName;
-  if (lastName) createBody.lastName = lastName;
-  if (phone) createBody.phone = phone;
-  if (email) createBody.email = email;
-  if (Array.isArray(tags) && tags.length > 0) createBody.tags = tags;
-
-  const createResp = await fetch("https://services.leadconnectorhq.com/contacts/", {
-    method: "POST",
-    headers,
-    body: JSON.stringify(createBody),
-  });
-  const createJson = await createResp.json().catch(() => null);
-  if (createResp.ok) {
-    const newId = createJson?.contact?.id || createJson?.id;
-    if (!newId) throw new IntakeError(502, "GHL contact create returned no id");
-    return { contactId: newId };
-  }
-  // Duplicate-handling pattern (per memory reference_ghl_contact_create_duplicate)
-  const dupId = createJson?.meta?.contactId;
-  if (createResp.status === 400 && dupId) {
-    return { contactId: dupId };
-  }
-  throw new IntakeError(502, `GHL contact create failed ${createResp.status}: ${JSON.stringify(createJson).slice(0, 200)}`);
 }
 
 async function enrollLeadInEngagement(args: {
@@ -402,16 +336,23 @@ Deno.serve(async (req) => {
         const synthetic = `probe-${phone || email || clientId}`.replace(/[^a-zA-Z0-9_-]/g, "");
         contactId = synthetic.slice(0, 64) || `probe-${clientId}`;
       } else {
-        ({ contactId } = await findOrCreateGhlContact({
-          ghlApiKey: client.ghl_api_key as string,
-          ghlLocationId: client.ghl_location_id as string,
-          firstName,
-          lastName,
-          phone,
-          email,
-          source: body.source || "intake-lead",
-          tags: Array.isArray(body.tags) ? body.tags : [],
-        }));
+        try {
+          ({ contactId } = await findOrCreateGhlContact({
+            ghlApiKey: client.ghl_api_key as string,
+            ghlLocationId: client.ghl_location_id as string,
+            firstName,
+            lastName,
+            phone,
+            email,
+            source: body.source || "intake-lead",
+            tags: Array.isArray(body.tags) ? body.tags : [],
+          }));
+        } catch (ghlErr) {
+          // The shared impl throws GhlContactError; this endpoint has always
+          // surfaced a GHL failure as a 502 to the caller.
+          if (ghlErr instanceof GhlContactError) throw new IntakeError(502, ghlErr.message);
+          throw ghlErr;
+        }
       }
     }
 

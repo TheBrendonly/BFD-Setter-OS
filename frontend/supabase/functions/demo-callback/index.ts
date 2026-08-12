@@ -44,7 +44,7 @@ import {
   findOrCreateGhlContact,
   GhlContactError,
   updateContactEmail,
-} from "./ghlContact.ts";
+} from "../_shared/ghlContact.ts";
 import {
   clientIpFromHeaders,
   IP_MAX_PER_WINDOW,
@@ -214,7 +214,8 @@ Deno.serve(async (req) => {
       }
     } else {
       try {
-        contactId = await findOrCreateGhlContact({
+        // Shared impl returns a result object; this funnel only needs the id.
+        ({ contactId } = await findOrCreateGhlContact({
           ghlApiKey: client.ghl_api_key as string,
           ghlLocationId: client.ghl_location_id as string,
           firstName,
@@ -222,7 +223,7 @@ Deno.serve(async (req) => {
           phone: normalizedPhone,
           source: `bfd-demo:${prospect.slug}`,
           tags: [DEMO_TAG],
-        });
+        }));
       } catch (ghlErr) {
         if (!(ghlErr instanceof GhlContactError)) throw ghlErr;
         // GHL being down must not lose the submission — the captured email is
