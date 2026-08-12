@@ -34,7 +34,7 @@ export const DEMO_PROSPECTS: Readonly<Record<string, DemoProspect>> = {
   "stapleton-finance-b7q4": {
     slug: "stapleton-finance-b7q4",
     clientId: BFD_CLIENT_ID,
-    voiceSetterId: "__PENDING_SETTER_ID__",
+    voiceSetterId: "2dc0c2b7-694f-47d7-a783-fddb0c4108c0",
     firmName: "Stapleton Finance",
   },
 };

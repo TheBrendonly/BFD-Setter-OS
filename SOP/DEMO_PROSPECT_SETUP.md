@@ -100,13 +100,11 @@ Path: `/client/e467dabc-57ee-416c-8831-83ecd9c7c925/prompts/voice`
 # a. get the setter UUID
 node scripts/rest.mjs "voice_setters?client_id=eq.e467dabc-57ee-416c-8831-83ecd9c7c925&name=like.*Demo*&select=id,name,retell_agent_id,is_active"
 
-# b. bind the dogfood number for OUTBOUND (resolution step 1 in make-retell-outbound-call)
-node scripts/rest.mjs "voice_setter_phone_bindings" POST '{
-  "client_id":"e467dabc-57ee-416c-8831-83ecd9c7c925",
-  "setter_id":"<SETTER_UUID>",
-  "direction":"outbound",
-  "phone_e164":"+61481614530"
-}'
+# b. NO phone binding needed. voice_setter_phone_bindings has a UNIQUE
+#    (client_id, phone_e164, direction) constraint and "Main Outbound" already
+#    owns +61481614530 for both directions on this client, so an insert 409s.
+#    With no binding, make-retell-outbound-call falls through to
+#    client.retell_phone_1, which IS +61481614530. Same result, nothing disturbed.
 ```
 
 Then two file edits:
