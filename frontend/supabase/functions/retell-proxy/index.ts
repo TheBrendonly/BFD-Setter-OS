@@ -20,6 +20,11 @@ import {
 import { buildVoicemailPatch } from "./voicemail.ts";
 import { buildPostCallAnalysisData } from "./postCallAnalysis.ts";
 import { buildRetellConfigSnapshot } from "./snapshot.ts";
+import {
+  buildRestorePayloads,
+  decideRestoreGuard,
+  executeRestoreSequence,
+} from "./restore.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -1222,6 +1227,24 @@ async function syncVoiceSetterConversationFlow(
   };
 }
 
+// Retell failure carrying the HTTP status, so restore's 400-strip-retry can tell a
+// rejected-field 400 from a 404/429/500 instead of regexing the message.
+//
+// The property is deliberately NOT called `status`: the top-level catch reads
+// `error.status` to choose the HTTP code it returns, so naming it that would silently
+// change the response code of every failing action in this file. The message string is
+// byte-identical to what this threw before.
+class RetellApiError extends Error {
+  readonly retellStatus: number;
+  readonly retellBody: unknown;
+  constructor(status: number, message: string, body: unknown) {
+    super(message);
+    this.name = "RetellApiError";
+    this.retellStatus = status;
+    this.retellBody = body;
+  }
+}
+
 async function retellFetch(
   apiKey: string,
   method: string,
@@ -1259,7 +1282,7 @@ async function retellFetch(
     const msg = typeof data === "object" && data !== null && "message" in data
       ? (data as { message: string }).message
       : text;
-    throw new Error(`Retell API error [${res.status}]: ${msg}`);
+    throw new RetellApiError(res.status, `Retell API error [${res.status}]: ${msg}`, data);
   }
 
   return data;
@@ -2000,6 +2023,151 @@ Deno.serve(async (req) => {
           .eq("client_id", clientId)
           .eq("legacy_slot", slotNumber);
         result = { success: true, snapshot, version: agent?.version ?? null };
+        break;
+      }
+
+      // ===== RESTORE RETELL CONFIG (2026-08-12) =====
+      // Push an archived full-fidelity snapshot back onto the slot's live agent, using
+      // the same draft -> PATCH -> publish -> repoint sequence as sync-voice-setter.
+      // All decisions (guards, payloads, 400-strip-retry) live in restore.ts so they
+      // are testable; this case is wiring only.
+      case "restore-retell-config": {
+        const slotNumber = params.slotNumber as number;
+        if (!slotNumber) throw new Error("slotNumber is required");
+        const force = params.force === true;
+        const dryRun = params.dryRun === true;
+        const agentColumn = SLOT_TO_AGENT_COLUMN[slotNumber];
+        if (!agentColumn) throw new Error(`Invalid voice setter slot number: ${slotNumber}`);
+        const supabaseAdmin = getSupabaseAdmin();
+
+        const { data: setterRow } = await supabaseAdmin
+          .from("voice_setters")
+          .select("id, name, retell_config_snapshot, is_retell_locked")
+          .eq("client_id", clientId)
+          .eq("legacy_slot", slotNumber)
+          .maybeSingle();
+        if (!setterRow) {
+          result = { success: false, code: "no_setter_row", error: `No voice setter on slot ${slotNumber}` };
+          break;
+        }
+
+        const { data: clientRow, error: clientFetchErr } = await supabaseAdmin
+          .from("clients")
+          .select(agentColumn)
+          .eq("id", clientId)
+          .single();
+        if (clientFetchErr) throw new Error(`Failed to fetch client: ${clientFetchErr.message}`);
+        const agentId = (clientRow as unknown as Record<string, string | null>)?.[agentColumn] ?? null;
+
+        // Read the live agent so the guard can compare engine type + resolve the LLM id.
+        let liveAgent: any = null;
+        if (agentId) liveAgent = await retellFetch(apiKey, "GET", `get-agent/${agentId}`);
+        const liveEngineType = liveAgent?.response_engine?.type ?? null;
+        const liveLlmId = liveAgent?.response_engine?.llm_id ?? null;
+
+        const snapshot = (setterRow as { retell_config_snapshot: unknown }).retell_config_snapshot;
+        const guard = decideRestoreGuard({
+          slotNumber,
+          snapshot,
+          liveAgentId: agentId,
+          liveEngineType,
+          isLocked: (setterRow as { is_retell_locked: boolean }).is_retell_locked === true,
+          force,
+        });
+        if (!guard.ok) {
+          const guardErr = new Error(guard.error) as Error & { status: number; code: string };
+          guardErr.status = guard.status;
+          guardErr.code = guard.code;
+          throw guardErr;
+        }
+
+        // Optional tool re-authorisation: only when intake_lead_secret was rotated after
+        // the pull, since restore's whole value is byte-fidelity of a known-good config.
+        let toolsOverride: Array<Record<string, unknown>> | undefined;
+        if (params.reauthorizeTools === true) {
+          const { data: secretRow } = await supabaseAdmin
+            .from("clients")
+            .select("intake_lead_secret")
+            .eq("id", clientId)
+            .single();
+          const snapTools = (snapshot as { llm?: { general_tools?: unknown } })?.llm?.general_tools;
+          toolsOverride = prepareGeneralTools(
+            { general_tools: snapTools },
+            clientId,
+            (secretRow as { intake_lead_secret: string | null } | null)?.intake_lead_secret ?? null,
+            "restore-retell-config",
+          );
+        }
+
+        const planned = buildRestorePayloads(snapshot, { generalToolsOverride: toolsOverride });
+        if (!planned.ok) {
+          const planErr = new Error(planned.error) as Error & { status: number; code: string };
+          planErr.status = planned.status;
+          planErr.code = planned.code;
+          throw planErr;
+        }
+
+        const snapshotPulledAt = (snapshot as { pulled_at?: string })?.pulled_at ?? "unknown";
+        const execution = await executeRestoreSequence(
+          {
+            retellFetch: (method, path, body) => retellFetch(apiKey, method, path, body),
+            ensureDraft: async (id) => {
+              const draft = await ensureEditableAgentDraft(apiKey, id);
+              return { draftVersion: draft.draftVersion, llmId: draft.llmId };
+            },
+            publish: (id, version, description) => publishAgentVersion(apiKey, id, version, description),
+            latestPublishedVersion: (id) => fetchLatestPublishedAgentVersion(apiKey, id),
+            repointPhones: (id, publishedVersion) =>
+              repointPhoneVersionsAfterPublish(supabaseAdmin, apiKey, clientId, slotNumber, id, publishedVersion),
+            statusOf: (e) => (e as { retellStatus?: number })?.retellStatus ?? null,
+          },
+          planned.plan,
+          agentId as string,
+          liveLlmId,
+          { dryRun, versionDescription: `BFD restore from snapshot pulled_at=${snapshotPulledAt}` },
+        );
+
+        // Re-baseline the drift basis. A restore PUBLISHES a new agent version, so
+        // without this pollRetellDrift flags versionDrifted on its next hourly run,
+        // triggered by our own restore. Skip it when publish failed: advancing the
+        // synced version past a version that never published would mask real drift.
+        if (!dryRun && execution.publishedVersion !== null) {
+          await supabaseAdmin
+            .from("voice_setters")
+            .update({
+              retell_synced_at: new Date().toISOString(),
+              retell_synced_version: execution.publishedVersion,
+              retell_drift_detected_at: null,
+              retell_booking_tools_lost_at: null,
+            })
+            .eq("client_id", clientId)
+            .eq("legacy_slot", slotNumber);
+        }
+
+        result = {
+          success: true,
+          slot: slotNumber,
+          agent_id: agentId,
+          engine_type: planned.plan.engineType,
+          snapshot_pulled_at: snapshotPulledAt,
+          dry_run: dryRun,
+          published_version: execution.publishedVersion,
+          dropped_fields: execution.droppedFields,
+          retried: execution.retried,
+          retell_error_first_attempt: execution.firstAttemptErrors,
+          publish_warning: execution.publishWarning,
+          // dryRun only: let the operator inspect exactly what WOULD be sent.
+          planned_payload: dryRun
+            ? {
+              llm_keys: Object.keys(planned.plan.llmPayload),
+              agent_keys: Object.keys(planned.plan.agentPatch),
+              general_prompt_chars: String(planned.plan.llmPayload.general_prompt ?? "").length,
+              tool_names: (planned.plan.llmPayload.general_tools as Array<{ name?: string }> ?? [])
+                .map((t) => t?.name)
+                .filter(Boolean),
+            }
+            : undefined,
+        };
         break;
       }
 
