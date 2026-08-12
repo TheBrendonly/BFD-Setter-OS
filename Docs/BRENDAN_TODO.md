@@ -26,7 +26,7 @@ Things only Brendan can do (UI clicks, logins, provider dashboards, business cal
 
 ## Open (all optional / low-priority)
 
-- [ ] **(Optional) Locate + delete the orphaned `qfbhcixkxzivpmxlciot` Supabase project.** It's an OLD project
+- [ ] **Locate + delete BOTH orphaned Supabase projects** (upgraded from "optional" 2026-08-12, now tracked as `ORPHAN-PROJ-1` in `Docs/BUG_LIST.md`: `qfbhcixkxzivpmxlciot` AND `awzlcmdomhtyqjabzvnn` both still return HTTP 401 from their REST API, i.e. both are alive and reachable).** It's an OLD project
   from before the platform migration to `bjgrgbgykvjrsuwwruoh`, still live but NOT visible in your current Supabase
   account — it's almost certainly under a separate/older Supabase login or org. It's now **harmless**: every GHL
   workflow was repointed to the live project and verified clean (2026-07-22), so nothing routes to it anymore.
