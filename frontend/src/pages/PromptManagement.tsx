@@ -5206,7 +5206,22 @@ const PromptManagement = () => {
       });
       if (error) throw error;
       if (data && (data as any).success === false) throw new Error((data as any).error || 'Pull failed');
-      toast({ title: 'Pulled from Retell', description: `Mirror updated (version ${(data as any)?.version ?? '—'}).` });
+      // The snapshot is full-fidelity as of 2026-08-12 (schema_version 1): it stores the
+      // prompt and tool definitions verbatim, so it can REBUILD the agent, not just
+      // detect that it drifted. Say so, otherwise an operator cannot tell an archival
+      // pull from the old presence-only mirror.
+      const snap = (data as any)?.snapshot;
+      const promptChars = snap?.llm?.general_prompt_chars;
+      const toolCount = Array.isArray(snap?.llm?.tools) ? snap.llm.tools.length : null;
+      const detail = snap?.schema_version
+        ? [
+            `Full snapshot saved (version ${(data as any)?.version ?? '—'})`,
+            typeof promptChars === 'number' ? `${promptChars.toLocaleString()} char prompt` : null,
+            typeof toolCount === 'number' ? `${toolCount} tools` : null,
+            snap?.flow ? 'conversation flow archived' : null,
+          ].filter(Boolean).join(' · ')
+        : `Mirror updated (version ${(data as any)?.version ?? '—'}).`;
+      toast({ title: 'Pulled from Retell', description: detail });
       setInboundMapRefresh((x) => x + 1);
     } catch (e: any) {
       toast({ title: 'Pull from Retell failed', description: e?.message || String(e), variant: 'destructive' });

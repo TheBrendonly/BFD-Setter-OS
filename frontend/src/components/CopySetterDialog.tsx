@@ -100,6 +100,10 @@ export const CopySetterDialog: React.FC<CopySetterDialogProps> = ({
 
   const selectedSlotInfo = availableSlots.find((s) => s.id === selectedSlot);
   const isCrossChannel = selectedSlotInfo && selectedSlotInfo.channel !== currentChannel;
+  // Voice -> text is its own path (clone-voice-to-text). The generic copy reads only
+  // prompt_configurations and never sees prompt_docs, so for a doc-model voice source it
+  // re-personalises stale setup-time parameters and the live prompt never participates.
+  const isVoiceToText = selectedSlotInfo?.channel === 'voice' && currentChannel === 'text';
 
   // Build the target parameter catalog so the AI knows what to generate
   const targetParameters = useMemo(() => {
@@ -145,11 +149,87 @@ export const CopySetterDialog: React.FC<CopySetterDialogProps> = ({
     return params;
   }, [currentChannel]);
 
+  // Poll the conversion job, then finalise it. Mirrors the polling the other AI dialogs
+  // use; the job row is the only progress signal available.
+  const runVoiceToTextClone = async () => {
+    const { data: started, error: startError } = await supabase.functions.invoke('clone-voice-to-text', {
+      body: {
+        action: 'start',
+        clientId,
+        sourceSlotId: selectedSlot,
+        targetSlotId: currentSlotId,
+        userGuidelines: userGuidelines.trim(),
+      },
+    });
+    if (startError) throw new Error(startError.message || 'Failed to start the clone');
+    if (started?.error) throw new Error(started.error);
+    if (!started?.job_id) throw new Error('No job ID returned');
+
+    onJobStarted(started.job_id);
+    toast.info(
+      `Converting ${started.source_chars?.toLocaleString?.() ?? ''} characters` +
+      `${started.compliance_lines ? `, preserving ${started.compliance_lines} compliance lines` : ''}. This takes a minute or two.`,
+    );
+
+    // ~5 minutes at 5s. runAiJob's own cap is 5 minutes per OpenRouter call.
+    for (let attempt = 0; attempt < 60; attempt++) {
+      await new Promise((resolve) => setTimeout(resolve, 5000));
+      const { data: job } = await (supabase as any)
+        .from('ai_generation_jobs')
+        .select('status, error_message')
+        .eq('id', started.job_id)
+        .maybeSingle();
+      if (job?.status === 'failed') throw new Error(job.error_message || 'The conversion job failed');
+      if (job?.status !== 'completed') continue;
+
+      const { data: applied, error: applyError } = await supabase.functions.invoke('clone-voice-to-text', {
+        body: { action: 'apply', clientId, jobId: started.job_id, targetSlotId: currentSlotId },
+      });
+      if (applyError) {
+        // A 422 (lint or coverage gate) carries its detail in the response body, which
+        // supabase-js exposes on error.context. Nothing was written in that case.
+        let detail = applyError.message || 'The conversion could not be saved';
+        try {
+          const body = await (applyError as any)?.context?.json?.();
+          if (body?.error) detail = body.error;
+          if (Array.isArray(body?.lint_errors) && body.lint_errors.length > 0) {
+            detail += ` (${body.lint_errors.map((e: any) => `${e.rule} line ${e.line}`).join(', ')})`;
+          }
+        } catch { /* fall back to the plain message */ }
+        throw new Error(detail);
+      }
+      if (applied?.error) throw new Error(applied.error);
+
+      const report = applied?.report;
+      toast.success(
+        `Cloned into ${currentSlotId}: ${report?.prompt_chars?.toLocaleString?.() ?? '?'} characters` +
+        `${report?.reasserted_compliance?.length ? `, ${report.reasserted_compliance.length} compliance lines restored verbatim` : ''}.`,
+      );
+      if (applied?.warning === 'section_editor_stale') {
+        toast.warning(applied.warning_detail, { duration: 12000 });
+      }
+      return;
+    }
+    throw new Error('The conversion timed out. Check the job in Logs before retrying.');
+  };
+
   const handleStartCopy = async () => {
     if (!selectedSlot || !clientId) return;
     setLoading(true);
     onStartRequested();
     onOpenChange(false);
+
+    if (isVoiceToText) {
+      try {
+        await runVoiceToTextClone();
+      } catch (err: any) {
+        onStartFailed();
+        toast.error(err?.message || 'Failed to clone the voice prompt');
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
 
     try {
       const { data, error } = await supabase.functions.invoke('copy-setter-config', {
@@ -260,7 +340,9 @@ export const CopySetterDialog: React.FC<CopySetterDialogProps> = ({
                             <div style={{ ...FONT, fontWeight: 500 }} className="text-foreground">{slot.label}</div>
                             {crossChannel && (
                               <div style={{ ...FONT, fontSize: '13px', color: 'hsl(45 100% 60%)' }} className="mt-0.5">
-                                Parameters will be adapted to {currentChannel} channel
+                                {currentChannel === 'text'
+                                  ? 'Prompt document will be converted for text'
+                                  : `Parameters will be adapted to ${currentChannel} channel`}
                               </div>
                             )}
                           </div>
@@ -310,13 +392,26 @@ export const CopySetterDialog: React.FC<CopySetterDialogProps> = ({
         {step === 'confirm' && selectedSlotInfo && (
           <div className="px-6 py-5 space-y-4">
             <div style={FONT} className="text-foreground space-y-3">
-              <p>
-                This will overwrite the entire configuration of this setter. AI will generate a completely new configuration based on <strong>{selectedSlotInfo.label}</strong>'s content{userGuidelines.trim() ? ' and your instructions' : ''}.
-              </p>
-              {isCrossChannel && (
-                <p className="text-destructive">
-                  Cross-channel copy: {selectedSlotInfo.channel} → {currentChannel}. Parameters will be adapted to fit the {currentChannel} channel structure.
-                </p>
+              {isVoiceToText ? (
+                <>
+                  <p>
+                    This clones <strong>{selectedSlotInfo.label}</strong>'s live prompt document into this text setter's prompt{userGuidelines.trim() ? ', following your instructions' : ''}. Compliance lines (AI disclosure, recording disclosure, NCCP guardrail) are preserved word for word; voice-only tooling, call flow and spoken filler are removed.
+                  </p>
+                  <p className="text-destructive">
+                    The section editor below will still show the older parameter-built prompt. Do not re-save it there afterwards, or the clone will be overwritten.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p>
+                    This will overwrite the entire configuration of this setter. AI will generate a completely new configuration based on <strong>{selectedSlotInfo.label}</strong>'s content{userGuidelines.trim() ? ' and your instructions' : ''}.
+                  </p>
+                  {isCrossChannel && (
+                    <p className="text-destructive">
+                      Cross-channel copy: {selectedSlotInfo.channel} → {currentChannel}. Parameters will be adapted to fit the {currentChannel} channel structure.
+                    </p>
+                  )}
+                </>
               )}
             </div>
 
