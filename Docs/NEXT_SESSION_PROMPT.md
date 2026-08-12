@@ -48,6 +48,11 @@ THE OWED WORK (all Brendan-gated, in order):
 6. SMS-GHL-1 — one real inbound SMS from a number that is NOT already a CRM lead. receive-twilio-sms was
    redeployed (v32) with its findOrCreateGhlContact repointed at _shared/ghlContact.ts; the boot probe passes
    and the adapter preserves the old contract exactly, but the GHL leg needs a real text.
+7. DEMO-CB-1/2 — the demo-callback dry run, now fully unblocked (PAT valid, Stapleton setter exists on slot 9,
+   demo-callback deployed v3, landing page renders, DEMO-CB-3 already PASSED). Submit /g/stapleton-finance-b7q4
+   with your own details: real call fires, agent sounds Stapleton-specific, NCCP guardrail holds under two
+   pushes, booking lands, confirmation email arrives at the SUBMITTED address. Then the guard checks (second
+   submit inside the hour -> 429 copy; after 8pm AEST -> calling-hours decline; unknown slug -> 404).
 
 Pass -> Docs/archive/COMPLETED_LOG.md; fail -> Docs/BUG_LIST.md + fix + retest. Close out per the Relay
 Protocol. Then the standing rule resumes: zero new product code until a pilot is paid, with the ONLY
