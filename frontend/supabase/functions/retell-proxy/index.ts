@@ -19,6 +19,7 @@ import {
 } from "../_shared/retell-lock.ts";
 import { buildVoicemailPatch } from "./voicemail.ts";
 import { buildPostCallAnalysisData } from "./postCallAnalysis.ts";
+import { buildRetellConfigSnapshot } from "./snapshot.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -1966,50 +1967,25 @@ Deno.serve(async (req) => {
         }
         const agent = await retellFetch(apiKey, "GET", `get-agent/${agentId}`) as any;
         const engineType = agent?.response_engine?.type ?? null;
-        let llmSnap: Record<string, unknown> | null = null;
-        let flowSnap: Record<string, unknown> | null = null;
+        // Full-fidelity capture (2026-08-12): the raw get-retell-llm /
+        // get-conversation-flow bodies go into the snapshot VERBATIM so the archive can
+        // rebuild the agent, not merely detect that it changed. Still read-only against
+        // Retell. See snapshot.ts for the v0 backward-compatibility contract.
+        let llmBody: Record<string, unknown> | null = null;
+        let flowBody: Record<string, unknown> | null = null;
         if (engineType === "retell-llm" && agent?.response_engine?.llm_id) {
-          const llm = await retellFetch(apiKey, "GET", `get-retell-llm/${agent.response_engine.llm_id}`) as any;
-          const tools = Array.isArray(llm?.general_tools)
-            ? llm.general_tools.map((t: Record<string, unknown>) => (typeof t?.name === "string" ? t.name : null)).filter(Boolean)
-            : [];
-          const prompt = typeof llm?.general_prompt === "string" ? llm.general_prompt : "";
-          const beginMessage = typeof llm?.begin_message === "string" ? llm.begin_message : "";
-          llmSnap = {
-            llm_id: llm?.llm_id ?? agent.response_engine.llm_id,
-            model: llm?.model ?? null,
-            version: llm?.version ?? null,
-            general_prompt_present: prompt.length > 0,
-            general_prompt_chars: prompt.length,
-            begin_message_present: beginMessage.length > 0,
-            start_speaker: llm?.start_speaker ?? null,
-            tools,
-            booking_tools_present: tools.some((n: string) => BFD_VOICE_BOOKING_TOOL_NAMES.has(n)),
-          };
+          llmBody = await retellFetch(apiKey, "GET", `get-retell-llm/${agent.response_engine.llm_id}`) as any;
         } else if (engineType === "conversation-flow" && agent?.response_engine?.conversation_flow_id) {
-          const flow = await retellFetch(apiKey, "GET", `get-conversation-flow/${agent.response_engine.conversation_flow_id}`) as any;
-          flowSnap = {
-            conversation_flow_id: agent.response_engine.conversation_flow_id,
-            present: true,
-            node_count: Array.isArray(flow?.nodes) ? flow.nodes.length : null,
-          };
+          flowBody = await retellFetch(apiKey, "GET", `get-conversation-flow/${agent.response_engine.conversation_flow_id}`) as any;
         }
         const pulledAt = new Date().toISOString();
-        const snapshot = {
-          pulled_at: pulledAt,
-          agent: {
-            agent_id: agent?.agent_id ?? agentId,
-            agent_name: agent?.agent_name ?? null,
-            version: agent?.version ?? null,
-            is_published: agent?.is_published ?? null,
-            last_modification_timestamp: agent?.last_modification_timestamp ?? null,
-            voice_id: agent?.voice_id ?? null,
-            language: agent?.language ?? null,
-            engine_type: engineType,
-          },
-          llm: llmSnap,
-          flow: flowSnap,
-        };
+        const snapshot = buildRetellConfigSnapshot({
+          agentId,
+          agent,
+          llm: llmBody,
+          flow: flowBody,
+          pulledAt,
+        });
         await supabaseAdmin
           .from("voice_setters")
           .update({
