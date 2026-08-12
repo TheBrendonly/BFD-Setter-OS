@@ -1,6 +1,7 @@
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
   assertComplianceVerbatim,
+  assessConversionCoverage,
   buildVoiceToTextMessages,
   detokenize,
   extractComplianceLines,
@@ -228,6 +229,26 @@ Deno.test("reassertComplianceLines is a no-op when nothing is missing", () => {
   assertEquals(reassertComplianceLines("unchanged", []), "unchanged");
 });
 
+Deno.test("one line matching two kinds is listed once, not twice", () => {
+  // BFD's real opener is BOTH the AI disclosure and the recording disclosure, so
+  // extract returns two entries with identical text.
+  const dupe = [
+    { kind: "ai_disclosure" as const, text: "- I'm an AI and this call may be recorded.", line: 1 },
+    { kind: "recording" as const, text: "- I'm an AI and this call may be recorded.", line: 1 },
+  ];
+  const out = reassertComplianceLines("body", dupe);
+  const occurrences = out.split("I'm an AI and this call may be recorded.").length - 1;
+  assertEquals(occurrences, 1);
+});
+
+Deno.test("a source line that already had a bullet does not render as '- - '", () => {
+  const out = reassertComplianceLines("body", [
+    { kind: "recording" as const, text: "- this call may be recorded", line: 1 },
+  ]);
+  assertEquals(out.includes("- - "), false);
+  assert(out.includes("- this call may be recorded"));
+});
+
 // ── finalizeTextPrompt ───────────────────────────────────────────────────────
 
 const COMPLIANCE = extractComplianceLines(VOICE_FIXTURE);
@@ -309,6 +330,50 @@ Deno.test("the report tells the operator what was removed", () => {
   assert(r.removedSections.length > 0);
   assert(r.droppedTokenLines.length > 0);
   assert(r.replacedTokens.length > 0);
+});
+
+// ── coverage gate ────────────────────────────────────────────────────────────
+
+Deno.test("coverage: a summarised conversion is rejected", () => {
+  // Calibrated on the real 2026-08-12 failure: a 20,082-char voice doc came back as a
+  // 1,439-char greeting that echoed the compliance block, and it linted perfectly clean.
+  const c = assessConversionCoverage(20082, 1439);
+  assertEquals(c.ok, false);
+  assert(c.ratio < 0.1, `ratio was ${c.ratio}`);
+});
+
+Deno.test("coverage: a genuinely converted prompt passes even though text is shorter", () => {
+  // Stripping tool specs and call flow legitimately loses length; the floor is generous.
+  assertEquals(assessConversionCoverage(20000, 12000).ok, true);
+  assertEquals(assessConversionCoverage(20000, 9000).ok, true);
+  assertEquals(assessConversionCoverage(20000, 8000).ok, false);
+});
+
+Deno.test("coverage: an unknown source length skips the gate rather than guessing", () => {
+  assertEquals(assessConversionCoverage(0, 500).ok, true);
+});
+
+Deno.test("finalizeTextPrompt fails on a gutted conversion even when lint is clean", () => {
+  const gutted = "## WHO YOU ARE\n\nYou are Gary. Book a call.";
+  const r = finalizeTextPrompt({ modelOutput: gutted, compliance: [], sourceChars: 20000 });
+  assertEquals(r.lint.ok, true, "lint alone cannot catch this");
+  assertEquals(r.coverage?.ok, false);
+  assertEquals(r.ok, false, "the combined gate must reject it");
+});
+
+Deno.test("finalizeTextPrompt measures the MODEL's output, not our appended blocks", () => {
+  // The booking + style blocks we append are ~1.5k chars and must not pad a gutted
+  // conversion over the line.
+  const r = finalizeTextPrompt({ modelOutput: "tiny", compliance: [], sourceChars: 3000 });
+  assertEquals(r.coverage?.outputChars, 4);
+  assert(r.prompt.length > 1000, "the finished file is padded by our blocks");
+  assertEquals(r.ok, false);
+});
+
+Deno.test("omitting sourceChars leaves coverage null and the gate off", () => {
+  const r = finalizeTextPrompt({ modelOutput: VOICE_FIXTURE, compliance: COMPLIANCE });
+  assertEquals(r.coverage, null);
+  assertEquals(r.ok, true);
 });
 
 // ── the booking twin ─────────────────────────────────────────────────────────

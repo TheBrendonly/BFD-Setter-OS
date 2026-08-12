@@ -250,15 +250,54 @@ export function reassertComplianceLines(
   missing: readonly ComplianceLine[],
 ): string {
   if (missing.length === 0) return output;
+  // One source line can match several kinds (the BFD opener is both the AI disclosure
+  // and the recording disclosure), so dedupe by text or the block repeats itself. Strip
+  // any bullet the source line already carried, so it does not render as "- - ".
+  const seen = new Set<string>();
+  const bullets: string[] = [];
+  for (const c of missing) {
+    const text = c.text.replace(/^\s*[-*]\s+/, "");
+    if (seen.has(text)) continue;
+    seen.add(text);
+    bullets.push(`- ${text}`);
+  }
   const block = [
     "# COMPLIANCE (VERBATIM, DO NOT EDIT)",
     "",
     "These lines are legal boundaries carried over from the voice agent. Use them as written.",
     "",
-    ...missing.map((c) => `- ${c.text}`),
+    ...bullets,
     "",
   ].join("\n");
   return `${block}\n${output}`;
+}
+
+/**
+ * A conversion that returns a fraction of the source has not converted anything, it has
+ * summarised. Observed live 2026-08-12: a 20,082-char voice doc came back as a 1,439-char
+ * greeting that echoed the compliance block and dropped the entire persona, and it linted
+ * perfectly clean. Length is the only signal that catches that class, so it is a gate.
+ *
+ * A text prompt is legitimately shorter than its voice original (tool specs and call
+ * flow are stripped), so the floor is deliberately generous.
+ */
+export const MIN_COVERAGE_RATIO = 0.45;
+
+export interface CoverageResult {
+  ok: boolean;
+  ratio: number;
+  sourceChars: number;
+  outputChars: number;
+}
+
+export function assessConversionCoverage(sourceChars: number, outputChars: number): CoverageResult {
+  const ratio = sourceChars > 0 ? outputChars / sourceChars : 1;
+  return {
+    ok: sourceChars === 0 ? true : ratio >= MIN_COVERAGE_RATIO,
+    ratio: Math.round(ratio * 1000) / 1000,
+    sourceChars,
+    outputChars,
+  };
 }
 
 export interface FinalizeResult {
@@ -269,6 +308,7 @@ export interface FinalizeResult {
   replacedTokens: string[];
   reasserted: ComplianceLine[];
   lint: LintResult;
+  coverage: CoverageResult | null;
   ok: boolean;
 }
 
@@ -284,6 +324,8 @@ export function finalizeTextPrompt(args: {
   modelOutput: string;
   compliance: readonly ComplianceLine[];
   bookingPrompt?: string;
+  /** Length of the source voice doc. Omit to skip the coverage gate. */
+  sourceChars?: number;
 }): FinalizeResult {
   const stripped = stripVoiceIsms(args.modelOutput);
   const swapped = swapBookingSection(stripped.text, args.bookingPrompt ?? DEFAULT_TEXT_BOOKING_PROMPT);
@@ -300,6 +342,12 @@ export function finalizeTextPrompt(args: {
   const prompt = reassertComplianceLines(detokenized.text, check.missing);
   const lint = lintTextSetterPrompt(prompt);
 
+  // Measure the MODEL's contribution, not the finished file: the appended booking and
+  // style blocks are ours and would otherwise pad a gutted conversion over the line.
+  const coverage = args.sourceChars === undefined
+    ? null
+    : assessConversionCoverage(args.sourceChars, args.modelOutput.length);
+
   return {
     prompt,
     removedVoiceIsms: stripped.removed,
@@ -308,7 +356,8 @@ export function finalizeTextPrompt(args: {
     replacedTokens: detokenized.replaced,
     reasserted: check.missing,
     lint,
-    ok: lint.ok,
+    coverage,
+    ok: lint.ok && (coverage === null || coverage.ok),
   };
 }
 
@@ -324,11 +373,24 @@ export function buildVoiceToTextMessages(args: {
     ? args.compliance.map((c) => `- (${c.kind}) ${c.text}`).join("\n")
     : "(none detected in the source)";
 
+  // Prompt calibrated against an observed failure (2026-08-12): an earlier wording that
+  // led with "PRESERVE THESE LINES" plus the compliance block made the model echo that
+  // block as its whole answer and then write a four-line greeting, discarding a
+  // 20,082-char persona. Hence: the rewrite instruction comes FIRST, the compliance list
+  // is explicitly labelled as a checklist rather than output, and completeness is stated
+  // as the primary requirement.
   const system = [
-    "You convert a VOICE agent prompt into a TEXT (SMS) agent prompt for the same business.",
+    "You REWRITE a VOICE agent prompt into a TEXT (SMS) agent prompt for the same business.",
     "",
-    "Keep, unchanged in meaning: the identity, the company knowledge, the qualification logic,",
-    "the objection handling, the guardrails, and the overall goal.",
+    "THIS IS A FULL REWRITE, NOT A SUMMARY. Work through the source document section by",
+    "section, top to bottom, and emit a converted version of EVERY section. Your output must",
+    "be a complete, standalone agent prompt of broadly similar length to the source. Never",
+    "condense the persona, the company knowledge, the qualification logic, the objection",
+    "handling, the guardrails, or the examples into a shorter gist. Never return only an",
+    "opening message. Never describe what you would change: emit the prompt itself.",
+    "",
+    "Keep, unchanged in meaning: identity, company knowledge, qualification logic, objection",
+    "handling, guardrails, disqualification rules, and the overall goal.",
     "",
     "Rewrite for text: short messages a person would thumb out, one question per message, no",
     "mention of speaking, calling, hearing, pausing, hold music, or being on the line.",
@@ -337,9 +399,10 @@ export function buildVoiceToTextMessages(args: {
     "'speak while this runs' lines, and tool call body specifications. Booking mechanics are",
     "code-owned on the text side and are appended separately, so do not write your own.",
     "",
-    "PRESERVE THESE LINES WORD FOR WORD. They are Australian legal boundaries (ASIC",
-    "misleading-conduct disclosure, recording disclosure, NCCP credit-assistance guardrail),",
-    "not style. Reproduce each one exactly as given, character for character:",
+    "COMPLIANCE CHECKLIST (these are Australian legal boundaries, not style). Each line below",
+    "must appear in your output WORD FOR WORD, character for character, positioned where it",
+    "naturally belongs in the converted prompt. Do NOT list them at the top, do NOT repeat",
+    "this checklist back, and do NOT reword or shorten them:",
     complianceBlock,
     "",
     "Do not use {{ }} template tokens; the text engine does not substitute them.",
