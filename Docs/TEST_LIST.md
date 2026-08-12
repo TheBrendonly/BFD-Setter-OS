@@ -13,8 +13,11 @@ When it fails, open a bug in `BUG_LIST.md`.
 ## Demo-callback funnel dry run (2026-08-11 build — blocked on PAT rotation + setter creation)
 
 > Built + review-hardened 2026-08-11 (`9fc1dd1`..`87b522e`): public `/g/:slug` callback landing page +
-> `demo-callback` edge fn. NOT yet deployed (SUPABASE_PAT dead) and the Stapleton setter is not yet created
-> (Brendan UI action). Run these once both unblock:
+> `demo-callback` edge fn. **Both original blockers cleared 2026-08-12:** the SUPABASE_PAT is valid (Management
+> API 200) and the "Stapleton Finance Demo" setter exists on slot 9 (active, Retell agent, 7,157-char prompt doc,
+> and correctly no phone binding per SOP step 4). `demo-callback` is deployed (v3). The landing page renders:
+> Playwright against the built bundle loads `/g/stapleton-finance-b7q4` showing "A LIVE DEMO, BUILT FOR
+> STAPLETON FINANCE" with zero page errors. Only the live legs below remain.
 
 - [ ] **DEMO-CB-1 — end-to-end dry run.** Submit `/g/stapleton-finance-b7q4` with Brendan's name+email+mobile →
   `leads` row on BFD client carries the email (real GHL contact id, `form_source bfd-demo:stapleton-finance-b7q4`,
@@ -24,10 +27,10 @@ When it fails, open a bug in `BUG_LIST.md`.
 - [ ] **DEMO-CB-2 — guard checks.** Second submit within the hour → per-phone 429 copy. Submit after 8pm AEST →
   honest calling-hours decline. Unknown slug → 404 "Unknown demo page.". Opted-out number (if one exists) →
   indistinguishable from call-failure copy.
-- [ ] **DEMO-CB-3 — `on_lead_change` residual check** (from the breakage review): confirm no `workflows` row on the
-  BFD client is `is_active` with `contact_created` in nodes (SQL in the 2026-08-11 session notes), so the lead upsert
-  cannot fire the legacy workflow-execute trigger. Expected clean (checked empty 2026-08-11 pre-fix; re-confirm at
-  dry-run time).
+- [x] **DEMO-CB-3 — `on_lead_change` residual check. PASSED 2026-08-12** (read-only, run autonomously). Asked for
+  any `workflows` row on the BFD client that is `is_active` with `contact_created` in nodes, so the leads upsert
+  could fire the legacy workflow-execute trigger. Result: the BFD client has **zero `workflows` rows at all**
+  (total 0, active 0), so the trigger cannot fire. Nothing to clean up; no need to re-confirm at dry-run time.
 
 ## Retell pivot overnight build (2026-08-12) — Brendan live-verify
 
