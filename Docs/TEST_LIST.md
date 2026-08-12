@@ -29,6 +29,44 @@ When it fails, open a bug in `BUG_LIST.md`.
   cannot fire the legacy workflow-execute trigger. Expected clean (checked empty 2026-08-11 pre-fix; re-confirm at
   dry-run time).
 
+## Retell pivot overnight build (2026-08-12) — Brendan live-verify
+
+> Built + deployed 2026-08-12 (`668eec7`..`8ab5e27`). Everything below was verified as far as it can
+> be without a browser session or a real inbound SMS; these are the legs that need Brendan.
+> Handoff: `Operations/handoffs/2026-08-12-overnight-run.md`.
+
+- [ ] **SNAP-1 — one real Pull from the UI.** Prompt Management → a BFD voice setter tile → Pull from
+  Retell. The toast must now read "Full snapshot saved (vN) · N,NNN char prompt · N tools", not the
+  old "Mirror updated". (Server-side equivalent already passed: retell-proxy v54, live pull against
+  Main Outbound stored a 34KB snapshot with the 21,675-char prompt and all 8 tool definitions
+  verbatim.)
+- [ ] **SNAP-2 — one restore on a throwaway slot.** Pick a spare BFD voice slot, Pull it first (a
+  pre-2026-08-12 snapshot is refused by design with `snapshot_not_restorable`), then call
+  `restore-retell-config` with `dryRun: true`, confirm the planned payload, then run it for real and
+  confirm the agent still answers and still has its 5 booking tools. **Never on slot 1, never on
+  slot 9 (Stapleton), never on a live client.** API-only tonight: there is deliberately no Restore
+  button yet.
+- [ ] **SNAP-3 — no false drift alert after a restore.** After SNAP-2, wait for the next hourly
+  `pollRetellDrift` run and confirm it does NOT flag `versionDrifted` on the restored slot. The
+  re-baseline is meant to prevent exactly this; it is untested against the live poll.
+- [ ] **CLONE-1 — one voice→text clone from the UI.** Open text setter **Setter-2** on the BFD tenant
+  (seeded 2026-08-12 specifically so this test never touches the live Setter-1) → COPY OTHER SETTER →
+  pick a voice setter. Confirm: the confirm-step copy describes a prompt-document conversion, the job
+  runs, the result saves, and the toast warns that the section editor below is stale. (Server-side
+  equivalent already passed: Voice-Setter-10 → Setter-2, 20,082 chars in, 19,448 out, lint clean,
+  zero surviving tokens, both disclosures verbatim.)
+- [ ] **CLONE-2 — read the cloned prompt.** Setter-2's prompt is a real conversion of Main Outbound.
+  Read it as the operator who would ship it: compliance lines intact, no voice leakage ("caller",
+  "on the phone"), persona still recognisable. This is a judgement check, not a pass/fail assertion.
+- [ ] **SMS-GHL-1 — one real inbound SMS.** `receive-twilio-sms` was redeployed (v32) with its
+  `findOrCreateGhlContact` repointed at the new shared module. The boot probe passes and the adapter
+  preserves the old contract exactly, but the GHL contact leg cannot be exercised without a real
+  inbound text. Send one from a number that is NOT already a CRM lead and confirm the lead resolves
+  to a real GHL contact id and the reply goes out.
+- [ ] **RENDER-1 — render smoke visual pass.** Prompt Management, Settings, Dashboard, Account
+  Settings, Clients. Frontend changes this run: the Pull toast, the CopySetterDialog voice→text
+  branch, and the deletion of the dead PersonalityConstructor.tsx.
+
 ## Claude-drivable (autonomous, next cleanup session)
 
 > **2026-07-23 cleanup-tail pass:** PURGE-SIM-1, PURGE-TAG-1, F15 funnel, F15 report, and F9V2-1/2 all PASSED

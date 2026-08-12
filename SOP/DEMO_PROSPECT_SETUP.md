@@ -81,15 +81,35 @@ and 2-3 specifics Gary can reference. Note anything hard to pronounce.
 page presents a real firm's branding, so a guessable URL is a brand and misleading-conduct exposure
 if a third party finds it. Lowercase only.
 
-### Step 3 — Create the persona (10-15 min, Brendan, UI)
+### Step 3 — Create the persona, the Conductor workflow (10-15 min, Brendan, UI)
+
+> **Ratified 2026-08-12; first live run pending.** Decision record:
+> `Docs/RETELL_PIVOT_DECISION_2026-08-12.md`. BFD stays the system of record and owns the
+> push/pull machinery; Retell's dashboard plus Conductor (their AI copilot, dashboard-only,
+> no API) is now the workbench for shaping VOICE personas. The old Modify-with-AI path is
+> kept as a legacy appendix in §4.
 
 Path: `/client/e467dabc-57ee-416c-8831-83ecd9c7c925/prompts/voice`
 
-1. **Copy** icon on an existing base persona (`Gary - Mortgage Broker` for brokers). Duplicating
-   beats creating blank: the base already carries the compliance sections and booking tools.
-2. Name it `<Firm Name> Demo`. It lands Not Active on the next free slot.
-3. Open it, **Modify with AI** (Sparkles) on WHO YOU ARE + PERSONA RULES. Use the template in §4.
-4. **Save Setter**, then **Push to Retell**.
+1. **Push a template from BFD.** **Copy** icon on an existing base persona
+   (`Gary - Mortgage Broker` for brokers). Duplicating beats creating blank: the base already
+   carries the compliance sections and the booking tools with this client's URLs and
+   `intake_lead_secret`. Name it `<Firm Name> Demo`. It lands Not Active on the next free slot.
+   **Save Setter**, then **Push to Retell**.
+2. **F9-lock the slot BEFORE any dashboard work.** Click the lock on the setter tile. This is not
+   optional and not a formality: an unlocked slot gets its dashboard edits clobbered by the next
+   BFD push, because the doc-model push sends the prompt text verbatim.
+3. **Shape it in Retell with Conductor.** In the Retell dashboard, open the agent and drive
+   Conductor in plain English: one large instruction carrying the firm's site facts, niche and
+   persona rules. It gets roughly 95% of the way there. **Tell it explicitly that the compliance
+   lines must stay VERBATIM** (AI disclosure, recording disclosure, NCCP guardrail). Conductor's
+   job is "improving" prompts, so it will happily reword a legal boundary if you let it.
+4. **Tweak and QA** per Step 6, which now carries three extra checks.
+5. **Pull Retell Config** back into BFD from the setter tile. Since 2026-08-12 this stores a
+   full-fidelity snapshot (prompt and tool definitions verbatim, `schema_version: 1`), so the
+   known-good agent is archived and restorable, not merely diffable. The toast reports the prompt
+   size and tool count; if it still says "Mirror updated", you are looking at a pre-2026-08-12
+   snapshot and should pull again.
 
 > Slot allocation reads the `prompts` table, and voice reserves slots 1-3. **Never create a setter on
 > slot 1** (SLOT-MAP-1: `SLOT_TO_AGENT_COLUMN[1]` clobbers `retell_inbound_agent_id`).
@@ -137,6 +157,20 @@ Submit the form yourself with your own details and listen to the whole call. Che
 - [ ] Qualification trio asked one at a time, not re-asked if volunteered
 - [ ] NCCP guardrail holds when you push on rates or borrowing capacity, twice
 - [ ] Booking offers real slots and the confirmation email lands
+
+**Three extra checks whenever Conductor touched the agent** (added 2026-08-12; each of these
+is a way a dashboard session silently breaks a working agent):
+
+- [ ] **Compliance lines word for word.** Read the AI disclosure, the recording disclosure and the
+      NCCP guardrail against the source. Conductor rewords helpfully and nothing in the platform
+      validates it.
+- [ ] **All 5 booking tools still on the agent** (`get-available-slots`, `book-appointments`,
+      `get-contact-appointments`, `update-appointment`, `cancel-appointments`). The hourly drift
+      poll flags a loss, but only for locked setters and only after the fact.
+- [ ] **The phone is not pinned to an old agent version.** A dashboard publish does NOT run
+      `repointPhoneVersionsAfterPublish`, so the number can still serve the pre-Conductor version
+      while the dashboard shows the new one. Re-Push from BFD, or check the phone's
+      `agent_version` in Retell.
 - [ ] **Role-play the principal**: say "I'm actually the broker here". A principal fielding
       qualification calls for a living is the most expert judge you will ever demo to, and the demo
       IS the pitch, so there is no human recovery if it fumbles.
@@ -149,9 +183,26 @@ Send the two-message DM (offer first, link in the second message only). When the
 
 ---
 
-## 4. Modify-with-AI template
+## 4. Persona content template (and the legacy Modify-with-AI path)
 
-Adapt names only. The scripted lines below are ratified and must be used verbatim.
+**Use this content with Conductor** (Step 3.3): paste it as the shaping instruction in the Retell
+dashboard. The scripted lines below are ratified and must be used verbatim, whichever tool applies
+them. Adapt names only.
+
+<details>
+<summary><strong>Legacy path: Modify with AI in the BFD UI</strong> (still works, no longer the default)</summary>
+
+Before 2026-08-12 the persona was shaped in the BFD UI: open the setter, click **Modify with AI**
+(Sparkles) on WHO YOU ARE and PERSONA RULES, paste the instruction, review the diff, apply, then
+Save Setter and Push to Retell.
+
+This still works and remains the only option for TEXT setters, which Conductor cannot author at all.
+Two caveats: the **per-section Sparkles** buttons work, but the **top-bar Modify-with-AI button is
+dead** (a dead env var since 2026-05-19, backlogged by Brendan 2026-08-12; the manual paste
+workaround stands). And a UI edit re-pushes the prompt, so it will clobber Conductor's work unless
+the slot is unlocked deliberately.
+
+</details>
 
 ```
 Rewrite WHO YOU ARE and PERSONA RULES so this agent is calling on behalf of [FIRM], a

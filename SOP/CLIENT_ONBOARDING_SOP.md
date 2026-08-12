@@ -226,6 +226,14 @@ Dynamic prompt). There is no separate voicemail agent and no Twilio AMD voicemai
 > are managed by Brendan through the BFD setter UI. If you find a prompt problem, report the exact
 > location and recommended change; do not apply it.
 
+> **How persona shaping works now (ratified 2026-08-12).** Voice personas are shaped in Retell's
+> dashboard using Conductor, their AI copilot, not in the BFD UI. BFD stays the system of record:
+> it pushes the template with this client's booking tools, F9-locks the slot so a later push cannot
+> clobber the dashboard work, and pulls a full-fidelity snapshot back afterwards. Text personas stay
+> entirely BFD-native, because Conductor cannot author text and Retell SMS is US-A2P-only with no
+> cadences. Decision record: `Docs/RETELL_PIVOT_DECISION_2026-08-12.md`. Runbook:
+> `SOP/PERSONA_SETUP.md` step 1 and `SOP/DEMO_PROSPECT_SETUP.md` step 3.
+
 ### 2.3 OpenRouter (BFD key)
 
 Use BFD's OpenRouter key for the client (`clients.openrouter_api_key`). Set `clients.llm_model` for
@@ -359,6 +367,13 @@ Open **Sub-Account Settings** (`/client/<client-uuid>/settings`) and configure e
 
 Create the voice and/or text setter(s) for the client (the Voice-Setter editor lives at
 `/client/<client-uuid>/prompts/voice`).
+
+> **Shaping the persona is a separate, ratified workflow (2026-08-12):** push the template from BFD,
+> F9-lock the slot, shape it in Retell with Conductor, QA it (including the three post-Conductor
+> checks: compliance lines verbatim, all 5 booking tools present, and the phone not left pinned to
+> an old agent version), then Pull Retell Config to archive it. Once the voice setter is right,
+> clone it across to the text setter with COPY OTHER SETTER. Full steps in `SOP/PERSONA_SETUP.md`;
+> rationale in `Docs/RETELL_PIVOT_DECISION_2026-08-12.md`.
 
 > **Known bug + workaround (live build, 2026-06-17):** creating a new voice setter on the currently
 > deployed app may produce a setter that is not bookable (only 3 tools, no booking flow), because the

@@ -8,9 +8,15 @@ description: Use when Brendan wants to spin up a personalised Gary demo for a na
 Spin up one named prospect's demo: their own landing page at `/g/<slug>`, their own Gary persona,
 a real callback to their mobile, and a real booking on Brendan's calendar.
 
-**Full detail, decision rationale and the Modify-with-AI template live in
+**Full detail, decision rationale and the persona content template live in
 `SOP/DEMO_PROSPECT_SETUP.md`. Read it before executing.** This skill is the workflow spine; the SOP
 is the reference.
+
+> **Persona shaping changed 2026-08-12 (ratified, first live run pending).** Voice personas are now
+> shaped in Retell's dashboard with Conductor, not in the BFD UI: push the template from BFD, F9-lock
+> the slot, shape with Conductor, QA, then Pull Retell Config to archive the known-good agent. The
+> BFD Modify-with-AI path still works and is the legacy fallback (and the only path for text).
+> Rationale: `Docs/RETELL_PIVOT_DECISION_2026-08-12.md`.
 
 ## Non-negotiables
 
@@ -39,9 +45,10 @@ Create a todo per step.
 2. **Pick the slug**: `<firm-slug>-<4 random chars>`, lowercase.
 3. **Pre-flight** (§6 of the SOP): confirm exactly one client row holds the dogfood number, no active
    legacy `workflows` row with `contact_created`, and which setter slots are occupied.
-4. **Hand Brendan the persona click-path** with the Modify-with-AI text filled in from §4 of the SOP.
-   He duplicates a base persona, renames, modifies, saves, pushes. Wait for confirmation. Do not
-   attempt this yourself.
+4. **Hand Brendan the persona click-path** with the persona content filled in from §4 of the SOP.
+   He duplicates a base persona, renames, **saves and pushes, F9-locks the slot**, then shapes it in
+   Retell with Conductor and pulls the config back. Wait for confirmation. Do not attempt this
+   yourself: Conductor is dashboard-only with no API, and prompt content is Brendan's to author.
 5. **Wire it** (§4 of the SOP): read the setter UUID, insert the `voice_setter_phone_bindings`
    outbound row for `+61481614530`, add the server registry entry and the frontend copy entry.
 6. **Verify then deploy**: `npm test` green → `deploy_single_fn.mjs demo-callback` → render smoke →
