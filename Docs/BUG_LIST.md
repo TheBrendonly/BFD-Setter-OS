@@ -12,7 +12,7 @@ Open bugs and behavior fixes. Reconciled 2026-06-25; full re-audit 2026-07-07 (S
 
 ## Open code items
 
-- [ ] **MFA-LOGIN-1 `[B]` — the headless agency login cannot pass TOTP, and it now blocks the release.**
+- [~] **MFA-LOGIN-1 `[B]` — the headless agency login cannot pass TOTP, and it now blocks the release.**
   11 consecutive `mfa_verification_failed` rejections: 6 on 2026-08-12/13, 5 more on 2026-08-13.
   **Timing is ruled out, definitively.** The final attempt had a **challenge 0.6s old** and the code
   submitted **1.9s** after Brendan wrote it into the file by hand from a terminal (no chat latency at all),
@@ -41,6 +41,9 @@ Open bugs and behavior fixes. Reconciled 2026-06-25; full re-audit 2026-07-07 (S
   gated on that push (the `/g/` route is **not live** — see DEMO-CB note in `TEST_LIST.md`).
   **Standing workaround that does not need any of this:** Brendan can click SNAP-1, CLONE-1 and the
   RENDER-1 surfaces himself in the UI in about 10 minutes.
+
+  **UPDATE 2026-08-13 12:53 AEST (relayed via Cowork from Brendan):** Brendan confirmed he CAN log into `app.buildingflowdigital.com` manually in his own browser with a code from his authenticator — it worked, first try. That is the decisive test from above, and it lands on the "succeeds" branch: the account and TOTP factor are fine, nothing is desynced, do NOT delete or re-enrol it. The fault is isolated to the automation harness or its environment (headless browser vs. Brendan's normal browser — different session/cookie state, network path, and browser fingerprint are all still on the table and worth checking if the next run still fails).
+  **Next step, unchanged from the plan above:** run `node scripts/test-harness/auth.mjs <scratchdir>` and have Brendan fire ONE fresh code via `echo 123456 > <scratchdir>/totp.txt` (it retries forever, so a rejected code costs nothing but the code). Pass -> close this out to `COMPLETED_LOG.md`. Still `mfa_verification_failed` on a code just proven to work manually -> that is a real, narrower finding (harness/environment divergence, not the account) — capture exactly what differs before trying anything else.
 
 - [ ] **CLONE-COMPLIANCE-1 — the voice→text clone re-asserts *voice* compliance copy into a *text* prompt.**
   Found by the CLONE-2 operator read on the live `Setter-2` clone (19,449 chars, 2026-08-12 09:22).

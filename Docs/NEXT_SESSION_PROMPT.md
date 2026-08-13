@@ -22,22 +22,12 @@ Read the corrected two-clock section of scripts/test-harness/README.md before to
 challenge TTL is a measured 300s, a reload mints a fresh one, and the field is #mfa_login_code (NOT
 getByRole('textbox'), which grabs the email box). Three sessions have now rebuilt this from scratch.
 
-STEP 0, BEFORE ANYTHING ELSE — resolve MFA-LOGIN-1 (Docs/BUG_LIST.md). 11 consecutive
-mfa_verification_failed; timing is conclusively ruled out (0.6s-old challenge, code submitted 1.9s after
-being typed by hand from a terminal, still rejected). Ask Brendan for the result of the one decisive test:
-can he log into app.buildingflowdigital.com MANUALLY in his own browser with a code?
-  - He CAN -> the fault is in the automation. Run `node scripts/test-harness/auth.mjs <scratchdir>` and
-    have him fire codes with `echo 123456 > <scratchdir>/totp.txt`. It retries forever, so a rejected code
-    costs nothing.
-  - He CANNOT -> the factor is desynced. With his explicit OK, delete the factor, log in via magiclink
-    alone (works, because with no verified factor the client-side gate stops firing), and have him
-    RE-ENROL TOTP fresh in Account Settings. End with working 2FA, not 2FA switched off.
-  - Do NOT read auth.mfa_factors.secret and do NOT mint an MFA-bypassing session. Both are blocked by the
-    permission classifier, correctly, and must not be worked around.
-  - IF IT STAYS BLOCKED, DO NOT BURN THE SESSION ON IT AGAIN. Brendan can click SNAP-1, CLONE-1 and the
-    RENDER-1 surfaces himself in ~10 minutes. Ask him to, capture what he sees, and proceed. Note that
-    server-side aal2 is NEVER checked (_shared/assert-client-access.ts), so only the browser-UI legs
-    actually need the elevated session.
+STEP 0, BEFORE ANYTHING ELSE — resolve MFA-LOGIN-1 (Docs/BUG_LIST.md). Brendan has ALREADY answered the decisive test (confirmed 2026-08-13 via Cowork): he CAN log into app.buildingflowdigital.com manually in his own browser with a code, first try. Do NOT ask him again. This means the account/factor is fine and the fault is in the automation harness or its environment, not a desynced TOTP secret — do NOT delete or re-enrol the factor.
+  Run `node scripts/test-harness/auth.mjs <scratchdir>` and ask Brendan to fire ONE fresh code with `echo 123456 > <scratchdir>/totp.txt` (it retries forever, so a rejected code costs nothing but the code).
+  - If it now PASSES — the harness fix from 2026-08-13 (field id `#mfa_login_code`, reload-before-type) was the actual cure and the earlier failures were stale runs; proceed to the owed work below.
+  - If it STILL fails with a code Brendan has just proven works manually — capture exactly what differs between the two paths (cookies/session state, network/IP, browser fingerprint, timing) rather than re-running the same script again; file the finding in Docs/BUG_LIST.md and ask Brendan before trying anything invasive.
+  - Do NOT read auth.mfa_factors.secret and do NOT mint an MFA-bypassing session. Both are blocked by the permission classifier, correctly, and must not be worked around.
+  - IF IT STAYS BLOCKED, DO NOT BURN THE SESSION ON IT AGAIN. Brendan can click SNAP-1, CLONE-1 and the RENDER-1 surfaces himself in ~10 minutes. Ask him to, capture what he sees, and proceed. Note that server-side aal2 is NEVER checked (_shared/assert-client-access.ts), so only the browser-UI legs actually need the elevated session.
 
 THEN the owed work, in dependency order (this chain was not written down before, respect it):
   authenticated browser -> RENDER-1 -> git push github main -> DEMO-CB-1/2

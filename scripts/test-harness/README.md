@@ -93,6 +93,8 @@ binary is the OS-cached Chromium at `~/.cache/ms-playwright/chromium-1217/chrome
   `finally`. This overwrites a live secret — get Brendan's explicit OK first (the auto-mode classifier blocks
   it otherwise) and keep the window short.
 
+- **UPDATE 2026-08-13 12:53 AEST, relayed via Cowork — the account is confirmed fine.** Brendan manually logged into `app.buildingflowdigital.com` in his own browser with a code and it worked, first try. That resolves the open question directly above: the factor is NOT desynced, do not re-enrol it. The remaining unknown is a narrower one — why the headless path rejects a code that the same authenticator, same secret, produces successfully in a normal browser. Next run should diff cookie/session state, network path, and browser fingerprint between the two if `auth.mjs` still fails after this update.
+
 ## Key IDs
 - BFD client `e467dabc-57ee-416c-8831-83ecd9c7c925`; Twilio/retell_phone_1 `+61481614530`;
   Main Outbound setter `b09624b5-…` (agent `agent_b2f6495…`, shared inbound+outbound); TEST_PHONE_A
