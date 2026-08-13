@@ -52,5 +52,28 @@ Protocol. Then the standing rule resumes: zero new product code until a pilot is
 
 Backlog, do NOT build unprompted: CLONE-COMPLIANCE-1 (the voice->text clone re-asserts voice compliance
 copy into text prompts - filed 2026-08-13, gated); give text setters a prompt_docs row; a Restore UI;
-delete or guard deploy_retell_proxy_bundle.mjs.
+delete or guard deploy_retell_proxy_bundle.mjs. All five live in the TickTick task "CLAUDE CODE BACKLOG
+(bfd-setter)".
+
+THEN, ONLY IF THE OWED WORK ABOVE IS FULLY CLOSED OUT, work this queue in order. These are the remaining
+items that are Claude Code's job rather than Brendan's or Cowork's. Re-read the standing rule first: zero
+new PRODUCT code until a pilot is paid. Tooling, infrastructure and verification are not product code;
+anything touching the setter product itself is, and stays filed.
+
+  A. Verify /try-gary GHL-to-cadence wiring end to end (TickTick, same title). Read-only tracing plus a
+     live probe. No new code, so not gated. Do this first - it is verification, same class as the owed
+     work above.
+  B. Slot 10 name drift on the BFD client (TickTick, same title). Read the live rows before proposing
+     anything; slot 9 orphan is already RESOLVED, so confirm what is actually still drifting.
+  C. Greenserver: build_card.py fixes found by the E2E test (TickTick, same title; ~30 lines - source
+     line + headline anchor + --reuse-plate + footer margin). Different project, content-pipeline
+     tooling, not setter product code. Unblocks the card pipeline.
+  D. Rebuild the Projects -> Notion docs mirror (TickTick "Claude Code on greenserver: rebuild the
+     Projects -> Notion docs mirror, ~90 min, plan mode"). Plan mode, and confirm the approach with
+     Brendan before building - it spans several projects.
+
+  Explicitly NOT in scope for this session, so do not start them: receive-twilio-sms 2026-04-30 hardening
+  and sender-aware inbound SMS routing (both product code, both gated); ORPHAN-PROJ-1 project deletion,
+  the PII vendor-toggle pass, and every secret rotation (Brendan, provider consoles); PU-15 and every
+  other prompt-content edit (Brendan, via the UI - report only).
 ```
