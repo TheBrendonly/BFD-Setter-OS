@@ -32,7 +32,7 @@ STEP 0, BEFORE ANYTHING ELSE — resolve MFA-LOGIN-1 (Docs/BUG_LIST.md). Brendan
 THEN the owed work, in dependency order (this chain was not written down before, respect it):
   authenticated browser -> RENDER-1 -> git push github main -> DEMO-CB-1/2
 1. RENDER-1 render smoke on the live app (Prompt Management, Settings, Dashboard, Account Settings,
-   Clients), THEN `git push github main` to release the frontend. github is 21 commits behind.
+   Clients), THEN `git push github main` to release the frontend. github is 24 commits behind.
 2. SNAP-1 one real Pull from the UI. The toast must read "Full snapshot saved (vN) . N,NNN char prompt .
    N tools", not "Mirror updated".
 3. SNAP-2 one restore on a throwaway BFD voice slot: Pull first, dryRun, then for real. Confirm the agent
