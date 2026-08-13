@@ -65,8 +65,10 @@ push"). The login was cured on the **first code, first try**, which unblocked th
   against a live positive control). Then fired one inbound via `sms_inbound.mjs`: `receive-twilio-sms`
   **created a new GHL contact `CSnx3VBsVsPqDNCmfocX`** (source "Twilio SMS (BFD)"), the lead resolved to that
   real id (not `bfd-<phone>`), and Gary's replies were **delivered** to +61405482446 (Twilio callbacks
-  sent -> delivered); a live human reply even continued the conversation. The test left a fresh lead + GHL
-  contact for +61405482446, which is now its current record.
+  sent -> delivered); a live human reply even continued the conversation. Afterward, at Brendan's request, the
+  test's own fresh lead + GHL contact were deleted too (34 more BFD Supabase rows across 6 tables + the new
+  contact `CSnx3VBsVsPqDNCmfocX`, GET-by-id confirms gone), so +61405482446 is fully clean again. The Synthetic
+  Probe tenant stayed intact throughout (still 1 lead + 1,401 engagement rows).
 
 Still owed after this session: **DEMO-CB-1/2** (DEMO-CB-1 deferred by Brendan; the 429/after-hours/opt-out
 guards remain; a TickTick runbook drives it). SMS-GHL-1 is DONE.
