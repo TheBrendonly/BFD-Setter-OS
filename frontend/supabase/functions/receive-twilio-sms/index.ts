@@ -785,6 +785,8 @@ Deno.serve(async (req) => {
           // Cadence v2 — direction-aware tracking for cold-reply nudge.
           last_inbound_at: nowTs,
           last_reply_at: nowTs,
+          // 1C — lead texted in (here, a STOP); we are no longer awaiting a reply.
+          awaiting_reply: false,
         }, { onConflict: "client_id,lead_id" });
       return new Response(TWIML_EMPTY, {
         status: 200,
@@ -899,6 +901,8 @@ Deno.serve(async (req) => {
         last_inbound_at: nowISO,
         last_reply_at: nowISO,
         nudge_count: 0,
+        // 1C — lead replied, so clear the awaiting-reply flag the nudge task gates on.
+        awaiting_reply: false,
       }, { onConflict: "client_id,lead_id" });
 
     // Voice-call coordination: if a cadence voice call is live for this contact,

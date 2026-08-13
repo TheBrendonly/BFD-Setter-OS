@@ -1142,7 +1142,8 @@ async function toolSendSms(args: { client: ClientRow; body: Record<string, unkno
     });
   } catch (e) { console.warn("send-sms: GHL mirror failed (non-fatal):", e); }
   try {
-    await supabase.from("leads").update({ last_outbound_at: new Date().toISOString() })
+    // 1C — mid-call outbound text expects a reply; inbound clears awaiting_reply.
+    await supabase.from("leads").update({ last_outbound_at: new Date().toISOString(), awaiting_reply: true })
       .eq("client_id", client.id).eq("lead_id", contactId);
   } catch { /* non-fatal */ }
 

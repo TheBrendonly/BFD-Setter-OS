@@ -1102,10 +1102,12 @@ export const runEngagement = task({
               );
               if (!callWasDeduped) {
                 // Cadence v2 — bump leads.last_outbound_at for cold-reply nudge accounting.
+                // 1C — an outbound engage call expects the lead to engage back;
+                // mark awaiting_reply so the nudge task can follow up if they don't.
                 try {
                   await supabase
                     .from("leads")
-                    .update({ last_outbound_at: new Date().toISOString() })
+                    .update({ last_outbound_at: new Date().toISOString(), awaiting_reply: true })
                     .eq("client_id", client_id)
                     .eq("lead_id", lead_id);
                 } catch (tsErr) {
@@ -1555,10 +1557,11 @@ export const runEngagement = task({
           );
           if (!legacyCallWasDeduped) {
             // Cadence v2 — bump leads.last_outbound_at for cold-reply nudge accounting.
+            // 1C — outbound call expects engagement back; mark awaiting_reply.
             try {
               await supabase
                 .from("leads")
-                .update({ last_outbound_at: new Date().toISOString() })
+                .update({ last_outbound_at: new Date().toISOString(), awaiting_reply: true })
                 .eq("client_id", client_id)
                 .eq("lead_id", lead_id);
             } catch (tsErr) {

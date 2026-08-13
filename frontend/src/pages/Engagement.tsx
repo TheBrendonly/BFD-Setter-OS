@@ -2737,10 +2737,10 @@ export default function Engagement() {
   const [cadenceEndTimeOpen, setCadenceEndTimeOpen] = useState(false);
 
   usePageHeader({
-    title: workflowName || 'Campaign',
+    title: workflowName || 'Lead Sequence',
     breadcrumbs: [
-      { label: 'Workflows', onClick: () => navigate(`/client/${clientId}/workflows`) },
-      { label: workflowName || 'Campaign', badge: (workflow as any)?.is_active ? 'ACTIVE' : 'INACTIVE', badgeVariant: (workflow as any)?.is_active ? 'positive' as const : 'neutral' as const },
+      { label: 'Lead Sequences', onClick: () => navigate(`/client/${clientId}/workflows`) },
+      { label: workflowName || 'Lead Sequence', badge: (workflow as any)?.is_active ? 'ACTIVE' : 'INACTIVE', badgeVariant: (workflow as any)?.is_active ? 'positive' as const : 'neutral' as const },
     ],
   }, [workflowName, (workflow as any)?.is_active]);
 
@@ -2836,7 +2836,7 @@ export default function Engagement() {
       }
 
       let loadedWorkflowId: string | null = null;
-      let loadedWorkflowName: string = 'Campaign';
+      let loadedWorkflowName: string = 'Lead Sequence';
 
       if (data) {
         setWorkflow(data);
@@ -3121,7 +3121,7 @@ export default function Engagement() {
   // Start Campaign handler — uses the existing linked campaign
   const handleStartCampaign = useCallback(async () => {
     if (!clientId || !workflow || !campaignId) {
-      toast.error('Campaign not linked. Please reload.');
+      toast.error('Sequence not linked. Please reload.');
       return;
     }
     const lines = campaignContactIds.split('\n').map(l => l.trim()).filter(Boolean);
@@ -3151,12 +3151,12 @@ export default function Engagement() {
       setCampaignLaunching(false);
       setCampaignProgress(null);
       setShowCampaignDialog(false);
-      toast.success(`Campaign started — ${successCount} leads enrolled`);
+      toast.success(`Sequence started, ${successCount} leads enrolled`);
       fetchExecutions();
     } catch (err: any) {
       setCampaignLaunching(false);
       setCampaignProgress(null);
-      toast.error(err.message || 'Failed to start campaign');
+      toast.error(err.message || 'Failed to start sequence');
     }
   }, [clientId, workflow, campaignContactIds, campaignId, fetchExecutions]);
 
@@ -3969,7 +3969,7 @@ export default function Engagement() {
           <div className="bg-card groove-border flex flex-col" style={{ width: 544, maxWidth: '90vw', maxHeight: '80vh' }}>
             <div className="flex items-center justify-between px-6 shrink-0" style={{ borderBottom: '3px groove hsl(var(--border-groove))', paddingTop: '14px', paddingBottom: '14px' }}>
               <h3 className="text-foreground" style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '13px', fontWeight: 500 }}>
-                START CAMPAIGN
+                START SEQUENCE
               </h3>
               <button
                 className="groove-btn !h-8 !w-8 !p-0 !min-h-[32px] !min-w-[32px] flex items-center justify-center bg-muted/50"
@@ -4018,7 +4018,7 @@ export default function Engagement() {
                 {campaignLaunching ? (
                   <><Loader2 className="w-4 h-4 mr-1.5 animate-spin" />ENROLLING...</>
                 ) : (
-                  <><Rocket className="w-4 h-4 mr-1.5" />START CAMPAIGN</>
+                  <><Rocket className="w-4 h-4 mr-1.5" />START SEQUENCE</>
                 )}
               </Button>
             </div>
@@ -4045,16 +4045,16 @@ export default function Engagement() {
               .delete()
               .eq('id', workflow.id);
             if (error) throw error;
-            toast.success('Campaign workflow deleted');
+            toast.success('Lead sequence deleted');
             navigate(`/client/${clientId}/workflows`);
           } catch (err) {
             console.error(err);
-            toast.error('Failed to delete workflow');
+            toast.error('Failed to delete sequence');
           }
         }}
-        title="Delete Campaign Workflow"
+        title="Delete Lead Sequence"
         itemName={workflowName}
-        description="This will permanently delete this campaign workflow and all associated analytics dashboards. All campaign data will be lost. This action cannot be undone."
+        description="This will permanently delete this lead sequence and all associated analytics dashboards. All sequence data will be lost. This action cannot be undone."
       />
       <DeleteConfirmDialog
         open={showToggleActiveDialog}
@@ -4096,7 +4096,7 @@ export default function Engagement() {
       <Dialog open={showRenameDialog} onOpenChange={setShowRenameDialog}>
         <DialogContent className="max-w-md !p-0">
           <DialogHeader>
-            <DialogTitle>CAMPAIGN SETTINGS</DialogTitle>
+            <DialogTitle>SEQUENCE SETTINGS</DialogTitle>
           </DialogHeader>
           <div className="p-6 space-y-4">
             <div className="space-y-1">
@@ -4135,7 +4135,7 @@ export default function Engagement() {
                 setWorkflowName(newName);
                 setWorkflow(prev => prev ? { ...prev, name: newName } : prev);
                 setShowRenameDialog(false);
-                toast.success('Campaign name saved');
+                toast.success('Sequence name saved');
               }}><Save className="w-4 h-4 mr-1.5" />SAVE</Button>
             </div>
           </div>

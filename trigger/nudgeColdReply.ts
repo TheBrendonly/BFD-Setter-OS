@@ -6,24 +6,28 @@
 // the moment a reply comes in. After that, nothing nudges them — that's
 // the gap this task closes.
 //
-// Nudge tiers (counted by leads.nudge_count):
+// Nudge cadence (counted by leads.nudge_count) is per-client config, read from
+// the clients row via resolveNudgeConfig (nudge_enabled / nudge_offsets_hours /
+// nudge_recovery_window_hours). Defaults preserve the original behaviour:
 //   nudge 1 at +24h since last outbound  (gentle re-engagement)
-//   nudge 2 at +72h since last outbound  (reframe — ask about underlying goal)
-//   tier 3 at +7d  → no SMS; just tag the lead and stop trying. They drop
-//                    into the long-tail nurture (Phase B).
+//   nudge 2 at +72h since last outbound  (reframe, ask about underlying goal)
+//   then no more SMS; tag the lead silent and stop trying. They drop into the
+//   long-tail nurture (Phase B).
+// nudge_offsets_hours[i] is the gap (hours since the previous outbound) before
+// nudge (i+1); the array length is how many nudges are sent before give-up.
 //
 // All nudges are AI-generated using the same aiGenerateEngagementCopy
 // helper that the active cadence uses. Cost is ~$0.001 per nudge.
 //
-// Single source of truth for the eligibility filter (mirrors plan §
-// cold-reply re-engagement):
-//   setter_stopped = false
+// Single source of truth for the eligibility filter:
+//   nudge_enabled <> false (per client)
+//     AND setter_stopped = false
 //     AND tagged_silent_after_engagement = false
 //     AND last_inbound_at IS NOT NULL
 //     AND last_outbound_at > last_inbound_at
-//     AND age(now() - last_outbound_at) >= tier-threshold
-//     AND age(now() - last_outbound_at) <= 14d   (outside recovery window)
-//     AND nudge_count < 3
+//     AND age(now() - last_outbound_at) >= this tier's offset
+//     AND age(now() - last_outbound_at) <= recovery window (default 14d)
+//     AND nudge_count < number of configured nudges
 
 import { schedules } from "@trigger.dev/sdk";
 import { createClient } from "@supabase/supabase-js";
@@ -39,6 +43,7 @@ import {
   parseQuietHours,
 } from "./_shared/businessHours";
 import { isVoiceCallActive } from "./_shared/voiceCallActive";
+import { resolveNudgeConfig, NUDGE_COUNT_HARD_CAP } from "./_shared/nudgeConfig";
 
 // SEC-PII-LOGS-1 — keep raw prospect phones out of platform logs.
 const redactPhone = (p: string | null | undefined): string => {
@@ -54,15 +59,15 @@ const getMainSupabase = () =>
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
   );
 
-// Hours since last_outbound_at required for each tier. Index = nudge_count
-// at task-fire time. tier 3 (index 2) is the give-up state.
-const TIER_THRESHOLDS_HOURS = [24, 72, 168]; // 1d, 3d, 7d
-const RECOVERY_WINDOW_HOURS = 24 * 14;       // skip leads >14d cold
 const MAX_LEADS_PER_RUN = 100;
 
+// Per-tier AI intent for the nudge copy. Index = nudge_count at fire time.
+// A client can configure more nudges than there are intents here (via
+// nudge_offsets_hours); tiers beyond this list reuse the last intent.
 const TIER_INTENT = [
   "The lead replied to your last SMS / call about 24h ago but then went quiet on the most recent setter message. Send a SHORT, warm nudge that references what they last said. One sentence + a single low-friction question. Goal: re-open the conversation without restating the original ask.",
-  "The lead replied a few days ago and then went silent. They might have lost interest or just got busy. Send ONE message that reframes — ask what the underlying goal or pain is, not whether they're 'still interested'. Avoid 'just checking in' and 'circling back'. Keep it human.",
+  "The lead replied a few days ago and then went silent. They might have lost interest or just got busy. Send ONE message that reframes, asking what the underlying goal or pain is, not whether they're 'still interested'. Avoid 'just checking in' and 'circling back'. Keep it human.",
+  "The lead has gone quiet after a couple of nudges. Send ONE final, low-pressure message that simply leaves the door open (offer to help whenever the timing is right). No guilt, no 'last chance', no restating the original ask. Keep it warm and brief.",
 ];
 
 export const nudgeColdReply = schedules.task({
@@ -85,13 +90,16 @@ export const nudgeColdReply = schedules.task({
     const { data: candidates, error: queryErr } = await supabase
       .from("leads")
       .select(
-        "client_id, lead_id, phone, email, first_name, last_name, business_name, custom_fields, last_inbound_at, last_outbound_at, nudge_count, clients ( id, twilio_account_sid, twilio_auth_token, twilio_default_phone, retell_phone_1, openrouter_api_key, llm_model, supabase_url, supabase_service_key, timezone, cadence_quiet_hours )",
+        "client_id, lead_id, phone, email, first_name, last_name, business_name, custom_fields, last_inbound_at, last_outbound_at, nudge_count, clients ( id, twilio_account_sid, twilio_auth_token, twilio_default_phone, retell_phone_1, openrouter_api_key, llm_model, supabase_url, supabase_service_key, timezone, cadence_quiet_hours, nudge_enabled, nudge_offsets_hours, nudge_recovery_window_hours )",
       )
       .eq("setter_stopped", false)
       .eq("tagged_silent_after_engagement", false)
+      // 1C — explicit gate: only nudge leads we sent a reply-expecting message to
+      // and who have not replied since. Set by the send paths, cleared on inbound.
+      .eq("awaiting_reply", true)
       .not("last_inbound_at", "is", null)
       .not("last_outbound_at", "is", null)
-      .lt("nudge_count", 3)
+      .lt("nudge_count", NUDGE_COUNT_HARD_CAP)
       .order("last_outbound_at", { ascending: true })
       .limit(MAX_LEADS_PER_RUN);
 
@@ -119,37 +127,6 @@ export const nudgeColdReply = schedules.task({
         continue;
       }
 
-      const ageH = (now.getTime() - lastOut) / 3_600_000;
-      if (ageH > RECOVERY_WINDOW_HOURS) {
-        // Outside recovery window. Tag silent so we stop re-checking.
-        await supabase
-          .from("leads")
-          .update({ tagged_silent_after_engagement: true })
-          .eq("client_id", lead.client_id!)
-          .eq("lead_id", lead.lead_id!);
-        stats.tagged_silent++;
-        continue;
-      }
-
-      const tier = (lead.nudge_count ?? 0) as 0 | 1 | 2;
-      const threshold = TIER_THRESHOLDS_HOURS[tier];
-      if (ageH < threshold) {
-        // Not yet due. Tomorrow's run may pick it up.
-        stats.skipped++;
-        continue;
-      }
-
-      // Tier 3 — give up + tag. No SMS sent.
-      if (tier >= 2) {
-        await supabase
-          .from("leads")
-          .update({ tagged_silent_after_engagement: true, nudge_count: 3 })
-          .eq("client_id", lead.client_id!)
-          .eq("lead_id", lead.lead_id!);
-        stats.tagged_silent++;
-        continue;
-      }
-
       const cl = lead.clients as unknown as {
         id: string;
         twilio_account_sid: string | null;
@@ -162,11 +139,61 @@ export const nudgeColdReply = schedules.task({
         supabase_service_key: string | null;
         timezone: string | null;
         cadence_quiet_hours: unknown;
+        nudge_enabled: boolean | null;
+        nudge_offsets_hours: unknown;
+        nudge_recovery_window_hours: number | null;
       } | null;
+
+      // Per-client nudge config (count + spacing + recovery window), defaulting
+      // to the original behaviour ([24h, 72h], 14d) for any client that has not
+      // tuned it. nudge_enabled=false opts a whole client out of cold nudges.
+      const nudgeCfg = resolveNudgeConfig(cl);
+      if (!nudgeCfg.enabled) {
+        stats.skipped++;
+        continue;
+      }
+
+      const ageH = (now.getTime() - lastOut) / 3_600_000;
+      if (ageH > nudgeCfg.recoveryWindowHours) {
+        // Outside recovery window. Tag silent so we stop re-checking, and clear
+        // awaiting_reply (1C) so the lead drops out of the nudge query.
+        await supabase
+          .from("leads")
+          .update({ tagged_silent_after_engagement: true, awaiting_reply: false })
+          .eq("client_id", lead.client_id!)
+          .eq("lead_id", lead.lead_id!);
+        stats.tagged_silent++;
+        continue;
+      }
+
+      const tier = lead.nudge_count ?? 0;
+
+      // Already sent every configured nudge -> give up + tag silent. No SMS.
+      if (tier >= nudgeCfg.offsetsHours.length) {
+        await supabase
+          .from("leads")
+          .update({
+            tagged_silent_after_engagement: true,
+            nudge_count: nudgeCfg.offsetsHours.length,
+            // 1C — no longer awaiting a reply; drop out of the nudge query.
+            awaiting_reply: false,
+          })
+          .eq("client_id", lead.client_id!)
+          .eq("lead_id", lead.lead_id!);
+        stats.tagged_silent++;
+        continue;
+      }
+
+      const threshold = nudgeCfg.offsetsHours[tier];
+      if (ageH < threshold) {
+        // Not yet due. A later hourly run picks it up once enough time passes.
+        stats.skipped++;
+        continue;
+      }
 
       if (!cl?.openrouter_api_key || !cl.twilio_account_sid || !cl.twilio_auth_token) {
         console.warn(
-          `nudgeColdReply: client ${lead.client_id} missing creds (openrouter/twilio) — skipping ${lead.lead_id}`,
+          `nudgeColdReply: client ${lead.client_id} missing creds (openrouter/twilio), skipping ${lead.lead_id}`,
         );
         stats.skipped++;
         continue;
@@ -221,7 +248,7 @@ export const nudgeColdReply = schedules.task({
           businessName: lead.business_name ?? null,
           customFields: (lead.custom_fields as Record<string, unknown> | null) ?? undefined,
           channelType: "sms",
-          nodeIntent: TIER_INTENT[tier],
+          nodeIntent: TIER_INTENT[Math.min(tier, TIER_INTENT.length - 1)],
         });
         smsBody = ai.body;
         aiCostCents = ai.costCents;
@@ -295,6 +322,8 @@ export const nudgeColdReply = schedules.task({
       }
 
       // Stamp the lead row: nudge_count++, last_outbound_at, message preview.
+      // 1C — the nudge itself expects a reply, so awaiting_reply stays true
+      // until the lead replies (which clears it) or we give up.
       const nowIso = new Date().toISOString();
       await supabase
         .from("leads")
@@ -303,6 +332,7 @@ export const nudgeColdReply = schedules.task({
           last_outbound_at: nowIso,
           last_message_at: nowIso,
           last_message_preview: sendBody.slice(0, 200),
+          awaiting_reply: true,
         })
         .eq("client_id", lead.client_id!)
         .eq("lead_id", lead.lead_id!);

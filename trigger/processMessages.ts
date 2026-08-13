@@ -504,6 +504,8 @@ export const processMessages = task({
             // outbound message; the cold-reply nudge task uses this to detect
             // "we replied, lead went quiet" windows.
             last_outbound_at: nowIso,
+            // 1C — the setter reply expects a reply back; inbound clears it.
+            awaiting_reply: true,
           })
           .eq("client_id", client.id)
           .eq("lead_id", lead_id);

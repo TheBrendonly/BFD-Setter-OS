@@ -119,7 +119,7 @@ function SortableCampaignRow({
         <StatusTag variant={ew.is_active ? 'positive' : 'neutral'}>
           {ew.is_active ? 'ACTIVE' : 'INACTIVE'}
         </StatusTag>
-        <StatusTag variant="warning">CAMPAIGN</StatusTag>
+        <StatusTag variant="warning">SEQUENCE</StatusTag>
         {isDefault && (
           <TooltipProvider delayDuration={200}>
             <Tooltip>
@@ -205,7 +205,7 @@ function SortableCampaignRow({
               </button>
             </TooltipTrigger>
             <TooltipContent side="top" className="max-w-[200px] text-center">
-              <p className="field-text">{ew.is_active ? 'Disable campaign' : 'Enable campaign'}</p>
+              <p className="field-text">{ew.is_active ? 'Disable sequence' : 'Enable sequence'}</p>
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>
@@ -277,7 +277,7 @@ function CampaignsDndList({
   };
 
   if (engagementWorkflows.length === 0) {
-    return <div className="text-center py-12 text-muted-foreground field-text">No campaigns yet. Click NEW CAMPAIGN to create one.</div>;
+    return <div className="text-center py-12 text-muted-foreground field-text">No lead sequences yet. Click NEW SEQUENCE to create one.</div>;
   }
 
   return (
@@ -324,10 +324,10 @@ export default function Workflows() {
 
   usePageHeader({
     title: 'Workflows',
-    breadcrumbs: [{ label: 'All Campaigns & Workflows' }],
+    breadcrumbs: [{ label: 'All Lead Sequences & Workflows' }],
     actions: [
       {
-        label: tab === 'campaigns' ? 'NEW CAMPAIGN' : 'NEW WORKFLOW',
+        label: tab === 'campaigns' ? 'NEW SEQUENCE' : 'NEW WORKFLOW',
         icon: <Plus className="w-4 h-4" />,
         onClick: tab === 'campaigns' ? handleCreateCampaign : handleCreateCustom,
         variant: 'default' as const,
@@ -425,14 +425,14 @@ export default function Workflows() {
       .from('engagement_workflows')
       .insert({
         client_id: clientId,
-        name: 'Untitled Campaign',
+        name: 'Untitled Sequence',
         nodes: templateNodes,
         is_active: false,
       })
       .select()
       .single();
     if (error) {
-      toast.error('Failed to create campaign workflow');
+      toast.error('Failed to create lead sequence');
       return;
     }
     // Auto-create linked engagement_campaigns row
@@ -441,7 +441,7 @@ export default function Workflows() {
       .insert({
         client_id: clientId,
         workflow_id: data.id,
-        name: 'Untitled Campaign',
+        name: 'Untitled Sequence',
       });
     // Auto-create default campaign widgets
     const { insertDefaultCampaignWidgets } = await import('@/lib/campaignWidgets');
@@ -507,11 +507,11 @@ export default function Workflows() {
       toast.success(on
         ? (newTag
             ? `'${ew.name}' now routes leads tagged '${newTag}'`
-            : `'${ew.name}' is a new-leads campaign — set its form tag`)
-        : `'${ew.name}' is no longer a new-leads campaign`);
+            : `'${ew.name}' is a new-leads sequence, set its form tag`)
+        : `'${ew.name}' is no longer a new-leads sequence`);
     } catch (err: any) {
       console.error('handleNewLeadsToggle failed', err);
-      toast.error(err?.message || 'Failed to update new-leads campaign');
+      toast.error(err?.message || 'Failed to update new-leads sequence');
       setEngagementWorkflows(previousState);
     }
   }
@@ -526,7 +526,7 @@ export default function Workflows() {
     if (error) {
       const dup = (error.code === '23505') || /duplicate|unique/i.test(error.message || '');
       toast.error(dup
-        ? `Tag '${tag}' is already used by another campaign for this client`
+        ? `Tag '${tag}' is already used by another sequence for this client`
         : 'Failed to update tag');
       setEngagementWorkflows(previousState);
       return;
@@ -545,7 +545,7 @@ export default function Workflows() {
       .update({ is_active: nextActive, updated_at: new Date().toISOString() })
       .eq('id', ew.id);
     if (error) {
-      toast.error('Failed to update campaign status');
+      toast.error('Failed to update sequence status');
     } else {
       setEngagementWorkflows(prev => prev.map(w => w.id === ew.id ? { ...w, is_active: nextActive } : w));
       toast.success(nextActive ? `'${ew.name}' activated` : `'${ew.name}' disabled`);
@@ -565,7 +565,7 @@ export default function Workflows() {
       .update({ auto_engagement_workflow_id: ew.id, use_native_text_engine: true })
       .eq('id', clientId);
     if (error) {
-      toast.error('Failed to set default campaign');
+      toast.error('Failed to set default sequence');
       setDefaultWorkflowId(prevDefault);
       return;
     }
@@ -623,7 +623,7 @@ export default function Workflows() {
       <div className="container mx-auto max-w-7xl flex min-h-full flex-col" style={{ paddingTop: '12px', paddingBottom: '24px' }}>
         {/* Tabs */}
         <div className="flex border-b border-dashed border-border shrink-0" style={{ marginBottom: '12px' }}>
-          {([{ key: 'campaigns' as WorkflowTab, label: 'CAMPAIGNS' }, { key: 'workflows' as WorkflowTab, label: 'WORKFLOWS' }]).map(t => (
+          {([{ key: 'campaigns' as WorkflowTab, label: 'LEAD SEQUENCES' }, { key: 'workflows' as WorkflowTab, label: 'WORKFLOWS' }]).map(t => (
             <button
               key={t.key}
               onClick={() => handleSetTab(t.key)}
@@ -810,7 +810,7 @@ export default function Workflows() {
               className="w-full groove-border bg-card hover:bg-muted/30 transition-colors px-4 py-3 text-left"
               onClick={() => { setShowCreateDialog(false); handleCreateCampaign(); }}
             >
-              <p className="text-foreground font-medium field-text">Campaign Workflow</p>
+              <p className="text-foreground font-medium field-text">Lead Sequence</p>
               <p className="text-muted-foreground field-text mt-0.5">Multi-step engagement sequence with reply detection and analytics dashboard</p>
             </button>
             <button
@@ -864,22 +864,22 @@ export default function Workflows() {
         open={!!deleteTarget}
         onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}
         onConfirm={confirmDelete}
-        title={deleteTarget?.type === 'campaign' ? 'Delete Campaign Workflow' : 'Delete Workflow'}
+        title={deleteTarget?.type === 'campaign' ? 'Delete Lead Sequence' : 'Delete Workflow'}
         itemName={deleteTarget?.name}
-        description={deleteTarget?.type === 'campaign' ? 'This will permanently delete this campaign workflow, all associated engagement executions, and the analytics dashboard for any campaigns linked to it. This action cannot be undone.' : undefined}
+        description={deleteTarget?.type === 'campaign' ? 'This will permanently delete this lead sequence, all associated engagement executions, and the analytics dashboard linked to it. This action cannot be undone.' : undefined}
       />
 
       <DeleteConfirmDialog
         open={!!activateTarget}
         onOpenChange={(open) => { if (!open) setActivateTarget(null); }}
         onConfirm={confirmActivateToggle}
-        title={activateTarget?.is_active ? 'Disable Campaign' : 'Enable Campaign'}
+        title={activateTarget?.is_active ? 'Disable Sequence' : 'Enable Sequence'}
         itemName={activateTarget?.name}
         confirmLabel={activateTarget?.is_active ? 'Disable' : 'Enable'}
         confirmIcon={activateTarget?.is_active ? <PowerOff className="w-4 h-4 mr-2" /> : <Power className="w-4 h-4 mr-2" />}
         description={activateTarget?.is_active
-          ? 'This will disable the campaign. No new leads will be enrolled until it is re-enabled.'
-          : 'This will enable the campaign. New leads will be enrolled based on its form-tag / default routing.'}
+          ? 'This will disable the sequence. No new leads will be enrolled until it is re-enabled.'
+          : 'This will enable the sequence. New leads will be enrolled based on its form-tag / default routing.'}
       />
     </div>
   );

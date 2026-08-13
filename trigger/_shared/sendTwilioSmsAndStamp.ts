@@ -68,7 +68,7 @@ export async function sendTwilioSmsAndStamp(args: {
     try {
       await args.supabase
         .from("leads")
-        .update({ last_outbound_at: new Date().toISOString() })
+        .update({ last_outbound_at: new Date().toISOString(), awaiting_reply: true })
         .eq("client_id", args.clientId)
         .eq("lead_id", args.leadId);
     } catch { /* non-fatal */ }
@@ -164,10 +164,12 @@ export async function sendTwilioSmsAndStamp(args: {
       console.warn("sendTwilioSmsAndStamp: outbound message_queue insert failed (non-fatal)", insErr);
     }
     // Cadence v2 — bump leads.last_outbound_at for the cold-reply nudge task.
+    // 1C — this is a reply-expecting send, so mark the lead awaiting_reply; an
+    // inbound reply clears it. Drives the nudge task's explicit eligibility.
     try {
       await args.supabase
         .from("leads")
-        .update({ last_outbound_at: new Date().toISOString() })
+        .update({ last_outbound_at: new Date().toISOString(), awaiting_reply: true })
         .eq("client_id", args.clientId)
         .eq("lead_id", args.leadId);
     } catch (tsErr) {

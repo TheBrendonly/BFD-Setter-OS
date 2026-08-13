@@ -270,6 +270,8 @@ Deno.serve(async (req) => {
         upsertRow.last_inbound_at = ts;
         upsertRow.last_reply_at = ts;
         upsertRow.nudge_count = 0;
+        // 1C — inbound call counts as a reply; clear the awaiting-reply flag.
+        upsertRow.awaiting_reply = false;
       }
 
       const { error: leadUpsertErr } = await internalSupabase
