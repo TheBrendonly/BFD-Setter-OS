@@ -12,38 +12,12 @@ Open bugs and behavior fixes. Reconciled 2026-06-25; full re-audit 2026-07-07 (S
 
 ## Open code items
 
-- [~] **MFA-LOGIN-1 `[B]` — the headless agency login cannot pass TOTP, and it now blocks the release.**
-  11 consecutive `mfa_verification_failed` rejections: 6 on 2026-08-12/13, 5 more on 2026-08-13.
-  **Timing is ruled out, definitively.** The final attempt had a **challenge 0.6s old** and the code
-  submitted **1.9s** after Brendan wrote it into the file by hand from a terminal (no chat latency at all),
-  and Supabase still rejected it. The previously-recorded root cause ("the challenge has a shorter,
-  separate expiry, never pre-navigate") was **wrong and is now corrected** in
-  `scripts/test-harness/README.md`: the challenge TTL is a measured **300s**, a reload mints a fresh one,
-  and a dead challenge reports `mfa_challenge_expired`, which is a *different* error we have not seen once
-  on 2026-08-13.
-  **Two real harness bugs were found and fixed on the way** (both in the now-committed
-  `scripts/test-harness/auth.mjs`): the field locator `getByRole('textbox').first()` was grabbing the EMAIL
-  input on the login form that renders before the MFA form swaps in, so the code went into the wrong box
-  and the submit button never enabled; and the whole flow now reloads immediately before typing so the
-  challenge is ~1s old. Neither fixed the rejection, which is what makes the remaining cause external.
-  **Remaining candidates, in order:** authenticator clock drift; Brendan reading a different entry in his
-  authenticator (two retired Supabase projects are still alive per ORPHAN-PROJ-1, so near-identical entries
-  are plausible); or a stored secret that no longer matches the device.
-  **Next step is one 30-second test by Brendan:** log into `app.buildingflowdigital.com` manually in his own
-  browser with a code. If that fails too, the factor is desynced and the repair is to delete the factor,
-  log in with magiclink alone (which works, because with no verified factor the client-side gate stops
-  firing) and **re-enrol TOTP fresh** — that ends with working 2FA rather than 2FA switched off. If it
-  succeeds, the fault is in the automation and we have a much smaller search space.
-  **Do not work around it by reading `auth.mfa_factors.secret`** to generate codes locally; the permission
-  classifier blocks that, correctly.
-  **Blast radius:** this is the only thing standing between the 2026-08-12 build and release. RENDER-1
-  needs an authenticated browser, the held `git push github main` is gated on RENDER-1, and DEMO-CB-1/2 is
-  gated on that push (the `/g/` route is **not live** — see DEMO-CB note in `TEST_LIST.md`).
-  **Standing workaround that does not need any of this:** Brendan can click SNAP-1, CLONE-1 and the
-  RENDER-1 surfaces himself in the UI in about 10 minutes.
-
-  **UPDATE 2026-08-13 12:53 AEST (relayed via Cowork from Brendan):** Brendan confirmed he CAN log into `app.buildingflowdigital.com` manually in his own browser with a code from his authenticator — it worked, first try. That is the decisive test from above, and it lands on the "succeeds" branch: the account and TOTP factor are fine, nothing is desynced, do NOT delete or re-enrol it. The fault is isolated to the automation harness or its environment (headless browser vs. Brendan's normal browser — different session/cookie state, network path, and browser fingerprint are all still on the table and worth checking if the next run still fails).
-  **Next step, unchanged from the plan above:** run `node scripts/test-harness/auth.mjs <scratchdir>` and have Brendan fire ONE fresh code via `echo 123456 > <scratchdir>/totp.txt` (it retries forever, so a rejected code costs nothing but the code). Pass -> close this out to `COMPLETED_LOG.md`. Still `mfa_verification_failed` on a code just proven to work manually -> that is a real, narrower finding (harness/environment divergence, not the account) — capture exactly what differs before trying anything else.
+- [x] **MFA-LOGIN-1: RESOLVED 2026-08-13 (evening)** -> `Docs/archive/COMPLETED_LOG.md`. The headless login
+  passed on the **first fresh code** once `playwright-core` was installed (it was missing) and the committed
+  `scripts/test-harness/auth.mjs` fix ran (field id `#mfa_login_code` plus reload-before-type): aal2 confirmed,
+  agency route held, `storageState.json` saved. The earlier 11 `mfa_verification_failed` were the
+  stale-field-locator and stale-challenge harness bugs, not a desynced factor; the account was always fine.
+  Do not rebuild `auth.mjs`. This unblocked RENDER-1, the release push, SNAP-1/2/3 and CLONE-1 (all passed).
 
 - [ ] **CLONE-COMPLIANCE-1 — the voice→text clone re-asserts *voice* compliance copy into a *text* prompt.**
   Found by the CLONE-2 operator read on the live `Setter-2` clone (19,449 chars, 2026-08-12 09:22).

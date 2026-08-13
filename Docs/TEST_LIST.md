@@ -10,85 +10,54 @@ When it fails, open a bug in `BUG_LIST.md`.
 > (2026-07-21 evening, `Operations/handoffs/2026-07-21-live-test-pass.md`); nothing below blocks the
 > First-Client Milestone.
 
-## Demo-callback funnel dry run (2026-08-11 build — blocked on PAT rotation + setter creation)
+## Demo-callback funnel dry run (2026-08-11 build): now LIVE in prod, real-call legs owed
 
-> Built + review-hardened 2026-08-11 (`9fc1dd1`..`87b522e`): public `/g/:slug` callback landing page +
-> `demo-callback` edge fn. **Both original blockers cleared 2026-08-12:** the SUPABASE_PAT is valid (Management
-> API 200) and the "Stapleton Finance Demo" setter exists on slot 9 (active, Retell agent, 7,157-char prompt doc,
-> and correctly no phone binding per SOP step 4). `demo-callback` is deployed (v3). The landing page renders:
-> Playwright against the built bundle loads `/g/stapleton-finance-b7q4` showing "A LIVE DEMO, BUILT FOR
-> STAPLETON FINANCE" with zero page errors. Only the live legs below remain.
+> Built plus review-hardened 2026-08-11 (`9fc1dd1`..`87b522e`): public `/g/:slug` callback landing page plus
+> `demo-callback` edge fn. Blockers cleared 2026-08-12 (PAT valid, Stapleton setter on slot 9), and the
+> **frontend was RELEASED 2026-08-13 evening** (`git push github main`, Railway redeploy), so the funnel is
+> now live. **2026-08-13 verified autonomously:** the live app renders `/g/stapleton-finance-b7q4` as the
+> Stapleton page ("A LIVE DEMO, BUILT FOR STAPLETON FINANCE", 0 page errors), and an unknown slug returns 404
+> both server-side (`{"error":"Unknown demo page."}`) and client-side ("DEMO NOT FOUND"). The remaining legs
+> need a real answered call. A Claude-assisted runbook to drive them lives in the TickTick task
+> "RUN: DEMO-CB-1 demo-callback dry run (bfd-setter, Claude-assisted)".
 
-- [ ] **DEMO-CB-1 — end-to-end dry run.** Submit `/g/stapleton-finance-b7q4` with Brendan's name+email+mobile →
-  `leads` row on BFD client carries the email (real GHL contact id, `form_source bfd-demo:stapleton-finance-b7q4`,
-  GHL contact tagged `bfd-demo-callback`) → real outbound call fires from +61481614530 → agent sounds
-  Stapleton-specific (qualification trio + NCCP guardrail hold) → booking lands on BFD's GHL calendar → confirmation
-  email arrives at the SUBMITTED address.
-- [ ] **DEMO-CB-2 — guard checks.** Second submit within the hour → per-phone 429 copy. Submit after 8pm AEST →
-  honest calling-hours decline. Unknown slug → 404 "Unknown demo page.". Opted-out number (if one exists) →
-  indistinguishable from call-failure copy.
+- [ ] **DEMO-CB-1: end-to-end dry run. DEFERRED by Brendan 2026-08-13** (fires a real call plus a real
+  booking, so it needs him at the phone). Submit `/g/stapleton-finance-b7q4` with name+email+mobile, then
+  the `leads` row on the BFD client carries the email (real GHL contact id, not `bfd-<phone>`; `form_source
+  bfd-demo:stapleton-finance-b7q4`; GHL contact tagged `bfd-demo-callback`); a real outbound call fires from
+  +61481614530; the agent sounds Stapleton-specific (qualification trio plus NCCP guardrail hold); a booking
+  lands on BFD's GHL calendar; a confirmation email arrives at the SUBMITTED address. Run via the TickTick
+  runbook above.
+- [ ] **DEMO-CB-2: guard checks.** **Unknown slug -> 404 "Unknown demo page." PASSED 2026-08-13** (server plus
+  client). Still owed: second submit within the hour -> per-phone 429 copy (needs a prior real submit, which
+  dials); submit after 8pm AEST -> honest calling-hours decline (needs off-hours); opted-out number ->
+  indistinguishable from call-failure copy (needs an opted-out number).
 - [x] **DEMO-CB-3 — `on_lead_change` residual check. PASSED 2026-08-12** (read-only, run autonomously). Asked for
   any `workflows` row on the BFD client that is `is_active` with `contact_created` in nodes, so the leads upsert
   could fire the legacy workflow-execute trigger. Result: the BFD client has **zero `workflows` rows at all**
   (total 0, active 0), so the trigger cannot fire. Nothing to clean up; no need to re-confirm at dry-run time.
 
-> **BLOCKED 2026-08-13 — read this before attempting SNAP-1/2, CLONE-1, RENDER-1 or DEMO-CB.** The headless
-> agency login still cannot pass TOTP: 11 consecutive `mfa_verification_failed`, timing conclusively ruled
-> out (a 0.6s-old challenge with the code submitted 1.9s after being typed by hand still failed). Filed as
-> **MFA-LOGIN-1** in `BUG_LIST.md`. Two harness bugs were found and fixed on the way and the working script
-> is now committed at `scripts/test-harness/auth.mjs`, so don't rebuild it. **The dependency chain is:**
-> RENDER-1 needs an authenticated browser → the held `git push github main` is gated on RENDER-1 → DEMO-CB
-> is gated on that push, because **`/g/stapleton-finance-b7q4` is NOT live** (verified 2026-08-13: the live
-> app returns its generic "OOPS! PAGE NOT FOUND", not the demo's own "DEMO NOT FOUND", so the whole demo
-> funnel is still sitting in the 21 unpushed commits). **Everything here can also be done by Brendan
-> clicking through the UI in ~10 minutes**, which does not need the harness at all.
+> **UNBLOCKED 2026-08-13 (evening).** The headless agency login now PASSES: `auth.mjs` cleared TOTP on the
+> first fresh code (attempt 1, aal2 confirmed, agency route held). **MFA-LOGIN-1 is closed.** RENDER-1 passed
+> and the held `git push github main` was released (26 commits, `033c8c1..e9acb17`); the frontend is live on
+> the new bundle, so `/g/stapleton-finance-b7q4` now renders the demo page (no longer the generic 404).
+> **SNAP-1, SNAP-2, SNAP-3 and CLONE-1 all PASSED** and moved to `Docs/archive/COMPLETED_LOG.md`. Only
+> SMS-GHL-1 (below) and the DEMO-CB real-call legs (above) remain.
 
-## Retell pivot overnight build (2026-08-12) — Brendan live-verify
+## Retell pivot overnight build (2026-08-12): remaining live leg
 
-> Built + deployed 2026-08-12 (`668eec7`..`8ab5e27`). Everything below was verified as far as it can
-> be without a browser session or a real inbound SMS; these are the legs that need Brendan.
-> Handoff: `Operations/handoffs/2026-08-12-overnight-run.md`.
+> Built plus deployed 2026-08-12 (`668eec7`..`8ab5e27`). SNAP-1/2/3, CLONE-1, CLONE-2 and RENDER-1 are DONE
+> (see COMPLETED_LOG, 2026-08-13 entries). Handoffs: `Operations/handoffs/2026-08-12-overnight-run.md` and
+> `Operations/handoffs/2026-08-13-mfa-unblocked-owed-legs.md`.
 
-- [ ] **SNAP-1 — one real Pull from the UI.** Prompt Management → a BFD voice setter tile → Pull from
-  Retell. The toast must now read "Full snapshot saved (vN) · N,NNN char prompt · N tools", not the
-  old "Mirror updated". (Server-side equivalent already passed: retell-proxy v54, live pull against
-  Main Outbound stored a 34KB snapshot with the 21,675-char prompt and all 8 tool definitions
-  verbatim.)
-- [ ] **SNAP-2 — one restore on a throwaway slot.** Pick a spare BFD voice slot, Pull it first (a
-  pre-2026-08-12 snapshot is refused by design with `snapshot_not_restorable`), then call
-  `restore-retell-config` with `dryRun: true`, confirm the planned payload, then run it for real and
-  confirm the agent still answers and still has its 5 booking tools. **Never on slot 1, never on
-  slot 9 (Stapleton), never on a live client.** API-only tonight: there is deliberately no Restore
-  button yet.
-- [ ] **SNAP-3 — no false drift alert after a restore.** After SNAP-2, wait for the next hourly
-  `pollRetellDrift` run and confirm it does NOT flag `versionDrifted` on the restored slot. The
-  re-baseline is meant to prevent exactly this; it is untested against the live poll.
-- [ ] **CLONE-1 — one voice→text clone from the UI.** Open text setter **Setter-2** on the BFD tenant
-  (seeded 2026-08-12 specifically so this test never touches the live Setter-1) → COPY OTHER SETTER →
-  pick a voice setter. Confirm: the confirm-step copy describes a prompt-document conversion, the job
-  runs, the result saves, and the toast warns that the section editor below is stale. (Server-side
-  equivalent already passed: Voice-Setter-10 → Setter-2, 20,082 chars in, 19,448 out, lint clean,
-  zero surviving tokens, both disclosures verbatim.)
-- [x] **CLONE-2 — read the cloned prompt. DONE 2026-08-13** (read-only, no session needed). Live
-  `Setter-2` on the BFD tenant: 19,449 chars, 153 lines, updated 2026-08-12 09:22, and `Setter-1`
-  untouched. **Structurally clean:** all 20 sections present, persona unmistakably Gary (first-person
-  Aussie, "no worries"/"too easy", the empathy-first and 1-3-sentence rules), **0** surviving `{{ }}`
-  tokens, **0** tool-call specs. Voice leakage is limited to figurative uses that read fine in text
-  ("listening" x3, "say" x9) plus one "misdial" at line 92 whose actual copy is "wrong number", which is
-  correct for SMS. Line 142 even carries an explicit no-audio guardrail.
-  **One real finding, filed:** the `# COMPLIANCE (VERBATIM, DO NOT EDIT)` block at the top is *voice*
-  copy in a *text* prompt ("these calls", "the call may be recorded", "[brief pause…]"), contradicting
-  line 142. Cause filed as **CLONE-COMPLIANCE-1** in `BUG_LIST.md`; the wording fix for the live prompt
-  is **PU-15** in `PROMPT_UPDATE_LIST.md`. Full detail in
-  `Operations/handoffs/2026-08-13-mfa-blocker-and-clone-read.md`.
-- [ ] **SMS-GHL-1 — one real inbound SMS.** `receive-twilio-sms` was redeployed (v32) with its
+- [ ] **SMS-GHL-1: one real inbound SMS.** `receive-twilio-sms` was redeployed (v32) with its
   `findOrCreateGhlContact` repointed at the new shared module. The boot probe passes and the adapter
   preserves the old contract exactly, but the GHL contact leg cannot be exercised without a real
-  inbound text. Send one from a number that is NOT already a CRM lead and confirm the lead resolves
-  to a real GHL contact id and the reply goes out.
-- [ ] **RENDER-1 — render smoke visual pass.** Prompt Management, Settings, Dashboard, Account
-  Settings, Clients. Frontend changes this run: the Pull toast, the CopySetterDialog voice→text
-  branch, and the deletion of the dead PersonalityConstructor.tsx.
+  inbound text. Send one from a number that is NOT already a CRM lead, to BFD's number `+61481614530`,
+  and confirm the lead resolves to a real GHL contact id (not `bfd-<phone>`) and the reply goes out.
+  **2026-08-13 status:** TEST_PHONE_B `+61403804263` was confirmed NOT a CRM lead and chosen for this
+  (Brendan grants per-use permission), but the text was not sent before the evening closeout, so it
+  stays owed. Whoever runs it next: re-confirm the chosen number is still non-CRM, then watch `leads`.
 
 ## Claude-drivable (autonomous, next cleanup session)
 

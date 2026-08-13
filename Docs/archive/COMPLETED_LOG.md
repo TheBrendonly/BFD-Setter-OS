@@ -4,6 +4,60 @@ Items closed out of the active lists. Newest first. The active lists are in the 
 (`BUG_LIST.md`, `FEATURE_ROADMAP.md`, `BRENDAN_TODO.md`, `TEST_LIST.md`, `DEFERRED.md`). First-client-gated
 work lives in `Docs/FIRST_CLIENT_TASKS.md` (not archived — deferred).
 
+## 2026-08-13 (evening): MFA-LOGIN-1 RESOLVED; six owed live-verify legs passed; frontend released
+
+Ran the 2026-08-13 relay ("unblock the login, then finish the owed live verification and release the held
+push"). The login was cured on the **first code, first try**, which unblocked the whole chain.
+
+- **MFA-LOGIN-1: RESOLVED.** `node scripts/test-harness/auth.mjs` armed, one fresh code fired, and it
+  passed: `attempt 1: submitted 1.8s after arrival, challenge age 0.6s -> aal2 CONFIRMED`, then the agency
+  route `/client/.../settings` held without bouncing and `storageState.json` saved. The 2026-08-13 harness
+  fix (field id `#mfa_login_code` plus reload-before-type) was the actual cure; the earlier 11
+  `mfa_verification_failed` were the stale-field-locator and stale-challenge bugs, exactly as the corrected
+  README predicted. The account/factor was never desynced. **Prereq discovered:** `playwright-core` was not
+  installed; `npm install --no-save playwright-core` (browser download skipped, cached Chromium reused) into
+  the repo `node_modules` (gitignored, lockfile untouched) makes the ESM bare import resolve from there.
+- **RENDER-1 plus push: DONE.** Headless render smoke on all five pages (plus both prompt tabs) against the
+  live app: authed, **0 console errors, 0 >=400 responses, no auth bounce, substantial render on every page**
+  (root HTML 34K to 174K chars). Then `git push github main` released the 26 held commits (`033c8c1..e9acb17`);
+  Railway redeployed the frontend in ~30s (main bundle `index-DH-zKseh.js` to `index-mrpR_ScJ.js`). **Re-ran the
+  render smoke on the NEW bundle: ALL CLEAN**, so the GATE-A white-screen protection passed. Frontend is live.
+- **SNAP-1: PASS.** Real UI "Pull from Retell" on slot 7 (Gary - Crazy Gary). Toast captured verbatim from
+  the live DOM: **"Full snapshot saved (version 12) . 5,270 char prompt . 8 tools"**, the new copy, not
+  "Mirror updated". (First click accidentally hit slot 4 because the selector matched the shared tile grid;
+  corrected to slot 7. Slot 4's mirror snapshot was refreshed to v19 in passing, which is harmless, a Pull is
+  read-only against Retell.)
+- **SNAP-2: PASS (API-only, agency JWT).** dryRun on slot 7 returned a clean planned payload: 5,270-char
+  prompt, 8 tools **including all 5 booking tools** (update-appointment, get-available-slots, book-appointments,
+  cancel-appointments, get-contact-appointments), no dropped fields. Real restore published **v13**. Live
+  Retell agent re-verified: version 13, 5,270-char prompt, **5/5 booking tools present**. DB re-baselined
+  (`retell_synced_version=13`, `retell_drift_detected_at` plus `retell_booking_tools_lost_at` cleared).
+- **SNAP-3: PASS (mechanism-verified).** Ran the poll's own decision function `computeDriftState` against
+  slot 7's real post-restore state, giving `{versionDrifted:false, bookingToolsLost:false}`. The re-baseline
+  holds (live v13 == synced v13). **CAVEAT worth keeping:** `pollRetellDrift` only evaluates
+  `is_retell_locked=true` setters, and slot 7 is unlocked, so the live hourly poll skips it entirely. This
+  direct check of the exact decision function is a stronger, deterministic confirmation than waiting for a poll
+  that would never look at the slot.
+- **CLONE-1: PASS (full UI drive).** Opened Setter-2, clicked COPY OTHER SETTER, picked voice source Setter-10,
+  read the confirm-step copy verbatim ("This clones Setter-10's live prompt document into this text setter's
+  prompt... voice-only tooling, call flow and spoken filler are removed" plus the stale-editor warning), then
+  clicked COPY & OVERWRITE. `clone-voice-to-text` start (20,082 source chars, 4 compliance lines) then apply
+  (**18,682 chars, coverage 0.993**, removed BOOKING FLOW/TOOLS/FLOWS). Three toasts fired: info "Converting...",
+  success "Cloned into Setter-2: 18,682 characters.", and the **`section_editor_stale` warning**. Setter-2 (the
+  seeded throwaway target) was overwritten by design. This run's apply reported `reasserted_compliance:[]`;
+  CLONE-COMPLIANCE-1 stays filed/gated regardless.
+- **DEMO-CB: partial.** The push made the funnel live: `/g/stapleton-finance-b7q4` renders the
+  Stapleton-specific page ("A LIVE DEMO, BUILT FOR STAPLETON FINANCE...", 0 page errors), and an unknown slug
+  returns 404 both server-side (`{"error":"Unknown demo page."}`) and client-side ("DEMO NOT FOUND"). The full
+  **DEMO-CB-1** real-call/booking/email leg was **DEFERRED by Brendan**; the 429, after-hours, and opt-out guards
+  need a prior real call, off-hours (it was ~15:00 AEST), or an opted-out number, all still owed in `TEST_LIST.md`.
+  A Claude-assisted runbook to drive DEMO-CB-1/2 lives in the TickTick task "RUN: DEMO-CB-1 demo-callback dry
+  run (bfd-setter, Claude-assisted)".
+
+Still owed after this session: **SMS-GHL-1** (TEST_PHONE_B `+61403804263` confirmed NOT a CRM lead, so it can
+exercise the GHL contact leg; Brendan chose it but did not send the text before closeout) and **DEMO-CB-1/2**
+(deferred/owed as above, now with a TickTick runbook).
+
 ## 2026-08-13 — CLONE-2 passed (with a finding), and MFA-LOGIN-1 escalated
 
 **CLONE-2 PASSED**, read-only, no browser session needed. Live `Setter-2` on the BFD tenant is a genuine
