@@ -54,9 +54,22 @@ push"). The login was cured on the **first code, first try**, which unblocked th
   A Claude-assisted runbook to drive DEMO-CB-1/2 lives in the TickTick task "RUN: DEMO-CB-1 demo-callback dry
   run (bfd-setter, Claude-assisted)".
 
-Still owed after this session: **SMS-GHL-1** (TEST_PHONE_B `+61403804263` confirmed NOT a CRM lead, so it can
-exercise the GHL contact leg; Brendan chose it but did not send the text before closeout) and **DEMO-CB-1/2**
-(deferred/owed as above, now with a TickTick runbook).
+- **SMS-GHL-1: PASS (later the same evening).** Brendan authorised clearing his own mobile `+61405482446`
+  (TEST_PHONE_A) as a CRM lead so the inbound contact-creation leg could fire fresh. Surveyed first, then
+  deleted BFD-scoped only: **730 Supabase rows** across 14 tables (leads 4, message_queue 130,
+  sms_delivery_events 330, tool_invocations 63, outbound_send_claims 62, followup_timers 49, dm_executions 44,
+  bookings 19, campaign_events 11, engagement_executions 7, execution_cost_events 5, error_logs 3,
+  chat_read_status 2, scheduled_callbacks 1) and **4 GHL contacts** (the 4 duplicate contact ids). The
+  Synthetic Probe tenant (`b0e4f199`, "do not delete") was deliberately left intact, including its 1,401
+  engagement_executions on the same phone. Verified both systems clear (Supabase 0, GHL search 0, validated
+  against a live positive control). Then fired one inbound via `sms_inbound.mjs`: `receive-twilio-sms`
+  **created a new GHL contact `CSnx3VBsVsPqDNCmfocX`** (source "Twilio SMS (BFD)"), the lead resolved to that
+  real id (not `bfd-<phone>`), and Gary's replies were **delivered** to +61405482446 (Twilio callbacks
+  sent -> delivered); a live human reply even continued the conversation. The test left a fresh lead + GHL
+  contact for +61405482446, which is now its current record.
+
+Still owed after this session: **DEMO-CB-1/2** (DEMO-CB-1 deferred by Brendan; the 429/after-hours/opt-out
+guards remain; a TickTick runbook drives it). SMS-GHL-1 is DONE.
 
 ## 2026-08-13 — CLONE-2 passed (with a finding), and MFA-LOGIN-1 escalated
 

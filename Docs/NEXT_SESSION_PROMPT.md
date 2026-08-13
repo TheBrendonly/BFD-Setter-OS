@@ -29,14 +29,11 @@ drive the browser, ASK BRENDAN FOR A FRESH 2FA CODE AT THE START. Note: server-s
 (pull/restore) need an AGENCY user JWT (pull it from storageState localStorage sb-<ref>-auth-token), not the
 service key. Retell MCP key is invalid (401): use BFD_RETELL_API_KEY from .env against api.retellai.com.
 
-TWO OWED LIVE LEGS REMAIN (everything else from the 2026-08-12 build passed 2026-08-13, see COMPLETED_LOG):
+ONE OWED LIVE LEG REMAINS (everything else from the 2026-08-12 build passed 2026-08-13, see COMPLETED_LOG;
+SMS-GHL-1 passed 2026-08-13 evening via a fresh inbound from +61405482446 after Brendan authorised clearing
+it as a CRM lead, so receive-twilio-sms created a new GHL contact and the reply was delivered):
 
-1. SMS-GHL-1: one real inbound SMS from a number that is NOT already a CRM lead, to +61481614530, so it
-   exercises the GHL contact leg. Confirm the lead resolves to a REAL GHL contact id (not bfd-<phone>) and the
-   reply goes out. TEST_PHONE_B +61403804263 was confirmed non-CRM and pre-approved by Brendan last session
-   but not sent; re-confirm the chosen number is still non-CRM, ask Brendan to text it, then watch leads.
-
-2. DEMO-CB-1/2: run the TickTick task "RUN: DEMO-CB-1 demo-callback dry run (bfd-setter, Claude-assisted)" in
+1. DEMO-CB-1/2: run the TickTick task "RUN: DEMO-CB-1 demo-callback dry run (bfd-setter, Claude-assisted)" in
    the bfd-setter project. It is a step-by-step runbook: Brendan submits /g/stapleton-finance-b7q4 on his
    phone and answers Gary's real callback; you verify each step (landing up, lead has a real GHL id +
    bfd-demo-callback tag, call fired, booking landed on BFD's GHL calendar, confirmation email arrived). The

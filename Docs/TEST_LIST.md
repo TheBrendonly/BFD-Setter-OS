@@ -44,20 +44,12 @@ When it fails, open a bug in `BUG_LIST.md`.
 > **SNAP-1, SNAP-2, SNAP-3 and CLONE-1 all PASSED** and moved to `Docs/archive/COMPLETED_LOG.md`. Only
 > SMS-GHL-1 (below) and the DEMO-CB real-call legs (above) remain.
 
-## Retell pivot overnight build (2026-08-12): remaining live leg
+## Retell pivot overnight build (2026-08-12): ALL live legs DONE
 
-> Built plus deployed 2026-08-12 (`668eec7`..`8ab5e27`). SNAP-1/2/3, CLONE-1, CLONE-2 and RENDER-1 are DONE
-> (see COMPLETED_LOG, 2026-08-13 entries). Handoffs: `Operations/handoffs/2026-08-12-overnight-run.md` and
-> `Operations/handoffs/2026-08-13-mfa-unblocked-owed-legs.md`.
-
-- [ ] **SMS-GHL-1: one real inbound SMS.** `receive-twilio-sms` was redeployed (v32) with its
-  `findOrCreateGhlContact` repointed at the new shared module. The boot probe passes and the adapter
-  preserves the old contract exactly, but the GHL contact leg cannot be exercised without a real
-  inbound text. Send one from a number that is NOT already a CRM lead, to BFD's number `+61481614530`,
-  and confirm the lead resolves to a real GHL contact id (not `bfd-<phone>`) and the reply goes out.
-  **2026-08-13 status:** TEST_PHONE_B `+61403804263` was confirmed NOT a CRM lead and chosen for this
-  (Brendan grants per-use permission), but the text was not sent before the evening closeout, so it
-  stays owed. Whoever runs it next: re-confirm the chosen number is still non-CRM, then watch `leads`.
+> Built plus deployed 2026-08-12 (`668eec7`..`8ab5e27`). SNAP-1/2/3, CLONE-1, CLONE-2, RENDER-1 and
+> SMS-GHL-1 all PASSED (see COMPLETED_LOG, 2026-08-13 entries). Handoffs:
+> `Operations/handoffs/2026-08-12-overnight-run.md` and
+> `Operations/handoffs/2026-08-13-mfa-unblocked-owed-legs.md`. Nothing owed in this section.
 
 ## Claude-drivable (autonomous, next cleanup session)
 
