@@ -4,6 +4,26 @@ Items closed out of the active lists. Newest first. The active lists are in the 
 (`BUG_LIST.md`, `FEATURE_ROADMAP.md`, `BRENDAN_TODO.md`, `TEST_LIST.md`, `DEFERRED.md`). First-client-gated
 work lives in `Docs/FIRST_CLIENT_TASKS.md` (not archived — deferred).
 
+## 2026-08-13 — CLONE-2 passed (with a finding), and MFA-LOGIN-1 escalated
+
+**CLONE-2 PASSED**, read-only, no browser session needed. Live `Setter-2` on the BFD tenant is a genuine
+conversion of Main Outbound: 19,449 chars / 153 lines / updated 2026-08-12 09:22, with `Setter-1` untouched.
+All 20 sections survive, the Gary persona is unmistakable, and there are **0** surviving `{{ }}` tokens and
+**0** tool-call specs. Apparent voice leakage is figurative only ("listening", "say") except one "misdial"
+whose copy is "wrong number", which is right for SMS.
+The finding: the top `# COMPLIANCE (VERBATIM, DO NOT EDIT)` block is voice copy in a text prompt ("these
+calls", "the call may be recorded", "[brief pause…]"), which contradicts the same prompt's own line 142
+no-audio guardrail. This is the 2026-08-12 verify-and-repair layer behaving exactly as built (the model
+reworded the disclosures, the byte-identical check failed, the voice originals went back) and the design
+being wrong for a cross-channel clone. Code cause → **CLONE-COMPLIANCE-1** (`BUG_LIST.md`, gated behind the
+no-new-product-code rule). Live wording fix → **PU-15** (`PROMPT_UPDATE_LIST.md`).
+
+Also this session: `npm test` re-baselined green at **608** (199 node + 18 frontend + 391 edge, 0 failures);
+the orphaned staged `Docs/DEFERRED.md` BOTDEF-1 entry was committed (`3f51242`); the working headless-login
+script was committed as `scripts/test-harness/auth.mjs`; and the harness README's two-clock section was
+**corrected** (the challenge TTL is a measured 300s, not "shorter than the code"). The login itself remains
+broken — see **MFA-LOGIN-1**.
+
 ## 2026-07-24 — Simulator repointed off n8n to the native engine (SIM-N8N-500 fixed)
 
 `4518408`. The simulator's setter-reply leg POSTed to `clients.simulation_webhook` (n8n on Railway), which had

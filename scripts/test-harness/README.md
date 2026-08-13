@@ -29,17 +29,40 @@ binary is the OS-cached Chromium at `~/.cache/ms-playwright/chromium-1217/chrome
   (service key; NO email is sent), navigate the returned `action_link`. **The account has 2FA (TOTP)** — the
   app then demands a 6-digit code, so ask Brendan for ONE code, fill it, and save `context.storageState()`
   to `storageState.json`. Reuse that state for all subsequent headless runs.
-- **TWO CLOCKS, not one (found the hard way 2026-08-12/13, six burned codes before this was understood).**
-  A TOTP code is valid ~30-90s. Separately, Supabase creates an MFA **challenge** server-side the moment
-  the magiclink is consumed and the app reaches the "enter your code" screen — and that challenge has its
-  OWN, apparently SHORTER expiry, independent of whether the code you type is valid. Evidence: the auth
-  response body differed between attempts — `422 mfa_verification_failed` (a real but stale code) on early
-  tries, then `422 mfa_challenge_expired` (a dead challenge, unrelated to the code) once the browser had
-  been pre-navigated to the MFA screen and left sitting there for a few minutes waiting on a code, even
-  though that code was typed within ~1s of arriving. **Do not pre-navigate and then wait.** Instead: launch
-  the browser ahead of time (safe — starts neither clock), poll for the code with the browser idle on
-  `about:blank`, and only once the code exists do `generate_link` → `page.goto` → type → submit, all
-  back-to-back with no waits in between, so both clocks start together right before they're needed.
+- **USE `auth.mjs` IN THIS DIRECTORY.** It is committed precisely so nobody rebuilds it a fourth time.
+  `node auth.mjs [scratchdir]` arms and waits; `echo 123456 > <scratchdir>/totp.txt` fires a code at it;
+  it retries indefinitely, so a rejected code costs nothing but the code.
+- **The two clocks, MEASURED 2026-08-13 (this supersedes the 2026-08-13 guess, which was wrong).**
+  The earlier note here claimed the MFA challenge had an "apparently SHORTER" expiry than the code and
+  that you must never pre-navigate. Both halves were wrong, and acting on them produced a design that
+  fails every time. What is actually true:
+  - **Challenge TTL is 300 seconds.** Don't guess it: the `/factors/{id}/challenge` response carries
+    `expires_at`. It is far longer than a TOTP code's life, not shorter.
+  - **A page reload mints a brand new challenge**, so the MFA screen can be parked indefinitely.
+  - **The two failures are distinguishable, so read the body before theorising.** A dead challenge is
+    `mfa_challenge_expired`; a code the server won't accept is `mfa_verification_failed`. The 2026-08-13
+    `mfa_challenge_expired` sighting was real but self-inflicted: the browser sat on one challenge for
+    more than five minutes.
+  - **Correct design:** do the slow work up front (launch, `generate_link`, navigate, warm the page),
+    then on code arrival `page.reload()` for a ~1s-old challenge and type immediately. ~2s total.
+- **UNRESOLVED as of 2026-08-13 — do not assume the login works.** With challenge age 0.6s and the code
+  submitted 1.9s after it was typed into the file by hand from a terminal (zero chat latency), Supabase
+  still returned `mfa_verification_failed`. That is 5 failures on 2026-08-13 on top of 6 on 2026-08-12/13,
+  **all of them `mfa_verification_failed`**, under every timing condition. Timing is therefore ruled out
+  and the remaining candidates are authenticator clock drift, Brendan reading a different entry in his
+  authenticator, or a stored secret that no longer matches the device. **The decisive next test is for
+  Brendan to log into the app manually in his own browser**: if that also fails the factor is desynced
+  and needs re-enrolling; if it succeeds the fault is in the automation. Reading `auth.mfa_factors.secret`
+  to generate codes locally is blocked by the permission classifier, correctly, and should not be
+  worked around.
+- **`#mfa_login_code` is the field id — use it.** `getByRole('textbox').first()` grabs the EMAIL input on
+  the login form that renders before the MFA form swaps in. The code then goes into the wrong box, the
+  submit button never enables (it is gated on `mfaCode.length >= 6`), and the click sits for its full 30s
+  timeout, which reads like a challenge problem and is not one. This cost an hour on 2026-08-13.
+- **Server side does not enforce aal2 at all.** `_shared/assert-client-access.ts` never inspects `aal`; it
+  checks JWT signature, `user_roles.role` and tenancy. The aal2 requirement is purely client-side
+  (`App.tsx` bounces on `mfaRequired`). So the MFA wall only blocks *browser UI* verification; anything
+  driven through an edge function needs a user JWT but not an elevated one.
 - Access token expires ~1h; refresh via `POST {SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`
   with `apikey = VITE_SUPABASE_ANON_KEY` (from `frontend/.env`) and the stored `refresh_token`. Simpler:
   just re-drive through the browser, which refreshes auth itself.

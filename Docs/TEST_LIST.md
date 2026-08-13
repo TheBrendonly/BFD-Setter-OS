@@ -32,6 +32,17 @@ When it fails, open a bug in `BUG_LIST.md`.
   could fire the legacy workflow-execute trigger. Result: the BFD client has **zero `workflows` rows at all**
   (total 0, active 0), so the trigger cannot fire. Nothing to clean up; no need to re-confirm at dry-run time.
 
+> **BLOCKED 2026-08-13 — read this before attempting SNAP-1/2, CLONE-1, RENDER-1 or DEMO-CB.** The headless
+> agency login still cannot pass TOTP: 11 consecutive `mfa_verification_failed`, timing conclusively ruled
+> out (a 0.6s-old challenge with the code submitted 1.9s after being typed by hand still failed). Filed as
+> **MFA-LOGIN-1** in `BUG_LIST.md`. Two harness bugs were found and fixed on the way and the working script
+> is now committed at `scripts/test-harness/auth.mjs`, so don't rebuild it. **The dependency chain is:**
+> RENDER-1 needs an authenticated browser → the held `git push github main` is gated on RENDER-1 → DEMO-CB
+> is gated on that push, because **`/g/stapleton-finance-b7q4` is NOT live** (verified 2026-08-13: the live
+> app returns its generic "OOPS! PAGE NOT FOUND", not the demo's own "DEMO NOT FOUND", so the whole demo
+> funnel is still sitting in the 21 unpushed commits). **Everything here can also be done by Brendan
+> clicking through the UI in ~10 minutes**, which does not need the harness at all.
+
 ## Retell pivot overnight build (2026-08-12) — Brendan live-verify
 
 > Built + deployed 2026-08-12 (`668eec7`..`8ab5e27`). Everything below was verified as far as it can
@@ -58,9 +69,18 @@ When it fails, open a bug in `BUG_LIST.md`.
   runs, the result saves, and the toast warns that the section editor below is stale. (Server-side
   equivalent already passed: Voice-Setter-10 → Setter-2, 20,082 chars in, 19,448 out, lint clean,
   zero surviving tokens, both disclosures verbatim.)
-- [ ] **CLONE-2 — read the cloned prompt.** Setter-2's prompt is a real conversion of Main Outbound.
-  Read it as the operator who would ship it: compliance lines intact, no voice leakage ("caller",
-  "on the phone"), persona still recognisable. This is a judgement check, not a pass/fail assertion.
+- [x] **CLONE-2 — read the cloned prompt. DONE 2026-08-13** (read-only, no session needed). Live
+  `Setter-2` on the BFD tenant: 19,449 chars, 153 lines, updated 2026-08-12 09:22, and `Setter-1`
+  untouched. **Structurally clean:** all 20 sections present, persona unmistakably Gary (first-person
+  Aussie, "no worries"/"too easy", the empathy-first and 1-3-sentence rules), **0** surviving `{{ }}`
+  tokens, **0** tool-call specs. Voice leakage is limited to figurative uses that read fine in text
+  ("listening" x3, "say" x9) plus one "misdial" at line 92 whose actual copy is "wrong number", which is
+  correct for SMS. Line 142 even carries an explicit no-audio guardrail.
+  **One real finding, filed:** the `# COMPLIANCE (VERBATIM, DO NOT EDIT)` block at the top is *voice*
+  copy in a *text* prompt ("these calls", "the call may be recorded", "[brief pause…]"), contradicting
+  line 142. Cause filed as **CLONE-COMPLIANCE-1** in `BUG_LIST.md`; the wording fix for the live prompt
+  is **PU-15** in `PROMPT_UPDATE_LIST.md`. Full detail in
+  `Operations/handoffs/2026-08-13-mfa-blocker-and-clone-read.md`.
 - [ ] **SMS-GHL-1 — one real inbound SMS.** `receive-twilio-sms` was redeployed (v32) with its
   `findOrCreateGhlContact` repointed at the new shared module. The boot probe passes and the adapter
   preserves the old contract exactly, but the GHL contact leg cannot be exercised without a real

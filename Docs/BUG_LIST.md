@@ -12,6 +12,56 @@ Open bugs and behavior fixes. Reconciled 2026-06-25; full re-audit 2026-07-07 (S
 
 ## Open code items
 
+- [ ] **MFA-LOGIN-1 `[B]` — the headless agency login cannot pass TOTP, and it now blocks the release.**
+  11 consecutive `mfa_verification_failed` rejections: 6 on 2026-08-12/13, 5 more on 2026-08-13.
+  **Timing is ruled out, definitively.** The final attempt had a **challenge 0.6s old** and the code
+  submitted **1.9s** after Brendan wrote it into the file by hand from a terminal (no chat latency at all),
+  and Supabase still rejected it. The previously-recorded root cause ("the challenge has a shorter,
+  separate expiry, never pre-navigate") was **wrong and is now corrected** in
+  `scripts/test-harness/README.md`: the challenge TTL is a measured **300s**, a reload mints a fresh one,
+  and a dead challenge reports `mfa_challenge_expired`, which is a *different* error we have not seen once
+  on 2026-08-13.
+  **Two real harness bugs were found and fixed on the way** (both in the now-committed
+  `scripts/test-harness/auth.mjs`): the field locator `getByRole('textbox').first()` was grabbing the EMAIL
+  input on the login form that renders before the MFA form swaps in, so the code went into the wrong box
+  and the submit button never enabled; and the whole flow now reloads immediately before typing so the
+  challenge is ~1s old. Neither fixed the rejection, which is what makes the remaining cause external.
+  **Remaining candidates, in order:** authenticator clock drift; Brendan reading a different entry in his
+  authenticator (two retired Supabase projects are still alive per ORPHAN-PROJ-1, so near-identical entries
+  are plausible); or a stored secret that no longer matches the device.
+  **Next step is one 30-second test by Brendan:** log into `app.buildingflowdigital.com` manually in his own
+  browser with a code. If that fails too, the factor is desynced and the repair is to delete the factor,
+  log in with magiclink alone (which works, because with no verified factor the client-side gate stops
+  firing) and **re-enrol TOTP fresh** — that ends with working 2FA rather than 2FA switched off. If it
+  succeeds, the fault is in the automation and we have a much smaller search space.
+  **Do not work around it by reading `auth.mfa_factors.secret`** to generate codes locally; the permission
+  classifier blocks that, correctly.
+  **Blast radius:** this is the only thing standing between the 2026-08-12 build and release. RENDER-1
+  needs an authenticated browser, the held `git push github main` is gated on RENDER-1, and DEMO-CB-1/2 is
+  gated on that push (the `/g/` route is **not live** — see DEMO-CB note in `TEST_LIST.md`).
+  **Standing workaround that does not need any of this:** Brendan can click SNAP-1, CLONE-1 and the
+  RENDER-1 surfaces himself in the UI in about 10 minutes.
+
+- [ ] **CLONE-COMPLIANCE-1 — the voice→text clone re-asserts *voice* compliance copy into a *text* prompt.**
+  Found by the CLONE-2 operator read on the live `Setter-2` clone (19,449 chars, 2026-08-12 09:22).
+  The conversion is otherwise excellent: all 20 sections, persona intact, **0** surviving `{{ }}` tokens,
+  **0** tool-call specs. But the compliance block re-asserted verbatim at the top is voice copy:
+  > "Quick bit of honesty before we dive in, I'm Brendan's AI assistant helping with **these calls**, and
+  > **the call may be recorded** for quality. All good with you?" **[brief pause for acknowledgment or objection]**
+  Over SMS there is no call and no recording, and a stage direction for a spoken pause is meaningless. It
+  also directly contradicts the same prompt's line 142: *"Never mention speaking, calling, hearing, hold
+  music, or waiting on the line. There is no audio channel here."*
+  **This is the verify-and-repair layer working as built, and the design being wrong.** Last night's model
+  output reworded the disclosures for the text channel, the byte-identical check failed, and the code put
+  the *voice* originals back. The handoff recorded that as the guarantee firing correctly; it fired, but
+  what it produced is not shippable in a text channel.
+  **Fix (code, `clone-voice-to-text`):** the compliance re-assertion must be channel-aware — either accept a
+  semantically-equivalent text rewrite (match on the *obligations* present: AI disclosure, recording/data
+  disclosure, opt-out) rather than bytes, or carry a text-channel variant of each compliance line and
+  re-assert that. **Gated behind the standing "no new product code until a pilot is paid" rule**, so this is
+  filed, not built. The matching wording change is **PU-15** in `PROMPT_UPDATE_LIST.md`, a Brendan-applies item so
+  the live `Setter-2` prompt can be corrected today without waiting for the code fix.
+
 - [ ] **ORPHAN-PROJ-1 `[B]` — two retired Supabase projects are still alive and answering.** Verified 2026-08-12
   by unauthenticated probe: `https://qfbhcixkxzivpmxlciot.supabase.co/rest/v1/` and
   `https://awzlcmdomhtyqjabzvnn.supabase.co/rest/v1/` both return **HTTP 401**, i.e. the API is up and demanding

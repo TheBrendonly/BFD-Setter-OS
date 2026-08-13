@@ -41,6 +41,27 @@ can be worked independently.
 
 ## Open
 
+- [ ] **PU-15 — Setter-2's compliance block is voice copy, in a text setter (text).** Found by the CLONE-2
+  read of the live clone on 2026-08-13. Location: Prompt Management → **Setter-2** (BFD tenant) → SETTER
+  CORE → the `# COMPLIANCE (VERBATIM, DO NOT EDIT)` block at the very top, first bullet.
+  **Currently reads:**
+  > "Quick bit of honesty before we dive in, I'm Brendan's AI assistant helping with these calls, and the
+  > call may be recorded for quality. All good with you?" [brief pause for acknowledgment or objection]
+  **Problem:** there is no call and no recording over SMS, and "[brief pause for acknowledgment or
+  objection]" is a spoken stage direction. It also contradicts line 142 of the same prompt, *"Never mention
+  speaking, calling, hearing, hold music, or waiting on the line. There is no audio channel here."*
+  **Suggested replacement (yours to word — this keeps both disclosure obligations, drops the audio
+  assumptions):**
+  > "Quick bit of honesty before we dive in, I'm Brendan's AI assistant helping with these messages, and
+  > this chat may be saved for quality. All good with you?"
+  And change the second bullet's "If they object to recording" to "If they object to their messages being
+  saved". **Why this is a prompt item and not just a code item:** the code cause is filed as
+  `CLONE-COMPLIANCE-1` in `BUG_LIST.md`, but that is gated behind the no-new-product-code rule, and every
+  future voice→text clone will keep reproducing this until it is fixed. Applying this by hand corrects the
+  live prompt now. **Note:** re-saving Setter-2 in the section editor overwrites the clone entirely (the
+  `section_editor_stale` warning from the 2026-08-12 build), so make this edit in one pass and expect the
+  editor below to be showing older parameter-built content.
+
 - [ ] **PU-5 — Stand up "Main Outbound V2" (voice).** A full new-prompt draft is ready:
   `Docs/archive/MAIN_OUTBOUND_V2_PROMPT_2026-06-16.md` (folds the Eddie/"Steven" structure into BFD V1: call-flow
   map, consent/AI-disclosure beat, path triage + goal hierarchy Book>Callback>Info, booking-failure ladder,
