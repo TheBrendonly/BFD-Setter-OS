@@ -59,6 +59,35 @@ Things deliberately not being built now, each with the gate that would un-defer 
   fns. Trivial, low value. **Gate:** next security-hygiene sweep. (A routine `npm audit` + Deno advisory scan belongs in
   the same sweep — the 2026-07-12 dep review found nothing obvious but ran no lockfile-level scan.)
 
+- [ ] **BOTDEF-1 — prove number ownership on the demo callback form (Turnstile now, SMS-OTP only if forced).**
+  The 2026-07-08 security review's one STRUCTURAL finding on the demo funnel: nothing proves the submitter owns the
+  number they type, so an automated submit makes BFD place a real outbound call to a number the submitter chose.
+  **Already built, and it is more than nothing:** `demo-callback` v3 runs four independent `bump_rate_limit`
+  dimensions (per-phone, per-IP, per-slug daily, per-slug spacing), the limiter **fails closed** (an RPC error
+  returns `limited=true` — unlike `campaign-enroll-webhook`, where token auth is the gate and the limiter is
+  secondary), and a 300s idempotency window collapses double-submits into a single dial. Volume is bounded; identity
+  is not. **Why this is not just a cost bug:** BFD is the party placing the call, so an abused form is a Do Not Call
+  Register / Spam Act exposure, and "a bot did it" is not a defence. **RULED 2026-08-12 (Brendan, Cowork admin
+  sitting): DEFERRED, not rejected**, because a /g/ slug is unguessable and is sent to ONE named broker — it is a
+  personalised page, not a public landing page, so realistic volume is a handful of submits from someone who was
+  expecting the call. **Gate — un-defer when ANY of these fires:** (1) a /g/ link goes anywhere PUBLIC (LinkedIn post
+  or Featured section, email footer, website, ad) — discoverable rather than sent changes the threat model completely;
+  (2) any 429 in `demo-callback` logs that cannot be attributed to a real prospect; (3) more than ~10 demo pages sent,
+  i.e. the point where Brendan stops personally recognising every number; (4) a prospect or their compliance person
+  asks how the form is protected. **Build when gated (~30 min):** Cloudflare Turnstile, free tier, invisible mode —
+  site key from the existing Cloudflare account (already used for the greenserver Tunnel), widget on the form in
+  `frontend/src/pages/DemoCallbackPage.tsx`, one server-side token verification at the TOP of
+  `supabase/functions/demo-callback/index.ts` **before** the rate-limit block, failing closed the same way the limiter
+  does. Turnstile is a layer ON TOP of the four dimensions, not a replacement. **SMS-OTP was considered and
+  rejected:** it is the only thing that actually proves ownership, but it puts a text-and-type-a-code step in front of
+  a demo whose entire pitch is "type your number and the phone rings in ten seconds" — a demo of instant response
+  that opens with friction argues against itself. Revisit only if gate (4) escalates into a real objection.
+  **Cheap partial available NOW, independent of the gate:** drop `SLUG_MAX_PER_WINDOW` to 3/day. A /g/ page serves
+  exactly one named broker; there is no legitimate reason for a fourth dial in a day. One-constant change, no new
+  dependencies, highest leverage per line in this entry. Tracked as TickTick **W1-2.1**; the matching open decision in
+  `Docs/BRENDAN_TODO.md` is now RULED and should be rewritten there as a ruling + trigger list rather than an open
+  question.
+
 ## Other
 
 - [ ] **`refreshCadenceFunnel` hourly task is dead (0 readers)** — `trigger/refreshCadenceFunnel.ts` runs
