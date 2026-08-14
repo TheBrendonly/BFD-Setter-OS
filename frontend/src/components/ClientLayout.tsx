@@ -754,7 +754,7 @@ function ClientSidebar() {
                                   {item.icon}
                                 </span>
                               )}
-                              <span className="flex-1">{item.key === 'workflows' ? 'Campaigns' : item.label}</span>
+                              <span className="flex-1">{item.label}</span>
                               {route === '/chats' && hasUnreadChats && <span className="w-2 h-2 rounded-[1px] bg-primary shrink-0" />}
                             </NavLink>
                           </SidebarMenuButton>
