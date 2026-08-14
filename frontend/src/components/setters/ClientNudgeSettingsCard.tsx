@@ -50,8 +50,12 @@ export const ClientNudgeSettingsCard: React.FC<Props> = ({ clientId }) => {
     (async () => {
       setLoading(true);
       try {
+        // Read via clients_public: GATE A revoked base-clients SELECT from the
+        // authenticated role, so agency reads route through the security-definer
+        // view (same as ClientQuietHoursCard). The write below still targets base
+        // clients, which the agency UPDATE policy allows.
         const { data, error } = await (supabase as any)
-          .from('clients')
+          .from('clients_public')
           .select('nudge_enabled, nudge_offsets_hours, nudge_recovery_window_hours')
           .eq('id', clientId)
           .maybeSingle();
