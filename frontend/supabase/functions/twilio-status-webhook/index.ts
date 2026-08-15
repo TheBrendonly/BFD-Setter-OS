@@ -20,6 +20,7 @@
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.101.0";
+import { normalizePhone } from "../_shared/phone.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -101,14 +102,18 @@ Deno.serve(async (req) => {
         .from("clients")
         .select("id, twilio_auth_token")
         .eq("twilio_account_sid", accountSid)
+        .limit(1)
         .maybeSingle();
       if (data) clientRow = data;
     }
     if (!clientRow && fromPhone) {
+      // Normalise From (the client's own number on an outbound status callback) so a
+      // format mismatch doesn't fail the lookup; limit(1) avoids a PGRST116 on dupes.
       const { data } = await supabase
         .from("clients")
         .select("id, twilio_auth_token")
-        .eq("retell_phone_1", fromPhone)
+        .eq("retell_phone_1", normalizePhone(fromPhone) ?? fromPhone)
+        .limit(1)
         .maybeSingle();
       if (data) clientRow = data;
     }
@@ -130,9 +135,23 @@ Deno.serve(async (req) => {
     }
 
     if (!clientRow?.twilio_auth_token) {
+      // Record the unresolved status callback instead of only warning — a delivery
+      // receipt we can't attribute means a message's status silently never updates.
+      // PII-safe: log accountSid + From (the client's own number), never the prospect (To).
       console.warn("twilio-status-webhook: no client / auth_token resolved; rejecting", {
         accountSid, fromPhone, toPhone, messageSid,
       });
+      try {
+        await supabase.from("error_logs").insert({
+          severity: "error",
+          source: "twilio_status_webhook",
+          error_type: "client_resolve_failed",
+          error_message: `No client resolved for status callback (accountSid=${accountSid ?? "none"}, from=${normalizePhone(fromPhone) ?? fromPhone ?? "none"})`,
+          context: { accountSid, fromPhone, messageSid },
+        });
+      } catch (logErr) {
+        console.warn("twilio-status-webhook: client_resolve_failed error_logs insert failed (non-fatal)", logErr);
+      }
       return new Response("Forbidden", { status: 403 });
     }
 

@@ -391,17 +391,39 @@ Deno.serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, serviceKey);
 
-    // Resolve client by inbound To number
+    // Resolve client by inbound To number. Normalise To (Twilio sends E.164, but be
+    // defensive against format drift) and order+limit(1) so an accidental duplicate
+    // retell_phone_1 picks a deterministic row instead of a PGRST116 error that would
+    // silently drop the inbound SMS. NOTE: intentionally NOT filtering dm_enabled here —
+    // a dm_enabled=false client is a KNOWN client handled below ("recorded but skipped"),
+    // not a resolution failure.
+    const lookupTo = normalizePhone(toPhone) ?? toPhone;
     const { data: client, error: clientError } = await supabase
       .from("clients")
       .select(
         "id, ghl_location_id, ghl_api_key, dm_enabled, debounce_seconds, twilio_account_sid, twilio_auth_token, supabase_url, supabase_service_key, ghl_conversation_provider_id, ghl_channel_field_id",
       )
-      .eq("retell_phone_1", toPhone)
+      .eq("retell_phone_1", lookupTo)
+      .order("created_at", { ascending: true })
+      .limit(1)
       .maybeSingle();
 
     if (clientError || !client) {
+      // Do NOT silently drop: an unresolvable inbound is data loss — a real prospect
+      // texted a number we can't route, and Twilio only ever sees HTTP 200. Record it
+      // so the miss is visible for triage instead of vanishing into a console.warn.
       console.warn("No client matched To number", { toPhone, clientError });
+      try {
+        await supabase.from("error_logs").insert({
+          severity: "error",
+          source: "receive_twilio_sms",
+          error_type: "client_resolve_failed",
+          error_message: `No client matched inbound To=${lookupTo}${clientError ? ` (${clientError.message})` : ""}`,
+          context: { toPhone, lookupTo, messageSid },
+        });
+      } catch (logErr) {
+        console.warn("receive-twilio-sms: client_resolve_failed error_logs insert failed (non-fatal)", logErr);
+      }
       return new Response(TWIML_EMPTY, {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "text/xml" },
