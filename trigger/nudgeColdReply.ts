@@ -44,6 +44,7 @@ import {
 } from "./_shared/businessHours";
 import { isVoiceCallActive } from "./_shared/voiceCallActive";
 import { resolveNudgeConfig, NUDGE_COUNT_HARD_CAP } from "./_shared/nudgeConfig";
+import { fetchUpcomingBookedKeys, bookedKey } from "./_shared/confirmedBooking";
 
 // SEC-PII-LOGS-1 — keep raw prospect phones out of platform logs.
 const redactPhone = (p: string | null | undefined): string => {
@@ -111,8 +112,25 @@ export const nudgeColdReply = schedules.task({
     type Candidate = NonNullable<typeof candidates>[number];
     const stats = { scanned: 0, nudged: 0, tagged_silent: 0, transitioned: 0, skipped: 0, errors: 0 };
 
+    // A lead who has already BOOKED must not be nudged. The candidate query gates on
+    // awaiting_reply, but the SMS booking-confirmation reply re-stamps awaiting_reply=true
+    // right after book-appointments, so a booked lead re-enters this set every run.
+    // Suppress on the authoritative signal — an upcoming confirmed booking — in one batch
+    // query for the whole candidate set (fail-open: a bookings error just proceeds).
+    const bookedKeys = await fetchUpcomingBookedKeys(
+      supabase,
+      ((candidates ?? []) as Candidate[]).map((l) => l.lead_id as string),
+    );
+
     for (const lead of (candidates ?? []) as Candidate[]) {
       stats.scanned++;
+
+      // Skip a lead who already has an upcoming confirmed booking (booked = resolved,
+      // not silent — so we never nudge and never drop them into the long-tail nurture).
+      if (lead.client_id && lead.lead_id && bookedKeys.has(bookedKey(lead.client_id, lead.lead_id))) {
+        stats.skipped++;
+        continue;
+      }
 
       // Hard pre-checks (the SQL is best-effort; verify in code).
       if (!lead.last_inbound_at || !lead.last_outbound_at) {

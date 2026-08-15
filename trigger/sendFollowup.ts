@@ -12,6 +12,7 @@ import {
   parseQuietHours,
 } from "./_shared/businessHours";
 import { isVoiceCallActive } from "./_shared/voiceCallActive";
+import { hasUpcomingConfirmedBooking } from "./_shared/confirmedBooking";
 import { normalizeLlmModel } from "./_shared/llmModel";
 import { resolveClientTimeZone, buildTimeAnchorBlock } from "./_shared/timeAnchor";
 import { prefetchAvailability, buildAvailabilityBlock } from "./_shared/prefetchSlots";
@@ -157,6 +158,21 @@ export const sendFollowup = task({
           .in("status", ["pending", "firing"]);
         return { status: "skipped", reason: "opted_out" };
       }
+    }
+
+    // Booked-lead gate: a lead who already has an upcoming confirmed booking must not be
+    // chased by a follow-up timer (the booking-confirmation reply schedules this timer, so
+    // without this check a just-booked lead gets a "still interested?" follow-up hours later).
+    // Cancel the remaining timers and skip — mirrors the setter_stopped/opt-out handling.
+    if (await hasUpcomingConfirmedBooking(supabase, client_id, lead_id)) {
+      console.log(`Follow-up timer ${timer_id}: lead has an upcoming confirmed booking — cancelling timers.`);
+      await supabase
+        .from("followup_timers")
+        .update({ status: "cancelled", updated_at: new Date().toISOString() })
+        .eq("lead_id", lead_id)
+        .eq("ghl_account_id", ghl_account_id)
+        .in("status", ["pending", "firing"]);
+      return { status: "skipped", reason: "booked" };
     }
 
     // Optimistic lock
