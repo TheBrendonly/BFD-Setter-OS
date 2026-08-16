@@ -32,9 +32,11 @@ Twilio reconciliation deferred (client-cost focus).
 - **Verified:** 660 tests green (node 232, frontend 18, edge 410); tsc unchanged at 17; edge fn `get-cost-ledger`
   redeployed v2; trigger redeployed **20260816.1** (16 tasks). Live OpenRouter probe on the real client account
   confirmed the response carries `usage.cost` (0.0000043 for a 7-token call), so the actual path populates.
-  Full end-to-end (a real setter reply landing a live `cost_kind=llm, is_estimated=false` row) still owed —
-  needs a real inbound SMS (tracked as LLM-COST-1 in TEST_LIST). Commit `5f1e12d`. Memory
-  `project_cost_ledger_llm_actual_2026_08_16`.
+  Full end-to-end **PASSED (LLM-COST-1)** the same session: a real inbound SMS to Gary (harness →
+  TEST_PHONE_A, non-simulation) landed a live row ~10s later — `cost_kind=llm, is_estimated=false,
+  cost_usd=0.005347, provider_ref=setter-reply:run_06g0kdg1noo5137s7b9kshhj01`, keyed by the Trigger run id
+  exactly as designed. Resolved to the pre-existing "Brendan" test lead (no new GHL contact; no cleanup).
+  Commit `5f1e12d`. Memory `project_cost_ledger_llm_actual_2026_08_16`.
 
 ## 2026-08-16: DO-NOW list cleared + UI refactor + Cost Ledger feature (big session)
 

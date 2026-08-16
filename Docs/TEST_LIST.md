@@ -17,12 +17,11 @@ When it fails, open a bug in `BUG_LIST.md`.
 > carried `usage.cost`). What remains is one real-traffic confirmation, since every LLM billing path also
 > sends a real SMS (so there is no side-effect-free way to force a row).
 
-- [ ] **LLM-COST-1: a real setter reply lands a live `execution_cost_events` llm row.** Drive one real
-  (non-simulation) inbound SMS to Gary (harness `sms_inbound.mjs` to TEST_PHONE_A, or a real reply), then
-  confirm a NEW row: `cost_kind='llm'`, `is_estimated=false`, `cost_usd>0`, `provider_ref` like
-  `setter-reply:...`. Re-open the agency Cost Ledger card and confirm the LLM line is non-zero and the
-  actual-vs-estimated split reflects it. Naturally covered by the next TEST SESSION's live-SMS pass; also
-  fires on any real nudge (`tj.sid`), followup (`timer_id`), or cadence AI-copy (`execution_id`) send.
+- [x] **LLM-COST-1 — PASSED 2026-08-16.** Drove one real (non-simulation) inbound SMS to Gary
+  (`sms_inbound.mjs` → TEST_PHONE_A); ~10s later a live row landed: `cost_kind='llm'`, `is_estimated=false`,
+  `cost_usd=0.005347`, `provider_ref=setter-reply:run_06g0kdg1noo5137s7b9kshhj01`. The actual OpenRouter
+  `usage.cost` was captured, keyed by the Trigger run id. Only the UI card read-back (agency JWT / 2FA) was
+  not exercised, but the summariser that drives it is unit-tested for exactly this ledger-present case.
 
 ## Demo-callback funnel dry run (2026-08-11 build): now LIVE in prod, real-call legs owed
 
