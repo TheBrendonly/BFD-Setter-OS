@@ -409,13 +409,10 @@ export default function Workflows() {
   const [activateTarget, setActivateTarget] = useState<EngagementWorkflow | null>(null);
   const [loading, setLoading] = useState(true);
   const [editingName, setEditingName] = useState<{ id: string; name: string; type: 'custom' | 'campaign' } | null>(null);
-  const [showCreateDialog, setShowCreateDialog] = useState(false);
-  const [tab, setTab] = useState<WorkflowTab>(() => {
-    const saved = localStorage.getItem(`workflows-tab-${clientId}`);
-    if (saved === 'campaigns' || saved === 'workflows') return saved;
-    return 'campaigns';
-  });
-  const handleSetTab = (t: WorkflowTab) => { localStorage.setItem(`workflows-tab-${clientId}`, t); setTab(t); };
+  // WORKFLOWS tab retired 2026-08-16: this page is Lead Sequences only now. The
+  // built-in integration/log views moved to Client Settings → Integrations & Activity;
+  // the unused custom-workflow builder is hidden. `tab` stays pinned to 'campaigns'.
+  const tab: WorkflowTab = 'campaigns';
 
   usePageHeader({
     title: 'Workflows',
@@ -740,22 +737,6 @@ export default function Workflows() {
   return (
     <div className="h-full overflow-y-auto overflow-x-hidden bg-background" style={{ scrollbarGutter: 'stable' as const }}>
       <div className="container mx-auto max-w-7xl flex min-h-full flex-col" style={{ paddingTop: '12px', paddingBottom: '24px' }}>
-        {/* Tabs */}
-        <div className="flex border-b border-dashed border-border shrink-0" style={{ marginBottom: '12px' }}>
-          {([{ key: 'campaigns' as WorkflowTab, label: 'LEAD SEQUENCES' }, { key: 'workflows' as WorkflowTab, label: 'WORKFLOWS' }]).map(t => (
-            <button
-              key={t.key}
-              onClick={() => handleSetTab(t.key)}
-              className={`ibm-spacing-allow flex-1 shrink-0 px-4 pt-0 pb-2.5 text-center font-medium transition-colors uppercase ${
-                tab === t.key ? 'text-primary border-b-2 border-primary' : 'text-muted-foreground hover:text-foreground'
-              }`}
-              style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '13px', fontWeight: 500, letterSpacing: '2px' }}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
-
         {tab === 'campaigns' && (
           <CampaignsDndList
             engagementWorkflows={engagementWorkflows}
@@ -773,176 +754,8 @@ export default function Workflows() {
           />
         )}
 
-        {tab === 'workflows' && (
-          <div className="flex flex-col gap-4">
-            {/* Built-in workflows */}
-            <div
-              className="groove-border bg-card flex items-center gap-4 px-4 py-3 cursor-pointer hover:bg-muted/30 transition-colors"
-              onClick={() => navigate(`/client/${clientId}/workflows/process-dms`)}
-            >
-              <div className="flex min-w-0 flex-1 items-center gap-4">
-                <div className="flex-1 min-w-0">
-                  <p className="text-foreground font-medium field-text truncate">Text Setter Engine</p>
-                  <p className="text-muted-foreground field-text truncate">Receive → Delay → Generate Reply → Follow Up</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3 shrink-0">
-                <StatusTag variant="positive">ACTIVE</StatusTag>
-                <TooltipProvider delayDuration={200}>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <span className="cursor-default"><StatusTag variant="neutral">BUILT-IN</StatusTag></span>
-                    </TooltipTrigger>
-                    <TooltipContent side="top" className="max-w-[240px] text-center">
-                      <p className="field-text">This workflow runs automatically. Use it to track progress, debug, and review executions.</p>
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              </div>
-            </div>
-
-            <div
-              className="groove-border bg-card flex items-center gap-4 px-4 py-3 cursor-pointer hover:bg-muted/30 transition-colors"
-              onClick={() => navigate(`/client/${clientId}/workflows/sync-ghl-contacts`)}
-            >
-              <div className="flex min-w-0 flex-1 items-center gap-4">
-                <div className="flex-1 min-w-0">
-                  <p className="text-foreground font-medium field-text truncate">New Lead from GoHighLevel</p>
-                  <p className="text-muted-foreground field-text truncate">Sync incoming leads from GoHighLevel into BFD-setter</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3 shrink-0">
-                <StatusTag variant="positive">ACTIVE</StatusTag>
-                <TooltipProvider delayDuration={200}>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <span className="cursor-default"><StatusTag variant="neutral">BUILT-IN</StatusTag></span>
-                    </TooltipTrigger>
-                    <TooltipContent side="top" className="max-w-[240px] text-center">
-                      <p className="field-text">This workflow runs automatically. Use it to track progress, debug, and review executions.</p>
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              </div>
-            </div>
-
-            <div
-              className="groove-border bg-card flex items-center gap-4 px-4 py-3 cursor-pointer hover:bg-muted/30 transition-colors"
-              onClick={() => navigate(`/client/${clientId}/workflows/sync-ghl-bookings`)}
-            >
-              <div className="flex min-w-0 flex-1 items-center gap-4">
-                <div className="flex-1 min-w-0">
-                  <p className="text-foreground font-medium field-text truncate">New Booking from GoHighLevel</p>
-                  <p className="text-muted-foreground field-text truncate">Sync incoming bookings from GoHighLevel into BFD-setter</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3 shrink-0">
-                <StatusTag variant="positive">ACTIVE</StatusTag>
-                <TooltipProvider delayDuration={200}>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <span className="cursor-default"><StatusTag variant="neutral">BUILT-IN</StatusTag></span>
-                    </TooltipTrigger>
-                    <TooltipContent side="top" className="max-w-[240px] text-center">
-                      <p className="field-text">This workflow runs automatically. Use it to track progress, debug, and review executions.</p>
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              </div>
-            </div>
-
-            <div
-              className="groove-border bg-card flex items-center gap-4 px-4 py-3 cursor-pointer hover:bg-muted/30 transition-colors"
-              onClick={() => navigate(`/client/${clientId}/workflows/outbound-call-processing`)}
-            >
-              <div className="flex min-w-0 flex-1 items-center gap-4">
-                <div className="flex-1 min-w-0">
-                  <p className="text-foreground font-medium field-text truncate">Outbound Call Processing</p>
-                  <p className="text-muted-foreground field-text truncate">Pre-call data fetching → Retell AI outbound call</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3 shrink-0">
-                <StatusTag variant="positive">ACTIVE</StatusTag>
-                <TooltipProvider delayDuration={200}>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <span className="cursor-default"><StatusTag variant="neutral">BUILT-IN</StatusTag></span>
-                    </TooltipTrigger>
-                    <TooltipContent side="top" className="max-w-[240px] text-center">
-                      <p className="field-text">This workflow runs automatically. Use it to track progress, debug, and review executions.</p>
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              </div>
-            </div>
-
-            {/* Custom Workflows */}
-            {workflows.map(workflow => (
-              <div
-                key={workflow.id}
-                className="groove-border bg-card flex items-center gap-4 px-4 py-3 cursor-pointer hover:bg-muted/30 transition-colors"
-                onClick={() => navigate(`/client/${clientId}/workflows/${workflow.id}`)}
-              >
-                <div className="flex min-w-0 flex-1 items-center gap-4">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-foreground font-medium field-text truncate">{workflow.name}</p>
-                    <p className="text-muted-foreground field-text truncate">
-                      {(workflow.nodes || []).length} nodes · {(workflow.edges || []).length} connections
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-3 shrink-0">
-                  <StatusTag variant={workflow.is_active ? 'positive' : 'neutral'}>
-                    {workflow.is_active ? 'ACTIVE' : 'DRAFT'}
-                  </StatusTag>
-                </div>
-
-                <div className="flex items-center gap-1 shrink-0">
-                  <button
-                    className="groove-btn !h-8 !w-8 !p-0 !min-h-[32px] !min-w-[32px] flex items-center justify-center bg-muted/50"
-                    onClick={(e) => { e.stopPropagation(); setEditingName({ id: workflow.id, name: workflow.name, type: 'custom' }); }}
-                  >
-                    <Pencil className="h-4 w-4" />
-                  </button>
-                  <button
-                    className="groove-btn groove-btn-destructive !h-8 !w-8 !p-0 !min-h-[32px] !min-w-[32px] flex items-center justify-center"
-                    onClick={(e) => handleDeleteClick(workflow.id, workflow.name, 'custom', e)}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
       </div>
 
-      {/* Create Workflow Type Dialog */}
-      <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
-        <DialogContent className="max-w-md !p-0">
-          <DialogHeader>
-            <DialogTitle>NEW WORKFLOW</DialogTitle>
-          </DialogHeader>
-          <div className="p-6 space-y-3">
-            <p className="text-muted-foreground field-text">Choose the type of workflow to create:</p>
-            <button
-              className="w-full groove-border bg-card hover:bg-muted/30 transition-colors px-4 py-3 text-left"
-              onClick={() => { setShowCreateDialog(false); handleCreateCampaign(); }}
-            >
-              <p className="text-foreground font-medium field-text">Lead Sequence</p>
-              <p className="text-muted-foreground field-text mt-0.5">Multi-step engagement sequence with reply detection and analytics dashboard</p>
-            </button>
-            <button
-              className="w-full groove-border bg-card hover:bg-muted/30 transition-colors px-4 py-3 text-left"
-              onClick={() => { setShowCreateDialog(false); handleCreateCustom(); }}
-            >
-              <p className="text-foreground font-medium field-text">Custom Workflow</p>
-              <p className="text-muted-foreground field-text mt-0.5">Build a custom automation with triggers, conditions, and actions</p>
-            </button>
-          </div>
-        </DialogContent>
-      </Dialog>
 
       {/* Edit Workflow Name Dialog */}
       {editingName && (

@@ -495,6 +495,46 @@ export default function ClientSettings() {
             </div>
           )}
 
+          {/* Integrations & Activity - Agency only. Read-only access to the built-in
+              GHL/setter automations + their execution logs. Moved here 2026-08-16 from
+              the Lead Sequences page's retired WORKFLOWS tab, since this is where
+              per-client configuration lives. The automations run automatically; the only
+              operator actions are copying the GHL webhook URLs (onboarding) and reviewing
+              execution logs (debugging). */}
+          {isAgency && clientId && (
+            <div className="border-t border-dashed border-border pt-6 space-y-4">
+              <div>
+                <h2 className="uppercase tracking-wider" style={{ fontFamily: "'VT323', monospace", fontSize: '18px' }}>
+                  Integrations & Activity
+                </h2>
+                <p className="text-muted-foreground field-text mt-1">
+                  Built-in automations that run automatically. Open one to copy its GoHighLevel webhook URL (onboarding) or review execution logs (debugging).
+                </p>
+              </div>
+              <div className="flex flex-col gap-2">
+                {[
+                  { label: 'New Lead from GoHighLevel', desc: 'Sync incoming leads from GHL into BFD-setter · webhook URL + logs', route: 'sync-ghl-contacts' },
+                  { label: 'New Booking from GoHighLevel', desc: 'Sync incoming bookings from GHL into BFD-setter · webhook URL + logs', route: 'sync-ghl-bookings' },
+                  { label: 'Text Setter Engine', desc: 'Receive → Delay → Generate Reply → Follow Up · webhook URL + logs', route: 'process-dms' },
+                  { label: 'Outbound Call Processing', desc: 'Pre-call data fetching → Retell AI outbound call · logs', route: 'outbound-call-processing' },
+                ].map((item) => (
+                  <button
+                    key={item.route}
+                    type="button"
+                    className="groove-border bg-card hover:bg-muted/30 transition-colors px-4 py-3 text-left flex items-center justify-between gap-4"
+                    onClick={() => navigate(`/client/${clientId}/workflows/${item.route}`)}
+                  >
+                    <div className="min-w-0">
+                      <p className="text-foreground font-medium field-text truncate">{item.label}</p>
+                      <p className="text-muted-foreground field-text truncate">{item.desc}</p>
+                    </div>
+                    <span className="text-muted-foreground shrink-0" aria-hidden>→</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Client Menu Settings - Agency only */}
           {isAgency && clientId && (
             <div className="border-t border-dashed border-border pt-6">
