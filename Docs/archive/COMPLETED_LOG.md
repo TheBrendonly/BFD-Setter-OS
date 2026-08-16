@@ -33,7 +33,8 @@ Twilio reconciliation deferred (client-cost focus).
   redeployed v2; trigger redeployed **20260816.1** (16 tasks). Live OpenRouter probe on the real client account
   confirmed the response carries `usage.cost` (0.0000043 for a 7-token call), so the actual path populates.
   Full end-to-end (a real setter reply landing a live `cost_kind=llm, is_estimated=false` row) still owed —
-  needs a real inbound SMS. Commit `<pending>`. Memory `project_cost_ledger_llm_actual_2026_08_16`.
+  needs a real inbound SMS (tracked as LLM-COST-1 in TEST_LIST). Commit `5f1e12d`. Memory
+  `project_cost_ledger_llm_actual_2026_08_16`.
 
 ## 2026-08-16: DO-NOW list cleared + UI refactor + Cost Ledger feature (big session)
 

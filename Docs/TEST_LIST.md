@@ -10,6 +10,20 @@ When it fails, open a bug in `BUG_LIST.md`.
 > (2026-07-21 evening, `Operations/handoffs/2026-07-21-live-test-pass.md`); nothing below blocks the
 > First-Client Milestone.
 
+## Cost Ledger LLM-actual (2026-08-16 build): one live row owed
+
+> Shipped + deployed 2026-08-16 (`5f1e12d`; trigger `20260816.1`, edge `get-cost-ledger` v2). Unit-verified
+> (660 tests) and the OpenRouter `usage.cost` mechanism was live-probed on the real client account (response
+> carried `usage.cost`). What remains is one real-traffic confirmation, since every LLM billing path also
+> sends a real SMS (so there is no side-effect-free way to force a row).
+
+- [ ] **LLM-COST-1: a real setter reply lands a live `execution_cost_events` llm row.** Drive one real
+  (non-simulation) inbound SMS to Gary (harness `sms_inbound.mjs` to TEST_PHONE_A, or a real reply), then
+  confirm a NEW row: `cost_kind='llm'`, `is_estimated=false`, `cost_usd>0`, `provider_ref` like
+  `setter-reply:...`. Re-open the agency Cost Ledger card and confirm the LLM line is non-zero and the
+  actual-vs-estimated split reflects it. Naturally covered by the next TEST SESSION's live-SMS pass; also
+  fires on any real nudge (`tj.sid`), followup (`timer_id`), or cadence AI-copy (`execution_id`) send.
+
 ## Demo-callback funnel dry run (2026-08-11 build): now LIVE in prod, real-call legs owed
 
 > Built plus review-hardened 2026-08-11 (`9fc1dd1`..`87b522e`): public `/g/:slug` callback landing page plus
