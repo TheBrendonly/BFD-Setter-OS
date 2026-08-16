@@ -1,5 +1,5 @@
 ---
-description: Canonical next-session relay prompt, regenerated at the 2026-08-13 evening closeout. The login is fixed and the frontend is released; finish the two remaining live legs (SMS-GHL-1 and the DEMO-CB real-call runbook), then work the Claude-Code queue.
+description: Canonical next-session relay prompt, regenerated at the 2026-08-16 closeout. The whole DO-NOW build plan + a UI refactor + the Cost Ledger feature shipped and verified live. The "no new product code" rule is LIFTED. Work the remaining queue (cost-ledger fast-follows, CLONE-COMPLIANCE-1, demo SLUG limit, small loose ends), all non-gated.
 ---
 
 # Next session prompt
@@ -7,61 +7,53 @@ description: Canonical next-session relay prompt, regenerated at the 2026-08-13 
 Paste the fenced block below as the session's instructions.
 
 ```
-BFD-setter: finish the last two owed live legs, then work the Claude-Code queue.
+BFD-setter: the 2026-08-15 DO-NOW plan is fully cleared. Work the remaining non-gated queue below.
 Repo /srv/bfd/Projects/bfd-setter, branch main (git pull first; commit by EXPLICIT path, never git add -A).
 Supabase ref bjgrgbgykvjrsuwwruoh. Creds in ./.env (SUPABASE_PAT is VALID). Live DB via the Supabase
 Management API /database/query (scripts/test-harness/q.mjs), NOT the postgres MCP. NEVER edit voice or text
 prompt CONTENT (report-only -> Docs/PROMPT_UPDATE_LIST.md). Deploys: edge fns via
-`node scripts/deploy_single_fn.mjs <slug>`, and NEVER deploy_retell_proxy_bundle.mjs (it bundles index.ts +
-_shared only and would drop retell-proxy's four function-local siblings). npm test is the only real gate:
-608 baseline, all passing. No em dashes. Relay Protocol in Docs/SESSION_PLAN.md.
-READ FIRST: Operations/handoffs/2026-08-13-mfa-unblocked-owed-legs.md, then Docs/TEST_LIST.md.
+`SUPABASE_PAT=$SUPABASE_PAT node scripts/deploy_single_fn.mjs <slug>`; trigger via
+`TRIGGER_ACCESS_TOKEN=$TRIGGER_DEPLOY_PAT npx trigger.dev@4.4.4 deploy`; frontend via git push github+origin
+main -> Railway (VERIFY a frontend deploy by walking the served chunk graph for a distinctive string, NOT
+the entry hash — lazy-chunk changes don't move it; poll `gh api repos/TheBrendonly/BFD-Setter-OS/commits/
+<sha>/status` for the Railway build). npm test is the real gate: 648 passing (node 223 + frontend 18 + edge
+407); tsc baseline is 17 pre-existing errors, none should be new. No em dashes. Relay Protocol in
+Docs/SESSION_PLAN.md.
 
-THE LOGIN IS FIXED. As of 2026-08-13 evening the headless agency login works and MFA-LOGIN-1 is CLOSED. Do
-NOT rebuild auth.mjs. `node scripts/test-harness/auth.mjs <scratchdir>` arms and waits; ask Brendan to fire
-ONE fresh 6-digit code with `echo 123456 > <scratchdir>/totp.txt`; it saves storageState.json to that dir.
-ONE prereq that bit the last three sessions: playwright-core is NOT committed (gitignored node_modules), so
-if auth.mjs throws ERR_MODULE_NOT_FOUND run `npm install --no-save playwright-core` (browser download
-skipped, cached Chromium reused). Scratchpad scripts that import playwright-core need the repo node_modules
-on the ESM resolution path: symlink it, ln -s <repo>/node_modules <scratch>/node_modules. If a session will
-drive the browser, ASK BRENDAN FOR A FRESH 2FA CODE AT THE START. Note: server-side aal2 is never checked
-(_shared/assert-client-access.ts), so only browser-UI legs need the elevated session; retell-proxy actions
-(pull/restore) need an AGENCY user JWT (pull it from storageState localStorage sb-<ref>-auth-token), not the
-service key. Retell MCP key is invalid (401): use BFD_RETELL_API_KEY from .env against api.retellai.com.
+VERIFY AGAINST THE RUNNING APP, not green builds — this session's repeated lesson (F24 "already deployed",
+the sync-ghl-booking lead_id bug, the awaiting_reply clobber all hid behind green tsc/build/tests). For any
+frontend change run the headless render smoke (scripts/test-harness/auth.mjs arms the agency login, which
+WORKS on the first fresh 2FA code; then a playwright pass loading storageState.json). Any browser/UI check
+needs a FRESH 6-digit 2FA code from Brendan at the START — ask for it first.
 
-ONE OWED LIVE LEG REMAINS (everything else from the 2026-08-12 build passed 2026-08-13, see COMPLETED_LOG;
-SMS-GHL-1 passed 2026-08-13 evening via a fresh inbound from +61405482446 after Brendan authorised clearing
-it as a CRM lead, so receive-twilio-sms created a new GHL contact and the reply was delivered):
+READ FIRST: Docs/archive/COMPLETED_LOG.md (the 2026-08-16 section, top) for everything that shipped, plus
+memories project_cost_ledger_read_surface_2026_08_16, project_booked_lead_suppression_two_engines_2026_08_16,
+and feedback_agency_cards_read_clients_public. The "no new product code until a pilot is paid" rule is
+LIFTED (Brendan, 2026-08-15) — feature builds are fine.
 
-1. DEMO-CB-1/2: run the TickTick task "RUN: DEMO-CB-1 demo-callback dry run (bfd-setter, Claude-assisted)" in
-   the bfd-setter project. It is a step-by-step runbook: Brendan submits /g/stapleton-finance-b7q4 on his
-   phone and answers Gary's real callback; you verify each step (landing up, lead has a real GHL id +
-   bfd-demo-callback tag, call fired, booking landed on BFD's GHL calendar, confirmation email arrived). The
-   landing render and the unknown-slug 404 already PASSED. Must be within 8am-8pm AEST. Cancel the test
-   booking afterwards.
+QUEUE (prioritised, all NON-gated; plan-mode any >30-line/structural item and wait for approval):
+  1. Cost Ledger fast-follows (Docs/DEFERRED.md "Cost Ledger fast-follows"): (a) make SMS + LLM cost events
+     WRITE to execution_cost_events via buildCostEvent so the ledger is fully actual (today SMS/LLM are
+     estimates from cadence_metrics; voice is actual) — this is the biggest one; (b) a proactive 80%-overage
+     ALERT (email/push via a scheduled trigger) — v1 only shows the visual flag; (c) note per-client
+     monthly_cost_ceiling_cents must be set to activate the cost-vs-ceiling burn-down.
+  2. CLONE-COMPLIANCE-1 (code fix): clone-voice-to-text re-asserts voice compliance copy ("call may be
+     recorded", spoken-pause) into TEXT prompts. Fix the CODE that generates it (strip voice-only lines when
+     the target is a text setter); Brendan still applies PU-15 to the live Setter-2 prompt once.
+  3. demo-callback SLUG limit (~5 lines): drop SLUG_MAX_PER_WINDOW to 3/day in demo-callback/index.ts +
+     redeploy; update Docs/BRENDAN_TODO.md "bot defense" from an open decision to a recorded ruling
+     (Turnstile deferred, 4 un-defer triggers). Turnstile itself stays deferred.
+  4. Small loose ends: trim the Lead Sequences page breadcrumb from "All Lead Sequences & Workflows" to
+     "All Lead Sequences" (Workflows.tsx usePageHeader, 1 line — the WORKFLOWS tab was retired 2026-08-16);
+     optionally wire the 5 Try-Gary cadences' "On silent ->" to Long Tail Nurture (only New-Lead Cadence is
+     wired; they're barely-used demo personas); DEMO-CB-2 guard legs still owed (opted-out -> 502,
+     after-hours -> 422 decline, per-phone 429) — need off-hours / an opted-out number.
+  5. Housekeeping: compact the memory index MEMORY.md to under 17KB (one line per entry); the two orphaned
+     Supabase projects (qfbhcixk..., awzlcmd...) still need Brendan to delete them in the console before the
+     ORPHAN-PROJ-1 code cleanup.
 
-Pass -> Docs/archive/COMPLETED_LOG.md; fail -> Docs/BUG_LIST.md + fix + retest. Close out per the Relay
-Protocol. The standing rule holds: zero new PRODUCT code until a pilot is paid; tooling, infra and
-verification are fine.
-
-THEN, ONLY IF THE TWO LEGS ABOVE ARE CLOSED, work this queue in order (Claude Code's job, not Brendan's or
-Cowork's):
-
-  A. Verify /try-gary GHL-to-cadence wiring end to end (TickTick, same title). Read-only tracing plus a live
-     probe. No new code, not gated. Do this first, it is verification.
-  B. Slot 10 name drift on the BFD client (TickTick, same title). Read the live rows before proposing; slot 9
-     orphan is already RESOLVED, so confirm what is actually still drifting.
-  C. Greenserver: build_card.py fixes found by the E2E test (TickTick, same title; ~30 lines: source line +
-     headline anchor + --reuse-plate + footer margin). Different project, content-pipeline tooling.
-  D. Rebuild the Projects -> Notion docs mirror (TickTick "Claude Code on greenserver: rebuild the Projects ->
-     Notion docs mirror, ~90 min, plan mode"). Plan mode, confirm the approach with Brendan first.
-
-Backlog, do NOT build unprompted (all in the TickTick task "CLAUDE CODE BACKLOG (bfd-setter)"):
-CLONE-COMPLIANCE-1 (the voice->text clone re-asserts voice compliance copy into text prompts, gated); give
-text setters a prompt_docs row; a Restore UI; delete or guard deploy_retell_proxy_bundle.mjs.
-
-Explicitly NOT in scope, do not start: receive-twilio-sms hardening and sender-aware inbound SMS routing
-(both product code, gated); ORPHAN-PROJ-1 project deletion, the PII vendor-toggle pass, and every secret
-rotation (Brendan, provider consoles); PU-15 and every other prompt-content edit (Brendan, via the UI,
-report only).
+DO NOT START (gated): the First-Client Milestone (Docs/FIRST_CLIENT_MILESTONE.md — Stripe / subscription
+enforcement / live webhook secrets / AU A2P — only when a contract signs); F17 phase 2, F18, F19, F20, F12;
+Cloudflare Turnstile; PII anonymisation post-retention. If Brendan says "onboarding a client", switch to
+Docs/FIRST_CLIENT_MILESTONE.md instead of this queue.
 ```

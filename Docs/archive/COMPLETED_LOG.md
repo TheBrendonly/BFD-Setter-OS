@@ -4,6 +4,44 @@ Items closed out of the active lists. Newest first. The active lists are in the 
 (`BUG_LIST.md`, `FEATURE_ROADMAP.md`, `BRENDAN_TODO.md`, `TEST_LIST.md`, `DEFERRED.md`). First-client-gated
 work lives in `Docs/FIRST_CLIENT_TASKS.md` (not archived — deferred).
 
+## 2026-08-16: DO-NOW list cleared + UI refactor + Cost Ledger feature (big session)
+
+Worked the 2026-08-15 build plan (`Docs/SESSION_BUILD_PLAN_2026-08-15.md`) end to end, plus a UI refactor
+and the P2 cost read surface. Everything below shipped + verified against the RUNNING app (server-side +
+render smoke). Commit trail `4ba8c77` → `852b4dd` → `c2239d7` → `cd8865f` → `6bee5c0`.
+
+- **Item 1 — stop nudging booked leads (both engines).** F24 was ALREADY live (voice-booking-tools v25,
+  2026-07-13); the runbook was stale. The real gap: the 2026-08-15 nudge/follow-up engines gate on `leads`
+  flags, and the SMS booking-confirmation reply re-stamps `awaiting_reply=true`, so clearing it is clobbered.
+  Fixed at the query level: `nudgeColdReply` + `sendFollowup` now skip a lead with an upcoming CONFIRMED
+  booking (new `trigger/_shared/confirmedBooking.ts`, fail-open). Verified live: booked test lead
+  scanned+skipped (0 SMS); `send-followup` → `{skipped, booked}` + timer cancelled. Commit `4ba8c77`,
+  trigger `20260815.2`. Memory `project_booked_lead_suppression_two_engines_2026_08_16`.
+- **Item 2 — harden receive-twilio-sms + twilio-status-webhook.** Silent client-resolve drops now write an
+  `error_logs` row (`client_resolve_failed`) + normalise the lookup number + `.limit(1)` (anti-PGRST116).
+  Deliberately NOT the runbook's `.eq('dm_enabled',true)` (would break the valid dm_enabled=false path).
+  Verified live (v34 / v9): a resolvable number routes; an unresolvable To/From writes an error_logs row.
+  Commit `852b4dd`.
+- **Item 3 — DEMO-CB-1 demo funnel PASS**, and found+fixed a real bug. `sync-ghl-booking:773` wrote
+  `bookings.lead_id` = the internal `leads.id` UUID instead of the GHL contact id (the only booking-writer of
+  four that did), which (a) fired false `booking_claimed_no_row` "fabrication" alerts and (b) undermined
+  item 1's suppression. Fixed → `contactId`, deployed v18. Re-verified with a second live demo booking:
+  `lead_id` = GHL contact id, no fabrication alert, confirmation email arrived. Commit `c2239d7`.
+- **Item 4 — lifecycle long-tail nurture ACTIVATED (roadmap 3.5 engine + 3.6 nurture now LIVE).** Brendan
+  built "Long Tail Nurture" (delay → 3× engage/wait, weekly/fortnightly SMS) + set Lifecycle=Long-Tail; the
+  client's default cadence ("New-Lead Cadence from Form-Fill") points **on-silent → nurture**. Spot-checked
+  live via `transition-lead`: an enrollment opened into the nurture (`entry_reason=silent`) + fired.
+- **UI refactor — retired the WORKFLOWS tab.** Lead Sequences is now sequences-only; the 4 built-in
+  integration/log views moved to a new agency-only "Integrations & Activity" card in Client Settings; the
+  unused custom-workflow builder (0 rows platform-wide) is hidden (runtime untouched). Render-smoke passed.
+  Commit `cd8865f`.
+- **Item 5 — Cost Ledger read surface (FEATURE).** First reader of `execution_cost_events`: new agency-only
+  `get-cost-ledger` edge fn (v1) + `_shared/costLedger.ts` (pure, 8 tests) + `ClientCostLedgerCard` +
+  `included_minutes` pricing-config field. Shows cost-by-kind (voice actual; SMS/LLM estimated),
+  cost-per-booking, minutes-vs-pool + cost-vs-ceiling burn-downs, actual-vs-estimated split. USD (raw
+  provider cost, no FX). Verified live + render smoke. Commit `6bee5c0`. Memory
+  `project_cost_ledger_read_surface_2026_08_16`.
+
 ## 2026-08-13 (evening): MFA-LOGIN-1 RESOLVED; six owed live-verify legs passed; frontend released
 
 Ran the 2026-08-13 relay ("unblock the login, then finish the owed live verification and release the held

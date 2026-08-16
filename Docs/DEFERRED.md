@@ -4,11 +4,12 @@ Things deliberately not being built now, each with the gate that would un-defer 
 
 ## ⭐ MAJOR — add soon (next big build)
 
-- [ ] **Lead lifecycle system** = roadmap 3.5 + 3.6 + 3.7, treated as one feature.
-  - **3.5 engine** — multi-workflow enrollment state machine: a lead transitions between workflows (Hot Pursuit → Cool Down → Long-Tail → Re-engage) instead of living in one cadence. **Already partly built** on branch `feat/cadence-v2-lifecycle-wip` (`engagement_enrollments` table + `transition-lead` edge fn + Workflows UI).
-  - **3.6 long-tail nurture** — a slow, email-only drip a lead enters after a cadence completes / goes silent (requires 3.5).
-  - **3.7 re-warm triggers** — email-click + GHL pricing-page-visit events auto-pull a quiet lead back into Re-engage (requires 3.5 + click-tracking/GHL-event infra).
-  - **Gate:** a reliable lead-state classifier (decides hot/cold/silent) + the click-tracking/GHL-event infra for 3.7. This is also the "build a better cadence v2 when needed" direction (the flat 28-node draft `c206da3e` was deleted in favor of this).
+- [ ] **Lead lifecycle system: only 3.7 re-warm triggers remains** (3.5 engine + 3.6 nurture SHIPPED + LIVE 2026-08-15/16, see COMPLETED_LOG).
+  - **3.5 engine: SHIPPED + LIVE.** Multi-workflow enrollment state machine (`engagement_enrollments` + `transition-lead` + the Lifecycle-role / on-silent / on-complete wiring on the Lead Sequences page). Deployed and spot-checked live 2026-08-16.
+  - **3.6 long-tail nurture: SHIPPED + ACTIVATED.** A lead exhausting nudges (nudgeColdReply give-up) POSTs `transition-lead` into its workflow's `on_silent_workflow_id`. BFD wired 2026-08-16 ("Long Tail Nurture" sequence). Note: the built version is SMS-based (the old note here said email-only; superseded).
+  - **3.7 re-warm triggers: STILL DEFERRED (gated).** Email-click + GHL pricing-page-visit events auto-pull a quiet lead back into Re-engage. Gate: click-tracking / GHL-event infra. This is the remaining piece of the feature.
+
+- [ ] **Cost Ledger fast-follows** (v1 shipped 2026-08-16, see COMPLETED_LOG). (a) Make SMS + LLM cost events WRITE to `execution_cost_events` so the ledger is fully actual (today SMS/LLM are estimates from cadence_metrics; voice is actual). (b) Proactive 80%-overage ALERT (email/push via a scheduled task) — v1 only shows the visual flag. (c) Per-client `monthly_cost_ceiling_cents` needs setting to activate the cost-vs-ceiling burn-down.
 
 ## Gated features
 
