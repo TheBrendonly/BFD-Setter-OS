@@ -19,6 +19,7 @@ import { prefetchAvailability, buildAvailabilityBlock } from "./_shared/prefetch
 import { makeVoiceBookingCallTool } from "./_shared/voiceBookingCallTool.ts";
 import { buildFollowupUserMessage } from "./_shared/buildFollowupContext";
 import type { CallTool } from "./_shared/setterToolLoop";
+import { recordLlmCost } from "./_shared/recordLlmCost";
 
 // SEC-PII-LOGS-1 — keep raw prospect phones out of platform logs.
 const redactPhone = (p: string | null | undefined): string => {
@@ -406,6 +407,21 @@ export const sendFollowup = task({
 
     // Raw exchange stored on the timer row regardless of decision — powers the logs tab
     const rawExchange = { messages: aiMessages, response: rawResponse };
+
+    // Session P2 — LLM cost ledger (execution_cost_events). The decision call always runs
+    // (even when it decides NOT to follow up), so bill it here regardless of the send/cancel
+    // branch below. Keyed by timer_id (idempotent across retries). Prefer actual usage.cost;
+    // fall back to the token estimate. Best-effort.
+    await recordLlmCost({
+      supabase,
+      clientId: client_id,
+      leadId: lead_id,
+      providerRef: timer_id,
+      model,
+      usage: ((rawResponse as any)?.usage ?? null) as
+        | { cost?: number; prompt_tokens?: number; completion_tokens?: number }
+        | null,
+    });
 
     console.log(`Follow-up #${sequenceIndex} decision: should_followup=${aiDecision.should_followup}, reason="${aiDecision.reason}"`);
 

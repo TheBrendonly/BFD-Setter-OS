@@ -3,7 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { placeOutboundCall } from "./placeOutboundCall";
 import { pushEmailToGhl } from "./_shared/ghl-conversations";
 import { sendTwilioSmsAndStamp } from "./_shared/sendTwilioSmsAndStamp";
-import { buildCostEvent } from "./_shared/costEvents";
+import { recordLlmCost } from "./_shared/recordLlmCost";
 import { aiGenerateEngagementCopy } from "./_shared/aiGenerateEngagementCopy";
 import { classifyCallOutcome } from "./_shared/classifyCallOutcome";
 import { normalizePhone } from "./_shared/phone";
@@ -452,7 +452,9 @@ export const runEngagement = task({
       sms_delivered: 0, // mirrored from sms_delivery_events at write time
       whatsapp_sent: 0,
       emails_sent: 0, // Cadence v2
-      ai_cost_cents: 0, // Cadence v2 — Day 4-5 AI-generated copy
+      ai_cost_cents: 0, // Cadence v2 — Day 4-5 AI-generated copy (token estimate; feeds the >500c alert)
+      ai_actual_cost_usd: 0, // summed OpenRouter usage.cost across this run's AI-copy calls
+      ai_all_actual: true, // false once any AI-copy call returned no usage.cost
       calls_attempted: 0,
       calls_picked_up: 0, // mirrored from voice_call_logs at write time
       voicemails_dropped: 0,
@@ -553,27 +555,24 @@ export const runEngagement = task({
             { onConflict: "execution_id" },
           );
 
-        // Session P2 — LLM cost event (execution_cost_events). Real OpenRouter cost
-        // accumulated in metricsBuffer.ai_cost_cents during this run; one rolled-up
-        // llm row per execution (provider_ref = execution_id makes it idempotent).
-        // Best-effort; never blocks the run.
+        // Session P2 — LLM cost event (execution_cost_events). One rolled-up llm row per
+        // execution (provider_ref = execution_id makes it idempotent across retries).
+        // Prefer OpenRouter's ACTUAL usage.cost summed across this run's AI-copy calls;
+        // fall back to the token estimate (metricsBuffer.ai_cost_cents) that also feeds the
+        // >500c alert below. recordLlmCost is best-effort and never throws/blocks the run.
         if (metricsBuffer.ai_cost_cents > 0) {
-          try {
-            const llmCostRow = buildCostEvent("llm", {
-              clientId: client_id,
-              executionId: execution_id,
-              workflowId: workflow_id,
-              leadId: lead_id,
-              providerRef: execution_id,
-              costUsd: metricsBuffer.ai_cost_cents / 100,
-              isEstimated: false,
-            });
-            await supabase
-              .from("execution_cost_events")
-              .upsert(llmCostRow, { onConflict: "cost_kind,provider_ref" });
-          } catch (llmCostErr) {
-            console.warn("execution_cost_events llm write failed (non-fatal):", (llmCostErr as Error).message);
-          }
+          const hasActual = metricsBuffer.ai_all_actual && metricsBuffer.ai_actual_cost_usd > 0;
+          await recordLlmCost({
+            supabase,
+            clientId: client_id,
+            executionId: execution_id,
+            workflowId: workflow_id,
+            leadId: lead_id,
+            providerRef: execution_id,
+            model: normalizeLlmModel((client as any).llm_model) ?? "",
+            usage: hasActual ? { cost: metricsBuffer.ai_actual_cost_usd } : null,
+            fallbackCostUsd: metricsBuffer.ai_cost_cents / 100,
+          });
         }
 
         // Cadence v2 Day 7 — cost-ceiling alert. Fires only on completed
@@ -1216,6 +1215,11 @@ export const runEngagement = task({
                   message = ai.body;
                   aiSubject = ai.subject;
                   metricsBuffer.ai_cost_cents += ai.costCents;
+                  if (typeof ai.usage?.cost === "number" && ai.usage.cost > 0) {
+                    metricsBuffer.ai_actual_cost_usd += ai.usage.cost;
+                  } else {
+                    metricsBuffer.ai_all_actual = false;
+                  }
                   console.log(
                     `Engage AI-generated ${ch.type} for ${lead_id}: cost=${ai.costCents}c tokens=${ai.promptTokens}/${ai.completionTokens} (node ${node.id})`,
                   );

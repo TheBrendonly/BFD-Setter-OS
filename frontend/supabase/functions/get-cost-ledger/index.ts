@@ -9,10 +9,11 @@
 //     role "client"  -> { role:"client", show:false }   (internal P&L, never leaked)
 //     role "agency"  -> { role:"agency", currency:"USD", period, ...summary }
 //
-// HONESTY: voice cost is ACTUAL (execution_cost_events). SMS + LLM are ESTIMATES
-// (SMS = outbound count × seed rate; LLM = cadence_metrics.ai_cost_cents), because
-// SMS/LLM cost events are not written to the ledger yet. All USD — this is raw
-// provider cost, so no FX to the display currency (deliberate; see costLedger.ts).
+// HONESTY: each kind uses its execution_cost_events rows when the period has any, and
+// only falls back to a running estimate for a kind with no ledger rows (SMS = outbound
+// count × seed rate; LLM = cadence_metrics.ai_cost_cents). Voice + LLM write actual rows;
+// SMS still falls back until the Twilio reconciliation ships. All USD — raw provider cost,
+// no FX to the display currency (deliberate; see costLedger.ts).
 //
 // Auth: resolveClientAccess (JWT signature + ownership), same as get-client-usage.
 

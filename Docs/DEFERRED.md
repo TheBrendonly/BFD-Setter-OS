@@ -9,7 +9,18 @@ Things deliberately not being built now, each with the gate that would un-defer 
   - **3.6 long-tail nurture: SHIPPED + ACTIVATED.** A lead exhausting nudges (nudgeColdReply give-up) POSTs `transition-lead` into its workflow's `on_silent_workflow_id`. BFD wired 2026-08-16 ("Long Tail Nurture" sequence). Note: the built version is SMS-based (the old note here said email-only; superseded).
   - **3.7 re-warm triggers: STILL DEFERRED (gated).** Email-click + GHL pricing-page-visit events auto-pull a quiet lead back into Re-engage. Gate: click-tracking / GHL-event infra. This is the remaining piece of the feature.
 
-- [ ] **Cost Ledger fast-follows** (v1 shipped 2026-08-16, see COMPLETED_LOG). (a) Make SMS + LLM cost events WRITE to `execution_cost_events` so the ledger is fully actual (today SMS/LLM are estimates from cadence_metrics; voice is actual). (b) Proactive 80%-overage ALERT (email/push via a scheduled task) — v1 only shows the visual flag. (c) Per-client `monthly_cost_ceiling_cents` needs setting to activate the cost-vs-ceiling burn-down.
+- [ ] **Cost Ledger fast-follows** (read surface v1 + LLM-actual both shipped 2026-08-16, see COMPLETED_LOG).
+  (a) **LLM: DONE.** The four lead-facing tasks (`processSetterReply`, `nudgeColdReply`, `sendFollowup`,
+  `runEngagement`) now write ACTUAL OpenRouter `usage.cost` to `execution_cost_events` via `recordLlmCost`
+  (voice was already actual from Retell), and the reader/summariser uses ledger rows per kind when present
+  (no double-count), falling back to the estimate only for a kind with no rows. This closed the LLM-cost-is-$0
+  gap. **SMS-actual STILL DEFERRED**: needs a Twilio settled-price reconciliation job reading `message_queue`
+  (817/817 outbound rows carry a `twilio_message_sid`, so no sender edits needed) → GET the settled `price`
+  by SID → upsert an `sms` cost event. Until then SMS falls back to the count×seed estimate (which the
+  summariser already handles). Heaviest, lowest-value leg (new Trigger schedule + per-client Twilio creds).
+  (b) Proactive 80%-overage ALERT (email/push via a scheduled task) — v1 only shows the visual flag; now more
+  useful since cost is real. (c) Per-client `monthly_cost_ceiling_cents` needs setting to activate the
+  cost-vs-ceiling burn-down.
 
 ## Gated features
 

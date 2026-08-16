@@ -10,44 +10,10 @@
 // can kill the cadence run.
 
 import { createClient } from "@supabase/supabase-js";
+import { estimateLlmCostUsd } from "./llmPricing.ts";
 
 const DEFAULT_MODEL = "openai/gpt-4.1-nano";
 const TIMEOUT_MS = 30000;
-
-// Model-aware pricing table (USD per token, 2026-05 OpenRouter list prices).
-// Keys are matched as substrings against the model id passed by the caller,
-// so e.g. "openai/gpt-4.1-nano" and "anthropic/claude-sonnet-4-6" resolve to
-// the right row. Unknown models fall back to gpt-4.1-nano (cheap default).
-//
-// If a per-client cost is wildly wrong because of model drift, update this
-// table — the cost_estimate_cents in cadence_metrics + the >500c
-// error_logs ceiling guard both depend on it.
-const MODEL_PRICING: Array<{ match: string; prompt: number; completion: number }> = [
-  // OpenAI cheap class
-  { match: "gpt-4.1-nano", prompt: 0.0000001, completion: 0.0000004 },
-  { match: "gpt-4o-mini",  prompt: 0.00000015, completion: 0.0000006 },
-  // Anthropic
-  { match: "claude-haiku-4", prompt: 0.000001, completion: 0.000005 },
-  { match: "claude-sonnet",  prompt: 0.000003, completion: 0.000015 },
-  { match: "claude-opus",    prompt: 0.000015, completion: 0.000075 },
-  // Google Gemini (BFD's current setting via clients.llm_model)
-  { match: "gemini-2.5-pro", prompt: 0.00000125, completion: 0.000005 },
-  { match: "gemini-2.0-flash", prompt: 0.0000001, completion: 0.0000004 },
-  { match: "gemini-2.5-flash", prompt: 0.0000003, completion: 0.0000025 },
-  // Catch-all gemini family (anything not matched above)
-  { match: "gemini", prompt: 0.000001, completion: 0.000004 },
-];
-
-function priceFor(model: string): { prompt: number; completion: number } {
-  const lc = model.toLowerCase();
-  for (const row of MODEL_PRICING) {
-    if (lc.includes(row.match)) return { prompt: row.prompt, completion: row.completion };
-  }
-  // Unknown model: assume gpt-4.1-nano. Cost will be underestimated for
-  // pricier models but the 500c per-lead ceiling guard still catches
-  // runaway usage.
-  return { prompt: 0.0000001, completion: 0.0000004 };
-}
 
 export type AiCopyInput = {
   // per-client OpenRouter creds
@@ -79,6 +45,10 @@ export type AiCopyResult = {
   costCents: number;
   promptTokens?: number;
   completionTokens?: number;
+  // Raw OpenRouter usage so callers can bill the LEDGER with actual cost
+  // (usage.cost, USD) when present; costCents above stays the token estimate that
+  // feeds the cadence_metrics alert math.
+  usage?: { cost?: number; prompt_tokens?: number; completion_tokens?: number };
   model: string;
 };
 
@@ -142,7 +112,7 @@ export async function aiGenerateEngagementCopy(args: AiCopyInput): Promise<AiCop
     }
     const json = (await resp.json()) as {
       choices?: Array<{ message?: { content?: string } }>;
-      usage?: { prompt_tokens?: number; completion_tokens?: number };
+      usage?: { prompt_tokens?: number; completion_tokens?: number; cost?: number };
     };
     const rawText = json.choices?.[0]?.message?.content?.trim() ?? "";
     if (!rawText) throw new Error("aiGenerateEngagementCopy: empty content from model");
@@ -161,8 +131,7 @@ export async function aiGenerateEngagementCopy(args: AiCopyInput): Promise<AiCop
 
     const pt = json.usage?.prompt_tokens ?? 0;
     const ct = json.usage?.completion_tokens ?? 0;
-    const price = priceFor(model);
-    const costUsd = pt * price.prompt + ct * price.completion;
+    const costUsd = estimateLlmCostUsd(model, pt, ct);
     const costCents = Math.max(0, Math.round(costUsd * 100 * 100) / 100); // round to 0.01¢
     return {
       subject: parsed.subject?.trim() || undefined,
@@ -170,6 +139,11 @@ export async function aiGenerateEngagementCopy(args: AiCopyInput): Promise<AiCop
       costCents,
       promptTokens: pt,
       completionTokens: ct,
+      usage: {
+        cost: typeof json.usage?.cost === "number" ? json.usage.cost : undefined,
+        prompt_tokens: pt,
+        completion_tokens: ct,
+      },
       model,
     };
   } finally {

@@ -4,6 +4,37 @@ Items closed out of the active lists. Newest first. The active lists are in the 
 (`BUG_LIST.md`, `FEATURE_ROADMAP.md`, `BRENDAN_TODO.md`, `TEST_LIST.md`, `DEFERRED.md`). First-client-gated
 work lives in `Docs/FIRST_CLIENT_TASKS.md` (not archived — deferred).
 
+## 2026-08-16 (later): Cost Ledger fast-follow — LLM cost is now ACTUAL, not $0
+
+Worked queue item 1a (Cost Ledger fast-follows). **Verifying against the running system corrected the
+runbook's premise:** the ledger's LLM line was not "an estimate from cadence_metrics" — it was **$0
+everywhere**. `cadence_metrics.ai_cost_cents` is 0 across all 1,451 rows, so the `runEngagement` writer
+(gated `if ai_cost_cents>0`) never fired AND the reader's "LLM estimate" (which summed that column) was
+always zero. The dominant LLM spend, Gary's setter reply loop, captured no usage at all. Voice was already
+actual (Retell `combined_cost`); SMS was already count-estimated. Brendan chose full-actual providers; SMS
+Twilio reconciliation deferred (client-cost focus).
+
+- **New `trigger/_shared/recordLlmCost.ts`** (+ 9 node tests) — reads an OpenRouter `usage` object, prefers
+  the ACTUAL billed `usage.cost` (`is_estimated=false`), falls back to a token×price estimate
+  (`is_estimated=true`), skips zero, upserts via `buildCostEvent` on `UNIQUE(cost_kind, provider_ref)`.
+  Best-effort (never throws/blocks). Optional `fallbackCostUsd` for callers holding a pre-computed estimate.
+- **Price map extracted** to `trigger/_shared/llmPricing.ts` (`MODEL_PRICING` + `priceFor` +
+  `estimateLlmCostUsd`), shared by `aiGenerateEngagementCopy` and `recordLlmCost` (was inline, single copy now).
+- **Four lead-facing tasks wired** to `recordLlmCost` with stable idempotency keys: `processSetterReply`
+  (accumulate `usage.cost` across the setter loop's N calls → one row, `provider_ref=setter-reply:${ctx.run.id}`,
+  skipped for `Simulation` runs), `nudgeColdReply` (`tj.sid`), `sendFollowup` (`timer_id`, billed regardless of
+  the send/cancel branch), `runEngagement` (`execution_id` — replaced the old hand-rolled write that
+  mislabelled a token estimate as `is_estimated=false`). No OpenRouter request-body change: `usage.cost` is
+  always returned (`usage:{include:true}` is deprecated/no-op).
+- **Reader/summariser rework** (`costLedger.ts` + `get-cost-ledger`, +3 deno tests) — per kind (sms/llm), use
+  the ledger rows when the period has any (no double-count), else fall back to the running estimate. Response
+  shape unchanged → no frontend change.
+- **Verified:** 660 tests green (node 232, frontend 18, edge 410); tsc unchanged at 17; edge fn `get-cost-ledger`
+  redeployed v2; trigger redeployed **20260816.1** (16 tasks). Live OpenRouter probe on the real client account
+  confirmed the response carries `usage.cost` (0.0000043 for a 7-token call), so the actual path populates.
+  Full end-to-end (a real setter reply landing a live `cost_kind=llm, is_estimated=false` row) still owed —
+  needs a real inbound SMS. Commit `<pending>`. Memory `project_cost_ledger_llm_actual_2026_08_16`.
+
 ## 2026-08-16: DO-NOW list cleared + UI refactor + Cost Ledger feature (big session)
 
 Worked the 2026-08-15 build plan (`Docs/SESSION_BUILD_PLAN_2026-08-15.md`) end to end, plus a UI refactor

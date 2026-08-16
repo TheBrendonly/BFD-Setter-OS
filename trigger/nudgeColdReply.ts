@@ -35,6 +35,7 @@ import { aiGenerateEngagementCopy } from "./_shared/aiGenerateEngagementCopy";
 import { normalizePhone } from "./_shared/phone";
 import { isPhoneOptedOut } from "./_shared/optout";
 import { normalizeLlmModel } from "./_shared/llmModel";
+import { recordLlmCost } from "./_shared/recordLlmCost";
 import { appendOptOutFooter } from "./_shared/optOutFooter";
 import {
   DEFAULT_QUIET_HOURS,
@@ -300,6 +301,7 @@ export const nudgeColdReply = schedules.task({
       // Generate the nudge copy. Failure → skip this lead this run.
       let smsBody: string;
       let aiCostCents = 0;
+      let aiUsage: { cost?: number; prompt_tokens?: number; completion_tokens?: number } | undefined;
       try {
         const ai = await aiGenerateEngagementCopy({
           openrouterApiKey: cl.openrouter_api_key,
@@ -319,6 +321,7 @@ export const nudgeColdReply = schedules.task({
         });
         smsBody = ai.body;
         aiCostCents = ai.costCents;
+        aiUsage = ai.usage;
       } catch (aiErr) {
         console.warn(
           `nudgeColdReply: aiGenerateEngagementCopy failed for ${lead.lead_id}: ${(aiErr as Error).message}`,
@@ -427,6 +430,20 @@ export const nudgeColdReply = schedules.task({
           insErr,
         );
       }
+
+      // Session P2 — LLM cost ledger (execution_cost_events). One llm row per nudge,
+      // keyed by the outbound Twilio SID (idempotent across retries; no collision with a
+      // future sms row on the same sid — the unique key is the (cost_kind, provider_ref)
+      // pair). Prefer the actual usage.cost; fall back to the token estimate. Best-effort.
+      await recordLlmCost({
+        supabase,
+        clientId: lead.client_id!,
+        leadId: lead.lead_id!,
+        providerRef: tj.sid,
+        model: normalizeLlmModel(cl.llm_model) ?? "",
+        usage: aiUsage ?? null,
+        fallbackCostUsd: aiCostCents / 100,
+      });
 
       console.log(
         `nudgeColdReply: tier ${tier + 1} nudge sent to ${lead.lead_id} (client ${lead.client_id}, sid=${tj.sid}, ai_cost=${aiCostCents}c)`,

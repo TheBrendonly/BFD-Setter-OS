@@ -35,6 +35,7 @@ import { resolveLeadDisplayTimeZone, zoneShortLabel } from "./_shared/leadTimezo
 import { mergeCanonicalSlots, validateBookingArgs, type CanonicalSlotMap } from "./_shared/slotBinding.ts";
 import { mergeEventIds, validateEventIdArgs, type EventIdSet } from "./_shared/eventIdBinding.ts";
 import { needsRescheduleHonestyRewrite, needsBookingHonestyRewrite, needsBookErrorHonestyRewrite } from "./_shared/rescheduleHonestyGuard.ts";
+import { recordLlmCost } from "./_shared/recordLlmCost.ts";
 import {
   runSetterToolLoop,
   ToolsUnsupportedError,
@@ -149,7 +150,7 @@ export const processSetterReply = task({
     // Prior turns of the simulated conversation, oldest first, EXCLUDING the current
     // Message_Body (which is appended as the latest user turn like the real path).
     SimulationHistory?: Array<{ role: "user" | "assistant"; content: string }>;
-  }) => {
+  }, { ctx }: any) => {
     const supabase = getMainSupabase();
     const setterNumber = String(payload.Setter_Number || "1").trim() || "1";
     const slotId = `Setter-${setterNumber}`;
@@ -315,6 +316,13 @@ export const processSetterReply = task({
       timeZone: clientTimeZone,
     };
 
+    // Roll up OpenRouter usage across the setter loop's N callLlm calls for the P2 cost
+    // ledger (one llm row written after the loop).
+    let llmCallCount = 0;
+    let llmSumCostUsd = 0;
+    let llmSumPromptTokens = 0;
+    let llmSumCompletionTokens = 0;
+    let llmAllHadCost = true;
     const callLlm: CallLlm = async ({ messages: llmMessages, tools: llmTools, toolChoice }) => {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), LLM_TIMEOUT_MS);
@@ -361,7 +369,15 @@ export const processSetterReply = task({
             tool_calls?: Array<{ id?: string; type?: string; function?: { name?: string; arguments?: string } }>;
           };
         }>;
+        usage?: { prompt_tokens?: number; completion_tokens?: number; cost?: number };
       };
+      // Accumulate this call's OpenRouter usage for the rolled-up cost row (below).
+      const usage = aiJson?.usage;
+      llmCallCount++;
+      if (typeof usage?.cost === "number" && usage.cost > 0) llmSumCostUsd += usage.cost;
+      else llmAllHadCost = false;
+      llmSumPromptTokens += Number(usage?.prompt_tokens ?? 0);
+      llmSumCompletionTokens += Number(usage?.completion_tokens ?? 0);
       const aiMsg = aiJson?.choices?.[0]?.message;
       const toolCalls: SetterToolCall[] = (aiMsg?.tool_calls ?? [])
         .filter((tc) => tc?.function?.name)
@@ -460,6 +476,27 @@ export const processSetterReply = task({
       // Prepend the BOOK-1 prefetch so the DB shows availability WAS fetched this turn.
       invocations: [prefetch.invocation, ...loopResult.toolInvocations],
     });
+
+    // ── Session P2 — LLM cost ledger (execution_cost_events). The setter loop makes N
+    // OpenRouter calls per inbound reply; write ONE rolled-up llm row keyed by the Trigger
+    // run id (stable across the task's 2 retry attempts → idempotent). Prefer the summed
+    // actual usage.cost; fall back to the token estimate. Skipped for simulator runs
+    // (agency testing, not client lead-running cost). Best-effort; never blocks the reply.
+    if (llmCallCount > 0 && !payload.Simulation) {
+      await recordLlmCost({
+        supabase,
+        clientId: client.id as string,
+        leadId: payload.Lead_ID,
+        providerRef: `setter-reply:${ctx?.run?.id ?? crypto.randomUUID()}`,
+        model,
+        usage: {
+          cost: llmAllHadCost ? llmSumCostUsd : undefined,
+          prompt_tokens: llmSumPromptTokens,
+          completion_tokens: llmSumCompletionTokens,
+        },
+      });
+    }
+
     const rawText = (loopResult.finalText || "").trim();
     if (!rawText) {
       throw new Error("processSetterReply: tool loop produced empty content");

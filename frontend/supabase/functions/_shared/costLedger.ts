@@ -9,10 +9,13 @@
 // LLM, Twilio SMS) are all billed in USD, and this is an agency-internal P&L view,
 // so there is deliberately NO FX to the display currency here — it is honest raw cost.
 //
-// HONESTY: voice is ACTUAL (execution_cost_events, is_estimated=false). SMS + LLM are
-// ESTIMATES today (SMS = count × a seed rate; LLM = cadence_metrics.ai_cost_cents),
-// because SMS/LLM cost events are not written to the ledger yet. The summary keeps the
-// estimated portion separate so the card can label it, and so the split is truthful.
+// HONESTY: each kind (voice/sms/llm) uses its execution_cost_events rows when the
+// period has any (real per-execution cost, carrying each row's is_estimated flag), and
+// ONLY falls back to a running estimate when a kind has no ledger rows (SMS = count ×
+// seed; LLM = cadence_metrics.ai_cost_cents). This is what prevents double-counting once
+// actual rows land. Voice + LLM write actual rows today; SMS still falls back to the count
+// estimate until the Twilio settled-price reconciliation ships. The summary keeps the
+// estimated portion separate so the card can label it, and so the split stays truthful.
 
 export interface CostEventRow {
   cost_kind: string; // 'voice' | 'sms' | 'llm' | ...
@@ -74,44 +77,65 @@ function burn(limit: number | null, used: number): BurnDown {
   };
 }
 
+interface KindAgg {
+  usd: number;
+  count: number;
+  hasEstimated: boolean; // any is_estimated=true row for this kind
+  quantity: number; // summed (used for voice minutes)
+}
+
 export function summarizeCostLedger(input: CostLedgerInput): CostLedgerSummary {
-  // Voice, from the ledger. Sum the dollars per bucket, round to cents ONCE.
-  let voiceUsd = 0;
-  let voiceMinutes = 0;
-  let ledgerActualUsd = 0; // is_estimated=false
-  let ledgerEstimatedUsd = 0; // is_estimated=true (none today, but future-proof)
-  const otherKindUsd = new Map<string, { usd: number; estimated: boolean }>();
+  // Bucket every ledger row by kind. Sum dollars per bucket and round to cents ONCE.
+  let ledgerActualUsd = 0; // is_estimated=false rows
+  let ledgerEstimatedUsd = 0; // is_estimated=true rows
+  const kindAgg = new Map<string, KindAgg>();
 
   for (const ev of input.costEvents) {
     const usd = Number.isFinite(ev.cost_usd) ? ev.cost_usd : 0;
     if (ev.is_estimated) ledgerEstimatedUsd += usd;
     else ledgerActualUsd += usd;
-    if (ev.cost_kind === "voice") {
-      voiceUsd += usd;
-      voiceMinutes += Number.isFinite(ev.quantity) ? ev.quantity : 0;
-    } else {
-      const cur = otherKindUsd.get(ev.cost_kind) ?? { usd: 0, estimated: false };
-      cur.usd += usd;
-      cur.estimated = cur.estimated || ev.is_estimated;
-      otherKindUsd.set(ev.cost_kind, cur);
-    }
+    const cur = kindAgg.get(ev.cost_kind) ?? { usd: 0, count: 0, hasEstimated: false, quantity: 0 };
+    cur.usd += usd;
+    cur.count += 1;
+    cur.hasEstimated = cur.hasEstimated || ev.is_estimated;
+    cur.quantity += Number.isFinite(ev.quantity) ? ev.quantity : 0;
+    kindAgg.set(ev.cost_kind, cur);
   }
 
-  const voiceCostCents = usdToCents(voiceUsd);
-  const llmCostCents = Math.max(0, Math.round(input.aiCostCents || 0));
-  const smsCostCents = Math.round((input.smsCount || 0) * (input.smsSeedUsdPerMsg || 0) * 100);
+  const voice = kindAgg.get("voice");
+  const voiceCostCents = usdToCents(voice?.usd ?? 0);
+  const voiceMinutes = voice?.quantity ?? 0;
+
+  // SMS + LLM: use the ledger when the period has any rows of that kind (real,
+  // per-execution cost), otherwise fall back to the running estimate. This is what
+  // stops the double-count once actual rows land — the estimate is only ever added
+  // for a kind that has NO ledger rows.
+  const smsAgg = kindAgg.get("sms");
+  const smsFromLedger = (smsAgg?.count ?? 0) > 0;
+  const smsCostCents = smsFromLedger
+    ? usdToCents(smsAgg!.usd)
+    : Math.round((input.smsCount || 0) * (input.smsSeedUsdPerMsg || 0) * 100);
+  const smsIsEstimated = smsFromLedger ? smsAgg!.hasEstimated : true;
+
+  const llmAgg = kindAgg.get("llm");
+  const llmFromLedger = (llmAgg?.count ?? 0) > 0;
+  const llmCostCents = llmFromLedger
+    ? usdToCents(llmAgg!.usd)
+    : Math.max(0, Math.round(input.aiCostCents || 0));
+  const llmIsEstimated = llmFromLedger ? llmAgg!.hasEstimated : true;
 
   const by_kind: CostKindLine[] = [
-    { cost_kind: "voice", cost_cents: voiceCostCents, is_estimated: false },
+    { cost_kind: "voice", cost_cents: voiceCostCents, is_estimated: voice?.hasEstimated ?? false },
+    { cost_kind: "sms", cost_cents: smsCostCents, is_estimated: smsIsEstimated },
+    { cost_kind: "llm", cost_cents: llmCostCents, is_estimated: llmIsEstimated },
   ];
-  for (const [kind, v] of otherKindUsd) {
-    by_kind.push({ cost_kind: kind, cost_cents: usdToCents(v.usd), is_estimated: v.estimated });
-  }
-  by_kind.push({ cost_kind: "sms", cost_cents: smsCostCents, is_estimated: true });
-  by_kind.push({ cost_kind: "llm", cost_cents: llmCostCents, is_estimated: true });
 
+  // Actual vs estimated split: ledger rows contribute by their own is_estimated flag;
+  // a fallback estimate (used only when a kind has NO ledger rows) is estimated.
   const actualCents = usdToCents(ledgerActualUsd);
-  const estimatedCents = usdToCents(ledgerEstimatedUsd) + smsCostCents + llmCostCents;
+  let estimatedCents = usdToCents(ledgerEstimatedUsd);
+  if (!smsFromLedger) estimatedCents += smsCostCents;
+  if (!llmFromLedger) estimatedCents += llmCostCents;
   const totalCents = actualCents + estimatedCents;
 
   const roundedMinutes = Math.round(voiceMinutes * 10) / 10;

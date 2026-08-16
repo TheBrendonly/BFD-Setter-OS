@@ -71,6 +71,60 @@ Deno.test("summarizeCostLedger: no ceiling/pool -> pct null, no flags", () => {
   assertEquals(s.minutes_burn.limit, null);
 });
 
+Deno.test("summarizeCostLedger: LLM ledger rows win over the aiCostCents estimate (no double-count)", () => {
+  // A real llm ledger row present + a stale aiCostCents estimate: the ledger wins,
+  // the estimate is IGNORED, and llm counts as actual.
+  const s = summarizeCostLedger({
+    ...base,
+    costEvents: [
+      { cost_kind: "voice", quantity: 2.31, cost_usd: 0.35, is_estimated: false },
+      { cost_kind: "voice", quantity: 2.035, cost_usd: 0.30, is_estimated: false },
+      { cost_kind: "llm", quantity: 0, cost_usd: 0.40, is_estimated: false },
+    ],
+    aiCostCents: 12, // must be ignored now that ledger has llm rows
+  });
+  assertEquals(s.llm_cost_cents, 40); // ledger, not 40+12
+  assertEquals(s.by_kind.find((k) => k.cost_kind === "llm")?.is_estimated, false);
+  assertEquals(s.actual_cost_cents, 105); // voice 65 + llm 40
+  assertEquals(s.estimated_cost_cents, 14); // sms fallback only
+  assertEquals(s.total_cost_cents, 119);
+});
+
+Deno.test("summarizeCostLedger: an estimated LLM ledger row stays in the estimated split", () => {
+  const s = summarizeCostLedger({
+    ...base,
+    costEvents: [
+      { cost_kind: "voice", quantity: 2.31, cost_usd: 0.35, is_estimated: false },
+      { cost_kind: "voice", quantity: 2.035, cost_usd: 0.30, is_estimated: false },
+      { cost_kind: "llm", quantity: 0, cost_usd: 0.05, is_estimated: true },
+    ],
+    aiCostCents: 12, // ignored — ledger has llm rows
+  });
+  assertEquals(s.llm_cost_cents, 5);
+  assertEquals(s.by_kind.find((k) => k.cost_kind === "llm")?.is_estimated, true);
+  assertEquals(s.actual_cost_cents, 65); // voice only
+  assertEquals(s.estimated_cost_cents, 19); // 5 llm-ledger + 14 sms fallback
+  assertEquals(s.total_cost_cents, 84);
+});
+
+Deno.test("summarizeCostLedger: SMS ledger rows win over the count×seed estimate", () => {
+  const s = summarizeCostLedger({
+    ...base,
+    costEvents: [
+      { cost_kind: "voice", quantity: 2.31, cost_usd: 0.35, is_estimated: false },
+      { cost_kind: "voice", quantity: 2.035, cost_usd: 0.30, is_estimated: false },
+      { cost_kind: "sms", quantity: 3, cost_usd: 0.20, is_estimated: false },
+    ],
+    smsCount: 10, // must be ignored now that ledger has sms rows
+    aiCostCents: 12,
+  });
+  assertEquals(s.sms_cost_cents, 20); // ledger 0.20, not the 14c count estimate
+  assertEquals(s.by_kind.find((k) => k.cost_kind === "sms")?.is_estimated, false);
+  assertEquals(s.actual_cost_cents, 85); // voice 65 + sms 20
+  assertEquals(s.estimated_cost_cents, 12); // llm fallback only
+  assertEquals(s.total_cost_cents, 97);
+});
+
 Deno.test("summarizeCostLedger: empty period is all zeros, not NaN", () => {
   const s = summarizeCostLedger({
     costEvents: [], aiCostCents: 0, smsCount: 0, smsSeedUsdPerMsg: 0.014,
