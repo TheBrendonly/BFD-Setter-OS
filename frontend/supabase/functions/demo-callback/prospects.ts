@@ -54,16 +54,18 @@ export function resolveProspect(slug: unknown): DemoProspect | null {
 // ── Rate limiting ──
 // Four windows, all enforced, all through the same atomic bump_rate_limit RPC.
 // Per-phone stops one number being dialled repeatedly. Per-slug caps the daily
-// blast radius if a page URL leaks. Per-IP stops a single scripted client
-// cycling distinct destination numbers (security review C1) — weak against a
-// distributed attacker, but it turns "25 robocalls in one burst" into "25
-// machines needed". Slug spacing forces >=60s between dials on one page, so
-// the daily budget cannot be exhausted in seconds and a real prospect is not
+// blast radius if a page URL leaks: a /g/ page serves ONE named broker, so there
+// is no legitimate reason for a 4th dial in a day (BOTDEF-1 ruling 2026-08-12 —
+// DEFERRED Turnstile, this 3/day cap is the cheap partial). Per-IP stops a single
+// scripted client cycling distinct destination numbers (security review C1) — weak
+// against a distributed attacker, but it turns "a day of robocalls in one burst"
+// into "many machines needed". Slug spacing forces >=60s between dials on one page,
+// so the daily budget cannot be exhausted in seconds and a real prospect is not
 // locked out by one burst.
 export const PHONE_WINDOW_SECONDS = 3600;
 export const PHONE_MAX_PER_WINDOW = 2;
 export const SLUG_WINDOW_SECONDS = 86_400;
-export const SLUG_MAX_PER_WINDOW = 25;
+export const SLUG_MAX_PER_WINDOW = 3;
 export const IP_WINDOW_SECONDS = 3600;
 export const IP_MAX_PER_WINDOW = 5;
 export const SLUG_SPACING_SECONDS = 60;

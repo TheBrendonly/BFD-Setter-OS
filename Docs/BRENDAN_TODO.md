@@ -19,10 +19,14 @@ Things only Brendan can do (UI clicks, logins, provider dashboards, business cal
   what `SOP/DEMO_PROSPECT_SETUP.md` step 4 specifies: "Main Outbound" already owns `+61481614530` for both
   directions, so `make-retell-outbound-call` falls through to `clients.retell_phone_1`, same number, nothing
   disturbed.
-- [ ] **Decide: bot defense before the first REAL prospect.** The security review's one structural finding: nothing
-  proves a submitter owns the number they type. Rate limits (4 dimensions) raise the bar but don't close it. Options:
-  Cloudflare Turnstile on the form (needs a site key) or SMS-OTP before dialling (adds friction + cost). Fine to run
-  the dry run and drop #1 without it; not fine at scale.
+- [x] **RULED 2026-08-12: bot defense on the demo callback = DEFERRED (not rejected).** A /g/ slug is unguessable
+  and sent to ONE named broker (a personalised page, not a public landing page), so realistic volume is a handful of
+  expected submits. **Cheap partial DONE 2026-08-16:** `SLUG_MAX_PER_WINDOW` dropped 25 -> 3/day (demo-callback v4)
+  — a page serves one broker, so a 4th dial/day is illegitimate. **Cloudflare Turnstile stays DEFERRED** (invisible
+  mode, ~30 min build); un-defer when ANY of: (1) a /g/ link goes anywhere PUBLIC (LinkedIn/Featured, email footer,
+  website, ad); (2) any demo-callback 429 in logs not attributable to a real prospect; (3) >~10 demo pages sent (you
+  stop recognising every number); (4) a prospect/compliance person asks how the form is protected. SMS-OTP was
+  considered + rejected (kills the "type your number, phone rings in 10s" pitch). Full detail: `DEFERRED.md` BOTDEF-1.
 
 ## Open (all optional / low-priority)
 
