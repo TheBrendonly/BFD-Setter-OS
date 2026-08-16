@@ -416,7 +416,7 @@ export default function Workflows() {
 
   usePageHeader({
     title: 'Workflows',
-    breadcrumbs: [{ label: 'All Lead Sequences & Workflows' }],
+    breadcrumbs: [{ label: 'All Lead Sequences' }],
     actions: [
       {
         label: tab === 'campaigns' ? 'NEW SEQUENCE' : 'NEW WORKFLOW',
