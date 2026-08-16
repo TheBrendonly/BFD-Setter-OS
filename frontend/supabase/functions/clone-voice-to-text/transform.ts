@@ -272,6 +272,42 @@ export function reassertComplianceLines(
   return `${block}\n${output}`;
 }
 
+// Voice-only spoken-pause / stage direction, e.g. "[brief pause for acknowledgment or
+// objection]". Meaningless over SMS. Kept narrow (needs a pause/acknowledgment/objection/
+// beat keyword) so it never eats a detokenized "[first name]" placeholder.
+const SPOKEN_STAGE_DIRECTION_RE =
+  /\s*\[[^\]]*\b(pause|acknowledg\w*|objection|beat)\b[^\]]*\]/gi;
+
+// The recording disclosure clause. Over SMS there is no call to record, so this whole
+// clause is dropped. Anchored on the recording verb and bounded by clause punctuation, so
+// it removes ", and the call may be recorded for quality" without swallowing the sentence
+// that follows.
+const RECORDING_CLAUSE_RE = /,?\s*(?:and\s+)?[^.,;!?]*\brecord(?:ed|ing)\b[^.,;!?]*/gi;
+
+/**
+ * Channel-aware sanitiser for a compliance line carried over from a voice prompt. Over SMS
+ * there is no call and no recording, so the recording disclosure and any spoken-pause stage
+ * direction are stripped; the AI-disclosure and NCCP obligations (which DO apply to text)
+ * are preserved. Returns the cleaned line, or `null` when nothing text-relevant remains
+ * (a line that was ONLY a recording disclosure), so the caller can drop it entirely.
+ *
+ * CLONE-COMPLIANCE-1: the BFD opener is a single line carrying BOTH the AI disclosure and
+ * the recording disclosure, so dropping by kind is not enough — the shared line must be
+ * cleaned at the clause level. Scope is deliberately the two voice-only obligations; other
+ * voice wording ("these calls") is left for the operator's prompt edit (PU-15).
+ */
+export function sanitizeComplianceLineForText(text: string): string | null {
+  const cleaned = text
+    .replace(SPOKEN_STAGE_DIRECTION_RE, "")
+    .replace(RECORDING_CLAUSE_RE, "")
+    .replace(/\s+([.?!,;])/g, "$1") // no space left before punctuation
+    .replace(/\s{2,}/g, " ")
+    .trim();
+  // Nothing but stray punctuation left → the line was purely a recording disclosure.
+  if (cleaned.replace(/[^A-Za-z0-9]/g, "").length === 0) return null;
+  return cleaned;
+}
+
 /**
  * A conversion that returns a fraction of the source has not converted anything, it has
  * summarised. Observed live 2026-08-12: a 20,082-char voice doc came back as a 1,439-char
@@ -331,15 +367,30 @@ export function finalizeTextPrompt(args: {
   const swapped = swapBookingSection(stripped.text, args.bookingPrompt ?? DEFAULT_TEXT_BOOKING_PROMPT);
   const detokenized = detokenize(swapped.text);
 
-  // Compare against the detokenized form of each required line: a compliance line
-  // containing a token cannot survive verbatim AND be lint-clean, and lint-clean wins.
-  // Lines without tokens (the real disclosure/recording/NCCP copy) are unchanged, so
-  // "byte-identical" still holds for them.
-  const required = args.compliance.map((c) => ({ ...c, text: detokenize(c.text).text.trim() }))
-    .filter((c) => c.text.length > 0);
+  // Channel-aware compliance (CLONE-COMPLIANCE-1). Each carried-over line is detokenized
+  // then sanitised for the text channel: the voice-only recording disclosure and any
+  // spoken-pause direction are stripped, the AI-disclosure + NCCP obligations kept. A line
+  // that was ONLY a recording disclosure sanitises to null and drops out entirely.
+  const required = args.compliance
+    .map((c) => {
+      const detok = detokenize(c.text).text.trim();
+      const clean = detok ? sanitizeComplianceLineForText(detok) : null;
+      return clean ? { ...c, text: clean } : null;
+    })
+    .filter((c): c is ComplianceLine => c !== null && c.text.length > 0);
 
-  const check = assertComplianceVerbatim(detokenized.text, required);
-  const prompt = reassertComplianceLines(detokenized.text, check.missing);
+  // Scrub any voice compliance line the MODEL preserved verbatim in its own draft, replacing
+  // it in place with the text-channel form (or removing a pure recording line), so voice copy
+  // cannot survive whether the model kept it or reworded it (then reassertion below re-adds it).
+  let body = detokenized.text;
+  for (const c of args.compliance) {
+    const detok = detokenize(c.text).text.trim();
+    if (!detok || !body.includes(detok)) continue;
+    body = body.split(detok).join(sanitizeComplianceLineForText(detok) ?? "");
+  }
+
+  const check = assertComplianceVerbatim(body, required);
+  const prompt = reassertComplianceLines(body, check.missing);
   const lint = lintTextSetterPrompt(prompt);
 
   // Measure the MODEL's contribution, not the finished file: the appended booking and

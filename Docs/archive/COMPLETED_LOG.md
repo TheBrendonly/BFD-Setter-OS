@@ -4,6 +4,27 @@ Items closed out of the active lists. Newest first. The active lists are in the 
 (`BUG_LIST.md`, `FEATURE_ROADMAP.md`, `BRENDAN_TODO.md`, `TEST_LIST.md`, `DEFERRED.md`). First-client-gated
 work lives in `Docs/FIRST_CLIENT_TASKS.md` (not archived — deferred).
 
+## 2026-08-16 (later 2): CLONE-COMPLIANCE-1 fixed + demo-callback slug cap tightened
+
+Two more non-gated queue items after the Cost Ledger LLM-actual build.
+
+- **CLONE-COMPLIANCE-1 — FIXED.** The voice→text clone (`clone-voice-to-text`) was re-asserting *voice*
+  compliance copy into *text* prompts: the BFD opener is a single line carrying BOTH the AI disclosure AND
+  the recording disclosure, so reasserting it for the (required) AI disclosure dragged "the call may be
+  recorded" + a "[brief pause…]" stage direction into the SMS prompt. Fix: new pure
+  `sanitizeComplianceLineForText` in `transform.ts` strips the recording clause + spoken-pause direction while
+  keeping the AI-disclosure and NCCP obligations (which apply to text); a pure recording line sanitises to
+  null and drops out. Applied both to the reasserted block AND in-place to any voice line the model preserved
+  verbatim, so voice copy cannot survive either path. **Decision (Brendan 2026-08-16): drop the recording
+  obligation for SMS** (no call, no recording). +6 deno tests; the 2 existing tests that asserted the recording
+  line survived verbatim were updated to the new behaviour (AI disclosure + NCCP still verbatim, recording
+  gone). Deployed `clone-voice-to-text` v5; edge suite 416 green. Out of scope: the live `Setter-2` prompt
+  wording is **PU-15** (Brendan applies via the UI).
+- **demo-callback SLUG cap 25 → 3/day (BOTDEF-1 cheap partial).** A `/g/` page serves ONE named broker, so a
+  4th dial in a day is illegitimate. `SLUG_MAX_PER_WINDOW` 25→3 in `demo-callback/prospects.ts` (21 tests still
+  green), deployed v4. The matching `BRENDAN_TODO` "decide bot defense" open question was rewritten as the
+  recorded ruling + un-defer trigger list (Turnstile stays deferred). Commit `7ebffa6`.
+
 ## 2026-08-16 (later): Cost Ledger fast-follow — LLM cost is now ACTUAL, not $0
 
 Worked queue item 1a (Cost Ledger fast-follows). **Verifying against the running system corrected the

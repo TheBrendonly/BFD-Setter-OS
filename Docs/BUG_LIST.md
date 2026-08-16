@@ -19,25 +19,13 @@ Open bugs and behavior fixes. Reconciled 2026-06-25; full re-audit 2026-07-07 (S
   stale-field-locator and stale-challenge harness bugs, not a desynced factor; the account was always fine.
   Do not rebuild `auth.mjs`. This unblocked RENDER-1, the release push, SNAP-1/2/3 and CLONE-1 (all passed).
 
-- [ ] **CLONE-COMPLIANCE-1 — the voice→text clone re-asserts *voice* compliance copy into a *text* prompt.**
-  Found by the CLONE-2 operator read on the live `Setter-2` clone (19,449 chars, 2026-08-12 09:22).
-  The conversion is otherwise excellent: all 20 sections, persona intact, **0** surviving `{{ }}` tokens,
-  **0** tool-call specs. But the compliance block re-asserted verbatim at the top is voice copy:
-  > "Quick bit of honesty before we dive in, I'm Brendan's AI assistant helping with **these calls**, and
-  > **the call may be recorded** for quality. All good with you?" **[brief pause for acknowledgment or objection]**
-  Over SMS there is no call and no recording, and a stage direction for a spoken pause is meaningless. It
-  also directly contradicts the same prompt's line 142: *"Never mention speaking, calling, hearing, hold
-  music, or waiting on the line. There is no audio channel here."*
-  **This is the verify-and-repair layer working as built, and the design being wrong.** Last night's model
-  output reworded the disclosures for the text channel, the byte-identical check failed, and the code put
-  the *voice* originals back. The handoff recorded that as the guarantee firing correctly; it fired, but
-  what it produced is not shippable in a text channel.
-  **Fix (code, `clone-voice-to-text`):** the compliance re-assertion must be channel-aware — either accept a
-  semantically-equivalent text rewrite (match on the *obligations* present: AI disclosure, recording/data
-  disclosure, opt-out) rather than bytes, or carry a text-channel variant of each compliance line and
-  re-assert that. **Gated behind the standing "no new product code until a pilot is paid" rule**, so this is
-  filed, not built. The matching wording change is **PU-15** in `PROMPT_UPDATE_LIST.md`, a Brendan-applies item so
-  the live `Setter-2` prompt can be corrected today without waiting for the code fix.
+- [x] **CLONE-COMPLIANCE-1 — FIXED 2026-08-16 (see COMPLETED_LOG).** The voice→text clone was re-asserting
+  *voice* compliance copy (recording disclosure + spoken-pause direction) into *text* prompts. Fix: a new
+  channel sanitizer `sanitizeComplianceLineForText` in `clone-voice-to-text/transform.ts` strips the recording
+  clause + spoken-pause direction (keeping AI disclosure + NCCP), applied both to the reasserted block and to
+  any voice line the model preserved verbatim. Decision (Brendan 2026-08-16): drop the recording obligation for
+  SMS (no call, no recording). Deployed v5, +6 tests. **PU-15** in `PROMPT_UPDATE_LIST.md` (the live `Setter-2`
+  prompt wording) remains a Brendan-applies item.
 
 - [ ] **ORPHAN-PROJ-1 `[B]` — two retired Supabase projects are still alive and answering.** Verified 2026-08-12
   by unauthenticated probe: `https://qfbhcixkxzivpmxlciot.supabase.co/rest/v1/` and

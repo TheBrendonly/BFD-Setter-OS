@@ -7,6 +7,7 @@ import {
   extractComplianceLines,
   finalizeTextPrompt,
   reassertComplianceLines,
+  sanitizeComplianceLineForText,
   stripVoiceIsms,
   swapBookingSection,
 } from "./transform.ts";
@@ -253,25 +254,29 @@ Deno.test("a source line that already had a bullet does not render as '- - '", (
 
 const COMPLIANCE = extractComplianceLines(VOICE_FIXTURE);
 
-Deno.test("end to end on the fixture: lint-clean, compliance intact", () => {
+Deno.test("end to end on the fixture: lint-clean, AI disclosure + NCCP intact, recording dropped", () => {
   const r = finalizeTextPrompt({ modelOutput: VOICE_FIXTURE, compliance: COMPLIANCE });
   assertEquals(r.lint.errors, []);
   assertEquals(r.ok, true);
   assert(r.prompt.includes(AI_DISCLOSURE));
-  assert(r.prompt.includes(RECORDING_LINE));
   assert(r.prompt.includes(NCCP_LINE));
+  // CLONE-COMPLIANCE-1: the voice recording disclosure is stripped for the text channel,
+  // while the AI-disclosure clause of that same opener line is preserved.
+  assert(!/recorded/i.test(r.prompt), "recording disclosure must not survive into text");
+  assert(r.prompt.includes("I'm Brendan's AI assistant at Building Flow Digital"));
 });
 
-Deno.test("a model that dropped ALL compliance still yields compliance verbatim", () => {
-  // The whole point: the guarantee holds no matter what the model returned.
+Deno.test("a model that dropped ALL compliance still yields (text-channel) compliance", () => {
+  // The guarantee holds no matter what the model returned — but recording is dropped.
   const r = finalizeTextPrompt({
     modelOutput: "## WHO YOU ARE\n\nYou are Gary.\n\n## GOAL\n\nBook a call.",
     compliance: COMPLIANCE,
   });
   assertEquals(r.reasserted.length, COMPLIANCE.length);
   assert(r.prompt.includes(AI_DISCLOSURE));
-  assert(r.prompt.includes(RECORDING_LINE));
   assert(r.prompt.includes(NCCP_LINE));
+  assert(!/recorded/i.test(r.prompt), "recording disclosure must not be reasserted into text");
+  assert(r.prompt.includes("I'm Brendan's AI assistant at Building Flow Digital"));
   assertEquals(r.ok, true);
 });
 
@@ -423,4 +428,54 @@ Deno.test("operator guidance rides along when supplied", () => {
   });
   assert(msgs[1].content.includes("keep it blunter"));
   assert(msgs[0].content.includes("(none detected in the source)"));
+});
+
+// ── CLONE-COMPLIANCE-1: voice-only compliance copy must not survive into a text prompt ──
+
+const VOICE_OPENER =
+  "Quick bit of honesty before we dive in, I'm Brendan's AI assistant helping with these calls, and the call may be recorded for quality. All good with you? [brief pause for acknowledgment or objection]";
+
+Deno.test("sanitize: combined opener keeps the AI disclosure, drops recording + spoken pause", () => {
+  const out = sanitizeComplianceLineForText(VOICE_OPENER);
+  assert(out !== null);
+  assert(/ai assistant/i.test(out!), "AI disclosure must be preserved");
+  assert(!/record/i.test(out!), "recording clause must be stripped");
+  assert(!out!.includes("["), "spoken-pause stage direction must be stripped");
+  assert(!/\bpause\b/i.test(out!));
+});
+
+Deno.test("sanitize: a pure recording disclosure line drops out entirely (null)", () => {
+  assertEquals(sanitizeComplianceLineForText("This call may be recorded for quality assurance."), null);
+});
+
+Deno.test("sanitize: an NCCP line is left untouched (obligation applies to text)", () => {
+  const nccp = "As an AI I can give general info under our NCCP credit assistance licence, not personal advice.";
+  const out = sanitizeComplianceLineForText(nccp);
+  assertEquals(out, nccp);
+});
+
+Deno.test("sanitize: a spoken-pause direction is stripped but the AI disclosure stays", () => {
+  const out = sanitizeComplianceLineForText("I'm an AI assistant. [pause for acknowledgment]");
+  assert(out !== null);
+  assert(!out!.includes("["));
+  assert(/ai assistant/i.test(out!));
+});
+
+Deno.test("finalize: a reworded draft gets a text-clean reasserted compliance block (no recording/pause)", () => {
+  const compliance = extractComplianceLines(VOICE_OPENER);
+  assert(compliance.some((c) => c.kind === "recording"), "fixture must carry a recording obligation");
+  const modelOutput = "Hey! Quick note before we start: I'm Brendan's AI assistant. How can I help today?";
+  const r = finalizeTextPrompt({ modelOutput, compliance });
+  assert(!/record/i.test(r.prompt), "reasserted block must not carry the recording disclosure");
+  assert(!r.prompt.includes("[brief pause"), "reasserted block must not carry a spoken pause");
+  assert(/ai assistant/i.test(r.prompt), "AI disclosure must still be present");
+});
+
+Deno.test("finalize: voice compliance copy the model preserved verbatim is scrubbed in place", () => {
+  const compliance = extractComplianceLines(VOICE_OPENER);
+  const modelOutput = `${VOICE_OPENER}\n\nSo, what are you after today?`;
+  const r = finalizeTextPrompt({ modelOutput, compliance });
+  assert(!/record/i.test(r.prompt), "the preserved voice recording clause must be scrubbed");
+  assert(!r.prompt.includes("[brief pause"), "the preserved spoken pause must be scrubbed");
+  assert(/ai assistant/i.test(r.prompt), "AI disclosure must survive the scrub");
 });
