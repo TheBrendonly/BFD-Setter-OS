@@ -764,7 +764,13 @@ Deno.serve(async (req) => {
       .from("bookings")
       .upsert({
         client_id: clientId,
-        lead_id: leadId,
+        // bookings.lead_id is the GHL CONTACT id by convention (voice-booking-tools,
+        // retell-call-analysis-webhook, and the nudge/follow-up booking-suppression all
+        // key on it). `leadId` here is the internal leads.id UUID — writing it clobbered
+        // the correct row (onConflict is ghl_appointment_id, and this webhook fires after
+        // the call books), which broke booking lookups (false booking_claimed_no_row) and
+        // let booked leads keep getting nudged. Key by the GHL contact id.
+        lead_id: contactId,
         ghl_appointment_id: bookingId,
         ghl_calendar_id: calendarId,
         appointment_time: startTime,
