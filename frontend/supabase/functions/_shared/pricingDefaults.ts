@@ -30,6 +30,7 @@ export type PricingConfigInput = {
   markup_bps?: number;
   show_rate_to_client?: boolean;
   billing_anchor_day?: number;
+  included_minutes?: number; // voice-minute pool for the cost-ledger burn-down (0 = unset)
   client_display?: Partial<ClientDisplayConfig>;
   components?: Record<string, Partial<PricingComponent>>;
 };
@@ -37,6 +38,7 @@ export type PricingConfigInput = {
 /** A merged config always carries the F13 fields (mergeWithDefaults guarantees it). */
 export type MergedPricingConfig = PricingConfig & {
   billing_anchor_day: number;
+  included_minutes: number;
   client_display: ClientDisplayConfig;
 };
 
@@ -48,6 +50,7 @@ export const DEFAULT_PRICING_CONFIG: MergedPricingConfig = {
   markup_bps: 5_000, // 50%
   show_rate_to_client: false,
   billing_anchor_day: 1,
+  included_minutes: 0, // no pool by default; the agency sets it per client
   client_display: {
     show_rate: false,
     show_minutes: false,
@@ -116,6 +119,9 @@ export function mergeWithDefaults(
     billing_anchor_day: typeof s.billing_anchor_day === "number"
       ? sanitizeAnchorDay(s.billing_anchor_day)
       : d.billing_anchor_day,
+    included_minutes: typeof s.included_minutes === "number" && s.included_minutes > 0
+      ? Math.round(s.included_minutes)
+      : d.included_minutes,
     client_display,
     components,
   };

@@ -208,6 +208,20 @@ export function ClientPricingConfigEditor({ clientId }: { clientId: string }) {
               Day of month the billing period starts. Day 31 clamps to the last day of shorter months.
             </p>
           </div>
+          <div className="space-y-1">
+            <Label className="text-xs uppercase text-muted-foreground">Included voice minutes / month</Label>
+            <Input
+              type="number"
+              min="0"
+              step="50"
+              value={String(form.included_minutes ?? 0)}
+              onChange={(e) => patch({ included_minutes: Math.max(0, Math.round(Number(e.target.value) || 0)) })}
+              className="field-text"
+            />
+            <p className="text-[10px] text-muted-foreground">
+              Voice-minute pool for the Cost Ledger burn-down. 0 = no pool (burn-down hidden).
+            </p>
+          </div>
         </div>
 
         {/* Component rate table */}

@@ -19,6 +19,7 @@ import { ClientUsagePanel } from "@/components/ClientUsagePanel";
 import { ShowRateFunnelCard } from "@/components/ShowRateFunnelCard";
 import { ReportSettingsCard } from "@/components/ReportSettingsCard";
 import { ComplianceSettingsCard } from "@/components/ComplianceSettingsCard";
+import { ClientCostLedgerCard } from "@/components/ClientCostLedgerCard";
 import { useSubscription } from "@/hooks/useSubscription";
 import { UnsavedChangesDialog } from '@/components/UnsavedChangesDialog';
 import { ClientVoicemailCard } from '@/components/setters/ClientVoicemailCard';
@@ -480,6 +481,10 @@ export default function ClientSettings() {
           {isAgency && clientId && (
             <div className="border-t border-dashed border-border pt-6">
               <ClientUsagePanel clientId={clientId} />
+              {/* Cost Ledger (agency P&L): cost-by-kind, cost-per-booking, burn-downs. */}
+              <div className="mt-4">
+                <ClientCostLedgerCard clientId={clientId} />
+              </div>
               {/* F15 show-rate funnel for this sub-account (agency view). */}
               <div className="mt-4">
                 <ShowRateFunnelCard clientId={clientId} />
