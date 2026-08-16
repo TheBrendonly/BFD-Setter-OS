@@ -35,6 +35,10 @@ Things only Brendan can do (UI clicks, logins, provider dashboards, business cal
   account — it's almost certainly under a separate/older Supabase login or org. It's now **harmless**: every GHL
   workflow was repointed to the live project and verified clean (2026-07-22), so nothing routes to it anymore.
   Delete it if/when you find it (check other Supabase logins/orgs); no urgency.
+  **RE-PROBED 2026-08-17: STILL ALIVE.** You said these were deleted, but a fresh unauth probe shows BOTH
+  `qfbhcixkxzivpmxlciot` + `awzlcmdomhtyqjabzvnn` still resolve and their Supabase gateways still answer
+  "No API key found in request" — i.e. still live. The deletions didn't take, almost certainly because these
+  two are under a DIFFERENT/older Supabase login than the one you deleted from. Log into that account to remove them.
 - [ ] **Enable the remaining per-client F16 features on the BFD dogfood client to test them** (default OFF). Agency
   view of the client → **Client Settings → "Calls & compliance"**: **Missed-call text-back** (F16c) is still OFF
   (speed-to-lead F16b + recording-disclosure are already ON since 2026-07-12). Optionally flip the **"Client ROI

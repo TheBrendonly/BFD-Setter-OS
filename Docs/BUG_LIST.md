@@ -47,6 +47,12 @@ Open bugs and behavior fixes. Reconciled 2026-06-25; full re-audit 2026-07-07 (S
   of those tokens relies on that cleanup at sign-out.
   **Do not confuse this with a leak.** No secret is exposed; 401 means unauthenticated reads are refused. The
   hazard is misrouting and log blindness, not disclosure.
+  **RE-PROBED 2026-08-17 — STILL OPEN.** Brendan believed both were deleted, but a fresh unauth probe shows
+  BOTH still live: DNS resolves (Cloudflare) and each Supabase gateway still answers `{"message":"No API key
+  found in request"}` on `/rest/v1/` AND `/auth/v1/health` — that is a LIVE project routing through Kong, not
+  a deleted one. Almost certainly they sit under the **separate/older Supabase login-or-org** this entry
+  already suspected, so the deletions Brendan made in his current account did not touch them. Action unchanged:
+  find that other Supabase login and delete/pause both there. Do NOT close this or drop the `removeItem` lines.
 
 Everything else: **0 open.** (Since the 2026-07-12 autonomous build; re-confirmed at the 2026-07-21 live TEST
 pass and the 2026-07-22 sweep.)
