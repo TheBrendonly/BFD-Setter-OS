@@ -944,7 +944,6 @@ function ClientSidebar() {
                 <SidebarMenuButton
                   onClick={async () => {
                     try {
-                      localStorage.removeItem('sb-awzlcmdomhtyqjabzvnn-auth-token');
                       await supabase.auth.signOut({ scope: 'global' });
                     } catch (e) {
                       console.log('Sign out cleanup:', e);

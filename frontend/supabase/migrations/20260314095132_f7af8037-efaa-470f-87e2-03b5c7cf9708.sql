@@ -1,13 +1,9 @@
-select
-  cron.schedule(
-    'refresh-usage-cache-every-minute',
-    '* * * * *',
-    $$
-    select
-      net.http_post(
-          url:='https://qfbhcixkxzivpmxlciot.supabase.co/functions/v1/refresh-usage-cache',
-          headers:='{"Content-Type": "application/json", "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFmYmhjaXhreHppdnBteGxjaW90Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI1MzkyNzUsImV4cCI6MjA4ODExNTI3NX0.IzBGKmBGerpJk6kEiEwVFXarPbTVkAolT-Nsd934lck"}'::jsonb,
-          body:=concat('{"time": "', now(), '"}')::jsonb
-      ) as request_id;
-    $$
-  );
+-- RETIRED 2026-08-17 (ORPHAN-PROJ-1 cleanup).
+-- This migration originally scheduled an every-minute pg_cron job
+-- ('refresh-usage-cache-every-minute') that net.http_post'd to a pre-migration
+-- Supabase project which is now under a different owner and unreachable to us.
+-- It does NOT run on the current platform project (bjgrgbgykvjrsuwwruoh): pg_cron
+-- and pg_net are not installed there and no such job exists (verified 2026-08-17).
+-- Neutralised to a no-op so the old project ref and its stale anon key are no longer
+-- carried in the repo. Usage-cache refresh, where still needed, runs via Trigger.dev.
+select 1;

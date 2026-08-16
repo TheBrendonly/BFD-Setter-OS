@@ -5,9 +5,9 @@
 // workflow webhooks). For actual calls from the app, prefer
 // supabase.functions.invoke(), which needs no URL and forwards the user's JWT.
 //
-// Historically several components hardcoded a now-dead project ref
-// (qfbhcixkxzivpmxlciot). Deriving from VITE_SUPABASE_URL keeps every surface
-// pointed at the live project automatically.
+// Historically several components hardcoded an old, since-retired project ref.
+// Deriving from VITE_SUPABASE_URL keeps every surface pointed at the live project
+// automatically.
 export const SUPABASE_PUBLIC_URL: string = import.meta.env.VITE_SUPABASE_URL ?? "";
 
 export const edgeFunctionUrl = (slug: string): string =>

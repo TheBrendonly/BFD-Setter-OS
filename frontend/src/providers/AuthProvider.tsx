@@ -194,9 +194,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const signOut = async () => {
     try {
-      // Clear any stale auth tokens left behind by dead/old Supabase projects.
-      localStorage.removeItem('sb-qfbhcixkxzivpmxlciot-auth-token');
-      localStorage.removeItem('sb-awzlcmdomhtyqjabzvnn-auth-token');
       await supabase.auth.signOut({ scope: 'global' }).catch(() => {});
       setSession(null);
       setUser(null);

@@ -504,7 +504,7 @@ function DmExecutionDetail({
     try {
       // invoke (not raw fetch) forwards the logged-in user's JWT — push-dm-now now
       // enforces authorizeClientRequest — and targets the live project (the bare
-      // fetch hardcoded the dead qfbhcixkxzivpmxlciot ref). Mirrors push-followup-now.
+      // fetch hardcoded an old, retired project ref). Mirrors push-followup-now.
       const { error } = await supabase.functions.invoke('push-dm-now', {
         body: { execution_id: execution.id },
       });
@@ -542,7 +542,7 @@ function DmExecutionDetail({
       // Use supabase.functions.invoke (not a raw fetch) so the logged-in user's
       // JWT is forwarded — push-followup-now now enforces authorizeClientRequest
       // (2026-06-10) — and so the call targets the live project (the bare fetch
-      // hardcoded the stale qfbhcixkxzivpmxlciot ref). Mirrors push-engagement-now.
+      // hardcoded an old, retired project ref). Mirrors push-engagement-now.
       const { error } = await supabase.functions.invoke('push-followup-now', {
         body: { timer_id: timer.id },
       });

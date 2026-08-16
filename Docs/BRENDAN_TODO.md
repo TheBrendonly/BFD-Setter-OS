@@ -30,15 +30,10 @@ Things only Brendan can do (UI clicks, logins, provider dashboards, business cal
 
 ## Open (all optional / low-priority)
 
-- [ ] **Locate + delete BOTH orphaned Supabase projects** (upgraded from "optional" 2026-08-12, now tracked as `ORPHAN-PROJ-1` in `Docs/BUG_LIST.md`: `qfbhcixkxzivpmxlciot` AND `awzlcmdomhtyqjabzvnn` both still return HTTP 401 from their REST API, i.e. both are alive and reachable).** It's an OLD project
-  from before the platform migration to `bjgrgbgykvjrsuwwruoh`, still live but NOT visible in your current Supabase
-  account — it's almost certainly under a separate/older Supabase login or org. It's now **harmless**: every GHL
-  workflow was repointed to the live project and verified clean (2026-07-22), so nothing routes to it anymore.
-  Delete it if/when you find it (check other Supabase logins/orgs); no urgency.
-  **RE-PROBED 2026-08-17: STILL ALIVE.** You said these were deleted, but a fresh unauth probe shows BOTH
-  `qfbhcixkxzivpmxlciot` + `awzlcmdomhtyqjabzvnn` still resolve and their Supabase gateways still answer
-  "No API key found in request" — i.e. still live. The deletions didn't take, almost certainly because these
-  two are under a DIFFERENT/older Supabase login than the one you deleted from. Log into that account to remove them.
+- [x] **Orphaned Supabase projects — NOTHING FOR YOU TO DO (resolved 2026-08-17).** You clarified both
+  `qfbhcixkxzivpmxlciot` + `awzlcmdomhtyqjabzvnn` belong to another person and you can't access them, so they
+  aren't yours to delete. BFD removed every code reference to them instead (ORPHAN-PROJ-1 closed) and verified
+  nothing of ours connects to them. They can stay alive under their owner's account; no BFD action remains.
 - [ ] **Enable the remaining per-client F16 features on the BFD dogfood client to test them** (default OFF). Agency
   view of the client → **Client Settings → "Calls & compliance"**: **Missed-call text-back** (F16c) is still OFF
   (speed-to-lead F16b + recording-disclosure are already ON since 2026-07-12). Optionally flip the **"Client ROI

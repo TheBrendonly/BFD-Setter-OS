@@ -27,32 +27,14 @@ Open bugs and behavior fixes. Reconciled 2026-06-25; full re-audit 2026-07-07 (S
   SMS (no call, no recording). Deployed v5, +6 tests. **PU-15** in `PROMPT_UPDATE_LIST.md` (the live `Setter-2`
   prompt wording) remains a Brendan-applies item.
 
-- [ ] **ORPHAN-PROJ-1 `[B]` — two retired Supabase projects are still alive and answering.** Verified 2026-08-12
-  by unauthenticated probe: `https://qfbhcixkxzivpmxlciot.supabase.co/rest/v1/` and
-  `https://awzlcmdomhtyqjabzvnn.supabase.co/rest/v1/` both return **HTTP 401**, i.e. the API is up and demanding
-  auth. A dead project would fail DNS or connection. `qfbhcixkxzivpmxlciot` is the one memory already flags as
-  "STILL ALIVE serving stale edge code", and it is the reason a 4xx can appear that never shows up in our logs:
-  the request landed on a project nobody reads the logs of.
-  **Why it stays open even though the code is clean.** The live risk is the surviving infrastructure, not the
-  repo. Grep confirms **no live code path calls either host**: the only source references are two
-  `localStorage.removeItem('sb-<ref>-auth-token')` cleanup calls (`AuthProvider.tsx:198-199`,
-  `ClientLayout.tsx:947`) that exist precisely to purge stale tokens, plus explanatory comments in
-  `ProcessDMs.tsx` and `integrations/supabase/functionsBase.ts`. `functionsBase.ts` is the durable fix: every
-  literal function URL now derives from `VITE_SUPABASE_URL`, so a surface cannot silently re-point at a dead ref.
-  **Fix (Brendan, provider console):** delete or pause both projects. `BRENDAN_TODO.md` already carries the
-  `qfbhcixkxzivpmxlciot` deletion as optional; this bug upgrades it and adds the second ref, because "optional"
-  undersells an internet-reachable project holding a copy of an old schema and old edge code.
-  **Then (code, trivial):** once both are gone, drop the two `removeItem` lines and the stale-ref comments; they
-  are dead-infrastructure trivia at that point. Do NOT drop them before deletion: any browser still holding one
-  of those tokens relies on that cleanup at sign-out.
-  **Do not confuse this with a leak.** No secret is exposed; 401 means unauthenticated reads are refused. The
-  hazard is misrouting and log blindness, not disclosure.
-  **RE-PROBED 2026-08-17 — STILL OPEN.** Brendan believed both were deleted, but a fresh unauth probe shows
-  BOTH still live: DNS resolves (Cloudflare) and each Supabase gateway still answers `{"message":"No API key
-  found in request"}` on `/rest/v1/` AND `/auth/v1/health` — that is a LIVE project routing through Kong, not
-  a deleted one. Almost certainly they sit under the **separate/older Supabase login-or-org** this entry
-  already suspected, so the deletions Brendan made in his current account did not touch them. Action unchanged:
-  find that other Supabase login and delete/pause both there. Do NOT close this or drop the `removeItem` lines.
+- [x] **ORPHAN-PROJ-1 `[B]` — RESOLVED 2026-08-17 (see COMPLETED_LOG).** The two still-live Supabase projects
+  (`qfbhcixkxzivpmxlciot`, `awzlcmdomhtyqjabzvnn`) turned out to belong to **another person** (Brendan cannot
+  access them, so BFD cannot delete them). BFD-side action taken instead: removed EVERY code reference so nothing
+  in the repo points at them: the `removeItem` token-cleanup calls (`AuthProvider`, `ClientLayout`), the stale-ref
+  comments (`ProcessDMs`, `functionsBase`), and the dead `20260314095132` pg_cron migration (neutralised to a
+  no-op, which also dropped that project's stale anon key from the repo). Verified **no BFD live connection**:
+  pg_cron/pg_net are not installed on the platform db and no DB object references either ref. The projects are a
+  third party's to manage; nothing of ours routes to them, so the misrouting/log-blindness hazard is closed.
 
 Everything else: **0 open.** (Since the 2026-07-12 autonomous build; re-confirmed at the 2026-07-21 live TEST
 pass and the 2026-07-22 sweep.)

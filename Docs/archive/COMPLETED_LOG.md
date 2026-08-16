@@ -4,6 +4,23 @@ Items closed out of the active lists. Newest first. The active lists are in the 
 (`BUG_LIST.md`, `FEATURE_ROADMAP.md`, `BRENDAN_TODO.md`, `TEST_LIST.md`, `DEFERRED.md`). First-client-gated
 work lives in `Docs/FIRST_CLIENT_TASKS.md` (not archived — deferred).
 
+## 2026-08-17: ORPHAN-PROJ-1 closed — all references to the two third-party Supabase projects removed
+
+Brendan clarified the two still-live orphan Supabase projects (`qfbhcixkxzivpmxlciot`,
+`awzlcmdomhtyqjabzvnn`) belong to **another person** and are unreachable to him, so they can't be deleted from
+BFD's side. Instead, removed every reference so nothing in the repo points at them:
+- Dropped the `localStorage.removeItem('sb-<ref>-auth-token')` cleanups in `AuthProvider.tsx` (both refs) and
+  `ClientLayout.tsx` (the `awzlcmd` ref).
+- De-referenced the stale-ref comments in `ProcessDMs.tsx` (×2) and `integrations/supabase/functionsBase.ts`.
+- Neutralised the dead `20260314095132` migration (an every-minute `pg_cron` `net.http_post` to the old
+  project's `refresh-usage-cache`) to a no-op `select 1;` + retirement note — which also removed that project's
+  stale anon key from the repo.
+- **Verified no BFD live connection:** `pg_cron`/`pg_net` are not installed on the platform db
+  (`bjgrgbgykvjrsuwwruoh`) and no DB object references either ref, so that migration never created a live job
+  here. `git grep` is now clean of both refs in code; frontend built + released.
+Result: ORPHAN-PROJ-1 and the matching BRENDAN_TODO item are closed. The projects remain a third party's to
+manage; nothing of ours routes to them.
+
 ## 2026-08-16 (later 2): CLONE-COMPLIANCE-1 fixed + demo-callback slug cap tightened
 
 Two more non-gated queue items after the Cost Ledger LLM-actual build.
